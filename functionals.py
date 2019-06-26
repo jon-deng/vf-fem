@@ -86,7 +86,7 @@ def vocaleff(n, h5path, fluid_props, h5group='/'):
     cost = dfn.assemble(frm_fluidwork)/inputwork
     return cost
 
-def dvocaleff_du(n, h5path, fluid_props, h5group='/'):
+def dvocaleff_du(n, h5path, h5group='/'):
     """
     Returns the derivative of the cost function with respect to u_n.
 
@@ -101,6 +101,7 @@ def dvocaleff_du(n, h5path, fluid_props, h5group='/'):
         ## Calculate the derivative of cost w.r.t u_n due to work from n to n+1.
         # Set the initial conditions for the forms properly
         sfu.set_states(n+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5path, group=h5group)
         info = frm.set_pressure(fluid_props)
         dp_du, dq_du = frm.set_flow_sensitivity(fluid_props)
 
@@ -127,6 +128,7 @@ def dvocaleff_du(n, h5path, fluid_props, h5group='/'):
     if n >= 1:
         # Set the initial conditions for the forms properly
         sfu.set_states(n, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n-1, h5path, group=h5group)
         info = frm.set_pressure(fluid_props)
 
         fluidwork = dfn.assemble(frm_fluidwork)

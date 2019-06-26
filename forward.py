@@ -32,9 +32,9 @@ from misc import get_dynamic_fluid_props
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
 
-def increment_forward(x0, x1, solid_props, fluid_props):
+def increment_forward(x0, solid_props, fluid_props):
     """
-    Returns the states at the next time x1 = (u1, v1, a1) of the forward model given x0.
+    Returns the states at the next time, x1 = (u1, v1, a1).
 
     Parameters
     ----------
@@ -54,13 +54,10 @@ def increment_forward(x0, x1, solid_props, fluid_props):
         that might be useful.
     """
     u0, v0, a0 = x0
-    u1, v1, a1 = x1
-    if u1 is None:
-        u1 = dfn.Function(frm.vector_function_space)
-    if v1 is None:
-        v1 = dfn.Function(frm.vector_function_space)
-    if a1 is None:
-        a1 = dfn.Function(frm.vector_function_space)
+
+    u1 = dfn.Function(frm.vector_function_space)
+    v1 = dfn.Function(frm.vector_function_space)
+    a1 = dfn.Function(frm.vector_function_space)
 
     ## Update form coefficients
     frm.emod.vector()[:] = solid_props['elastic_modulus']
@@ -130,37 +127,57 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
     time = dt*np.arange(num_time)
 
     with h5py.File(h5path, mode='a') as f:
+        # Kinematic states
         for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
             f.create_dataset(join(h5group, dataset_name), shape=(num_time, data.vector()[:].size),
                              dtype=np.float64)
             f[join(h5group, dataset_name)][0] = data.vector()
-        f.create_dataset(join(h5group, 'cost'), shape=(num_time-1,), dtype=np.float64)
+
         f.create_dataset(join(h5group, 'time'), data=time)
+
+        # Functionals
+        f.create_dataset(join(h5group, 'cost'), shape=(num_time-1,), dtype=np.float64)
         f.create_dataset(join(h5group, 'vocal_efficiency'), shape=(num_time-1,), dtype=np.float64)
         f.create_dataset(join(h5group, 'fluid_work'), shape=(num_time-1,), dtype=np.float64)
+
+        # Fluid properties
+        f.create_dataset(join(h5group, 'fluid_properties', 'p_sub'), shape=(num_time-1,))
+        f.create_dataset(join(h5group, 'fluid_properties', 'p_sup'), shape=(num_time-1,))
+        f.create_dataset(join(h5group, 'fluid_properties', 'rho'), shape=(num_time-1,))
+        f.create_dataset(join(h5group, 'fluid_properties', 'y_midline'), shape=(num_time-1,))
+
+        # Solid properties
+        f.create_dataset(join(h5group, 'solid_properties', 'elastic_modulus'),
+                         data=frm.emod.vector()[:])
 
     for ii, t in enumerate(time[:-1]):
         _fluid_props = get_dynamic_fluid_props(fluid_props, t)
 
-        (u1, v1, a1), info = increment_forward([u0, v0, a0], [u1, v1, a1], solid_props, _fluid_props)
+        (u1, v1, a1), info = increment_forward([u0, v0, a0], solid_props, _fluid_props)
 
         xy_min = info['xy_min']
         xy_sep = info['xy_sep']
         flow_rate = info['flow_rate']
 
-        ## Write the solution to a file
+        ## Calculate useful/interesting functionals
+        frm.u1.assign(u1)
+        p_sub = _fluid_props['p_sub']
+        vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt)
+        fluid_work = dfn.assemble(functionals.frm_fluidwork)
+
+        ## Write the solution outputs to a file
         with h5py.File(h5path, mode='a') as f:
-            f[join(h5group, 'u')][ii+1] = u1.vector()[:]
-            f[join(h5group, 'v')][ii+1] = v1.vector()[:]
-            f[join(h5group, 'a')][ii+1] = a1.vector()[:]
-            frm.u1.assign(u1)
-            p_sub = _fluid_props['p_sub']
+            # State variables
+            for label, value in zip(['u', 'v', 'a'], [u1, v1, a1]):
+                f[join(h5group, label)][ii+1] = value.vector()[:]
 
-            # f['cost'][ii] = dfn.assemble(functionals.frm_fluidwork)
-            vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt)
+            # Fluid properties
+            for label in ('p_sub', 'p_sup', 'rho', 'y_midline'):
+                f[join(h5group, 'fluid_properties', label)][ii] = _fluid_props[label]
+
+            # Output functionals
             f[join(h5group, 'cost')][ii] = vocal_efficiency
-
-            f[join(h5group, 'fluid_work')][ii] = dfn.assemble(functionals.frm_fluidwork)
+            f[join(h5group, 'fluid_work')][ii] = fluid_work
             f[join(h5group, 'vocal_efficiency')][ii] = vocal_efficiency
 
         ## Update initial conditions for the next time step
@@ -209,7 +226,7 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
 if __name__ == '__main__':
     dfn.set_log_level(30)
     emod = frm.emod.vector()[:].copy()
-    solid_props = {'elastic_modulus': 2*emod}
+    solid_props = {'elastic_modulus': 4*emod}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
     fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
     fluid_props['p_sub_time'] = [0, 2.5e-3, 2.5e-3, 0.02]
