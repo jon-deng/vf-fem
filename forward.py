@@ -3,10 +3,6 @@ Forward model
 
 Uses CGS (cm-g-s) units unless otherwise stated
 """
-# TODO: Check if adjoint works properly over collision/changing the seperation area
-# I'm pretty sure it won't, because those are discontinuous change that will make the cost function
-# discontinuous. If it does work, I'm pretty sure the cost function will be noisy
-
 from time import perf_counter
 import os
 from os.path import join
@@ -29,8 +25,71 @@ import functionals
 from collision import detect_collision, set_collision
 from misc import get_dynamic_fluid_props
 
-# dfn.parameters['form_compiler']['optimize'] = True
-# dfn.parameters['form_compiler']['cpp_optimize'] = True
+
+def init_figure():
+    """
+    Returns a figure and tuple of axes to plot the solution into.
+    """
+    gridspec_kw = {'height_ratios': [3, 1]}
+    fig, axs = plt.subplots(2, 1, gridspec_kw=gridspec_kw)
+    axs[0].set_aspect('equal', adjustable='datalim')
+
+    x = np.arange(frm.surface_vertices.shape[0])
+    y = np.arange(frm.surface_vertices.shape[0])
+    axs[1].plot(x, y, marker='o')
+
+    return fig, axs
+
+def update_figure(fig, axs, t, x, fluid_info, fluid_props):
+    """
+    Plots the FEM solution into a figure.
+
+    Parameters
+    ----------
+    fig : matplotlib.Figure
+    axs : tuple of matplotlib.Axes
+    x : tuple (u, v, a) of dfn.Function
+        Kinematic states
+    fluid_props : dict
+        Fluid properties at time t
+
+    Returns
+    -------
+    fig, axs
+    """
+    axs[0].clear()
+
+    delta_xy = x[0].vector()[frm.vert_to_vdof.reshape(-1)].reshape(-1, 2)
+    xy_current = frm.mesh.coordinates() + delta_xy
+    triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1], triangles=frm.mesh.cells())
+
+    axs[0].triplot(triangulation)
+
+    xy_surface = xy_current[frm.surface_vertices]
+
+    xy_min, xy_sep = fluid_info['xy_min'], fluid_info['xy_sep']
+    axs[0].plot(*xy_min, marker='o', mfc='none', color='C0')
+    axs[0].plot(*xy_sep, marker='o', mfc='none', color='C1')
+    axs[0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
+    axs[0].axhline(y=frm.y_midline, ls='-.')
+    axs[0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
+
+    axs[0].set_title(f'Time: {1e3*t:>5.1f} ms')
+
+    pressure_profile = axs[1].lines[0]
+    pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure'])
+
+    # Formatting
+    axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[0].set_ylim(0.0, 0.7, auto=False)
+
+    axs[1].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[1].set_ylim(0, 5*fluid_props['p_sub'], auto=False)
+
+    axs[1].set_ylabel('Surface pressure')
+    plt.pause(0.001)
+
+    return fig, axs
 
 def increment_forward(x0, solid_props, fluid_props):
     """
@@ -49,9 +108,9 @@ def increment_forward(x0, solid_props, fluid_props):
     -------
     tuple (u1, v1, a1) of dfn.Function
         The next state of the forward model
-    info : dict
-        A dictionary of additional info. These are some things that are computed during the solve
-        that might be useful.
+    fluid_info : dict
+        A dictionary containing information on the fluid solution. These include the flow rate,
+        surface pressure, etc.
     """
     u0, v0, a0 = x0
 
@@ -64,12 +123,16 @@ def increment_forward(x0, solid_props, fluid_props):
     frm.u0.assign(u0)
     frm.v0.assign(v0)
     frm.a0.assign(a0)
-    info = frm.set_pressure(fluid_props)
+    fluid_info = frm.set_pressure(fluid_props)
 
-    # ## Collision handling
+    # # check for collision
     # verts_coll = detect_collision(frm.mesh, frm.vertex_marker, frm.omega_contact, frm.u0, frm.v0, frm.a0,
     #                               frm.vert_to_vdof)
+    # # Collision boundary conditions
+    # if verts_coll.size > 0:
+    #     print('Woah, collision!')
 
+    ## Solve the thing
     frm.u1.assign(u0)
     dfn.solve(frm.fu_nonlin == 0, frm.u1, bcs=frm.bc_base, J=frm.jac_fu_nonlin)
     u1.assign(frm.u1)
@@ -77,7 +140,7 @@ def increment_forward(x0, solid_props, fluid_props):
     v1.vector()[:] = frm.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
     a1.vector()[:] = frm.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
 
-    return (u1, v1, a1), info
+    return (u1, v1, a1), fluid_info
 
 def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_figure=False):
     """
@@ -107,25 +170,21 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
     v1 = dfn.Function(frm.vector_function_space)
     a1 = dfn.Function(frm.vector_function_space)
 
+    # Set material properties
+    elastic_modulus = solid_props['elastic_modulus']
+    frm.emod.vector()[:] = elastic_modulus
+
     ## Allocate a figure for plotting
     fig, axs = None, None
     if show_figure:
-        gridspec_kw = {'height_ratios': [3, 1]}
-        fig, axs = plt.subplots(2, 1, gridspec_kw=gridspec_kw)
-        axs[0].set_aspect('equal', adjustable='datalim')
-
-        x = np.arange(frm.surface_vertices.shape[0])
-        y = np.arange(frm.surface_vertices.shape[0])
-        pressure_profile, = axs[1].plot(x, y, marker='o')
-
-    elastic_modulus = solid_props['elastic_modulus']
-    frm.emod.vector()[:] = elastic_modulus
+        fig, axs = init_figure()
 
     assert tspan[1] > tspan[0]
     dt = frm.dt.values()[0]
     num_time = np.ceil((tspan[1]-tspan[0])/dt)
     time = dt*np.arange(num_time)
 
+    ## Initialize datasets
     with h5py.File(h5path, mode='a') as f:
         # Kinematic states
         for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
@@ -151,17 +210,16 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
                          data=frm.emod.vector()[:])
 
     for ii, t in enumerate(time[:-1]):
-        _fluid_props = get_dynamic_fluid_props(fluid_props, t)
+        ## Increment the state
+        fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
 
-        (u1, v1, a1), info = increment_forward([u0, v0, a0], solid_props, _fluid_props)
+        (u1, v1, a1), info = increment_forward([u0, v0, a0], solid_props, fluid_props_ii)
 
-        xy_min = info['xy_min']
-        xy_sep = info['xy_sep']
         flow_rate = info['flow_rate']
 
         ## Calculate useful/interesting functionals
         frm.u1.assign(u1)
-        p_sub = _fluid_props['p_sub']
+        p_sub = fluid_props_ii['p_sub']
         vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt)
         fluid_work = dfn.assemble(functionals.frm_fluidwork)
 
@@ -173,7 +231,7 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
 
             # Fluid properties
             for label in ('p_sub', 'p_sup', 'rho', 'y_midline'):
-                f[join(h5group, 'fluid_properties', label)][ii] = _fluid_props[label]
+                f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
 
             # Output functionals
             f[join(h5group, 'cost')][ii] = vocal_efficiency
@@ -187,46 +245,18 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
 
         ## Plot the solution
         if show_figure:
-            delta_xy = u0.vector()[frm.vert_to_vdof.reshape(-1)].reshape(-1, 2)
-            xy_current = frm.mesh.coordinates() + delta_xy
-            triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
-                                              triangles=frm.mesh.cells())
-
-            axs[0].clear()
-
-            axs[0].triplot(triangulation)
-
-            xy_surface = xy_current[frm.surface_vertices]
-
-            axs[0].plot(*xy_min, marker='o', mfc='none', color='C0')
-            axs[0].plot(*xy_sep, marker='o', mfc='none', color='C1')
-            axs[0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
-            axs[0].axhline(y=frm.y_midline, ls='-.')
-            axs[0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
-
-            axs[0].set_title(f'Time: {1e3*t:>5.1f} ms')
-
-            pressure_profile.set_data(xy_surface[:, 0], info['pressure'])
-
-            # Formatting
-            axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
-            axs[0].set_ylim(0.0, 0.7, auto=False)
-
-            axs[1].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
-            axs[1].set_ylim(0, 5*_fluid_props['p_sub'], auto=False)
-
-            axs[1].set_ylabel('Surface pressure')
-            plt.pause(0.001)
+            fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
 
     total_cost = None
     with h5py.File(h5path, mode='r') as f:
         total_cost = np.sum(f[join(h5group, 'cost')][:])
+
     return total_cost
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
     emod = frm.emod.vector()[:].copy()
-    solid_props = {'elastic_modulus': 4*emod}
+    solid_props = {'elastic_modulus': 2*emod}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
     fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
     fluid_props['p_sub_time'] = [0, 2.5e-3, 2.5e-3, 0.02]

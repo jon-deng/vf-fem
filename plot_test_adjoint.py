@@ -37,13 +37,13 @@ fig, axs = plt.subplots(1, 2, figsize=(7, 3))
 
 ## Plotting
 cost_fd = np.array(cost_fd)
-axs[0].plot(cost_fd, color='C0', marker='o', label='Forward simulation')
+axs[0].plot(emod, cost_fd, color='C0', marker='o', label='Forward simulation')
 
 # Project the gradient in the direction of uniform increase in elastic modulus
 demod = emod-emod[0]
 grad_ad_projected = grad_ad.sum()
 cost_ad = cost_fd[0] + grad_ad_projected*demod
-axs[0].plot(cost_ad, color='C1', marker='o', label='Adjoint prediction')
+axs[0].plot(emod, cost_ad, color='C1', marker='o', label='Adjoint prediction')
 
 grad_fd_projected = (cost_fd[1:]-cost_fd[0])/(demod[1:])
 error = np.abs((grad_ad_projected-grad_fd_projected)/grad_ad_projected)*100
@@ -58,9 +58,12 @@ axs[1].set_ylabel(r"% Error")
 
 for ax in axs:
     ax.grid()
-    ax.set_xlabel(r"$N_{\Delta h}$")
-    ax.set_xlim([0, error.size])
 
+axs[0].set_xlabel(r"$E$")
+axs[1].set_xlabel(r"$N_{\Delta h}$")
+
+axs[0].set_xlim(emod[[0, -1]])
+axs[1].set_xlim([0, error.size])
 axs[1].set_ylim([0, error.max()])
 
 plt.tight_layout()

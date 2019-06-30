@@ -19,15 +19,15 @@ if __name__ == '__main__':
     emod = frm.emod.vector()[:].copy()
 
     # Constant fluid properties
-    fluid_props = constants.DEFAULT_FLUID_PROPERTIES
+    # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
 
     # Time varying fluid properties
-    # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-    # fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
-    # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
+    fluid_props = constants.DEFAULT_FLUID_PROPERTIES
+    fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
+    fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 
     step_size = 0.1*constants.PASCAL_TO_CGS
-    num_steps = 25
+    num_steps = 10
 
     save_path = 'out/FiniteDifferenceStates.h5'
     with h5py.File(save_path, mode='w') as f:

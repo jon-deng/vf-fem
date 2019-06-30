@@ -13,6 +13,9 @@ import transforms
 import fluids
 import constants as const
 
+# dfn.parameters['form_compiler']['optimize'] = True
+# dfn.parameters['form_compiler']['cpp_optimize'] = True
+
 ## Mesh generation
 mesh = dfn.RectangleMesh(dfn.Point(-0.5, -0.5), dfn.Point(0.5, 0.5), 5, 15)
 

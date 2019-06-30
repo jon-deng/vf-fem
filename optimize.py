@@ -2,8 +2,10 @@
 Find optimal elastic modulus distribution to maximize vocal efficiency.
 """
 
+import dolfin as dfn
 import numpy as np
 import nlopt
+
 from matplotlib import pyplot as plt
 from matplotlib import tri
 
@@ -19,7 +21,15 @@ np.seterr(all='raise')
 
 def objective(scaled_elastic_modulus, scale):
     """
-    Returns the objective function and scaled gradient value
+    Returns the objective function and the scaled gradient
+
+    Parameters
+    ----------
+    scaled_elastic_modulus : array_like
+        The elastic modulus, E, divided by a scale factor. Note that:
+        scaled_elastic_modulus = elastic_modulus/scale
+    scale : float
+        The scale factor by which to scale the elastic modulus
     """
     solid_props = {'elastic_modulus': scaled_elastic_modulus*scale}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
@@ -28,7 +38,7 @@ def objective(scaled_elastic_modulus, scale):
     with h5py.File('temp.h5', 'w'):
         pass
     _objective = forward([0, 0.1], solid_props, fluid_props, h5path='temp.h5', show_figure=False)
-    gradient = adjoint(solid_props, fluid_props, 'temp.h5')
+    gradient = adjoint(solid_props, 'temp.h5')
     plt.close()
 
     NTIME = None
@@ -65,33 +75,33 @@ def plot_elastic_modulus(elastic_modulus):
     ax.plot(coords_fixed[:, 0], coords_fixed[:, 1], color='C1')
 
     fig.colorbar(mappable, ax=ax)
-    fig.savefig(f"out/iteration{ii}.png")
-    plt.close(fig)
 
     return fig, ax
 
 if __name__ == '__main__':
+    dfn.set_log_level(30)
+
     ## Decorate the objective function to one that works with nlopt
     SCALE = 10 * 10e3 * constants.PASCAL_TO_CGS
     ii = 0
-    def decorated_objective(scaled_x, scaled_grad):
+    def decorated_objective(scaled_elastic_modulus, scaled_grad):
         """
-        Modifies the gradient inplace and prints some useful info
+        Modifies the gradient inplace and returns the objective function value + other useful stuff
 
         Parameters
         ----------
-        scaled_x :
+        scaled_elastic_modulus :
         scaled_grad :
         """
         global ii
-        _objective, _grad = objective(scaled_x, SCALE)
+        _objective, _grad = objective(scaled_elastic_modulus, SCALE)
 
         scaled_grad[...] = _grad
 
         # Save elastic modulus to disk
         with h5py.File('out/ElasticModuli.h5', mode='a') as f:
             f['elastic_modulus'].resize(ii+1, axis=0)
-            f['elastic_modulus'][ii] = scaled_x*SCALE
+            f['elastic_modulus'][ii] = scaled_elastic_modulus*SCALE
 
         NTIME = None
         with h5py.File('temp.h5', mode='r') as f:
@@ -100,9 +110,11 @@ if __name__ == '__main__':
         print(f"Time averaged vocal efficiency: {_objective/NTIME*100:.2f}%")
         print(f"Gradient norm: {np.linalg.norm(_grad)*SCALE/NTIME}")
 
-        fig, ax = plot_elastic_modulus(scaled_x*SCALE)
+        fig, ax = plot_elastic_modulus(scaled_elastic_modulus*SCALE)
 
-        fig.savefig(f'{ii}.png')
+        fig.savefig(f"out/iteration{ii}.png")
+        plt.close(fig)
+
         ii += 1
         return _objective
 
@@ -121,4 +133,3 @@ if __name__ == '__main__':
 
     optimum_emod = opt.optimize(scaled_emod0)
     plt.show()
-fluid_props_

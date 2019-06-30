@@ -29,7 +29,7 @@ with h5py.File('out/collision_elasticity_sweep.h5', mode='r') as f:
 
         # cost.append(np.mean(f[join(f'{ii}', 'fluid_work')]))
         # cost.append(np.mean(max_y_displacement))
-        cost.append(np.mean(f[join(f'{ii}', 'vocal_efficiency')]))
+        cost.append(np.sum(f[join(f'{ii}', 'cost')]))
 
 ### Figure generation
 fig, axs = plt.subplots(1, 2, figsize=(7, 3))
