@@ -142,6 +142,25 @@ def dvocaleff_du(n, h5path, h5group='/'):
 
     return out
 
+def totalfluidwork(n, h5path, h5group='/'):
+    """
+    Returns the total work done by the fluid.
+    
+    This is the ratio of the total work done by the fluid on the folds to the total input work on
+    the fluid.
+    """
+    totalfluidwork = 0
+    num_states = sfu.get_num_states(h5path, group=h5group)
+    for ii in range(num_states-1):
+        # Set form coefficients to represent the equation at state ii
+        sfu.set_states(ii+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(ii, h5path, group=h5group)
+        info = frm.set_pressure(fluid_props)
+
+        totalfluidwork += dfn.assemble(frm_fluidwork)
+
+    return totalfluidwork
+
 def totalvocaleff(n, h5path, h5group='/'):
     """
     Returns the total vocal efficiency.
@@ -165,5 +184,18 @@ def totalvocaleff(n, h5path, h5group='/'):
     return totalfluidwork/totalinputwork
 
 def dtotalvocaleff_du(n, h5path, h5group='/'):
-    pass
+    totalfluidwork = 0
+    totalinputwork = 0
+    num_states = sfu.get_num_states(h5path, group=h5group)
+    for ii in range(num_states-1):
+        # Set form coefficients to represent the equation at state ii
+        sfu.set_states(ii+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(ii, h5path, group=h5group)
+        info = frm.set_pressure(fluid_props)
+
+        dt = float(frm.dt)
+        totalinputwork += dt*info['flow_rate']*fluid_props['p_sub']
+        totalfluidwork += dfn.assemble(frm_fluidwork)
+
+    return dtotalfluidwork_du/totalinputwork - totalfluidwork/totalinputwork**2*dtotalinputwork_du
 
