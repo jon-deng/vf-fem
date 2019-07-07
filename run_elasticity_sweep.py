@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     save_path = f"out/collision_elasticity_sweep.h5"
     emod = 11.8e3 * constants.PASCAL_TO_CGS
-    elastic_moduli = np.linspace(emod+12*constants.PASCAL_TO_CGS, emod+13*constants.PASCAL_TO_CGS, 100)
+    elastic_moduli = np.linspace(0.5*emod, 1.5*emod, 50)
 
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
     fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
