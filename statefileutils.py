@@ -25,27 +25,19 @@ import h5py
 
 from os.path import join
 
-def get_time(path, group='/'):
+def get_time(h5file, group='/'):
     """
     Returns the time vector.
     """
-    time = None
-    with h5py.File(path, mode='r') as f:
-        time = f[join(group, 'time')][:]
+    return h5file[join(group, 'time')][:]
 
-    return time
-
-def get_num_states(path, group='/'):
+def get_num_states(h5file, group='/'):
     """
-    Returns the number of stored states
+    Returns the number of states in the solution
     """
-    num = None
-    with h5py.File(path, mode='r') as f:
-        num = f[join(group, 'u')].shape[0]
+    return h5file[join(group, 'u')].shape[0]
 
-    return num
-
-def get_state(n, path, group='/'):
+def get_state(n, h5file, group='/'):
     """
     Returns form coefficient vectors for states (u, v, a) at index n.
 
@@ -58,26 +50,23 @@ def get_state(n, path, group='/'):
     group : string
         The group where states are stored.
     """
-    u, v, a = None, None, None
-    with h5py.File(path, mode='r') as f:
-        u = f[join(group, 'u')][n, ...]
-        v = f[join(group, 'v')][n, ...]
-        a = f[join(group, 'a')][n, ...]
+    u = h5file[join(group, 'u')][n, ...]
+    v = h5file[join(group, 'v')][n, ...]
+    a = h5file[join(group, 'a')][n, ...]
 
     return (u, v, a)
 
-def get_fluid_properties(n, path, group='/'):
+def get_fluid_properties(n, h5file, group='/'):
     """
     Returns the fluid properties dictionary at index n.
     """
     fluid_props = {}
-    with h5py.File(path, mode='r') as f:
-        for label in ('p_sub', 'p_sup', 'rho', 'y_midline'):
-            fluid_props[label] = f[join(group, 'fluid_properties', label)][n]
+    for label in ('p_sub', 'p_sup', 'rho', 'y_midline'):
+        fluid_props[label] = h5file[join(group, 'fluid_properties', label)][n]
 
     return fluid_props
 
-def set_states(n, path, group='/', u0=None, v0=None, a0=None, u1=None):
+def set_states(n, h5file, group='/', u0=None, v0=None, a0=None, u1=None):
     """
     Sets form coefficient vectors for states u_n-1, v_n-1, a_n-1, u_n at index n.
 
@@ -90,12 +79,11 @@ def set_states(n, path, group='/', u0=None, v0=None, a0=None, u1=None):
     path : string
         The path of the hdf5 file containing states.
     """
-    with h5py.File(path, mode='r') as f:
-        if u0 is not None:
-            u0.vector()[:] = f[join(group, 'u')][n-1]
-        if v0 is not None:
-            v0.vector()[:] = f[join(group, 'v')][n-1]
-        if a0 is not None:
-            a0.vector()[:] = f[join(group, 'a')][n-1]
-        if u1 is not None:
-            u1.vector()[:] = f[join(group, 'u')][n]
+    if u0 is not None:
+        u0.vector()[:] = h5file[join(group, 'u')][n-1]
+    if v0 is not None:
+        v0.vector()[:] = h5file[join(group, 'v')][n-1]
+    if a0 is not None:
+        a0.vector()[:] = h5file[join(group, 'a')][n-1]
+    if u1 is not None:
+        u1.vector()[:] = h5file[join(group, 'u')][n]

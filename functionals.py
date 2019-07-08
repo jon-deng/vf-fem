@@ -14,9 +14,9 @@ frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, frm.u0, frm.test)
 frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, frm.pressure, frm.scalar_test)
 frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, frm.u1, frm.test)
 
-def fluidwork(n, h5path, fluid_props, h5group='/'):
+def fluidwork(n, h5file, h5group='/'):
     """
-    Returns the fluid work over the timestep from n to n+1.
+    Returns the fluid work from n-1 to n.
 
     Parameters
     ----------
@@ -26,14 +26,18 @@ def fluidwork(n, h5path, fluid_props, h5group='/'):
         Path to the file containing states from the forward run
     """
     # Set form coefficients to represent the fluidwork at index n
-    sfu.set_form_states(n, h5path, h5group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_form_states(n, h5file, h5group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
     frm.set_pressure(fluid_props)
 
     return dfn.assemble(frm_fluidwork)
 
-def dfluidwork_du(n, h5path, fluid_props, h5group='/'):
+def dfluidwork_du(n, h5file, h5group='/'):
     """
     Returns the derivative of fluid work w.r.t state n.
+
+    Since fluid work over both time intervals [n-1, n] and [n, n+1] involve state n, this derivative
+    incorporates both timesteps.
 
     Parameters
     ----------
@@ -43,11 +47,12 @@ def dfluidwork_du(n, h5path, fluid_props, h5group='/'):
         Path to the file containing states from the forward run
     """
     out = 0
-    num_states = sfu.get_num_states(h5path, group=h5group)
+    num_states = sfu.get_num_states(h5file, group=h5group)
 
     # Set form coefficients to represent the fluidwork over n to n+1
-    if n <= -2 or n <= num_states-2:
-        sfu.set_states(n+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    if n < -1 or n < num_states-1:
+        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
         frm.set_pressure(fluid_props)
         dp_du, _ = frm.set_flow_sensitivity(fluid_props)
 
@@ -62,15 +67,16 @@ def dfluidwork_du(n, h5path, fluid_props, h5group='/'):
         out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
 
     # Set form coefficients to represent the fluidwork over n-1 to n
-    if n >= 1:
-        sfu.set_states(n, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    if n > 0:
+        sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
         frm.set_pressure(fluid_props)
 
         out += dfn.assemble(frm_dfluidwork_du1)
 
     return out
 
-def vocaleff(n, h5path, h5group='/'):
+def vocaleff(n, h5file, h5group='/'):
     """
     Returns the vocal efficiency over the timestep from n to n+1.
 
@@ -78,8 +84,8 @@ def vocaleff(n, h5path, h5group='/'):
         Path to the file containing states from the forward run
     """
     # Set form coefficients to represent the fluidwork at index n
-    sfu.set_states(n, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-    fluid_props = sfu.get_fluid_properties(n, h5path, group=h5group)
+    sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
     info = frm.set_pressure(fluid_props)
 
     dt = float(frm.dt)
@@ -87,7 +93,7 @@ def vocaleff(n, h5path, h5group='/'):
     cost = dfn.assemble(frm_fluidwork)/inputwork
     return cost
 
-def dvocaleff_du(n, h5path, h5group='/'):
+def dvocaleff_du(n, h5file, h5group='/'):
     """
     Returns the derivative of the cost function with respect to u_n.
 
@@ -95,14 +101,14 @@ def dvocaleff_du(n, h5path, h5group='/'):
         Path to the file containing states from the forward run
     """
     out = 0
-    num_states = sfu.get_num_states(h5path, group=h5group)
+    num_states = sfu.get_num_states(h5file, group=h5group)
 
     # Set form coefficients to represent step from n to n+1
     if n <= num_states-2 or n <= -2:
         ## Calculate the derivative of cost w.r.t u_n due to work from n to n+1.
         # Set the initial conditions for the forms properly
-        sfu.set_states(n+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(n, h5path, group=h5group)
+        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
         info = frm.set_pressure(fluid_props)
         dp_du, dq_du = frm.set_flow_sensitivity(fluid_props)
 
@@ -128,8 +134,8 @@ def dvocaleff_du(n, h5path, h5group='/'):
     # Set form coefficients to represent step from n-1 to n
     if n >= 1:
         # Set the initial conditions for the forms properly
-        sfu.set_states(n, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(n-1, h5path, group=h5group)
+        sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
         info = frm.set_pressure(fluid_props)
 
         fluidwork = dfn.assemble(frm_fluidwork)
@@ -142,60 +148,71 @@ def dvocaleff_du(n, h5path, h5group='/'):
 
     return out
 
-def totalfluidwork(n, h5path, h5group='/'):
+def totalfluidwork(n, h5file, h5group='/'):
     """
-    Returns the total work done by the fluid.
-    
-    This is the ratio of the total work done by the fluid on the folds to the total input work on
-    the fluid.
+    Returns the total work done by the fluid on the vocal folds.
     """
-    totalfluidwork = 0
-    num_states = sfu.get_num_states(h5path, group=h5group)
+    res = 0
+    num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
-        sfu.set_states(ii+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(ii, h5path, group=h5group)
+        sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
+        frm.set_pressure(fluid_props)
+
+        res += dfn.assemble(frm_fluidwork)
+
+    return res
+
+def totalinputwork(n, h5file, h5group='/'):
+    """
+    Returns the total work input into the fluid.
+    """
+    res = 0
+    num_states = sfu.get_num_states(h5file, group=h5group)
+    for ii in range(num_states-1):
+        # Set form coefficients to represent the equation at state ii
+        sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
         info = frm.set_pressure(fluid_props)
 
-        totalfluidwork += dfn.assemble(frm_fluidwork)
+        res += float(frm.dt)*info['flow_rate']*fluid_props['p_sub']
 
-    return totalfluidwork
+    return res
 
-def totalvocaleff(n, h5path, h5group='/'):
+def totalvocaleff(n, h5file, h5group='/'):
     """
     Returns the total vocal efficiency.
-    
+
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
-    totalfluidwork = 0
-    totalinputwork = 0
-    num_states = sfu.get_num_states(h5path, group=h5group)
-    for ii in range(num_states-1):
-        # Set form coefficients to represent the equation at state ii
-        sfu.set_states(ii+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(ii, h5path, group=h5group)
-        info = frm.set_pressure(fluid_props)
+    return totalfluidwork(n, h5file, h5group=h5group)/totalinputwork(n, h5file, h5group=h5group)
 
-        dt = float(frm.dt)
-        totalinputwork += dt*info['flow_rate']*fluid_props['p_sub']
-        totalfluidwork += dfn.assemble(frm_fluidwork)
+    # return totalfluidwork/totalinputwork
 
-    return totalfluidwork/totalinputwork
+def dtotalvocaleff_du(n, h5file, h5group='/'):
+    """
+    Returns the derivative of the total vocal efficiency w.r.t state n.
 
-def dtotalvocaleff_du(n, h5path, h5group='/'):
-    totalfluidwork = 0
-    totalinputwork = 0
-    num_states = sfu.get_num_states(h5path, group=h5group)
-    for ii in range(num_states-1):
-        # Set form coefficients to represent the equation at state ii
-        sfu.set_states(ii+1, h5path, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(ii, h5path, group=h5group)
-        info = frm.set_pressure(fluid_props)
+    This is the ratio of the total work done by the fluid on the folds to the total input work on
+    the fluid.
+    """
+    tfluidwork = totalfluidwork(n, h5file, h5group=h5group)
+    tinputwork = totalinputwork(n, h5file, h5group=h5group)
+    # num_states = sfu.get_num_states(h5path, group=h5group)
 
-        dt = float(frm.dt)
-        totalinputwork += dt*info['flow_rate']*fluid_props['p_sub']
-        totalfluidwork += dfn.assemble(frm_fluidwork)
+    dtotalfluidwork_du = dfluidwork_du(n, h5file, h5group=h5group)
 
-    return dtotalfluidwork_du/totalinputwork - totalfluidwork/totalinputwork**2*dtotalinputwork_du
+    dtotalinputwork_du = 0
+    # Set form coefficients to represent step from n to n+1
+    num_states = sfu.get_num_states(h5file, group=h5group)
+    if n < num_states-1 or n < -1:
+        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+        _, dq_du = frm.set_flow_sensitivity(fluid_props)
 
+        dt = frm.dt.values()[0]
+        dtotalinputwork_du = dt*fluid_props['p_sub']*dfn.PETScVector(dq_du)
+
+    return dtotalfluidwork_du/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du

@@ -37,7 +37,7 @@ def objective(scaled_elastic_modulus, scale):
     # Create an empty file to write to
     with h5py.File('temp.h5', 'w'):
         pass
-    _objective = forward([0, 0.1], solid_props, fluid_props, h5path='temp.h5', show_figure=False)
+    _objective = forward([0, 0.1], solid_props, fluid_props, h5file='temp.h5', show_figure=False)
     gradient = adjoint(solid_props, 'temp.h5')
     plt.close()
 

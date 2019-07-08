@@ -142,7 +142,7 @@ def increment_forward(x0, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_figure=False):
+def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False):
     """
     Solves the forward model over a time interval.
 
@@ -154,7 +154,7 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
         Should use this style of call in the future?
     fluid_props : dict
         A dictionary storing fluid properties.
-    save_path : string
+    h5file : string
         Path to an hdf5 file where states will be appended.
     group : string
         An h5 group to save under
@@ -185,7 +185,7 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
     time = dt*np.arange(num_time)
 
     ## Initialize datasets
-    with h5py.File(h5path, mode='a') as f:
+    with h5py.File(h5file, mode='a') as f:
         # Kinematic states
         for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
             f.create_dataset(join(h5group, dataset_name), shape=(num_time, data.vector()[:].size),
@@ -195,7 +195,7 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
         f.create_dataset(join(h5group, 'time'), data=time)
 
         # Functionals
-        f.create_dataset(join(h5group, 'cost'), shape=(num_time-1,), dtype=np.float64)
+        f.create_dataset(join(h5group, 'cost'), shape=(), dtype=np.float64)
         f.create_dataset(join(h5group, 'vocal_efficiency'), shape=(num_time-1,), dtype=np.float64)
         f.create_dataset(join(h5group, 'fluid_work'), shape=(num_time-1,), dtype=np.float64)
 
@@ -209,22 +209,22 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
         f.create_dataset(join(h5group, 'solid_properties', 'elastic_modulus'),
                          data=frm.emod.vector()[:])
 
-    for ii, t in enumerate(time[:-1]):
-        ## Increment the state
-        fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
+    with h5py.File(h5file, mode='a') as f:
+        for ii, t in enumerate(time[:-1]):
+            ## Increment the state
+            fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
 
-        (u1, v1, a1), info = increment_forward([u0, v0, a0], solid_props, fluid_props_ii)
+            (u1, v1, a1), info = increment_forward([u0, v0, a0], solid_props, fluid_props_ii)
 
-        flow_rate = info['flow_rate']
+            flow_rate = info['flow_rate']
 
-        ## Calculate useful/interesting functionals
-        frm.u1.assign(u1)
-        p_sub = fluid_props_ii['p_sub']
-        vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt)
-        fluid_work = dfn.assemble(functionals.frm_fluidwork)
+            ## Calculate useful/interesting functionals
+            frm.u1.assign(u1)
+            p_sub = fluid_props_ii['p_sub']
+            vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt)
+            fluid_work = dfn.assemble(functionals.frm_fluidwork)
 
-        ## Write the solution outputs to a file
-        with h5py.File(h5path, mode='a') as f:
+            ## Write the solution outputs to a file
             # State variables
             for label, value in zip(['u', 'v', 'a'], [u1, v1, a1]):
                 f[join(h5group, label)][ii+1] = value.vector()[:]
@@ -234,22 +234,27 @@ def forward(tspan, solid_props, fluid_props, h5path="tmp.h5", h5group='/', show_
                 f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
 
             # Output functionals
-            f[join(h5group, 'cost')][ii] = vocal_efficiency
+            # f[join(h5group, 'cost')][ii] = vocal_efficiency
             f[join(h5group, 'fluid_work')][ii] = fluid_work
             f[join(h5group, 'vocal_efficiency')][ii] = vocal_efficiency
 
-        ## Update initial conditions for the next time step
-        u0.assign(u1)
-        v0.assign(v1)
-        a0.assign(a1)
+            ## Update initial conditions for the next time step
+            u0.assign(u1)
+            v0.assign(v1)
+            a0.assign(a1)
 
-        ## Plot the solution
-        if show_figure:
-            fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
+            ## Plot the solution
+            if show_figure:
+                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
 
     total_cost = None
-    with h5py.File(h5path, mode='r') as f:
-        total_cost = np.sum(f[join(h5group, 'cost')][:])
+    # with h5py.File(h5file, mode='r') as f:
+    #     f[join(h5group, 'cost')] = np.sum(f[join(h5group, 'fluidwork')][:])
+    #     total_cost = f[join(h5group, 'cost')]
+
+    with h5py.File(h5file, mode='a') as f:
+        f[join(h5group, 'cost')][()] = functionals.totalvocaleff(0, f, h5group=h5group)
+        total_cost = f[join(h5group, 'cost')]
 
     return total_cost
 

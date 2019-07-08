@@ -24,7 +24,7 @@ import constants
 if __name__ == '__main__':
     dfn.set_log_level(30)
 
-    save_path = f"out/collision_elasticity_sweep.h5"
+    save_path = f"out/elasticity_sweep.h5"
     emod = 11.8e3 * constants.PASCAL_TO_CGS
     elastic_moduli = np.linspace(0.5*emod, 1.5*emod, 50)
 

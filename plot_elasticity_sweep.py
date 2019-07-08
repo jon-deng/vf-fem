@@ -25,24 +25,21 @@ elastic_moduli = None
 cost = list()
 
 elastic_moduli = None
-with h5py.File('out/collision_elasticity_sweep.h5', mode='r') as f:
-    elastic_moduli = f['elastic_moduli'][()]
-
-for ii in range(elastic_moduli.shape[0]):
-    ntime = None
-    with h5py.File('out/collision_elasticity_sweep.h5', mode='r') as f:
+with h5py.File('out/elasticity_sweep.h5', mode='r') as f:
+    elastic_moduli = f['elastic_moduli'][...]
+    for ii in range(elastic_moduli.shape[0]):
         ntime = f[join(f'{ii}', 'u')].shape[0]
 
-    cost.append(totalvocaleff(0, 'out/collision_elasticity_sweep.h5', h5group=f'{ii}'))
-    # with h5py.File('out/collision_elasticity_sweep.h5', mode='r') as f:
+        cost.append(totalvocaleff(0, f, h5group=f'{ii}'))
+
         # cost.append(np.mean(f[join(f'{ii}', 'fluid_work')]))
         # cost.append(np.mean(max_y_displacement))
         # cost.append(np.sum(f[join(f'{ii}', 'cost')]))
 
-    # Additional functionals you might want to look at
-    # max_y_displacement = np.max(f[join(f'{ii}', 'u')][:, 1::2], axis=-1)
+        # Additional functionals you might want to look at
+        # max_y_displacement = np.max(f[join(f'{ii}', 'u')][:, 1::2], axis=-1)
 
-### Figure generation
+## Figure generation
 fig, axs = plt.subplots(1, 2, figsize=(7, 3))
 
 ## Plotting
