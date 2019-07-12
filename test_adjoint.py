@@ -11,6 +11,7 @@ from forward import forward
 from adjoint import adjoint
 import forms as frm
 import constants
+import functionals
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
@@ -49,9 +50,15 @@ if __name__ == '__main__':
     ## Running adjoint
     print("Computing Adjoint")
 
+    totalfluidwork = None
+    totalinputwork = None
+    with h5py.File(save_path, mode='r') as f:
+        totalfluidwork = functionals.totalfluidwork(0, f, h5group='0')
+        totalinputwork = functionals.totalinputwork(0, f, h5group='0')
+    fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
     solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()
-    gradient = adjoint(solid_props, save_path, h5group='0')
+    gradient = adjoint(solid_props, save_path, h5group='0', functional_kwargs=fkwargs)
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

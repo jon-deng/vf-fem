@@ -191,16 +191,20 @@ def totalvocaleff(n, h5file, h5group='/'):
 
     # return totalfluidwork/totalinputwork
 
-def dtotalvocaleff_du(n, h5file, h5group='/'):
+def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_totalinputwork=None):
     """
     Returns the derivative of the total vocal efficiency w.r.t state n.
 
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
-    tfluidwork = totalfluidwork(n, h5file, h5group=h5group)
-    tinputwork = totalinputwork(n, h5file, h5group=h5group)
-    # num_states = sfu.get_num_states(h5path, group=h5group)
+    tfluidwork = cache_totalfluidwork
+    if tfluidwork is None:
+        tfluidwork = totalfluidwork(n, h5file, h5group=h5group)
+    
+    tinputwork = cache_totalinputwork
+    if tinputwork is None:
+        tinputwork = totalinputwork(n, h5file, h5group=h5group)
 
     dtotalfluidwork_du = dfluidwork_du(n, h5file, h5group=h5group)
 

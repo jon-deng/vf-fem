@@ -118,7 +118,7 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
 
     return (adj_u1, adj_v1, adj_a1), df1_dparam
 
-def adjoint(solid_props, h5file, h5group='/', show_figure=False):
+def adjoint(solid_props, h5file, h5group='/', show_figure=False, functional_kwargs={}):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
 
@@ -171,7 +171,7 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False):
     ## Initialize the adjoint state
     dcost_du2 = None
     with h5py.File(h5file, mode='r') as f:
-        dcost_du2 = dfunctional_du(num_states-1, f, h5group=h5group)
+        dcost_du2 = dfunctional_du(num_states-1, f, h5group=h5group, **functional_kwargs)
 
     frm.bc_base_adjoint.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
@@ -192,7 +192,7 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False):
             x1 = sfu.get_state(ii-1, f, group=h5group)
 
             # dcost_du1 = functionals.dfluidwork_du(ii, h5path, h5group=h5group)
-            dcost_du1 = dfunctional_du(ii, f, h5group=h5group)
+            dcost_du1 = dfunctional_du(ii, f, h5group=h5group, **functional_kwargs)
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
                 (adj_u2, adj_v2, adj_a2), x1, x2, x2, solid_props,

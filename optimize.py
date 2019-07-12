@@ -13,6 +13,7 @@ import h5py
 
 from forward import forward
 from adjoint import adjoint
+import functionals
 
 import forms as frm
 import constants
@@ -37,15 +38,18 @@ def objective(scaled_elastic_modulus, scale):
     # Create an empty file to write to
     with h5py.File('temp.h5', 'w'):
         pass
-    _objective = forward([0, 0.1], solid_props, fluid_props, h5file='temp.h5', show_figure=False)
-    gradient = adjoint(solid_props, 'temp.h5')
+    _objective = forward([0, 0.1], solid_props, fluid_props, h5file='temp.h5', show_figure=True)
     plt.close()
 
-    NTIME = None
+    totalfluidwork = None
+    totalinputwork = None
     with h5py.File('temp.h5', mode='r') as f:
-        NTIME = f['u'].shape[0]
+        totalfluidwork = functionals.totalfluidwork(0, f)
+        totalinputwork = functionals.totalinputwork(0, f)
+    fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
+    gradient = adjoint(solid_props, 'temp.h5', functional_kwargs=fkwargs)
 
-    return 1-_objective/NTIME, -1 * gradient/NTIME * scale
+    return 1-_objective, -1 * gradient * scale
 
 def plot_elastic_modulus(elastic_modulus):
     """
@@ -99,16 +103,16 @@ if __name__ == '__main__':
         scaled_grad[...] = _grad
 
         # Save elastic modulus to disk
-        with h5py.File('out/ElasticModuli.h5', mode='a') as f:
+        with h5py.File('out/OptimizationElasticModuli.h5', mode='a') as f:
             f['elastic_modulus'].resize(ii+1, axis=0)
             f['elastic_modulus'][ii] = scaled_elastic_modulus*SCALE
 
-        NTIME = None
-        with h5py.File('temp.h5', mode='r') as f:
-            NTIME = f['u'].shape[0]
+        # NTIME = None
+        # with h5py.File('temp.h5', mode='r') as f:
+        #     NTIME = f['u'].shape[0]
 
-        print(f"Time averaged vocal efficiency: {_objective/NTIME*100:.2f}%")
-        print(f"Gradient norm: {np.linalg.norm(_grad)*SCALE/NTIME}")
+        print(f"Vocal inefficiency: {_objective*100:.2f}%")
+        print(f"Gradient norm: {np.linalg.norm(_grad)*SCALE}")
 
         fig, ax = plot_elastic_modulus(scaled_elastic_modulus*SCALE)
 
@@ -123,9 +127,6 @@ if __name__ == '__main__':
     opt.set_min_objective(decorated_objective)
 
     scaled_emod0 = frm.emod.vector()[:].copy()/SCALE
-
-    options = {'maxiter': 50,
-               'disp': True}
 
     with h5py.File('out/ElasticModuli.h5', mode='w') as f:
         NVERTS = scaled_emod0.size

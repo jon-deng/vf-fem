@@ -254,17 +254,20 @@ def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_
 
     with h5py.File(h5file, mode='a') as f:
         f[join(h5group, 'cost')][()] = functionals.totalvocaleff(0, f, h5group=h5group)
-        total_cost = f[join(h5group, 'cost')]
+        total_cost = f[join(h5group, 'cost')][()]
 
     return total_cost
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
-    emod = frm.emod.vector()[:].copy()
-    solid_props = {'elastic_modulus': 2*emod}
+    # emod = frm.emod.vector()[:].copy()
+    emod = None
+    with h5py.File('out/ElasticModuli.h5') as f:
+        emod = f['elastic_modulus'][-1, :]
+    solid_props = {'elastic_modulus': emod}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-    fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
-    fluid_props['p_sub_time'] = [0, 2.5e-3, 2.5e-3, 0.02]
+    # fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
+    # fluid_props['p_sub_time'] = [0, 2.5e-3, 2.5e-3, 0.02]
 
     save_path = f"out/test.h5"
     try:
