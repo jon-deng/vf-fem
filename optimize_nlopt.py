@@ -2,6 +2,9 @@
 Find optimal elastic modulus distribution to maximize vocal efficiency.
 """
 
+from os import path
+
+from time import perf_counter
 import dolfin as dfn
 import numpy as np
 import nlopt
@@ -38,7 +41,8 @@ def objective(scaled_elastic_modulus, scale):
     # Create an empty file to write to
     with h5py.File('temp.h5', 'w'):
         pass
-    _objective = forward([0, 0.1], solid_props, fluid_props, h5file='temp.h5', show_figure=True)
+    dt = 1e-4
+    forward([0, 0.1], dt, solid_props, fluid_props, h5file='temp.h5', show_figure=False)
     plt.close()
 
     totalfluidwork = None
@@ -49,7 +53,9 @@ def objective(scaled_elastic_modulus, scale):
     fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
     gradient = adjoint(solid_props, 'temp.h5', functional_kwargs=fkwargs)
 
-    return 1-_objective, -1 * gradient * scale
+    _objective = totalfluidwork/totalinputwork
+
+    return 1 - _objective, -1 * gradient * scale
 
 def plot_elastic_modulus(elastic_modulus):
     """
@@ -83,6 +89,8 @@ def plot_elastic_modulus(elastic_modulus):
     return fig, ax
 
 if __name__ == '__main__':
+    save_dir = 'out/opt-nlopt'
+    save_path = path.join(save_dir, 'ElasticModuli.h5')
     dfn.set_log_level(30)
 
     ## Decorate the objective function to one that works with nlopt
@@ -94,30 +102,31 @@ if __name__ == '__main__':
 
         Parameters
         ----------
-        scaled_elastic_modulus :
-        scaled_grad :
+        scaled_elastic_modulus : np.ndarray
+            The elastic moduli of the VFs, divided by a scaling factor.
+        scaled_grad : np.ndarray
+            The derivative of the objective function w.r.t the scaled elastic moduli.
         """
         global ii
-        _objective, _grad = objective(scaled_elastic_modulus, SCALE)
 
-        scaled_grad[...] = _grad
-
-        # Save elastic modulus to disk
-        with h5py.File('out/OptimizationElasticModuli.h5', mode='a') as f:
+        # Save inputs (elastic moduli + figure)
+        with h5py.File(save_path, mode='a') as f:
             f['elastic_modulus'].resize(ii+1, axis=0)
             f['elastic_modulus'][ii] = scaled_elastic_modulus*SCALE
 
-        # NTIME = None
-        # with h5py.File('temp.h5', mode='r') as f:
-        #     NTIME = f['u'].shape[0]
+        fig, ax = plot_elastic_modulus(scaled_elastic_modulus*SCALE)
+        fig.savefig(path.join(save_dir, f"iteration{ii}.png"))
+        plt.close(fig)
+
+        tstart = perf_counter()
+        _objective, _grad = objective(scaled_elastic_modulus, SCALE)
+        tend = perf_counter()
+        print(f"Iteration {ii}: {tend-tstart:.2f} s")
+
+        scaled_grad[...] = _grad
 
         print(f"Vocal inefficiency: {_objective*100:.2f}%")
         print(f"Gradient norm: {np.linalg.norm(_grad)*SCALE}")
-
-        fig, ax = plot_elastic_modulus(scaled_elastic_modulus*SCALE)
-
-        fig.savefig(f"out/iteration{ii}.png")
-        plt.close(fig)
 
         ii += 1
         return _objective
@@ -125,12 +134,15 @@ if __name__ == '__main__':
     ## Configure the optimizer
     opt = nlopt.opt(nlopt.LD_LBFGS, frm.mesh.num_vertices())
     opt.set_min_objective(decorated_objective)
+    opt.set_lower_bounds(np.zeros(frm.emod.vector()[:].size))
+    opt.set_ftol_rel(1e-5)
 
     scaled_emod0 = frm.emod.vector()[:].copy()/SCALE
 
-    with h5py.File('out/ElasticModuli.h5', mode='w') as f:
+    with h5py.File(save_path, mode='w') as f:
         NVERTS = scaled_emod0.size
         f.create_dataset('elastic_modulus', (1, NVERTS), maxshape=(None, NVERTS))
 
     optimum_emod = opt.optimize(scaled_emod0)
+    print(f"Done! numevals: {opt.get_numevals()}, result: {opt.last_optimize_result()}")
     plt.show()

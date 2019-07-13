@@ -17,6 +17,7 @@ import dolfin as dfn
 import forms as frm
 from fluids import fluid_pressure
 import constants as const
+import functionals
 
 # Loading data
 emod = None
@@ -26,7 +27,8 @@ with h5py.File('out/FiniteDifferenceStates.h5', mode='r') as f:
     num_steps = f['num_steps'][()]
     emod = f['elastic_modulus'] + np.arange(num_steps)*step_size
     for ii in range(num_steps):
-        cost_fd.append(np.sum(f[join(f'{ii}', 'cost')]))
+        cost_fd.append(functionals.totalvocaleff(0, f, h5group=f'{ii}'))
+        # cost_fd.append(np.sum(f[join(f'{ii}', 'cost')]))
 
 grad_ad = None
 with h5py.File('out/Adjoint.h5', mode='r') as f:

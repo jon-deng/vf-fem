@@ -13,7 +13,7 @@ import forward
 import constants
 
 emod = None
-with h5py.File('out/ElasticModuli.h5', mode='r') as f:
+with h5py.File('out/OptimizationElasticModuli.h5', mode='r') as f:
     emod = f['elastic_modulus'][6]
 
 fluid_props = constants.DEFAULT_FLUID_PROPERTIES

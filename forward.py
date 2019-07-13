@@ -61,7 +61,8 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
 
     delta_xy = x[0].vector()[frm.vert_to_vdof.reshape(-1)].reshape(-1, 2)
     xy_current = frm.mesh.coordinates() + delta_xy
-    triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1], triangles=frm.mesh.cells())
+    triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
+                                      triangles=frm.mesh.cells())
 
     axs[0].triplot(triangulation)
 
@@ -142,7 +143,7 @@ def increment_forward(x0, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False):
+def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False):
     """
     Solves the forward model over a time interval.
 
@@ -150,6 +151,8 @@ def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_
     ----------
     tspan : (2,) array_like of float
         The start time and end time of the simulation in seconds.
+    dt : float
+        The time step in seconds.
     solid_props : dict
         Should use this style of call in the future?
     fluid_props : dict
@@ -180,9 +183,10 @@ def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_
         fig, axs = init_figure()
 
     assert tspan[1] > tspan[0]
-    dt = frm.dt.values()[0]
-    num_time = np.ceil((tspan[1]-tspan[0])/dt)
-    time = dt*np.arange(num_time)
+    frm.dt.values()[0] = dt
+    dt_ = frm.dt.values()[0]
+    num_time = np.ceil((tspan[1]-tspan[0])/dt_)
+    time = dt_*np.arange(num_time)
 
     ## Initialize datasets
     with h5py.File(h5file, mode='a') as f:
@@ -221,7 +225,7 @@ def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_
             ## Calculate useful/interesting functionals
             frm.u1.assign(u1)
             p_sub = fluid_props_ii['p_sub']
-            vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt)
+            vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt_)
             fluid_work = dfn.assemble(functionals.frm_fluidwork)
 
             ## Write the solution outputs to a file
@@ -247,22 +251,11 @@ def forward(tspan, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_
             if show_figure:
                 fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
 
-    total_cost = None
-    # with h5py.File(h5file, mode='r') as f:
-    #     f[join(h5group, 'cost')] = np.sum(f[join(h5group, 'fluidwork')][:])
-    #     total_cost = f[join(h5group, 'cost')]
-
-    with h5py.File(h5file, mode='a') as f:
-        f[join(h5group, 'cost')][()] = functionals.totalvocaleff(0, f, h5group=h5group)
-        total_cost = f[join(h5group, 'cost')][()]
-
-    return total_cost
-
 if __name__ == '__main__':
     dfn.set_log_level(30)
     # emod = frm.emod.vector()[:].copy()
     emod = None
-    with h5py.File('out/ElasticModuli.h5') as f:
+    with h5py.File('out/opt-scipy/ElasticModuli.h5') as f:
         emod = f['elastic_modulus'][-1, :]
     solid_props = {'elastic_modulus': emod}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
@@ -275,8 +268,10 @@ if __name__ == '__main__':
     except FileNotFoundError:
         pass
 
+    dt = 1e-4
     runtime_start = perf_counter()
-    forward([0, 0.02], solid_props, fluid_props, save_path, show_figure=True)
+    forward([0, 0.1], dt, solid_props, fluid_props, save_path, show_figure=True)
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+    plt.show()
