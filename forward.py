@@ -253,10 +253,11 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
-    # emod = frm.emod.vector()[:].copy()
-    emod = None
-    with h5py.File('out/opt-scipy/ElasticModuli.h5') as f:
-        emod = f['elastic_modulus'][-1, :]
+    # emod = None
+    # with h5py.File('out/opt-nlopt/ElasticModuli.h5') as f:
+    #     emod = f['elastic_modulus'][-1, :]
+    emod = constants.DEFAULT_SOLID_PROPERTIES['elastic_modulus']
+
     solid_props = {'elastic_modulus': emod}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
     # fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
