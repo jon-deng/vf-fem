@@ -65,7 +65,7 @@ def fluid_pressure(coordinates, fluid_props):
     a_min = area[idx_min]
 
     # The separation pressure is computed at the node before 'total' separation
-    a_sep = 1.2 * a_min
+    a_sep = 1.1 * a_min
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
 
     # 1D Bernoulli approximation of the flow
@@ -73,7 +73,7 @@ def fluid_pressure(coordinates, fluid_props):
 
     attached_bool = np.ones(coordinates.shape[0], dtype=np.bool)
     attached_bool[idx_sep+1:] = 0
-    p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 + 1/area**2)
+    p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
 
     # Calculate the pressure along the separation edge
     # Separation happens between vertex i and i+1, so adjust the bernoulli pressure at vertex i
@@ -168,8 +168,8 @@ def flow_sensitivity(coordinates, fluid_props):
     idx_min = np.argmin(area)
     a_min = area[idx_min]
 
-    a_sep = 1.2 * a_min
-    da_sep_da_min = 1.2
+    a_sep = 1.1 * a_min
+    da_sep_da_min = 1.1
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
 
     # 1D Bernoulli approximation of the flow
@@ -189,9 +189,9 @@ def flow_sensitivity(coordinates, fluid_props):
         j = 2*i + 1
 
         # p[i] = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 + 1/area[i]**2)
-        dp_darea = 1/2*rho*flow_rate_sqr*(-2/area[i]**3)
-        dp_darea_sep = 1/2*rho*dflow_rate_sqr_da_sep*(1/a_sub**2 + 1/area[i]**2)
-        dp_darea_sub = 1/2*rho*dflow_rate_sqr_da_sub*(1/a_sub**2 + 1/area[i]**2) \
+        dp_darea = 1/2*rho*flow_rate_sqr*(2/area[i]**3)
+        dp_darea_sep = 1/2*rho*dflow_rate_sqr_da_sep*(1/a_sub**2 - 1/area[i]**2)
+        dp_darea_sub = 1/2*rho*dflow_rate_sqr_da_sub*(1/a_sub**2 - 1/area[i]**2) \
                        + 1/2*rho*flow_rate_sqr*(-2/a_sub**3)
 
         dp_du[i, j] += dp_darea * darea_dy
@@ -199,8 +199,8 @@ def flow_sensitivity(coordinates, fluid_props):
         dp_du[i, j_sub] += dp_darea_sub * darea_dy
 
     # Account for factor on separation pressure
-    p_sep = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 + 1/area[idx_sep]**2)
-    p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 + 1/area**2)
+    p_sep = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area[idx_sep]**2)
+    p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
     p_sep = p[idx_sep]
     dp_sep_du = dp_du[idx_sep, :]
 
