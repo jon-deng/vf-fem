@@ -41,7 +41,7 @@ def objective(scaled_elastic_modulus, scale):
     # Create an empty file to write to
     with h5py.File('temp.h5', 'w'):
         pass
-    dt = 1e-4
+    dt = 2e-5
     forward([0, 0.1], dt, solid_props, fluid_props, h5file='temp.h5', show_figure=False)
     plt.close()
 
@@ -77,7 +77,7 @@ def plot_elastic_modulus(elastic_modulus):
     ax.axhline(y=frm.y_midline, ls='-.')
     ax.axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
 
-    ax.set_title('Gradient')
+    ax.set_title("Elastic Modulus")
 
     mappable = ax.tripcolor(triangulation, elastic_modulus[frm.vert_to_sdof], edgecolors='k',
                             shading='flat')
@@ -115,7 +115,7 @@ if __name__ == '__main__':
             f['elastic_modulus'][ii] = scaled_elastic_modulus*SCALE
 
         fig, ax = plot_elastic_modulus(scaled_elastic_modulus*SCALE)
-        fig.savefig(path.join(save_dir, f"iteration{ii}.png"))
+        fig.savefig(path.join(save_dir, f"OptimizationIteration{ii}.png"))
         plt.close(fig)
 
         tstart = perf_counter()

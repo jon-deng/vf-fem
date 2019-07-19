@@ -7,6 +7,9 @@ from autograd import numpy as np
 
 from petsc4py import PETSc
 
+FLUID_PROP_LABELS = ('p_sub', 'p_sup', 'a_sub', 'a_sup', 'rho', 'y_midline')
+SEPARATION_FACTOR = 1.1
+
 def set_pressure_form(form, coordinates, vertices, vertex_to_sdof, fluid_props):
     """
     Sets the nodal values of the pressure ufl.Coefficient.
@@ -59,20 +62,20 @@ def fluid_pressure(coordinates, fluid_props):
     rho = fluid_props['rho']
 
     area = 2 * (y_midline - coordinates[:, 1])
-    a_sub = area[0]
+    # a_sub = area[0]
+    a_sub = fluid_props['a_sub']
 
     idx_min = np.argmin(area)
     a_min = area[idx_min]
 
     # The separation pressure is computed at the node before 'total' separation
-    a_sep = 1.1 * a_min
+    a_sep = SEPARATION_FACTOR * a_min
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
 
     # 1D Bernoulli approximation of the flow
-    flow_rate_sqr = (p_sup - p_sub)/(1/2*rho*(1/a_sub**2-1/a_sep**2))
+    p_sep = p_sup
+    flow_rate_sqr = (p_sep - p_sub)/(1/2*rho*(1/a_sub**2-1/a_sep**2))
 
-    attached_bool = np.ones(coordinates.shape[0], dtype=np.bool)
-    attached_bool[idx_sep+1:] = 0
     p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
 
     # Calculate the pressure along the separation edge
@@ -163,13 +166,14 @@ def flow_sensitivity(coordinates, fluid_props):
     area = 2 * (y_midline - coordinates[:, 1])
     darea_dy = -2 # darea_dx = 0
 
-    a_sub = area[0]
+    # a_sub = area[0]
+    a_sub = fluid_props['a_sub']
 
     idx_min = np.argmin(area)
     a_min = area[idx_min]
 
-    a_sep = 1.1 * a_min
-    da_sep_da_min = 1.1
+    a_sep = SEPARATION_FACTOR * a_min
+    da_sep_da_min = SEPARATION_FACTOR
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
 
     # 1D Bernoulli approximation of the flow

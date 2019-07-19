@@ -10,7 +10,9 @@ SI_VISCOSITY_TO_CGS = PASCAL_TO_CGS
 ## Default properties you can use if you can't think of anything else
 DEFAULT_FLUID_PROPERTIES = {'p_sub': 800*PASCAL_TO_CGS,
                             'p_sup': 0*PASCAL_TO_CGS,
-                            'rho': 1.184*SI_DENSITY_TO_CGS,
+                            'a_sub': 100000,
+                            'a_sup': 0.6,
+                            'rho': 1.1225*SI_DENSITY_TO_CGS,
                             'y_midline': 0.61}
 
 DEFAULT_SOLID_PROPERTIES = {'elastic_modulus': 10e3*PASCAL_TO_CGS,

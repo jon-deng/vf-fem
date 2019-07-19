@@ -4,6 +4,7 @@ Verifies if the adjoint is working.
 I'm using CGS : cm-g-s units
 """
 
+import sys
 from os.path import join
 
 import h5py
@@ -14,10 +15,11 @@ from matplotlib import pyplot as plt
 import dolfin as dfn
 #import ufl
 
-import forms as frm
-from fluids import fluid_pressure
-import constants as const
-import functionals
+sys.path.append('../')
+from femvf import forms as frm
+from femvf.fluids import fluid_pressure
+from femvf import constants as const
+from femvf import functionals
 
 # Loading data
 emod = None

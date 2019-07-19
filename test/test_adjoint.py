@@ -2,16 +2,18 @@
 Compare gradient computed via adjoint method with gradient computed via FD.
 """
 
+import sys
 from time import perf_counter
 
 import h5py
 import dolfin as dfn
 
-from forward import forward
-from adjoint import adjoint
-import forms as frm
-import constants
-import functionals
+sys.path.append('../')
+from femvf.forward import forward
+from femvf.adjoint import adjoint
+from femvf import forms as frm
+from femvf import constants
+from femvf import functionals
 
 if __name__ == '__main__':
     dfn.set_log_level(30)

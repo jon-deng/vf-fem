@@ -7,7 +7,8 @@ from matplotlib import pyplot as plt
 
 import h5py
 
-import forms as frm
+sys.path.append('../')
+from femvf import forms as frm
 
 vocal_eff = None
 time = None

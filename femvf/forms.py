@@ -17,7 +17,7 @@ import constants as const
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
 
 ## Mesh generation
-mesh = dfn.RectangleMesh(dfn.Point(-0.5, -0.5), dfn.Point(0.5, 0.5), 5, 15)
+mesh = dfn.RectangleMesh(dfn.Point(-0.5, -0.5), dfn.Point(0.5, 0.5), 10, 25)
 
 # Mark the mesh boundaries with dfn.MeshFunction
 # Use the MeshFunction class to mark portions of the mesh with integer values.
@@ -43,7 +43,7 @@ class OmegaPressure(dfn.SubDomain):
 omega_pressure = OmegaPressure()
 
 # Set a function to mark collision nodes
-collision_eps = 0.005
+collision_eps = 0.001
 y_midline = const.DEFAULT_FLUID_PROPERTIES['y_midline']
 class OmegaContact(dfn.SubDomain):
     """Marks the contact boundary"""
@@ -185,6 +185,7 @@ u1 = dfn.Function(vector_function_space)
 
 # Time step
 dt = dfn.Constant(1e-4)
+# dt = dfn.Constant(2e-5)
 
 # Pressure forcing
 pressure = dfn.Function(scalar_function_space)
@@ -222,10 +223,10 @@ x_reference = dfn.Function(vector_function_space)
 x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
 # gap = (x_reference.sub(1) + u1.sub(1))# - (y_midline-collision_eps)
 # gap = u1.sub(1)
-gap = ufl.dot(x_reference+u1, collision_normal) - (y_midline-collision_eps)
+gap = ufl.dot(x_reference+u1, collision_normal) - (y_midline - collision_eps)
 positive_gap = (gap + abs(gap)) / 2
 
-k_collision = dfn.Constant(1e10)
+k_collision = dfn.Constant(1e11)
 penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, test) * ds(domainid_pressure)
 
 fu_nonlin = ufl.action(fu, u1) - penalty

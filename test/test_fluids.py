@@ -2,6 +2,7 @@
 Tests fluids.py module
 """
 
+import sys
 import dolfin as dfn
 
 import autograd
@@ -13,12 +14,10 @@ import petsc4py
 petsc4py.init()
 from petsc4py import PETSc
 
-import ipdb
-
-import forms as frm
-import fluids
-import transforms
-import constants
+sys.path.append('../')
+from femvf import fluids
+from femvf import transforms
+from femvf import constants
 
 ## Mesh generation
 mesh = dfn.RectangleMesh(dfn.Point(-0.5, -0.5), dfn.Point(0.5, 0.5), 10, 30)

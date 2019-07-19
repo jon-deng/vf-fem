@@ -12,17 +12,19 @@ shows a non-smooth behaviour at a peak however, the portions to the left and rig
 """
 
 import os
+import sys
 from time import perf_counter
 
 import h5py
 import numpy as np
 import dolfin as dfn
 
-import forms as frm
-from forward import forward
-from adjoint import adjoint
-import constants
-import functionals
+sys.path.append('../')
+from femvf import forms as frm
+from femvf.forward import forward
+from femvf.adjoint import adjoint
+from femvf import constants
+from femvf import functionals
 
 def gradient(tspan, dt, solid_props, fluid_props):
     """

@@ -18,29 +18,41 @@ import dolfin as dfn
 # import ufl
 
 import forms as frm
-# import fluids
+import fluids
 import constants
 import functionals
 
 from collision import detect_collision, set_collision
 from misc import get_dynamic_fluid_props
 
-
 def init_figure():
     """
     Returns a figure and tuple of axes to plot the solution into.
     """
-    gridspec_kw = {'height_ratios': [3, 1]}
-    fig, axs = plt.subplots(2, 1, gridspec_kw=gridspec_kw)
+    gridspec_kw = {'height_ratios': [3, 2, 2]}
+    fig, axs = plt.subplots(3, 1, gridspec_kw=gridspec_kw, figsize=(6, 8), )
     axs[0].set_aspect('equal', adjustable='datalim')
 
     x = np.arange(frm.surface_vertices.shape[0])
     y = np.arange(frm.surface_vertices.shape[0])
+
     axs[1].plot(x, y, marker='o')
 
+    axs[2].plot([0], [0])
+
+    axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[0].set_ylim(0.0, 0.7, auto=False)
+
+    axs[1].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
+    axs[1].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
+
+    axs[2].set_xlabel("Time [s]")
+    axs[2].set_ylabel("Glottal flow rate [cm^2/s]")
+    axs[1].set_ylabel("Surface pressure [Pa]")
     return fig, axs
 
-def update_figure(fig, axs, t, x, fluid_info, fluid_props):
+def update_figure(fig, axs, t, x, fluid_info, fluid_props, n, figure_path=None):
     """
     Plots the FEM solution into a figure.
 
@@ -63,7 +75,6 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     xy_current = frm.mesh.coordinates() + delta_xy
     triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
                                       triangles=frm.mesh.cells())
-
     axs[0].triplot(triangulation)
 
     xy_surface = xy_current[frm.surface_vertices]
@@ -72,23 +83,29 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     axs[0].plot(*xy_min, marker='o', mfc='none', color='C0')
     axs[0].plot(*xy_sep, marker='o', mfc='none', color='C1')
     axs[0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
-    axs[0].axhline(y=frm.y_midline, ls='-.')
-    axs[0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
 
     axs[0].set_title(f'Time: {1e3*t:>5.1f} ms')
 
+    axs[0].axhline(y=frm.y_midline, ls='-.', lw=0.5)
+    axs[0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
+
     pressure_profile = axs[1].lines[0]
-    pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure'])
+    pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
 
-    # Formatting
-    axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
-    axs[0].set_ylim(0.0, 0.7, auto=False)
+    line = axs[2].lines[0]
+    ydata = line.get_ydata()
+    xdata = line.get_xdata()
+    line.set_data([*xdata, t], [*ydata, fluid_info['flow_rate']])
 
-    axs[1].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
-    axs[1].set_ylim(0, 5*fluid_props['p_sub'], auto=False)
+    axs[2].set_xlim(0, 1.2*t)
+    axs[2].set_ylim(0, 200)
 
-    axs[1].set_ylabel('Surface pressure')
+    # print(fluid_info['flow_rate'])
     plt.pause(0.001)
+
+    ext = '.png'
+    if figure_path is not None:
+        fig.savefig(f'{figure_path}_{n}{ext}')
 
     return fig, axs
 
@@ -143,7 +160,7 @@ def increment_forward(x0, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False):
+def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False, figure_path=None):
     """
     Solves the forward model over a time interval.
 
@@ -204,10 +221,8 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
         f.create_dataset(join(h5group, 'fluid_work'), shape=(num_time-1,), dtype=np.float64)
 
         # Fluid properties
-        f.create_dataset(join(h5group, 'fluid_properties', 'p_sub'), shape=(num_time-1,))
-        f.create_dataset(join(h5group, 'fluid_properties', 'p_sup'), shape=(num_time-1,))
-        f.create_dataset(join(h5group, 'fluid_properties', 'rho'), shape=(num_time-1,))
-        f.create_dataset(join(h5group, 'fluid_properties', 'y_midline'), shape=(num_time-1,))
+        for label in fluids.FLUID_PROP_LABELS:
+            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(num_time-1,))
 
         # Solid properties
         f.create_dataset(join(h5group, 'solid_properties', 'elastic_modulus'),
@@ -234,7 +249,7 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
                 f[join(h5group, label)][ii+1] = value.vector()[:]
 
             # Fluid properties
-            for label in ('p_sub', 'p_sup', 'rho', 'y_midline'):
+            for label in fluids.FLUID_PROP_LABELS:
                 f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
 
             # Output functionals
@@ -249,14 +264,15 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
 
             ## Plot the solution
             if show_figure:
-                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
+                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii, ii,
+                                         figure_path=figure_path)
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
-    # emod = None
-    # with h5py.File('out/opt-nlopt/ElasticModuli.h5') as f:
-    #     emod = f['elastic_modulus'][-1, :]
-    emod = constants.DEFAULT_SOLID_PROPERTIES['elastic_modulus']
+    emod = None
+    with h5py.File('out/opt-nlopt/ElasticModuli.h5') as f:
+        emod = f['elastic_modulus'][0, :]
+    # emod = constants.DEFAULT_SOLID_PROPERTIES['elastic_modulus']
 
     solid_props = {'elastic_modulus': emod}
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
@@ -271,7 +287,8 @@ if __name__ == '__main__':
 
     dt = 1e-4
     runtime_start = perf_counter()
-    forward([0, 0.1], dt, solid_props, fluid_props, save_path, show_figure=True)
+    forward([0, 0.05], dt, solid_props, fluid_props, save_path, show_figure=True,
+            figure_path='out/opt-nlopt/anim_start/frame')
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

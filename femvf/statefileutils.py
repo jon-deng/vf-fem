@@ -25,6 +25,8 @@ import h5py
 
 from os.path import join
 
+import fluids
+
 def get_time(h5file, group='/'):
     """
     Returns the time vector.
@@ -61,7 +63,7 @@ def get_fluid_properties(n, h5file, group='/'):
     Returns the fluid properties dictionary at index n.
     """
     fluid_props = {}
-    for label in ('p_sub', 'p_sup', 'rho', 'y_midline'):
+    for label in fluids.FLUID_PROP_LABELS:
         fluid_props[label] = h5file[join(group, 'fluid_properties', label)][n]
 
     return fluid_props
