@@ -13,24 +13,25 @@ import numpy as np
 
 from matplotlib import tri
 from matplotlib import pyplot as plt
+from matplotlib import animation
 
 import dolfin as dfn
 # import ufl
 
-import forms as frm
-import fluids
-import constants
-import functionals
+from . import forms as frm
+from . import fluids
+from . import constants
+from . import functionals
 
-from collision import detect_collision, set_collision
-from misc import get_dynamic_fluid_props
+# from .collision import detect_collision
+from .misc import get_dynamic_fluid_props
 
-def init_figure():
+def init_figure(fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
     """
     gridspec_kw = {'height_ratios': [3, 2, 2]}
-    fig, axs = plt.subplots(3, 1, gridspec_kw=gridspec_kw, figsize=(6, 8), )
+    fig, axs = plt.subplots(4, 1, gridspec_kw=gridspec_kw, figsize=(6, 8), )
     axs[0].set_aspect('equal', adjustable='datalim')
 
     x = np.arange(frm.surface_vertices.shape[0])
@@ -197,7 +198,7 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     ## Allocate a figure for plotting
     fig, axs = None, None
     if show_figure:
-        fig, axs = init_figure()
+        fig, axs = init_figure(fluid_props)
 
     assert tspan[1] > tspan[0]
     frm.dt.values()[0] = dt

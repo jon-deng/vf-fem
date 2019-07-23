@@ -22,13 +22,13 @@ import ufl
 #petsc4py.init()
 from petsc4py import PETSc
 
-import forms as frm
-import linalg
-import statefileutils as sfu
-import constants
-import functionals
+from . import forms as frm
+from . import linalg
+from . import statefileutils as sfu
+from . import constants
+from . import functionals
 
-from misc import get_dynamic_fluid_props
+from .misc import get_dynamic_fluid_props
 
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True

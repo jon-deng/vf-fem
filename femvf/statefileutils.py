@@ -25,7 +25,7 @@ import h5py
 
 from os.path import join
 
-import fluids
+from . import fluids
 
 def get_time(h5file, group='/'):
     """

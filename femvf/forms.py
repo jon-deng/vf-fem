@@ -9,9 +9,9 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-import transforms
-import fluids
-import constants as const
+from . import transforms
+from . import fluids
+from . import constants as const
 
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True

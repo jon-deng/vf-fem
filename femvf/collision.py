@@ -3,7 +3,7 @@ Routines for implementing collision
 """
 import numpy as np
 import dolfin as dfn
-import forms as frm
+from . import forms as frm
 
 def detect_collision(mesh, vert_marker, omega_contact, u0, v0, a0, vert_to_vdof,
                      domainid_contact=frm.domainid_contact):

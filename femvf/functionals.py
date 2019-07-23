@@ -5,8 +5,8 @@ Contains a bunch of different functionals
 import dolfin as dfn
 import ufl
 
-import statefileutils as sfu
-import forms as frm
+from . import statefileutils as sfu
+from . import forms as frm
 
 # Form definitions needed for the fluid work functional
 frm_fluidwork = ufl.dot(frm.fluid_force, frm.u1-frm.u0) * frm.ds(frm.domainid_pressure)
@@ -201,7 +201,7 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
     tfluidwork = cache_totalfluidwork
     if tfluidwork is None:
         tfluidwork = totalfluidwork(n, h5file, h5group=h5group)
-    
+
     tinputwork = cache_totalinputwork
     if tinputwork is None:
         tinputwork = totalinputwork(n, h5file, h5group=h5group)
