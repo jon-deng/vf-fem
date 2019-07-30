@@ -23,10 +23,12 @@ import ufl
 from petsc4py import PETSc
 
 from . import forms as frm
-from . import linalg
+# from . import linalg
 from . import statefileutils as sfu
 from . import constants
 from . import functionals
+
+# import forms as frm
 
 from .misc import get_dynamic_fluid_props
 
@@ -118,7 +120,8 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
 
     return (adj_u1, adj_v1, adj_a1), df1_dparam
 
-def adjoint(solid_props, h5file, h5group='/', show_figure=False, functional_kwargs={}):
+def adjoint(solid_props, h5file, h5group='/', show_figure=False,
+            dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs={}):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
 
@@ -134,10 +137,10 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False, functional_kwar
         The group where states are stored in the hdf5 file.
     show_figures : bool
         Whether to display a figure showing the solution or not.
+    dg_du : callable
+        The sensitivity of a functional g with respect to the n'th state given by
+        dg_du(n, h5file, h5group='/', **kwargs)
     """
-    # TODO: you should refactor the functional to be something u can change
-    dfunctional_du = functionals.dtotalvocaleff_du
-
     ## Allocate adjoint states
     adj_u1 = dfn.Function(frm.vector_function_space)
     adj_v1 = dfn.Function(frm.vector_function_space)
@@ -171,7 +174,7 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False, functional_kwar
     ## Initialize the adjoint state
     dcost_du2 = None
     with h5py.File(h5file, mode='r') as f:
-        dcost_du2 = dfunctional_du(num_states-1, f, h5group=h5group, **functional_kwargs)
+        dcost_du2 = dg_du(num_states-1, f, h5group=h5group, **dg_du_kwargs)
 
     frm.bc_base_adjoint.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
@@ -192,7 +195,7 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False, functional_kwar
             x1 = sfu.get_state(ii-1, f, group=h5group)
 
             # dcost_du1 = functionals.dfluidwork_du(ii, h5path, h5group=h5group)
-            dcost_du1 = dfunctional_du(ii, f, h5group=h5group, **functional_kwargs)
+            dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
                 (adj_u2, adj_v2, adj_a2), x1, x2, x2, solid_props,

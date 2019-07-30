@@ -22,6 +22,7 @@ from . import forms as frm
 from . import fluids
 from . import constants
 from . import functionals
+from . import visualization as vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props

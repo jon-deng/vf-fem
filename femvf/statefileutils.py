@@ -58,6 +58,28 @@ def get_state(n, h5file, group='/'):
 
     return (u, v, a)
 
+def set_state(x, n, h5file, group='/'):
+    """
+    Sets the function x (u, v, a) to values at index n.
+
+    Parameters
+    ----------
+    x : tuple of dolfin.Function
+        A tuple of function values
+    n : int
+        Index to set the functions for.
+    group : string
+        The group where states are stored.
+    path : string
+        The path of the hdf5 file containing states.
+    """
+    u, v, a = get_state(n, h5file, group=group)
+    x[0].vector()[:] = u
+    x[1].vector()[:] = v
+    x[2].vector()[:] = a
+
+    return x
+
 def get_fluid_properties(n, h5file, group='/'):
     """
     Returns the fluid properties dictionary at index n.
@@ -89,3 +111,6 @@ def set_states(n, h5file, group='/', u0=None, v0=None, a0=None, u1=None):
         a0.vector()[:] = h5file[join(group, 'a')][n-1]
     if u1 is not None:
         u1.vector()[:] = h5file[join(group, 'u')][n]
+
+# class StateFile:
+#     pass

@@ -40,7 +40,7 @@ if __name__ == '__main__':
         f.create_dataset('num_steps', data=num_steps)
 
     for ii in range(num_steps):
-        tspan = [0, 0.005]
+        tspan = [0, 0.05]
         solid_props = {'elastic_modulus': emod + ii*step_size}
 
         runtime_start = perf_counter()
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
     solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()
-    gradient = adjoint(solid_props, save_path, h5group='0', functional_kwargs=fkwargs)
+    gradient = adjoint(solid_props, save_path, h5group='0', dg_du_kwargs=fkwargs)
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

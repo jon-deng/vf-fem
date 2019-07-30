@@ -40,7 +40,7 @@ def gradient(tspan, dt, solid_props, fluid_props):
         totalfluidwork = functionals.totalfluidwork(0, f)
         totalinputwork = functionals.totalinputwork(0, f)
     fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    grad = adjoint(solid_props, '_tmp.h5', functional_kwargs=fkwargs)
+    grad = adjoint(solid_props, '_tmp.h5', dg_du_kwargs=fkwargs)
     return totalfluidwork/totalinputwork, grad
 
 if __name__ == '__main__':

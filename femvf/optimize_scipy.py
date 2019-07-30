@@ -83,7 +83,7 @@ def objective(scaled_elastic_modulus, scale):
         totalfluidwork = functionals.totalfluidwork(0, f)
         totalinputwork = functionals.totalinputwork(0, f)
     fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    gradient = adjoint(solid_props, 'temp.h5', functional_kwargs=fkwargs)
+    gradient = adjoint(solid_props, 'temp.h5', dg_du_kwargs=fkwargs)
     _objective = totalfluidwork/totalinputwork
 
     return 1 - _objective, -1 * gradient * scale
