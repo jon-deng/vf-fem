@@ -73,7 +73,7 @@ if __name__ == '__main__':
         solid_props = {'elastic_modulus': elastic_modulus}
 
         runtime_start = perf_counter()
-        forward([0, 0.1], dt, solid_props, fluid_props, save_path, h5group=f'{ii}', show_figure=False)
+        forward([0, 0.05], dt, solid_props, fluid_props, save_path, h5group=f'{ii}', show_figure=True)
         runtime_end = perf_counter()
 
         objective = None

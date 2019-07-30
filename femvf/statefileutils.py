@@ -27,7 +27,13 @@ from os.path import join
 
 from . import fluids
 
-def get_time(h5file, group='/'):
+def get_time(n, h5file, group='/'):
+    """
+    Returns the time vector.
+    """
+    return h5file[join(group, 'time')][n]
+
+def get_times(h5file, group='/'):
     """
     Returns the time vector.
     """

@@ -32,7 +32,7 @@ def init_figure(fluid_props):
     Returns a figure and tuple of axes to plot the solution into.
     """
     gridspec_kw = {'height_ratios': [3, 2, 2]}
-    fig, axs = plt.subplots(4, 1, gridspec_kw=gridspec_kw, figsize=(6, 8), )
+    fig, axs = plt.subplots(3, 1, gridspec_kw=gridspec_kw, figsize=(6, 8))
     axs[0].set_aspect('equal', adjustable='datalim')
 
     x = np.arange(frm.surface_vertices.shape[0])
@@ -54,7 +54,7 @@ def init_figure(fluid_props):
     axs[1].set_ylabel("Surface pressure [Pa]")
     return fig, axs
 
-def update_figure(fig, axs, t, x, fluid_info, fluid_props, n, figure_path=None):
+def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     """
     Plots the FEM solution into a figure.
 
@@ -101,13 +101,6 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props, n, figure_path=None):
 
     axs[2].set_xlim(0, 1.2*t)
     axs[2].set_ylim(0, 200)
-
-    # print(fluid_info['flow_rate'])
-    plt.pause(0.001)
-
-    ext = '.png'
-    if figure_path is not None:
-        fig.savefig(f'{figure_path}_{n}{ext}')
 
     return fig, axs
 
@@ -255,7 +248,6 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
                 f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
 
             # Output functionals
-            # f[join(h5group, 'cost')][ii] = vocal_efficiency
             f[join(h5group, 'fluid_work')][ii] = fluid_work
             f[join(h5group, 'vocal_efficiency')][ii] = vocal_efficiency
 
@@ -266,8 +258,12 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
 
             ## Plot the solution
             if show_figure:
-                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii, ii,
-                                         figure_path=figure_path)
+                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
+                plt.pause(0.001)
+
+                if figure_path is not None:
+                    ext = '.png'
+                    fig.savefig(f'{figure_path}_{ii}{ext}')
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
