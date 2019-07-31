@@ -14,6 +14,7 @@ frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, frm.u0, frm.test)
 frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, frm.pressure, frm.scalar_test)
 frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, frm.u1, frm.test)
 
+## Functionals defined for a single state index
 def fluidwork(n, h5file, h5group='/'):
     """
     Returns the fluid work from n-1 to n.
@@ -148,6 +149,53 @@ def dvocaleff_du(n, h5file, h5group='/'):
 
     return out
 
+def fdr(n, h5file, h5group='/'):
+    """
+    Returns the flow declination rate at n.
+
+    This uses finite differencing
+    """
+    # Set form coefficients to represent the equation at state ii
+    sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+    info = frm.set_pressure(fluid_props)
+
+    t_plus = sfu.get_time(n+1, h5file, group=h5group)
+    q_plus = info['flow_rate']
+
+    sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+    info = frm.set_pressure(fluid_props)
+
+    t_minus = sfu.get_time(n, h5file, group=h5group)
+    q_minus = info['flow_rate']
+
+    return (q_plus-q_minus)/(t_plus-t_minus)
+
+def dfdr_du(n, h5file, h5group='/'):
+    """
+    Returns the flow declination rate at n.
+
+    This uses finite differencing
+    """
+    # Set form coefficients to represent the equation at state ii
+    sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+    info = frm.set_pressure(fluid_props)
+
+    t_plus = sfu.get_time(n+1, h5file, group=h5group)
+    q_plus = info['flow_rate']
+
+    sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+    info = frm.set_pressure(fluid_props)
+
+    t_minus = sfu.get_time(n, h5file, group=h5group)
+    q_minus = info['flow_rate']
+
+    return (q_plus-q_minus)/(t_plus-t_minus)
+
+## Functionals defined over the entire state history
 def totalfluidwork(n, h5file, h5group='/'):
     """
     Returns the total work done by the fluid on the vocal folds.
@@ -220,3 +268,21 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
         dtotalinputwork_du = dt*fluid_props['p_sub']*dfn.PETScVector(dq_du)
 
     return dtotalfluidwork_du/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du
+
+def mfdr(n, h5file, h5group='/', min_time=0.03):
+    """
+    Returns the maximum flow declination rate at a time > min_time (s).
+    """
+
+    res = 0
+    times = sfu.get_times(h5file, group=h5group)
+    num_states = sfu.get_num_states(h5file, group=h5group)
+    for ii in range(num_states-1):
+        # Set form coefficients to represent the equation at state ii
+        sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
+        info = frm.set_pressure(fluid_props)
+
+        res += float(frm.dt)*info['flow_rate']*fluid_props['p_sub']
+
+    return res

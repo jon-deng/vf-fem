@@ -39,14 +39,14 @@ def set_pressure_form(form, coordinates, vertices, vertex_to_sdof, fluid_props):
     info['pressure'] = pressure
     return info
 
-def fluid_pressure(coordinates, fluid_props):
+def fluid_pressure(x, fluid_props):
     """
     Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
     Parameters
     ----------
-    coordinates : (NUM_VERTICES, GEOMETRIC_DIM) np.array
-        Coordinates of surface vertices ordered along the flow direction (increasing x coordinate).
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
     fluid_props : dict
         A dictionary of fluid properties.
 
@@ -61,20 +61,25 @@ def fluid_pressure(coordinates, fluid_props):
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
 
-    area = 2 * (y_midline - coordinates[:, 1])
-    # a_sub = area[0]
+    # Calculate transverse plane areas using the y component of 'u' (aka x[0]) of the surface
+    area = 2 * (y_midline - x[0][:, 1])
+    dt_area = -2 * (x[1][:, 1])
+
     a_sub = fluid_props['a_sub']
 
     idx_min = np.argmin(area)
     a_min = area[idx_min]
+    dt_a_min = dt_area[idx_min]
 
     # The separation pressure is computed at the node before 'total' separation
     a_sep = SEPARATION_FACTOR * a_min
+    dt_a_sep = SEPARATION_FACTOR * dt_a_min
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
 
     # 1D Bernoulli approximation of the flow
     p_sep = p_sup
-    flow_rate_sqr = (p_sep - p_sub)/(1/2*rho*(1/a_sub**2-1/a_sep**2))
+    flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
+    dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
 
     p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
 
@@ -85,19 +90,21 @@ def fluid_pressure(coordinates, fluid_props):
     den = (area[idx_sep+1] - area[idx_sep])
     factor = num/den
 
-    separation = np.zeros(coordinates.shape[0], dtype=np.bool)
+    separation = np.zeros(x[0].shape[0], dtype=np.bool)
     separation[idx_sep] = 1
 
-    attached = np.ones(coordinates.shape[0], dtype=np.bool)
+    attached = np.ones(x[0].shape[0], dtype=np.bool)
     attached[idx_sep:] = 0
 
     p = attached*p + separation*factor*p[idx_sep]
 
     flow_rate = flow_rate_sqr**0.5
+    dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
 
-    xy_min = coordinates[idx_min]
-    xy_sep = coordinates[idx_sep]
+    xy_min = x[0][idx_min]
+    xy_sep = x[0][idx_sep]
     info = {'flow_rate': flow_rate,
+            'dt_flow_rate': dt_flow_rate,
             'xy_min': xy_min,
             'xy_sep': xy_sep}
     return p, info

@@ -270,9 +270,11 @@ def set_pressure(fluid_props):
     fluid_props : dict
         A dictionary of fluid properties for the 1d bernoulli fluids model
     """
-    delta_xy = u0.vector()[vert_to_vdof[surface_vertices].reshape(-1)].reshape(-1, 2)
-    xy_surface = surface_coordinates + delta_xy
-    info = fluids.set_pressure_form(pressure, xy_surface, surface_vertices, vert_to_sdof,
+    _u = u0.vector()[vert_to_vdof[surface_vertices].reshape(-1)].reshape(-1, 2)
+    _v = v0.vector()[vert_to_vdof[surface_vertices].reshape(-1)].reshape(-1, 2)
+    _a = a0.vector()[vert_to_vdof[surface_vertices].reshape(-1)].reshape(-1, 2)
+    x_surface = (surface_coordinates + _u, _v, _a)
+    info = fluids.set_pressure_form(pressure, x_surface, surface_vertices, vert_to_sdof,
                                     fluid_props)
     return info
 

@@ -31,7 +31,7 @@ def init_figure(fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
     """
-    gridspec_kw = {'height_ratios': [3, 2, 2]}
+    gridspec_kw = {'height_ratios': [4, 2, 2]}
     fig, axs = plt.subplots(3, 1, gridspec_kw=gridspec_kw, figsize=(6, 8))
     axs[0].set_aspect('equal', adjustable='datalim')
 
@@ -40,7 +40,10 @@ def init_figure(fluid_props):
 
     axs[1].plot(x, y, marker='o')
 
+    # Initialize lines for plotting flow rate and the rate of flow rate
     axs[2].plot([0], [0])
+    axs[3].plot([0], [0])
+    axs[3].plot([0], [0])
 
     axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
     axs[0].set_ylim(0.0, 0.7, auto=False)
@@ -49,9 +52,12 @@ def init_figure(fluid_props):
     p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
     axs[1].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
 
-    axs[2].set_xlabel("Time [s]")
-    axs[2].set_ylabel("Glottal flow rate [cm^2/s]")
     axs[1].set_ylabel("Surface pressure [Pa]")
+
+    axs[2].set_ylabel("Glottal flow rate [cm^2/s]")
+
+    # axs[3].set_xlabel("Time [s]")
+    # axs[3].set_ylabel("Glottal flow rate rate [cm^2/s^2]")
     return fig, axs
 
 def update_figure(fig, axs, t, x, fluid_info, fluid_props):
@@ -95,12 +101,23 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
 
     line = axs[2].lines[0]
-    ydata = line.get_ydata()
-    xdata = line.get_xdata()
-    line.set_data([*xdata, t], [*ydata, fluid_info['flow_rate']])
+    xdata = np.concatenate((line.get_xdata(), [t]), axis=0)
+    ydata = np.concatenate((line.get_ydata(), [fluid_info['flow_rate']]), axis=0)
+    line.set_data(xdata, ydata)
+
+    # line = axs[3].lines[1]
+    # fd = (ydata[1:]-ydata[:-1])/(xdata[1:]-xdata[:-1])
+    # line.set_data(xdata[:-1], fd)
+
+    # line = axs[3].lines[0]
+    # ydata = np.concatenate((line.get_ydata(), [fluid_info['dt_flow_rate']]), axis=0)
+    # line.set_data(xdata, ydata)
 
     axs[2].set_xlim(0, 1.2*t)
     axs[2].set_ylim(0, 200)
+
+    # axs[3].set_xlim(0, 1.2*t)
+    # axs[3].set_ylim(np.min(ydata)*1.1, np.max(ydata)*1.1)
 
     return fig, axs
 
@@ -155,7 +172,8 @@ def increment_forward(x0, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False, figure_path=None):
+def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False, 
+            figure_path=None):
     """
     Solves the forward model over a time interval.
 
