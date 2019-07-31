@@ -42,8 +42,8 @@ def init_figure(fluid_props):
 
     # Initialize lines for plotting flow rate and the rate of flow rate
     axs[2].plot([0], [0])
-    axs[3].plot([0], [0])
-    axs[3].plot([0], [0])
+    # axs[3].plot([0], [0])
+    # axs[3].plot([0], [0])
 
     axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
     axs[0].set_ylim(0.0, 0.7, auto=False)
@@ -172,7 +172,7 @@ def increment_forward(x0, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False, 
+def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False,
             figure_path=None):
     """
     Solves the forward model over a time interval.

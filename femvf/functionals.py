@@ -193,7 +193,7 @@ def dfdr_du(n, h5file, h5group='/'):
     dq_minus_du = frm.set_flow_sensitivity(fluid_props)[1]
     t_minus = sfu.get_time(n, h5file, group=h5group)
 
-    if n
+    # if n
 
     return (dq_plus_du-dq_minus_du)/(t_plus-t_minus)
 

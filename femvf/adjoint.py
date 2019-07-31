@@ -43,11 +43,14 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
 
     Parameters
     ----------
-    adj_x2 : tuple (adj_u1, adj_v1, adj_a1) of dfn.Function
-        'Initial' states for the adjoint model
+    adj_x2 : tuple (adj_u2, adj_v2, adj_a2) of dfn.Function
+        A tuple of 'initial' (time index 2) states for the adjoint model.
+    x0, x1, x2 : tuple (u, v, a) of dfn.Function
+        Tuples of states at time indices 0, 1, and 2.
     solid_props : dict
+        A dictionary of solid properties.
     fluid_props0, fluid_props1 : dict
-        Dictionaries storing fluid properties.
+        Dictionaries storing fluid properties at time indices 0 and 1.
     h5path : string
         Path to an hdf5 file containing states from a forward run of the model.
     h5group : string
@@ -125,21 +128,21 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False,
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
 
+    TODO: Remove the solid_props parameter. This should be retrievable from the h5file.
+
     Parameters
     ----------
     solid_props : dict
         Should use this style of call in the future?
-    states_path : string
-        The path of the file containing states from the forward model run.
-    h5path : string
+    h5file : string
         Path to an hdf5 file containing states from a forward run of the model.
     h5group : string
         The group where states are stored in the hdf5 file.
     show_figures : bool
         Whether to display a figure showing the solution or not.
     dg_du : callable
-        The sensitivity of a functional g with respect to the n'th state given by
-        dg_du(n, h5file, h5group='/', **kwargs)
+        A callable returning the sensitivity of a functional, g, with respect to the state n given.
+        The signature should be dg_du(n, h5file, h5group='/', **kwargs)
     """
     ## Allocate adjoint states
     adj_u1 = dfn.Function(frm.vector_function_space)
@@ -191,14 +194,14 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False,
             fluid_props1 = sfu.get_fluid_properties(ii, f, group=h5group)
 
             x2 = sfu.get_state(ii+1, f, group=h5group)
-            x2 = sfu.get_state(ii, f, group=h5group)
-            x1 = sfu.get_state(ii-1, f, group=h5group)
+            x1 = sfu.get_state(ii, f, group=h5group)
+            x0 = sfu.get_state(ii-1, f, group=h5group)
 
             # dcost_du1 = functionals.dfluidwork_du(ii, h5path, h5group=h5group)
             dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
-                (adj_u2, adj_v2, adj_a2), x1, x2, x2, solid_props,
+                (adj_u2, adj_v2, adj_a2), x0, x1, x2, solid_props,
                 fluid_props0, fluid_props1, dcost_du1)
 
             # Update gradient
