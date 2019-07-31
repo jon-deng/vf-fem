@@ -181,19 +181,21 @@ def dfdr_du(n, h5file, h5group='/'):
     # Set form coefficients to represent the equation at state ii
     sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-    info = frm.set_pressure(fluid_props)
 
+    q_plus = frm.set_pressure(fluid_props)['flow_rate']
+    dq_plus_du = frm.set_flow_sensitivity(fluid_props)[1]
     t_plus = sfu.get_time(n+1, h5file, group=h5group)
-    q_plus = info['flow_rate']
 
     sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-    info = frm.set_pressure(fluid_props)
 
+    q_minus = frm.set_pressure(fluid_props)['flow_rate']
+    dq_minus_du = frm.set_flow_sensitivity(fluid_props)[1]
     t_minus = sfu.get_time(n, h5file, group=h5group)
-    q_minus = info['flow_rate']
 
-    return (q_plus-q_minus)/(t_plus-t_minus)
+    if n
+
+    return (dq_plus_du-dq_minus_du)/(t_plus-t_minus)
 
 ## Functionals defined over the entire state history
 def totalfluidwork(n, h5file, h5group='/'):
