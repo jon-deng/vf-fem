@@ -41,6 +41,16 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
     """
     Returns the adjoint at the previous time step.
 
+    Each adjoint step is based on an indexing scheme where the postfix on a variable represents
+    index n + postfix. For example, variables x0, x1, and x2 are states at n, n+1, and n+2. This is
+    done because the adjoint calculation to solve for lambda_{n+1} given lambda_{n+2} requires the
+    forward equations f^{n+2}=0, and f^{n+1}=0, which in turn require states x^{n}, x^{n+1}, and
+    x^{n+2} to be defined.
+
+    Note that f^{n+1} = f^{n+1}([u, v, a]^{n+1}, [u, v, a]^{n}) = 0 involves the FEM approximation
+    and time stepping scheme that defines the state x^{n+1} = (u, v, a)^{n+1} implicitly, which
+    could be linear or non-linear.
+
     Parameters
     ----------
     adj_x2 : tuple (adj_u2, adj_v2, adj_a2) of dfn.Function
