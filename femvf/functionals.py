@@ -2,8 +2,13 @@
 Contains a bunch of different functionals
 """
 
+import os.path as path
+
+import numpy as np
 import dolfin as dfn
 import ufl
+
+from petsc4py import PETSc
 
 from . import statefileutils as sfu
 from . import forms as frm
@@ -275,9 +280,8 @@ def mfdr(n, h5file, h5group='/', min_time=0.03):
     """
     Returns the maximum flow declination rate at a time > min_time (s).
     """
+    flow_rate = []
 
-    res = 0
-    times = sfu.get_times(h5file, group=h5group)
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
@@ -285,6 +289,64 @@ def mfdr(n, h5file, h5group='/', min_time=0.03):
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
         info = frm.set_pressure(fluid_props)
 
-        res += float(frm.dt)*info['flow_rate']*fluid_props['p_sub']
+        flow_rate.append(info['flow_rate'])
+    flow_rate = np.array(flow_rate)
+
+    times = sfu.get_times(h5file, group=h5group)[:-1]
+    dflow_rate_dt = (flow_rate[1:]-flow_rate[:-1]) / (times[1:] - times[:-1])
+
+    idx_start = 50 # TODO: should base this on min_time
+    idx_min = np.argmin(dflow_rate_dt[idx_start:]) + idx_start
+
+    res = dflow_rate_dt[idx_min]
+
+    info['idx_mfdr'] = idx_min
+    return res, info
+
+def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
+    """
+    Returns the sensitivity of the maximum flow declination rate at a time > min_time (s).
+    """
+
+    # First make a petsc vector
+    res = None
+
+    if cache_idx_mfdr is None:
+        cache_idx_mfdr = mfdr(n, h5file, h5group=h5group, min_time=min_time)[1]['idx_mfdr']
+
+    if n == cache_idx_mfdr or n == cache_idx_mfdr+1:
+        # First calculate flow rates at n and n+1
+        sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+
+        q1 = frm.set_pressure(fluid_props)['flow_rate']
+        dq1_du = frm.set_flow_sensitivity(fluid_props)[1]
+        t1 = sfu.get_time(n+1, h5file, group=h5group)
+
+        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+
+        q0 = frm.set_pressure(fluid_props)['flow_rate']
+        dq0_du = frm.set_flow_sensitivity(fluid_props)[1]
+        t0 = sfu.get_time(n, h5file, group=h5group)
+
+        # fdr = (q1-q0) / (t1-t0)
+
+        dfdr_du0 = -dfn.PETScVector(dq0_du) / (t1-t0)
+        dfdr_du1 = dfn.PETScVector(dq1_du) / (t1-t0)
+
+        if n == cache_idx_mfdr:
+            res = dfdr_du0
+        elif n == cache_idx_mfdr+1:
+            res = dfdr_du1
+    else:
+        ndof = h5file[path.join(h5group, 'u')].shape[1]
+        res = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(ndof)
+
+        res.setValues(ndof, 0)
+        res.assemblyBegin()
+        res.assemblyEnd()
+
+        res = dfn.PETScVector(res)
 
     return res

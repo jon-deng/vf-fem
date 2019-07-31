@@ -21,6 +21,10 @@ from femvf.fluids import fluid_pressure
 from femvf import constants as const
 from femvf import functionals
 
+# Specify the functional
+functional = functionals.totalvocaleff
+functional = functionals.mfdr
+
 # Loading data
 emod = None
 cost_fd = list()
@@ -29,7 +33,7 @@ with h5py.File('out/FiniteDifferenceStates.h5', mode='r') as f:
     num_steps = f['num_steps'][()]
     emod = f['elastic_modulus'] + np.arange(num_steps)*step_size
     for ii in range(num_steps):
-        cost_fd.append(functionals.totalvocaleff(0, f, h5group=f'{ii}'))
+        cost_fd.append(functional(0, f, h5group=f'{ii}'))
         # cost_fd.append(np.sum(f[join(f'{ii}', 'cost')]))
 
 grad_ad = None

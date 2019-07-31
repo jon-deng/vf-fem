@@ -122,7 +122,6 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
                                + 1/beta/dt * adj_a2.vector())
     frm.bc_base_adjoint.apply(adj_v1.vector())
 
-
     adj_u1_lhs = dcost_du1 \
                  + gamma/beta/dt * adj_v1.vector() + 1/beta/dt**2 * adj_a1.vector() \
                  - (df2_du1 * adj_u2.vector()
