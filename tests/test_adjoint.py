@@ -31,7 +31,7 @@ if __name__ == '__main__':
     fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 
     step_size = 0.1*constants.PASCAL_TO_CGS
-    num_steps = 3
+    num_steps = 6
 
     save_path = 'out/FiniteDifferenceStates.h5'
     with h5py.File(save_path, mode='w') as f:
@@ -40,7 +40,7 @@ if __name__ == '__main__':
         f.create_dataset('num_steps', data=num_steps)
 
     for ii in range(num_steps):
-        tspan = [0, 0.01]
+        tspan = [0, 0.05]
         solid_props = {'elastic_modulus': emod + ii*step_size}
 
         runtime_start = perf_counter()

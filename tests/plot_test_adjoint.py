@@ -33,7 +33,7 @@ with h5py.File('out/FiniteDifferenceStates.h5', mode='r') as f:
     num_steps = f['num_steps'][()]
     emod = f['elastic_modulus'] + np.arange(num_steps)*step_size
     for ii in range(num_steps):
-        cost_fd.append(functional(0, f, h5group=f'{ii}'))
+        cost_fd.append(functional(0, f, h5group=f'{ii}')[0])
         # cost_fd.append(np.sum(f[join(f'{ii}', 'cost')]))
 
 grad_ad = None

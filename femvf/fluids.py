@@ -5,7 +5,10 @@ Functionality related to fluids
 import autograd
 from autograd import numpy as np
 
+import dolfin as dfn
 from petsc4py import PETSc
+
+from . import forms as frm
 
 FLUID_PROP_LABELS = ('p_sub', 'p_sup', 'a_sub', 'a_sup', 'rho', 'y_midline')
 SEPARATION_FACTOR = 1.1
@@ -147,11 +150,18 @@ def set_flow_sensitivity(coordinates, vertices, vertex_to_sdof, vertex_to_vdof, 
     dp_du.assemblyBegin()
     dp_du.assemblyEnd()
 
-    dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vertex_to_vdof.size)
+    # You should be able to create your own vector from scratch too but there are a couple of things
+    # you have to set like local to global mapping that need to be there in order to interface with
+    # a particular fenics setup. I just don't know what it needs to use.
+    # TODO: Figure this out, since it also applies to matrices
 
-    dq_du.setValues(vertex_to_vdof[vertices].reshape(-1), _dq_du)
-    dq_du.assemblyBegin()
-    dq_du.assemblyEnd()
+    # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vertex_to_vdof.size)
+    # dq_du.setValues(vertex_to_vdof[vertices].reshape(-1), _dq_du)
+    # dq_du.assemblyBegin()
+    # dq_du.assemblyEnd()
+
+    dq_du = dfn.Function(frm.vector_function_space).vector()
+    dq_du[vertex_to_vdof[vertices].reshape(-1)] = _dq_du
 
     return dp_du, dq_du
 

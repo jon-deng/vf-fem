@@ -332,21 +332,22 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
 
         # fdr = (q1-q0) / (t1-t0)
 
-        dfdr_du0 = -dfn.PETScVector(dq0_du) / (t1-t0)
-        dfdr_du1 = dfn.PETScVector(dq1_du) / (t1-t0)
+        dfdr_du0 = -dq0_du / (t1-t0)
+        dfdr_du1 = dq1_du / (t1-t0)
 
         if n == cache_idx_mfdr:
             res = dfdr_du0
         elif n == cache_idx_mfdr+1:
             res = dfdr_du1
     else:
-        ndof = h5file[path.join(h5group, 'u')].shape[1]
-        res = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(ndof)
+        # ndof = h5file[path.join(h5group, 'u')].shape[1]
+        # res = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(ndof)
 
-        res.setValues(ndof, 0)
-        res.assemblyBegin()
-        res.assemblyEnd()
+        # res.set(0.0)
+        # res.assemblyBegin()
+        # res.assemblyEnd()
 
-        res = dfn.PETScVector(res)
+        # res = dfn.PETScVector(res)
+        res = dfn.Function(frm.vector_function_space).vector()
 
     return res
