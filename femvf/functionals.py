@@ -351,3 +351,152 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
         res = dfn.Function(frm.vector_function_space).vector()
 
     return res
+
+def wss_glottal_width(n, h5file, h5group='/', weights=None, meas_indices=None,
+                      meas_glottal_width=None):
+    """
+    Returns the weighted sum of squared difference between a measurement and a model's glottal width.
+    """
+
+    wss = 0
+
+    u = dfn.Function(frm.vector_function_space)
+    v = dfn.Function(frm.vector_function_space)
+    a = dfn.Function(frm.vector_function_space)
+
+    ref_surface = frm.mesh.coordinates()[frm.surface_vertices]
+
+    # Set default values when kwargs are not provided
+    num_states = sfu.get_num_states(h5file, group=h5group)
+    if weights is None:
+        weights = np.ones(num_states) / num_states
+    if meas_indices is None:
+        meas_indices = np.arange(num_states)
+    if meas_glottal_width is None:
+        meas_glottal_width = np.zeros(num_states)
+
+    assert meas_indices.size == meas_glottal_width.size
+
+    # Loop through every state
+    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_width, weights):
+        u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
+
+        u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
+        cur_surface = ref_surface + u_surface
+
+        # Find the maximum y coordinate on the surface
+        idx_surface = np.argmax(cur_surface[:, 1])
+
+        # Find the maximum y coordinate on the surface
+        gw_modl = 2 * (frm.y_midline - cur_surface[idx_surface, 1])
+
+        wss += weight * (gw_modl - gw_meas)**2
+
+    return wss
+
+def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=None,
+                          meas_glottal_width=None):
+    """
+    Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
+    """
+    dwss_du = dfn.Function(frm.vector_function_space)
+
+    u = dfn.Function(frm.vector_function_space)
+    v = dfn.Function(frm.vector_function_space)
+    a = dfn.Function(frm.vector_function_space)
+
+    ref_surface = frm.mesh.coordinates()[frm.surface_vertices]
+
+    # Set default values when kwargs are not provided
+    num_states = sfu.get_num_states(h5file, group=h5group)
+    if weights is None:
+        weights = np.ones(num_states) / num_states
+    if meas_indices is None:
+        meas_indices = np.arange(num_states)
+    if meas_glottal_width is None:
+        meas_glottal_width = np.zeros(num_states)
+
+    assert meas_indices.size == meas_glottal_width.size
+
+    # The sensitivity is only non-zero if n corresponds to a measurement index
+    if n in set(meas_indices):
+        weight = weights[n]
+        gw_meas = meas_glottal_width[n]
+
+        u, v, a = sfu.set_state((u, v, a), n, h5file, group=h5group)
+
+        u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
+        cur_surface = ref_surface + u_surface
+
+        # Find the surface vertex corresponding to where the glottal width is measured
+        # This is numbered according to the 'local' numbering scheme of the surface vertices i.e.
+        # 0 is the most upstream node, 1 the next node etc.
+        idx_surface = np.argmax(cur_surface[:, 1])
+
+        # Find the maximum y coordinate on the surface
+        gw_modl = 2 * (frm.y_midline - cur_surface[idx_surface, 1])
+        dgw_modl_du_width = -2
+
+        # Find the vertex number according to the mesh vertex numbering scheme
+        idx_body = frm.surface_vertices[idx_surface]
+
+        # Finally convert it to the DOF number of the u-dof that actually influences glottal width
+        dof_width = frm.vert_to_vdof[idx_body, 1]
+
+        # wss = weight * (gw_modl - gw_meas)**2
+        dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
+    else:
+        # In this case the derivative is simply 0.
+        pass
+
+    return dwss_du
+
+def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
+                         meas_glottal_width=None):
+    """
+    Returns the weighted sum of squared difference between a measurement and a model's glottal width.
+    """
+    # TODO
+    dwss_dt = 0
+
+    u = dfn.Function(frm.vector_function_space)
+    v = dfn.Function(frm.vector_function_space)
+    a = dfn.Function(frm.vector_function_space)
+
+    ref_surface = frm.mesh.coordinates()[frm.surface_vertices]
+
+    # Set default values when kwargs are not provided
+    num_states = sfu.get_num_states(h5file, group=h5group)
+    if weights is None:
+        weights = np.ones(num_states) / num_states
+    if meas_indices is None:
+        meas_indices = np.arange(num_states)
+    if meas_glottal_width is None:
+        meas_glottal_width = np.zeros(num_states)
+
+    assert meas_indices.size == meas_glottal_width.size
+
+    # Loop through every state
+    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_width, weights):
+        u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
+
+        u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
+        cur_surface = ref_surface + u_surface
+
+        # Find the maximum y coordinate on the surface
+        idx_surface = np.argmax(cur_surface[:, 1])
+
+        # Find the vertex number according to the mesh vertex numbering scheme
+        idx_body = frm.surface_vertices[idx_surface]
+
+        # Finally convert it to the DOF number of the u-dof that actually influences glottal width
+        dof_width = frm.vert_to_vdof[idx_body, 1]
+
+        # Find the maximum y coordinate on the surface
+        gw_modl = 2 * (frm.y_midline - cur_surface[idx_surface, 1])
+        dgw_modl_dt = -2 * v[dof_width]
+
+        wss += weight * (gw_modl - gw_meas)**2
+        dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
+
+    return wss
