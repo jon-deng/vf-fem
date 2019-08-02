@@ -63,11 +63,16 @@ if __name__ == '__main__':
     # dg_du = functionals.dtotalvocaleff_du
 
     # Functional for MFDR
-    idx_mfdr = None
-    with h5py.File(save_path, mode='r') as f:
-        idx_mfdr = functionals.mfdr(0, f, h5group='0')[1]['idx_mfdr']
-    fkwargs = {'cache_idx_mfdr': idx_mfdr}
-    dg_du = functionals.dmfdr_du
+    # idx_mfdr = None
+    # with h5py.File(save_path, mode='r') as f:
+    #     idx_mfdr = functionals.mfdr(0, f, h5group='0')[1]['idx_mfdr']
+    # fkwargs = {'cache_idx_mfdr': idx_mfdr}
+    # dg_du = functionals.dmfdr_du
+
+    # Functional for weighted sum of squares glottal width
+    fkwargs = {}
+    dg_du = functionals.dwss_glottal_width_du
+
 
     solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()

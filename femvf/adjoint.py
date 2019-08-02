@@ -41,22 +41,24 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
     """
     Returns the adjoint at the previous time step.
 
-    Each adjoint step is based on an indexing scheme where the postfix on a variable represents
-    index n + postfix. For example, variables x0, x1, and x2 are states at n, n+1, and n+2. This is
-    done because the adjoint calculation to solve for lambda_{n+1} given lambda_{n+2} requires the
-    forward equations f^{n+2}=0, and f^{n+1}=0, which in turn require states x^{n}, x^{n+1}, and
-    x^{n+2} to be defined.
+    Each adjoint step is based on an indexing scheme where the postfix on a variable represents that
+    variable at time index n + postfix. For example, variables x0, x1, and x2 correspond to states
+    at n, n+1, and n+2.
 
-    Note that f^{n+1} = f^{n+1}([u, v, a]^{n+1}, [u, v, a]^{n}) = 0 involves the FEM approximation
-    and time stepping scheme that defines the state x^{n+1} = (u, v, a)^{n+1} implicitly, which
-    could be linear or non-linear.
+    This is done because the adjoint calculation to solve for :math:`lambda_{n+1}` given
+    :math:`lambda_{n+2}` requires the forward equations :math:`f^{n+2}=0`, and :math:`f^{n+1}=0`, which in
+    turn require states :math:`x^{n}`, :math:`x^{n+1}`, and :math:`x^{n+2}` to be defined.
+
+    Note that :math:`f^{n+1} = f^{n+1}([u, v, a]^{n+1}, [u, v, a]^{n}) = 0` involves the FEM
+    approximation and time stepping scheme that defines the state :math`x^{n+1} = (u, v, a)^{n+1}`
+    implicitly, which could be linear or non-linear.
 
     Parameters
     ----------
-    adj_x2 : tuple (adj_u2, adj_v2, adj_a2) of dfn.Function
-        A tuple of 'initial' (time index 2) states for the adjoint model.
-    x0, x1, x2 : tuple (u, v, a) of dfn.Function
-        Tuples of states at time indices 0, 1, and 2.
+    adj_x2 : tuple of dfn.Function
+        A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
+    x0, x1, x2 : tuple of dfn.Function
+        Tuple (u, v, a) of states at time indices 0, 1, and 2.
     solid_props : dict
         A dictionary of solid properties.
     fluid_props0, fluid_props1 : dict
@@ -68,8 +70,8 @@ def decrement_adjoint(adj_x2, x0, x1, x2, solid_props, fluid_props0, fluid_props
 
     Returns
     -------
-    adj_x1 : tuple (adj_u1, adj_v1, adj_a1) of dfn.Function
-        The 'next' state of the adjoint model
+    adj_x1 : tuple of dfn.Function
+        The 'next' state (adj_u1, adj_v1, adj_a1) of the adjoint model.
     info : dict
         Additional info computed during the solve that might be useful.
     """

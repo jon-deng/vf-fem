@@ -68,8 +68,8 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     ----------
     fig : matplotlib.Figure
     axs : tuple of matplotlib.Axes
-    x : tuple (u, v, a) of dfn.Function
-        Kinematic states
+    x : tuple of dfn.Function
+        Kinematic states (u, v, a)
     fluid_props : dict
         Fluid properties at time t
 
@@ -127,8 +127,8 @@ def increment_forward(x0, solid_props, fluid_props):
 
     Parameters
     ----------
-    x0 : tuple (u0, v0, a0) of dfn.Function
-        Initial states for the forward model
+    x0 : tuple of dfn.Function
+        Initial states (u0, v0, a0) for the forward model
     solid_props : dict
         A dictionary of solid properties
     fluid_props : dict
@@ -136,8 +136,8 @@ def increment_forward(x0, solid_props, fluid_props):
 
     Returns
     -------
-    tuple (u1, v1, a1) of dfn.Function
-        The next state of the forward model
+    tuple of dfn.Function
+        The next state (u1, v1, a1) of the forward model
     fluid_info : dict
         A dictionary containing information on the fluid solution. These include the flow rate,
         surface pressure, etc.

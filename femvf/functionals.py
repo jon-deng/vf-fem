@@ -1,5 +1,22 @@
 """
-Contains a bunch of different functionals
+This module contains definitions of various functionals.
+
+A functional should take in the entire time history of states from a forward model run and return a
+real number. Each functional has a general signature
+
+functional(h5file, h5group='/', **kwargs) -> float, dict
+
+, where h5file is an hdf5 file reference that contains the states history, h5group is the group path
+in the file where the states are stored, and **kwargs are and specific keyword arguments. The
+functional returns it's value as the first argument and a dictionary of additional info as a second
+argument.
+
+For computing the sensitivity of the functional through the discrete adjoint method, you also need
+the sensitivity of the functional with respect to the n'th state. This function has the signature
+
+dfunctional_du(n, h5file, h5group='/', **kwargs) -> float, dict
+
+, where the parameters have the same uses as defined previously.
 """
 
 import os.path as path
@@ -399,7 +416,7 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
     """
     Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
     """
-    dwss_du = dfn.Function(frm.vector_function_space)
+    dwss_du = dfn.Function(frm.vector_function_space).vector()
 
     u = dfn.Function(frm.vector_function_space)
     v = dfn.Function(frm.vector_function_space)
@@ -452,11 +469,10 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
     return dwss_du
 
 def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
-                         meas_glottal_width=None):
+                          meas_glottal_width=None):
     """
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.
     """
-    # TODO
     dwss_dt = 0
 
     u = dfn.Function(frm.vector_function_space)
