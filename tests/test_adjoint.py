@@ -30,7 +30,7 @@ if __name__ == '__main__':
     fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
     fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 
-    step_size = 0.1*constants.PASCAL_TO_CGS
+    step_size = 0.01*constants.PASCAL_TO_CGS
     num_steps = 6
 
     save_path = 'out/FiniteDifferenceStates.h5'
@@ -54,13 +54,13 @@ if __name__ == '__main__':
     print("Computing Adjoint")
 
     # Functional for vocal eff
-    # totalfluidwork = None
-    # totalinputwork = None
-    # with h5py.File(save_path, mode='r') as f:
-    #     totalfluidwork = functionals.totalfluidwork(f, h5group='0')[0]
-    #     totalinputwork = functionals.totalinputwork(f, h5group='0')[0]
-    # fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    # dg_du = functionals.dtotalvocaleff_du
+    totalfluidwork = None
+    totalinputwork = None
+    with h5py.File(save_path, mode='r') as f:
+        totalfluidwork = functionals.totalfluidwork(f, h5group='0')[0]
+        totalinputwork = functionals.totalinputwork(f, h5group='0')[0]
+    fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
+    dg_du = functionals.dtotalvocaleff_du
 
     # Functional for MFDR
     # idx_mfdr = None
@@ -70,8 +70,8 @@ if __name__ == '__main__':
     # dg_du = functionals.dmfdr_du
 
     # Functional for weighted sum of squares glottal width
-    fkwargs = {}
-    dg_du = functionals.dwss_glottal_width_du
+    # fkwargs = {}
+    # dg_du = functionals.dwss_glottal_width_du
 
     solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()

@@ -273,6 +273,9 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
 
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
+
+    # TODO : Something is slightly wrong with this one. You can tell from comparing with FD. The
+    # error is small but is not propto step size!
     """
     info = {}
 
@@ -284,7 +287,7 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
     if tinputwork is None:
         tinputwork = totalinputwork(h5file, h5group=h5group)[0]
 
-    dtotalfluidwork_du = dtotalfluidwork_du(n, h5file, h5group=h5group)[0]
+    dtotalfluidwork_du_ = dtotalfluidwork_du(n, h5file, h5group=h5group)[0]
 
     dtotalinputwork_du = 0
     # Set form coefficients to represent step from n to n+1
@@ -297,7 +300,7 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
         dt = frm.dt.values()[0]
         dtotalinputwork_du = dt*fluid_props['p_sub']*dq_du
 
-    return dtotalfluidwork_du/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du, info
+    return dtotalfluidwork_du_/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du, info
 
 def mfdr(h5file, h5group='/', min_time=0.03):
     """

@@ -22,9 +22,9 @@ from femvf import constants as const
 from femvf import functionals
 
 # Specify the functional
-# functional = functionals.totalvocaleff
+functional = functionals.totalvocaleff
 # functional = functionals.mfdr
-functional = functionals.wss_glottal_width
+# functional = functionals.wss_glottal_width
 
 # Load data and caculate functional value at each FD step
 emod = None
