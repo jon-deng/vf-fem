@@ -55,50 +55,6 @@ def fluidwork(n, h5file, h5group='/'):
 
     return dfn.assemble(frm_fluidwork)
 
-def dfluidwork_du(n, h5file, h5group='/'):
-    """
-    Returns the derivative of fluid work w.r.t state n.
-
-    Since fluid work over both time intervals [n-1, n] and [n, n+1] involve state n, this derivative
-    incorporates both timesteps.
-
-    Parameters
-    ----------
-    n : int
-        State index
-    h5path : str
-        Path to the file containing states from the forward run
-    """
-    out = 0
-    num_states = sfu.get_num_states(h5file, group=h5group)
-
-    # Set form coefficients to represent the fluidwork over n to n+1
-    if n < -1 or n < num_states-1:
-        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-        frm.set_pressure(fluid_props)
-        dp_du, _ = frm.set_flow_sensitivity(fluid_props)
-
-        out += dfn.assemble(frm_dfluidwork_du0)
-
-        # Correct dfluidwork_du0 since pressure depends on u0
-        dfluidwork_dp = dfn.assemble(frm_dfluidwork_dp, tensor=dfn.PETScVector()).vec()
-
-        dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
-        dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
-
-        out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
-
-    # Set form coefficients to represent the fluidwork over n-1 to n
-    if n > 0:
-        sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
-        frm.set_pressure(fluid_props)
-
-        out += dfn.assemble(frm_dfluidwork_du1)
-
-    return out
-
 def vocaleff(n, h5file, h5group='/'):
     """
     Returns the vocal efficiency over the timestep from n to n+1.
@@ -220,11 +176,12 @@ def dfdr_du(n, h5file, h5group='/'):
     return (dq_plus_du-dq_minus_du)/(t_plus-t_minus)
 
 ## Functionals defined over the entire state history
-def totalfluidwork(n, h5file, h5group='/'):
+def totalfluidwork(h5file, h5group='/'):
     """
     Returns the total work done by the fluid on the vocal folds.
     """
     res = 0
+    info = {}
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
@@ -234,34 +191,81 @@ def totalfluidwork(n, h5file, h5group='/'):
 
         res += dfn.assemble(frm_fluidwork)
 
-    return res
+    return res, info
 
-def totalinputwork(n, h5file, h5group='/'):
+def dtotalfluidwork_du(n, h5file, h5group='/'):
+    """
+    Returns the derivative of fluid work w.r.t state n.
+
+    Since fluid work over both time intervals [n-1, n] and [n, n+1] involve state n, this derivative
+    incorporates both timesteps.
+
+    Parameters
+    ----------
+    n : int
+        State index
+    h5path : str
+        Path to the file containing states from the forward run
+    """
+    out = 0
+    info = {}
+    num_states = sfu.get_num_states(h5file, group=h5group)
+
+    # Set form coefficients to represent the fluidwork over n to n+1
+    if n < -1 or n < num_states-1:
+        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+        frm.set_pressure(fluid_props)
+        dp_du, _ = frm.set_flow_sensitivity(fluid_props)
+
+        out += dfn.assemble(frm_dfluidwork_du0)
+
+        # Correct dfluidwork_du0 since pressure depends on u0
+        dfluidwork_dp = dfn.assemble(frm_dfluidwork_dp, tensor=dfn.PETScVector()).vec()
+
+        dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
+        dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
+
+        out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
+
+    # Set form coefficients to represent the fluidwork over n-1 to n
+    if n > 0:
+        sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
+        frm.set_pressure(fluid_props)
+
+        out += dfn.assemble(frm_dfluidwork_du1)
+
+    return out, info
+
+def totalinputwork(h5file, h5group='/'):
     """
     Returns the total work input into the fluid.
     """
     res = 0
+    info = {}
+
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
         sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
-        info = frm.set_pressure(fluid_props)
+        fluid_info = frm.set_pressure(fluid_props)
 
-        res += float(frm.dt)*info['flow_rate']*fluid_props['p_sub']
+        res += float(frm.dt)*fluid_info['flow_rate']*fluid_props['p_sub']
 
-    return res
+    return res, info
 
-def totalvocaleff(n, h5file, h5group='/'):
+def totalvocaleff(h5file, h5group='/'):
     """
     Returns the total vocal efficiency.
 
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
-    return totalfluidwork(n, h5file, h5group=h5group)/totalinputwork(n, h5file, h5group=h5group)
-
-    # return totalfluidwork/totalinputwork
+    res = totalfluidwork(h5file, h5group)[0]/totalinputwork(h5file, h5group)[0]
+    info = {}
+    return res, info
 
 def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_totalinputwork=None):
     """
@@ -270,15 +274,17 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
+    info = {}
+
     tfluidwork = cache_totalfluidwork
     if tfluidwork is None:
-        tfluidwork = totalfluidwork(n, h5file, h5group=h5group)
+        tfluidwork = totalfluidwork(h5file, h5group=h5group)[0]
 
     tinputwork = cache_totalinputwork
     if tinputwork is None:
-        tinputwork = totalinputwork(n, h5file, h5group=h5group)
+        tinputwork = totalinputwork(h5file, h5group=h5group)[0]
 
-    dtotalfluidwork_du = dfluidwork_du(n, h5file, h5group=h5group)
+    dtotalfluidwork_du = dtotalfluidwork_du(n, h5file, h5group=h5group)[0]
 
     dtotalinputwork_du = 0
     # Set form coefficients to represent step from n to n+1
@@ -289,15 +295,16 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
         _, dq_du = frm.set_flow_sensitivity(fluid_props)
 
         dt = frm.dt.values()[0]
-        dtotalinputwork_du = dt*fluid_props['p_sub']*dfn.PETScVector(dq_du)
+        dtotalinputwork_du = dt*fluid_props['p_sub']*dq_du
 
-    return dtotalfluidwork_du/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du
+    return dtotalfluidwork_du/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du, info
 
-def mfdr(n, h5file, h5group='/', min_time=0.03):
+def mfdr(h5file, h5group='/', min_time=0.03):
     """
     Returns the maximum flow declination rate at a time > min_time (s).
     """
     flow_rate = []
+    info = {}
 
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
@@ -324,12 +331,11 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
     """
     Returns the sensitivity of the maximum flow declination rate at a time > min_time (s).
     """
-
-    # First make a petsc vector
     res = None
+    info = {}
 
     if cache_idx_mfdr is None:
-        cache_idx_mfdr = mfdr(n, h5file, h5group=h5group, min_time=min_time)[1]['idx_mfdr']
+        cache_idx_mfdr = mfdr(h5file, h5group=h5group, min_time=min_time)[1]['idx_mfdr']
 
     if n == cache_idx_mfdr or n == cache_idx_mfdr+1:
         # First calculate flow rates at n and n+1
@@ -367,15 +373,15 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
         # res = dfn.PETScVector(res)
         res = dfn.Function(frm.vector_function_space).vector()
 
-    return res
+    return res, info
 
-def wss_glottal_width(n, h5file, h5group='/', weights=None, meas_indices=None,
+def wss_glottal_width(h5file, h5group='/', weights=None, meas_indices=None,
                       meas_glottal_width=None):
     """
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.
     """
-
     wss = 0
+    info = {}
 
     u = dfn.Function(frm.vector_function_space)
     v = dfn.Function(frm.vector_function_space)
@@ -409,7 +415,7 @@ def wss_glottal_width(n, h5file, h5group='/', weights=None, meas_indices=None,
 
         wss += weight * (gw_modl - gw_meas)**2
 
-    return wss
+    return wss, info
 
 def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=None,
                           meas_glottal_width=None):
@@ -417,6 +423,7 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
     Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
     """
     dwss_du = dfn.Function(frm.vector_function_space).vector()
+    info = {}
 
     u = dfn.Function(frm.vector_function_space)
     v = dfn.Function(frm.vector_function_space)
@@ -466,7 +473,7 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
         # In this case the derivative is simply 0.
         pass
 
-    return dwss_du
+    return dwss_du, info
 
 def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
                           meas_glottal_width=None):
@@ -474,6 +481,7 @@ def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=Non
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.
     """
     dwss_dt = 0
+    info = {}
 
     u = dfn.Function(frm.vector_function_space)
     v = dfn.Function(frm.vector_function_space)
@@ -515,4 +523,4 @@ def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=Non
         wss += weight * (gw_modl - gw_meas)**2
         dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
 
-    return wss
+    return wss, info

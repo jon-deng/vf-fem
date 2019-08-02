@@ -57,22 +57,21 @@ if __name__ == '__main__':
     # totalfluidwork = None
     # totalinputwork = None
     # with h5py.File(save_path, mode='r') as f:
-    #     totalfluidwork = functionals.totalfluidwork(0, f, h5group='0')
-    #     totalinputwork = functionals.totalinputwork(0, f, h5group='0')
+    #     totalfluidwork = functionals.totalfluidwork(f, h5group='0')[0]
+    #     totalinputwork = functionals.totalinputwork(f, h5group='0')[0]
     # fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
     # dg_du = functionals.dtotalvocaleff_du
 
     # Functional for MFDR
     # idx_mfdr = None
     # with h5py.File(save_path, mode='r') as f:
-    #     idx_mfdr = functionals.mfdr(0, f, h5group='0')[1]['idx_mfdr']
+    #     idx_mfdr = functionals.mfdr(f, h5group='0')[1]['idx_mfdr']
     # fkwargs = {'cache_idx_mfdr': idx_mfdr}
     # dg_du = functionals.dmfdr_du
 
     # Functional for weighted sum of squares glottal width
     fkwargs = {}
     dg_du = functionals.dwss_glottal_width_du
-
 
     solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()

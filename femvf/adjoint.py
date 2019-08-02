@@ -188,7 +188,7 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False,
     ## Initialize the adjoint state
     dcost_du2 = None
     with h5py.File(h5file, mode='r') as f:
-        dcost_du2 = dg_du(num_states-1, f, h5group=h5group, **dg_du_kwargs)
+        dcost_du2 = dg_du(num_states-1, f, h5group=h5group, **dg_du_kwargs)[0]
 
     frm.bc_base_adjoint.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
@@ -209,7 +209,7 @@ def adjoint(solid_props, h5file, h5group='/', show_figure=False,
             x0 = sfu.get_state(ii-1, f, group=h5group)
 
             # dcost_du1 = functionals.dfluidwork_du(ii, h5path, h5group=h5group)
-            dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)
+            dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)[0]
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
                 (adj_u2, adj_v2, adj_a2), x0, x1, x2, solid_props,
