@@ -121,7 +121,7 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
 
     return fig, axs
 
-def increment_forward(x0, solid_props, fluid_props):
+def increment_forward(x0, dt, solid_props, fluid_props):
     """
     Returns the states at the next time, x1 = (u1, v1, a1).
 
@@ -129,6 +129,8 @@ def increment_forward(x0, solid_props, fluid_props):
     ----------
     x0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model
+    dt : float
+        The time step to increment over
     solid_props : dict
         A dictionary of solid properties
     fluid_props : dict
@@ -153,6 +155,7 @@ def increment_forward(x0, solid_props, fluid_props):
     frm.u0.assign(u0)
     frm.v0.assign(v0)
     frm.a0.assign(a0)
+    frm.dt.assign(dt)
     fluid_info = frm.set_pressure(fluid_props)
 
     # # check for collision
@@ -172,29 +175,35 @@ def increment_forward(x0, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False,
+def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False, 
             figure_path=None):
     """
     Solves the forward model over a time interval.
 
     Parameters
     ----------
-    tspan : (2,) array_like of float
-        The start time and end time of the simulation in seconds.
+    tmeas : array_like of float
+        Specific times at which the model should be solved. There should be a minimum of two 
+        entries. The first entry is the starting time while the final entry is the final time. A 
+        common way to set this would be to set [0, tfinal] to record the first step and final step 
+        + all time steps in between.
     dt : float
         The time step in seconds.
     solid_props : dict
-        Should use this style of call in the future?
+        A dictionary of solid properties.
     fluid_props : dict
-        A dictionary storing fluid properties.
+        A dictionary of fluid properties.
     h5file : string
         Path to an hdf5 file where states will be appended.
     group : string
         An h5 group to save under
     show_figure : bool
         Determines whether to display figures of the solution or not.
+    figure_path : string
+        A path to save figures to. The figures will have a postfix of the iteration number and
+        extension added.
     """
-    ## Allocate functions for states
+    # Allocate functions for states
     u0 = dfn.Function(frm.vector_function_space)
     v0 = dfn.Function(frm.vector_function_space)
     a0 = dfn.Function(frm.vector_function_space)
@@ -203,7 +212,7 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     v1 = dfn.Function(frm.vector_function_space)
     a1 = dfn.Function(frm.vector_function_space)
 
-    # Set material properties
+    # Set solid material properties
     elastic_modulus = solid_props['elastic_modulus']
     frm.emod.vector()[:] = elastic_modulus
 
@@ -212,49 +221,56 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     if show_figure:
         fig, axs = init_figure(fluid_props)
 
-    assert tspan[1] > tspan[0]
-    frm.dt.values()[0] = dt
-    dt_ = frm.dt.values()[0]
-    num_time = np.ceil((tspan[1]-tspan[0])/dt_)
-    time = dt_*np.arange(num_time)
+    # Generate an array of solution times
+    # This is an evenly spaced array of times @ dt with measurement times placed between dt
+    # increments.
+    tmeas = np.array(tmeas)
+    assert tmeas.size >= 2
+    assert tmeas[-1] > tmeas[0]
 
-    ## Initialize datasets
+    # TODO: Ensure this is doing what you think it is doing...
+    time = np.array([tmeas[0]])
+    for n in range(tmeas.size-1):
+        if n == 0:
+            t_pre_measurement = tmeas[0]
+        else:
+            t_pre_measurement = time[-2]
+
+        nspacing = (tmeas[n+1] - t_pre_measurement) / dt
+        if nspacing.is_integer():
+            nspacing = int(nspacing) - 1
+        else:
+            nspacing = int(np.floor(nspacing))
+        tspacing = t_pre_measurement + dt*(1 + np.arange(nspacing))
+
+        time = np.concatenate((time, tspacing, [tmeas[n+1]]), axis=0)
+
+    ## Initialize datasets to save in h5 file
     with h5py.File(h5file, mode='a') as f:
         # Kinematic states
         for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
-            f.create_dataset(join(h5group, dataset_name), shape=(num_time, data.vector()[:].size),
+            f.create_dataset(join(h5group, dataset_name), shape=(time.size, data.vector()[:].size),
                              dtype=np.float64)
             f[join(h5group, dataset_name)][0] = data.vector()
 
         f.create_dataset(join(h5group, 'time'), data=time)
 
-        # Functionals
-        f.create_dataset(join(h5group, 'cost'), shape=(), dtype=np.float64)
-        f.create_dataset(join(h5group, 'vocal_efficiency'), shape=(num_time-1,), dtype=np.float64)
-        f.create_dataset(join(h5group, 'fluid_work'), shape=(num_time-1,), dtype=np.float64)
-
         # Fluid properties
         for label in fluids.FLUID_PROP_LABELS:
-            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(num_time-1,))
+            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(time.size-1,))
 
         # Solid properties
+        # TODO: Assuming only one time constant solid property here but there may be more.
         f.create_dataset(join(h5group, 'solid_properties', 'elastic_modulus'),
                          data=frm.emod.vector()[:])
 
+    ## Loop through solution times and write solution variables to h5file.
     with h5py.File(h5file, mode='a') as f:
         for ii, t in enumerate(time[:-1]):
             ## Increment the state
             fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
-
-            (u1, v1, a1), info = increment_forward([u0, v0, a0], solid_props, fluid_props_ii)
-
-            flow_rate = info['flow_rate']
-
-            ## Calculate useful/interesting functionals
-            frm.u1.assign(u1)
-            p_sub = fluid_props_ii['p_sub']
-            vocal_efficiency = dfn.assemble(functionals.frm_fluidwork)/(flow_rate*p_sub*dt_)
-            fluid_work = dfn.assemble(functionals.frm_fluidwork)
+            dt_ = time[ii+1] - time[ii]
+            (u1, v1, a1), info = increment_forward([u0, v0, a0], dt_, solid_props, fluid_props_ii)
 
             ## Write the solution outputs to a file
             # State variables
@@ -264,10 +280,6 @@ def forward(tspan, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
             # Fluid properties
             for label in fluids.FLUID_PROP_LABELS:
                 f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
-
-            # Output functionals
-            f[join(h5group, 'fluid_work')][ii] = fluid_work
-            f[join(h5group, 'vocal_efficiency')][ii] = vocal_efficiency
 
             ## Update initial conditions for the next time step
             u0.assign(u1)

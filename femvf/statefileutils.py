@@ -96,6 +96,21 @@ def get_fluid_properties(n, h5file, group='/'):
 
     return fluid_props
 
+def get_solid_properties(h5file, group='/'):
+    """
+    Returns the solid properties
+    """
+    solid_props = {}
+
+    # TODO: This is a hardcoded value since I haven't figured out what each solid property will be 
+    # yet. For this plane strain problem I think only elastic modulus and poisson's ratio will show
+    # up
+    # Also assumes they are constant in time
+    for label in ('elastic_modulus',):
+        solid_props[label] = h5file[join(group, 'solid_properties', label)][:]
+
+    return solid_props
+
 def set_states(n, h5file, group='/', u0=None, v0=None, a0=None, u1=None):
     """
     Sets form coefficient vectors for states u_n-1, v_n-1, a_n-1, u_n at index n.
