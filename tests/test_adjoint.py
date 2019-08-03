@@ -40,7 +40,7 @@ if __name__ == '__main__':
         f.create_dataset('num_steps', data=num_steps)
 
     for ii in range(num_steps):
-        tspan = [0, 0.01]
+        tspan = [0, 0.005, 0.01]
         solid_props = {'elastic_modulus': emod + ii*step_size}
 
         runtime_start = perf_counter()

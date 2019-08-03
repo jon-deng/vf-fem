@@ -10,6 +10,7 @@ from os.path import join
 import h5py
 
 import numpy as np
+from math import isclose, ceil, floor, remainder
 
 from matplotlib import tri
 from matplotlib import pyplot as plt
@@ -27,6 +28,35 @@ from . import visualization as vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 
+def solution_times(measured_times, dt):
+    """
+    Returns an array of solution times spaced at dt starting from the first measurement time.
+    
+    Measurement times are interlaced between starting from tmeas[0] with measurement times 
+    interlaced between if they are not divisible.
+    """
+    times = np.array([measured_times[0]])
+
+    for n in range(measured_times.size-1):
+        n_start = None
+        n_stop = None
+
+        tgap = measured_times[n]-measured_times[0]
+        if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
+            n_start = int(tgap/dt) + 1
+        else:
+            n_start = ceil(tgap/dt)
+
+        tgap = measured_times[n+1]-measured_times[0]
+        if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
+            n_stop = int(tgap/dt) - 1
+        else:
+            n_stop = floor(tgap/dt)
+        between_times = times[0] + dt*np.arange(n_start, n_stop+1)
+        times = np.concatenate((times, between_times, [measured_times[n+1]]), axis=0)
+
+    return times
+        
 def init_figure(fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
@@ -221,43 +251,26 @@ def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     if show_figure:
         fig, axs = init_figure(fluid_props)
 
-    # Generate an array of solution times
-    # This is an evenly spaced array of times @ dt with measurement times placed between dt
-    # increments.
+    # Get the solution times
     tmeas = np.array(tmeas)
     assert tmeas.size >= 2
     assert tmeas[-1] > tmeas[0]
 
-    # TODO: Ensure this is doing what you think it is doing...
-    time = np.array([tmeas[0]])
-    for n in range(tmeas.size-1):
-        if n == 0:
-            t_pre_measurement = tmeas[0]
-        else:
-            t_pre_measurement = time[-2]
-
-        nspacing = (tmeas[n+1] - t_pre_measurement) / dt
-        if nspacing.is_integer():
-            nspacing = int(nspacing) - 1
-        else:
-            nspacing = int(np.floor(nspacing))
-        tspacing = t_pre_measurement + dt*(1 + np.arange(nspacing))
-
-        time = np.concatenate((time, tspacing, [tmeas[n+1]]), axis=0)
+    times = solution_times(tmeas, dt)
 
     ## Initialize datasets to save in h5 file
     with h5py.File(h5file, mode='a') as f:
         # Kinematic states
         for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
-            f.create_dataset(join(h5group, dataset_name), shape=(time.size, data.vector()[:].size),
+            f.create_dataset(join(h5group, dataset_name), shape=(times.size, data.vector()[:].size),
                              dtype=np.float64)
             f[join(h5group, dataset_name)][0] = data.vector()
 
-        f.create_dataset(join(h5group, 'time'), data=time)
+        f.create_dataset(join(h5group, 'time'), data=times)
 
         # Fluid properties
         for label in fluids.FLUID_PROP_LABELS:
-            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(time.size-1,))
+            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(times.size-1,))
 
         # Solid properties
         # TODO: Assuming only one time constant solid property here but there may be more.
@@ -266,10 +279,10 @@ def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
 
     ## Loop through solution times and write solution variables to h5file.
     with h5py.File(h5file, mode='a') as f:
-        for ii, t in enumerate(time[:-1]):
+        for ii, t in enumerate(times[:-1]):
             ## Increment the state
             fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
-            dt_ = time[ii+1] - time[ii]
+            dt_ = times[ii+1] - times[ii]
             (u1, v1, a1), info = increment_forward([u0, v0, a0], dt_, solid_props, fluid_props_ii)
 
             ## Write the solution outputs to a file
