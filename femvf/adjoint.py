@@ -117,7 +117,7 @@ def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, f
     # out when solving for adj_u (but I'm gonna do it anyway)
     gamma, beta = frm.gamma.values()[0], frm.beta.values()[0]
 
-    # These are manually implemented matrix multiplications representing adjoint recurrence 
+    # These are manually implemented matrix multiplications representing adjoint recurrence
     # relations
     # TODO: you can probably take advantage of autodiff capabilities of fenics of the newmark
     # schemes so you don't have to do the differentiation manually like you did here.
@@ -142,11 +142,9 @@ def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, f
     return (adj_u1, adj_v1, adj_a1), df1_dparam
 
 def adjoint(h5file, h5group='/', show_figure=False,
-            dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs={}):
+            dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs=None):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
-
-    TODO: Remove the solid_props parameter. This should be retrievable from the h5file.
 
     Parameters
     ----------
@@ -160,6 +158,9 @@ def adjoint(h5file, h5group='/', show_figure=False,
         A callable returning the sensitivity of a functional, g, with respect to the state n given.
         The signature should be dg_du(n, h5file, h5group='/', **kwargs)
     """
+    if dg_du_kwargs is None:
+        dg_du_kwargs = {}
+
     ## Allocate adjoint states
     adj_u1 = dfn.Function(frm.vector_function_space)
     adj_v1 = dfn.Function(frm.vector_function_space)
@@ -220,19 +221,19 @@ def adjoint(h5file, h5group='/', show_figure=False,
 
             fluid_props0 = sfu.get_fluid_properties(ii-1, f, group=h5group)
             fluid_props1 = sfu.get_fluid_properties(ii, f, group=h5group)
-            
+
             dt1 = times[ii] - times[ii-1]
             dt2 = times[ii+1] - times[ii]
 
             dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)[0]
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
-                (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props, 
+                (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
                  fluid_props0, fluid_props1, dcost_du1)
 
             # Update gradient using the adjoint state
             # TODO: Here we assumed that functionals never depend on the velocity or acceleration
-            # states so we only multiply by adj_u1. In the future you might have to use adj_v1 and 
+            # states so we only multiply by adj_u1. In the future you might have to use adj_v1 and
             # adj_a1 too.
             gradient = gradient - 1*df1_dparam*adj_u1.vector()
 

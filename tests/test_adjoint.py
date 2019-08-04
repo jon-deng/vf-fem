@@ -71,17 +71,17 @@ if __name__ == '__main__':
     # functional = functionals.totalvocaleff
 
     # Functional for MFDR
-    # idx_mfdr = None
-    # with h5py.File(save_path, mode='r') as f:
-    #     idx_mfdr = functionals.mfdr(f, h5group='0')[1]['idx_mfdr']
-    # fkwargs = {'cache_idx_mfdr': idx_mfdr}
-    # dg_du = functionals.dmfdr_du
-    # functional = functionals.mfdr
+    idx_mfdr = None
+    with h5py.File(save_path, mode='r') as f:
+        idx_mfdr = functionals.mfdr(f, h5group='0')[1]['idx_mfdr']
+    fkwargs = {'cache_idx_mfdr': idx_mfdr}
+    dg_du = functionals.dmfdr_du
+    functional = functionals.mfdr
 
     # Functional for weighted sum of squared glottal widths
-    fkwargs = {}
-    dg_du = functionals.dwss_glottal_width_du
-    functional = functionals.wss_glottal_width
+    # fkwargs = {}
+    # dg_du = functionals.dwss_glottal_width_du
+    # functional = functionals.wss_glottal_width
 
     solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()

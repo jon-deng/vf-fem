@@ -384,9 +384,9 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
     return res, info
 
 def wss_glottal_width(h5file, h5group='/', weights=None, meas_indices=None,
-                      meas_glottal_width=None):
+                      meas_glottal_widths=None):
     """
-    Returns the weighted sum of squared difference between a measurement and a model's glottal width.
+    Returns the weighted sum of squared differences between a measurement/model glottal widths.
     """
     wss = 0
     info = {}
@@ -403,13 +403,13 @@ def wss_glottal_width(h5file, h5group='/', weights=None, meas_indices=None,
         weights = np.ones(num_states) / num_states
     if meas_indices is None:
         meas_indices = np.arange(num_states)
-    if meas_glottal_width is None:
-        meas_glottal_width = np.zeros(num_states)
+    if meas_glottal_widths is None:
+        meas_glottal_widths = np.zeros(num_states)
 
-    assert meas_indices.size == meas_glottal_width.size
+    assert meas_indices.size == meas_glottal_widths.size
 
     # Loop through every state
-    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_width, weights):
+    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
         u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
 
         u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
@@ -426,7 +426,7 @@ def wss_glottal_width(h5file, h5group='/', weights=None, meas_indices=None,
     return wss, info
 
 def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=None,
-                          meas_glottal_width=None):
+                          meas_glottal_widths=None):
     """
     Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
     """
@@ -445,15 +445,15 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
         weights = np.ones(num_states) / num_states
     if meas_indices is None:
         meas_indices = np.arange(num_states)
-    if meas_glottal_width is None:
-        meas_glottal_width = np.zeros(num_states)
+    if meas_glottal_widths is None:
+        meas_glottal_widths = np.zeros(num_states)
 
-    assert meas_indices.size == meas_glottal_width.size
+    assert meas_indices.size == meas_glottal_widths.size
 
     # The sensitivity is only non-zero if n corresponds to a measurement index
     if n in set(meas_indices):
         weight = weights[n]
-        gw_meas = meas_glottal_width[n]
+        gw_meas = meas_glottal_widths[n]
 
         u, v, a = sfu.set_state((u, v, a), n, h5file, group=h5group)
 

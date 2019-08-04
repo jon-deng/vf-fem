@@ -28,35 +28,54 @@ from . import visualization as vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 
-def solution_times(measured_times, dt):
+def solution_times(t0, meas_times, dt):
     """
     Returns an array of solution times spaced at dt starting from the first measurement time.
-    
-    Measurement times are interlaced between starting from tmeas[0] with measurement times 
-    interlaced between if they are not divisible.
-    """
-    times = np.array([measured_times[0]])
 
-    for n in range(measured_times.size-1):
+    Measurement times are interlaced between times spaced at dt, starting from tmeas[0].
+
+    Parameters
+    ----------
+    t0 : float
+        The starting time of the simulation.
+    measured_times : array_like of float
+        An array of times at which the solution is measured.
+    dt : float
+        The time step.
+
+    Returns
+    -------
+    times : np.array of float
+        An array of times at which the solution is solved
+    meas_indices : np.array of int
+        An array containing indices marking point in `times` corresponding to `meas_times`.
+    """
+    times = np.array([t0])
+    meas_indices = []
+
+    for n in range(meas_times.size):
         n_start = None
         n_stop = None
 
-        tgap = measured_times[n]-measured_times[0]
+        tgap = times[-1]-t0
         if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
             n_start = int(tgap/dt) + 1
         else:
             n_start = ceil(tgap/dt)
 
-        tgap = measured_times[n+1]-measured_times[0]
+        tgap = meas_times[n]-t0
         if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
             n_stop = int(tgap/dt) - 1
         else:
             n_stop = floor(tgap/dt)
-        between_times = times[0] + dt*np.arange(n_start, n_stop+1)
-        times = np.concatenate((times, between_times, [measured_times[n+1]]), axis=0)
 
-    return times
-        
+        between_times = times[0] + dt*np.arange(n_start, n_stop+1)
+        times = np.concatenate((times, between_times, [meas_times[n]]), axis=0)
+
+        meas_indices.append(times.size)
+
+    return times, np.array(meas_indices, dtype=np.intp)
+
 def init_figure(fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
@@ -135,19 +154,8 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     ydata = np.concatenate((line.get_ydata(), [fluid_info['flow_rate']]), axis=0)
     line.set_data(xdata, ydata)
 
-    # line = axs[3].lines[1]
-    # fd = (ydata[1:]-ydata[:-1])/(xdata[1:]-xdata[:-1])
-    # line.set_data(xdata[:-1], fd)
-
-    # line = axs[3].lines[0]
-    # ydata = np.concatenate((line.get_ydata(), [fluid_info['dt_flow_rate']]), axis=0)
-    # line.set_data(xdata, ydata)
-
     axs[2].set_xlim(0, 1.2*t)
     axs[2].set_ylim(0, 200)
-
-    # axs[3].set_xlim(0, 1.2*t)
-    # axs[3].set_ylim(np.min(ydata)*1.1, np.max(ydata)*1.1)
 
     return fig, axs
 
@@ -188,13 +196,6 @@ def increment_forward(x0, dt, solid_props, fluid_props):
     frm.dt.assign(dt)
     fluid_info = frm.set_pressure(fluid_props)
 
-    # # check for collision
-    # verts_coll = detect_collision(frm.mesh, frm.vertex_marker, frm.omega_contact, frm.u0, frm.v0, frm.a0,
-    #                               frm.vert_to_vdof)
-    # # Collision boundary conditions
-    # if verts_coll.size > 0:
-    #     print('Woah, collision!')
-
     ## Solve the thing
     frm.u1.assign(u0)
     dfn.solve(frm.fu_nonlin == 0, frm.u1, bcs=frm.bc_base, J=frm.jac_fu_nonlin)
@@ -205,7 +206,7 @@ def increment_forward(x0, dt, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False, 
+def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False,
             figure_path=None):
     """
     Solves the forward model over a time interval.
@@ -213,9 +214,9 @@ def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     Parameters
     ----------
     tmeas : array_like of float
-        Specific times at which the model should be solved. There should be a minimum of two 
-        entries. The first entry is the starting time while the final entry is the final time. A 
-        common way to set this would be to set [0, tfinal] to record the first step and final step 
+        Specific times at which the model should be solved. There should be a minimum of two
+        entries. The first entry is the starting time while the final entry is the final time. A
+        common way to set this would be to set [0, tfinal] to record the first step and final step
         + all time steps in between.
     dt : float
         The time step in seconds.
@@ -232,7 +233,14 @@ def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     figure_path : string
         A path to save figures to. The figures will have a postfix of the iteration number and
         extension added.
+
+    Returns
+    -------
+    info : dict
+        A dictionary of info about the run.
     """
+    info = {}
+
     # Allocate functions for states
     u0 = dfn.Function(frm.vector_function_space)
     v0 = dfn.Function(frm.vector_function_space)
@@ -256,7 +264,8 @@ def forward(tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', s
     assert tmeas.size >= 2
     assert tmeas[-1] > tmeas[0]
 
-    times = solution_times(tmeas, dt)
+    times, meas_indices = solution_times(t0, tmeas, dt)
+    info{'meas_indices'} = meas_indices
 
     ## Initialize datasets to save in h5 file
     with h5py.File(h5file, mode='a') as f:
