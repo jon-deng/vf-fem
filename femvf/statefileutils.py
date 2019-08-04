@@ -133,5 +133,11 @@ def set_states(n, h5file, group='/', u0=None, v0=None, a0=None, u1=None):
     if u1 is not None:
         u1.vector()[:] = h5file[join(group, 'u')][n]
 
+def set_time_step(n, h5file, group='/', dt=None):
+    if dt is not None:
+        tspan = h5file[join(group, 'time')][n-1:n+1]
+        dt.assign(tspan[1]-tspan[0])
+
+
 # class StateFile:
 #     pass

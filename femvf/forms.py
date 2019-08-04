@@ -90,7 +90,7 @@ surface_coordinates = surface_coordinates[idx_sort]
 ## Governing equation variational forms
 scalar_function_space = dfn.FunctionSpace(mesh, 'CG', 1)
 vector_function_space = dfn.VectorFunctionSpace(mesh, 'CG', 1)
-trial = dfn.TrialFunction(vector_function_space)
+trial_u = dfn.TrialFunction(vector_function_space)
 test = dfn.TestFunction(vector_function_space)
 
 scalar_trial = dfn.TrialFunction(scalar_function_space)
@@ -185,17 +185,16 @@ u1 = dfn.Function(vector_function_space)
 
 # Time step
 dt = dfn.Constant(1e-4)
-# dt = dfn.Constant(2e-5)
 
 # Pressure forcing
 pressure = dfn.Function(scalar_function_space)
 
 # Define the variational forms
-trial_v = newmark_v(trial, u0, v0, a0, dt, gamma=gamma, beta=beta)
-trial_a = newmark_a(trial, u0, v0, a0, dt, gamma=gamma, beta=beta)
+trial_v = newmark_v(trial_u, u0, v0, a0, dt, gamma=gamma, beta=beta)
+trial_a = newmark_a(trial_u, u0, v0, a0, dt, gamma=gamma, beta=beta)
 
 inertia = rho*ufl.dot(trial_a, test)*ufl.dx
-stiffness = ufl.inner(linear_elasticity(trial, emod, nu), strain(test))*ufl.dx
+stiffness = ufl.inner(linear_elasticity(trial_u, emod, nu), strain(test))*ufl.dx
 
 raleigh_m = dfn.Constant(1e-4)
 raleigh_k = dfn.Constant(1e-4)
@@ -230,7 +229,7 @@ k_collision = dfn.Constant(1e11)
 penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, test) * ds(domainid_pressure)
 
 fu_nonlin = ufl.action(fu, u1) - penalty
-jac_fu_nonlin = ufl.derivative(fu_nonlin, u1, trial)
+jac_fu_nonlin = ufl.derivative(fu_nonlin, u1, trial_u)
 
 ####################################################################################################
 # Boundary conditions
@@ -248,14 +247,15 @@ force_form = ufl.inner(linear_elasticity(u0, emod, nu), strain(test))*ufl.dx - t
 ####################################################################################################
 ## Forms needed for adjoint computation
 # Note: For an externally calculated pressure, you have to correct the derivative based on the
-# sensitivity of the pressure loading in f1 to either u0 or u1 (or both).
+# sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if it's strongly 
+# coupled).
 f1 = fu_nonlin
-df1_du0_adjoint = dfn.adjoint(ufl.derivative(f1, u0, trial))
-df1_da0_adjoint = dfn.adjoint(ufl.derivative(f1, a0, trial))
-df1_dv0_adjoint = dfn.adjoint(ufl.derivative(f1, v0, trial))
+df1_du0_adjoint = dfn.adjoint(ufl.derivative(f1, u0, trial_u))
+df1_da0_adjoint = dfn.adjoint(ufl.derivative(f1, a0, trial_u))
+df1_dv0_adjoint = dfn.adjoint(ufl.derivative(f1, v0, trial_u))
 df1_dp_adjoint = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
 
-df1_du1_adjoint = dfn.adjoint(ufl.derivative(f1, u1, trial))
+df1_du1_adjoint = dfn.adjoint(ufl.derivative(f1, u1, trial_u))
 
 # Work done by pressure from u0 to u1
 fluid_work = ufl.dot(fluid_force, u1-u0) * ds(domainid_pressure)

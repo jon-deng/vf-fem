@@ -22,8 +22,8 @@ from femvf import constants as const
 from femvf import functionals
 
 # Specify the functional
-functional = functionals.totalvocaleff
-# functional = functionals.mfdr
+# functional = functionals.totalvocaleff
+functional = functionals.mfdr
 # functional = functionals.wss_glottal_width
 
 # Load data and caculate functional value at each FD step
@@ -60,7 +60,7 @@ axs[1].plot(np.arange(error.size)+1, error)
 
 ## Formatting
 axs[0].set_xlabel("Elastic modulus [Pa]")
-axs[0].set_ylabel("Cost funciton")
+axs[0].set_ylabel("Objective function")
 axs[0].legend()
 
 axs[1].set_ylabel(r"% Error")

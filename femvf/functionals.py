@@ -87,7 +87,9 @@ def dvocaleff_du(n, h5file, h5group='/'):
         ## Calculate the derivative of cost w.r.t u_n due to work from n to n+1.
         # Set the initial conditions for the forms properly
         sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
+        sfu.set_time_step
         info = frm.set_pressure(fluid_props)
         dp_du, dq_du = frm.set_flow_sensitivity(fluid_props)
 
@@ -114,6 +116,7 @@ def dvocaleff_du(n, h5file, h5group='/'):
     if n >= 1:
         # Set the initial conditions for the forms properly
         sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n, h5file, group=h5group)
         fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
         info = frm.set_pressure(fluid_props)
 
@@ -135,6 +138,7 @@ def fdr(n, h5file, h5group='/'):
     """
     # Set form coefficients to represent the equation at state ii
     sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_time_step(n+2, h5file, group=h5group)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
     info = frm.set_pressure(fluid_props)
 
@@ -142,6 +146,7 @@ def fdr(n, h5file, h5group='/'):
     q_plus = info['flow_rate']
 
     sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_time_step(n+1, h5file, group=h5group)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
     info = frm.set_pressure(fluid_props)
 
@@ -186,6 +191,7 @@ def totalfluidwork(h5file, h5group='/'):
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
         sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(ii+1, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
         frm.set_pressure(fluid_props)
 
@@ -214,6 +220,7 @@ def dtotalfluidwork_du(n, h5file, h5group='/'):
     # Set form coefficients to represent the fluidwork over n to n+1
     if n < -1 or n < num_states-1:
         sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
         frm.set_pressure(fluid_props)
         dp_du, _ = frm.set_flow_sensitivity(fluid_props)
@@ -231,6 +238,7 @@ def dtotalfluidwork_du(n, h5file, h5group='/'):
     # Set form coefficients to represent the fluidwork over n-1 to n
     if n > 0:
         sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
         frm.set_pressure(fluid_props)
 
@@ -249,6 +257,7 @@ def totalinputwork(h5file, h5group='/'):
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
         sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(ii+1, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
         fluid_info = frm.set_pressure(fluid_props)
 
@@ -294,6 +303,7 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
     num_states = sfu.get_num_states(h5file, group=h5group)
     if n < num_states-1 or n < -1:
         sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
         _, dq_du = frm.set_flow_sensitivity(fluid_props)
 
@@ -313,6 +323,7 @@ def mfdr(h5file, h5group='/', min_time=0.03):
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
         sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(ii+1, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
         info = frm.set_pressure(fluid_props)
 
@@ -343,6 +354,7 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
     if n == cache_idx_mfdr or n == cache_idx_mfdr+1:
         # First calculate flow rates at n and n+1
         sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n+2, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
 
         q1 = frm.set_pressure(fluid_props)['flow_rate']
@@ -350,6 +362,7 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
         t1 = sfu.get_time(n+1, h5file, group=h5group)
 
         sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group, dt=frm.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
 
         q0 = frm.set_pressure(fluid_props)['flow_rate']
@@ -366,14 +379,6 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
         elif n == cache_idx_mfdr+1:
             res = dfdr_du1
     else:
-        # ndof = h5file[path.join(h5group, 'u')].shape[1]
-        # res = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(ndof)
-
-        # res.set(0.0)
-        # res.assemblyBegin()
-        # res.assemblyEnd()
-
-        # res = dfn.PETScVector(res)
         res = dfn.Function(frm.vector_function_space).vector()
 
     return res, info
@@ -526,4 +531,4 @@ def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=Non
         wss += weight * (gw_modl - gw_meas)**2
         dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
 
-    return wss, info
+    return dwss_dt, info

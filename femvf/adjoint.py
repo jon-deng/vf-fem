@@ -121,22 +121,21 @@ def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, f
     # relations
     # TODO: you can probably take advantage of autodiff capabilities of fenics of the newmark
     # schemes so you don't have to do the differentiation manually like you did here.
-    dt = dt2
     adj_a1.vector()[:] = -1 * (df2_da1 * adj_u2.vector()
-                               + dt*(gamma/2/beta-1) * adj_v2.vector()
+                               + dt2 * (gamma/2/beta-1) * adj_v2.vector()
                                + (1/2/beta-1) * adj_a2.vector())
     frm.bc_base_adjoint.apply(adj_a1.vector())
 
     adj_v1.vector()[:] = -1 * (df2_dv1 * adj_u2.vector()
                                + (gamma/beta-1) * adj_v2.vector()
-                               + 1/beta/dt * adj_a2.vector())
+                               + 1/beta/dt2 * adj_a2.vector())
     frm.bc_base_adjoint.apply(adj_v1.vector())
 
     adj_u1_lhs = dcost_du1 \
-                 + gamma/beta/dt * adj_v1.vector() + 1/beta/dt**2 * adj_a1.vector() \
+                 + gamma/beta/dt1 * adj_v1.vector() + 1/beta/dt1**2 * adj_a1.vector() \
                  - (df2_du1 * adj_u2.vector()
-                    + gamma/beta/dt * adj_v2.vector()
-                    + 1/beta/dt**2 * adj_a2.vector())
+                    + gamma/beta/dt2 * adj_v2.vector()
+                    + 1/beta/dt2**2 * adj_a2.vector())
     frm.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs)
 
@@ -173,10 +172,10 @@ def adjoint(h5file, h5group='/', show_figure=False,
     ## Allocate space for the gradient
     gradient = np.zeros(frm.emod.vector().size())
 
-    time = None
+    times = None
     num_states = None
     with h5py.File(h5file, mode='r') as f:
-        time = sfu.get_times(f, group=h5group)
+        times = sfu.get_times(f, group=h5group)
         num_states = sfu.get_num_states(f, group=h5group)
 
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
@@ -189,12 +188,13 @@ def adjoint(h5file, h5group='/', show_figure=False,
         x2 = sfu.get_state(num_states-1, f, group=h5group)
         x1 = sfu.get_state(num_states-2, f, group=h5group)
 
-    frm.dt.assign(time[-1]-time[-2])
+    frm.dt.assign(times[-1]-times[-2])
     frm.u1.vector()[:] = x2[0]
     frm.u0.vector()[:], frm.v0.vector()[:], frm.a0.vector()[:] = x1
     frm.set_pressure(fluid_props)
 
     df2_du2 = dfn.assemble(frm.df1_du1_adjoint)
+    # import ipdb; ipdb.set_trace()
 
     ## Initialize the adjoint state
     dcost_du2 = None
@@ -214,15 +214,15 @@ def adjoint(h5file, h5group='/', show_figure=False,
         for ii in range(num_states-2, 0, -1):
             # Note that ii corresponds to the time index of the adjoint state we are solving for.
             # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
-            dt1 = time[ii] - time[ii-1]
-            dt2 = time[ii+1] - time[ii]
-
-            fluid_props0 = sfu.get_fluid_properties(ii-1, f, group=h5group)
-            fluid_props1 = sfu.get_fluid_properties(ii, f, group=h5group)
-
             x0 = sfu.get_state(ii-1, f, group=h5group)
             x1 = sfu.get_state(ii, f, group=h5group)
             x2 = sfu.get_state(ii+1, f, group=h5group)
+
+            fluid_props0 = sfu.get_fluid_properties(ii-1, f, group=h5group)
+            fluid_props1 = sfu.get_fluid_properties(ii, f, group=h5group)
+            
+            dt1 = times[ii] - times[ii-1]
+            dt2 = times[ii+1] - times[ii]
 
             dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)[0]
 
