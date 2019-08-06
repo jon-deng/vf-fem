@@ -51,7 +51,7 @@ if __name__ == '__main__':
         solid_props = {'elastic_modulus': emod + ii*step_size}
 
         runtime_start = perf_counter()
-        forward(times_meas, dt, solid_props, fluid_props, h5file=save_path, h5group=f'{ii}/',
+        forward(0, times_meas, dt, solid_props, fluid_props, h5file=save_path, h5group=f'{ii}/',
                 show_figure=False)
         runtime_end = perf_counter()
 

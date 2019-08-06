@@ -50,20 +50,23 @@ def solution_times(t0, meas_times, dt):
     meas_indices : np.array of int
         An array containing indices marking point in `times` corresponding to `meas_times`.
     """
-    times = np.array([t0])
+
+    # Start the times array from `t0-dt` because the code is meant work when 'meas_times>t0'.
+    # This allows it to work when t0 == meas_times[0], just chop off the first entry later.
+    times = np.array([t0-dt])
     meas_indices = []
 
     for n in range(meas_times.size):
         n_start = None
         n_stop = None
 
-        tgap = times[-1]-t0
+        tgap = times[-1] - (t0-dt)
         if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
             n_start = int(tgap/dt) + 1
         else:
             n_start = ceil(tgap/dt)
 
-        tgap = meas_times[n]-t0
+        tgap = meas_times[n] - (t0-dt)
         if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
             n_stop = int(tgap/dt) - 1
         else:
@@ -72,9 +75,9 @@ def solution_times(t0, meas_times, dt):
         between_times = times[0] + dt*np.arange(n_start, n_stop+1)
         times = np.concatenate((times, between_times, [meas_times[n]]), axis=0)
 
-        meas_indices.append(times.size)
+        meas_indices.append(times.size-1)
 
-    return times, np.array(meas_indices, dtype=np.intp)
+    return times[1:], np.array(meas_indices, dtype=np.intp)-1
 
 def init_figure(fluid_props):
     """
@@ -265,7 +268,7 @@ def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/
     assert tmeas[-1] > tmeas[0]
 
     times, meas_indices = solution_times(t0, tmeas, dt)
-    info{'meas_indices'} = meas_indices
+    forward_info = {'meas_indices': meas_indices}
 
     ## Initialize datasets to save in h5 file
     with h5py.File(h5file, mode='a') as f:
@@ -316,6 +319,8 @@ def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/
                 if figure_path is not None:
                     ext = '.png'
                     fig.savefig(f'{figure_path}_{ii}{ext}')
+
+        return forward_info
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
