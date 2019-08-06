@@ -50,7 +50,7 @@ def solution_times(t0, meas_times, dt):
     meas_indices : np.array of int
         An array containing indices marking point in `times` corresponding to `meas_times`.
     """
-
+    assert meas_times[0] >= t0
     # Start the times array from `t0-dt` because the code is meant work when 'meas_times>t0'.
     # This allows it to work when t0 == meas_times[0], just chop off the first entry later.
     times = np.array([t0-dt])
@@ -242,7 +242,7 @@ def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/
     info : dict
         A dictionary of info about the run.
     """
-    info = {}
+    forward_info = {}
 
     # Allocate functions for states
     u0 = dfn.Function(frm.vector_function_space)
@@ -268,7 +268,7 @@ def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/
     assert tmeas[-1] > tmeas[0]
 
     times, meas_indices = solution_times(t0, tmeas, dt)
-    forward_info = {'meas_indices': meas_indices}
+    forward_info['meas_indices'] = meas_indices
 
     ## Initialize datasets to save in h5 file
     with h5py.File(h5file, mode='a') as f:
@@ -342,7 +342,7 @@ if __name__ == '__main__':
 
     dt = 1e-4
     runtime_start = perf_counter()
-    forward([0, 0.05], dt, solid_props, fluid_props, save_path, show_figure=True,
+    forward(0, [0, 0.05], dt, solid_props, fluid_props, save_path, show_figure=True,
             figure_path='out/opt-nlopt/anim_start/frame')
     runtime_end = perf_counter()
 

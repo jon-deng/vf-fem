@@ -484,7 +484,7 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
     return dwss_du, info
 
 def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
-                          meas_glottal_width=None):
+                          meas_glottal_widths=None):
     """
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.
     """
@@ -503,13 +503,13 @@ def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=Non
         weights = np.ones(num_states) / num_states
     if meas_indices is None:
         meas_indices = np.arange(num_states)
-    if meas_glottal_width is None:
-        meas_glottal_width = np.zeros(num_states)
+    if meas_glottal_widths is None:
+        meas_glottal_widths = np.zeros(num_states)
 
-    assert meas_indices.size == meas_glottal_width.size
+    assert meas_indices.size == meas_glottal_widths.size
 
     # Loop through every state
-    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_width, weights):
+    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
         u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
 
         u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)

@@ -157,6 +157,11 @@ def adjoint(h5file, h5group='/', show_figure=False,
     dg_du : callable
         A callable returning the sensitivity of a functional, g, with respect to the state n given.
         The signature should be dg_du(n, h5file, h5group='/', **kwargs)
+
+    Returns
+    -------
+    np.array of float
+        The sensitivity of the functional wrt parameters.
     """
     if dg_du_kwargs is None:
         dg_du_kwargs = {}
@@ -229,7 +234,7 @@ def adjoint(h5file, h5group='/', show_figure=False,
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
                 (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
-                 fluid_props0, fluid_props1, dcost_du1)
+                fluid_props0, fluid_props1, dcost_du1)
 
             # Update gradient using the adjoint state
             # TODO: Here we assumed that functionals never depend on the velocity or acceleration
