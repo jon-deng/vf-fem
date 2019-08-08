@@ -383,7 +383,7 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
 
     return res, info
 
-def wss_glottal_width(h5file, h5group='/', weights=None, meas_indices=None,
+def wss_gwidth(h5file, h5group='/', weights=None, meas_indices=None,
                       meas_glottal_widths=None):
     """
     Returns the weighted sum of squared differences between a measurement/model glottal widths.
@@ -425,7 +425,7 @@ def wss_glottal_width(h5file, h5group='/', weights=None, meas_indices=None,
 
     return wss, info
 
-def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=None,
+def dwss_gwidth_du(n, h5file, h5group='/', weights=None, meas_indices=None,
                           meas_glottal_widths=None):
     """
     Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
@@ -483,7 +483,7 @@ def dwss_glottal_width_du(n, h5file, h5group='/', weights=None, meas_indices=Non
 
     return dwss_du, info
 
-def dwss_glottal_width_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
+def dwss_gwidth_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
                           meas_glottal_widths=None):
     """
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.

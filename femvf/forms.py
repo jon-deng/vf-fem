@@ -3,6 +3,8 @@ Module for definitions of weak forms.
 
 Units are in CGS
 """
+import sys
+import os
 
 import numpy as np
 
@@ -12,82 +14,62 @@ import ufl
 from . import transforms
 from . import fluids
 from . import constants as const
+from . import default_mesh
 
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
 
-## Mesh generation
-mesh = dfn.RectangleMesh(dfn.Point(-0.5, -0.5), dfn.Point(0.5, 0.5), 10, 25)
+####################################################################################################
+## Mesh definition
 
-# Mark the mesh boundaries with dfn.MeshFunction
-# Use the MeshFunction class to mark portions of the mesh with integer values.
-# mark left, top, and right lines of the rectangle as one and the bottom as another.
-boundary_marker = dfn.MeshFunction('size_t', mesh, 1)
-vertex_marker = dfn.MeshFunction('size_t', mesh, 0)
+# loading the mesh
+# mesh, boundary_marker, domainid_pressure, domainid_fixed = default_mesh.givememesh()
 
-# You need to subclass 'SubDomain' to 'mark' portions of the mesh in 'boundary_marker'
-class OmegaFixed(dfn.SubDomain):
-    """Marks the fixed boundary"""
-    def inside(self, x, on_boundary):
-        """Marks the appropriate nodes"""
-        return np.abs(x[1] - -0.5) <= dfn.DOLFIN_EPS
-omega_fixed = OmegaFixed()
+mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
+mesh_base_filename = 'geometry2'
+path_to_mesh = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+path_to_mesh_function = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
 
-class OmegaPressure(dfn.SubDomain):
-    """Marks the pressure boundary"""
-    def inside(self, x, on_boundary):
-        """Marks the appropriate nodes"""
-        return (np.abs(x[0] - -0.5) <= dfn.DOLFIN_EPS
-                or np.abs(x[1] - 0.5) <= dfn.DOLFIN_EPS
-                or np.abs(x[0] - 0.5) <= dfn.DOLFIN_EPS)
-omega_pressure = OmegaPressure()
-
-# Set a function to mark collision nodes
-collision_eps = 0.001
-y_midline = const.DEFAULT_FLUID_PROPERTIES['y_midline']
-class OmegaContact(dfn.SubDomain):
-    """Marks the contact boundary"""
-    def inside(self, x, on_boundary):
-        """Marks the appropriate nodes"""
-        return on_boundary and x[1] >= y_midline-collision_eps
-omega_contact = OmegaContact()
+mesh = dfn.Mesh(path_to_mesh)
+boundary_marker = dfn.MeshFunction('size_t', mesh, path_to_mesh_function)
 
 domainid_pressure = 1
-domainid_fixed = 2
-domainid_contact = 3
+domainid_fixed = 3
 
-omega_pressure.mark(boundary_marker, domainid_pressure)
-omega_pressure.mark(vertex_marker, domainid_pressure)
+# Create a vertex marker from the boundary marker
+edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
+                            for edge in dfn.edges(mesh)])
+pressure_edges = boundary_marker.where_equal(domainid_pressure)
+fixed_edges = boundary_marker.where_equal(domainid_fixed)
+
+pressure_vertices = np.unique(edge_to_vertex[pressure_edges].reshape(-1))
+fixed_vertices = np.unique(edge_to_vertex[fixed_edges].reshape(-1))
+
+vertex_marker = dfn.MeshFunction('size_t', mesh, 0)
+vertex_marker.set_all(0)
+vertex_marker.array()[pressure_vertices] = domainid_pressure
+vertex_marker.array()[fixed_vertices] = domainid_fixed
+
+### End mesh stuff
 surface_vertices = np.array(vertex_marker.where_equal(domainid_pressure))
-
-omega_fixed.mark(boundary_marker, domainid_fixed)
-omega_fixed.mark(vertex_marker, domainid_fixed)
-fixed_vertices = np.array(vertex_marker.where_equal(domainid_fixed))
-
-## Deform the mesh to a VF-like shape
-depth = 0.6
-thickness_bottom = 1.0
-thickness_top = 1/4 * thickness_bottom
-x_inf_edge = 1/2 * thickness_bottom
-x_sup_edge = x_inf_edge + thickness_top
-
-x1 = [0, 0]
-x2 = [thickness_bottom, 0]
-x3 = [x_sup_edge, depth]
-x4 = [x_inf_edge, depth-0.002]
-x4 = [x_inf_edge, depth]
-
-mesh.coordinates()[...] = transforms.bilinear(mesh.coordinates(), x1, x2, x3, x4)
-
-# Sort the pressure surface vertices from inferior to superior
 surface_coordinates = mesh.coordinates()[surface_vertices]
 
+# Sort the pressure surface vertices from inferior to superior
 idx_sort = np.argsort(surface_coordinates[..., 0])
 surface_vertices = surface_vertices[idx_sort]
 surface_coordinates = surface_coordinates[idx_sort]
 
 ####################################################################################################
+## Geometric parameters
+
+thickness_bottom = np.amax(mesh.coordinates()[:, 0])
+
+####################################################################################################
 ## Governing equation variational forms
+
+collision_eps = 0.001
+y_midline = const.DEFAULT_FLUID_PROPERTIES['y_midline']
+
 scalar_function_space = dfn.FunctionSpace(mesh, 'CG', 1)
 vector_function_space = dfn.VectorFunctionSpace(mesh, 'CG', 1)
 trial_u = dfn.TrialFunction(vector_function_space)
@@ -247,7 +229,7 @@ force_form = ufl.inner(linear_elasticity(u0, emod, nu), strain(test))*ufl.dx - t
 ####################################################################################################
 ## Forms needed for adjoint computation
 # Note: For an externally calculated pressure, you have to correct the derivative based on the
-# sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if it's strongly 
+# sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if it's strongly
 # coupled).
 f1 = fu_nonlin
 df1_du0_adjoint = dfn.adjoint(ufl.derivative(f1, u0, trial_u))
