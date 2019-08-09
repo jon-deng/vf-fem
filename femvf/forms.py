@@ -23,10 +23,10 @@ from . import default_mesh
 ## Mesh definition
 
 # loading the mesh
-# mesh, boundary_marker, domainid_pressure, domainid_fixed = default_mesh.givememesh()
+# mesh, boundary_marker, domainid_pressure, domainid_fixed = default_mesh.givemethemesh()
 
 mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
-mesh_base_filename = 'geometry2'
+mesh_base_filename = 'geometry1'
 path_to_mesh = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 path_to_mesh_function = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
 

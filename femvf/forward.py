@@ -7,14 +7,14 @@ from time import perf_counter
 import os
 from os.path import join
 
+from math import isclose, ceil, floor, remainder
+
 import h5py
 
 import numpy as np
-from math import isclose, ceil, floor, remainder
 
 from matplotlib import tri
 from matplotlib import pyplot as plt
-from matplotlib import animation
 
 import dolfin as dfn
 # import ufl
@@ -22,8 +22,8 @@ import dolfin as dfn
 from . import forms as frm
 from . import fluids
 from . import constants
-from . import functionals
-from . import visualization as vis
+# from . import functionals
+# from . import visualization as vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
@@ -157,7 +157,7 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     ydata = np.concatenate((line.get_ydata(), [fluid_info['flow_rate']]), axis=0)
     line.set_data(xdata, ydata)
 
-    axs[2].set_xlim(0, 1.2*t)
+    axs[2].set_xlim(0, np.maximum(1.2*t, 0.01))
     axs[2].set_ylim(0, 200)
 
     return fig, axs

@@ -9,7 +9,7 @@ import dolfin as dfn
 from . import transforms
 from . import constants as const
 
-def givememesh():
+def givemethemesh():
     """
     Returns the mesh and a bunch of other stuff.
 
