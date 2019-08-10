@@ -61,14 +61,14 @@ def solution_times(t0, meas_times, dt):
         n_stop = None
 
         tgap = times[-1] - (t0-dt)
-        if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
-            n_start = int(tgap/dt) + 1
+        if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=10*2**-52):
+            n_start = int(round(tgap/dt)) + 1
         else:
             n_start = ceil(tgap/dt)
 
         tgap = meas_times[n] - (t0-dt)
-        if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=2**-52):
-            n_stop = int(tgap/dt) - 1
+        if isclose(remainder(tgap, dt), 0, rel_tol=1e-10, abs_tol=10*2**-52):
+            n_stop = int(round(tgap/dt)) - 1
         else:
             n_stop = floor(tgap/dt)
 
@@ -83,36 +83,34 @@ def init_figure(fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
     """
-    gridspec_kw = {'height_ratios': [4, 2, 2]}
-    fig, axs = plt.subplots(3, 1, gridspec_kw=gridspec_kw, figsize=(6, 8))
-    axs[0].set_aspect('equal', adjustable='datalim')
+    gridspec_kw = {'height_ratios': [4, 2, 2], 'width_ratios': [9, 1]}
+    fig, axs = plt.subplots(3, 2, gridspec_kw=gridspec_kw, figsize=(6, 8))
+    axs[0, 0].set_aspect('equal', adjustable='datalim')
 
     x = np.arange(frm.surface_vertices.shape[0])
     y = np.arange(frm.surface_vertices.shape[0])
 
-    axs[1].plot(x, y, marker='o')
+    axs[1, 0].plot(x, y, marker='o')
 
     # Initialize lines for plotting flow rate and the rate of flow rate
-    axs[2].plot([0], [0])
-    # axs[3].plot([0], [0])
-    # axs[3].plot([0], [0])
+    axs[2, 0].plot([0], [0])
 
-    axs[0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
-    axs[0].set_ylim(0.0, 0.7, auto=False)
+    axs[0, 0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[0, 0].set_ylim(0.0, 0.7, auto=False)
 
-    axs[1].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[1, 0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
     p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
-    axs[1].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
+    axs[1, 0].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
 
-    axs[1].set_ylabel("Surface pressure [Pa]")
+    axs[1, 0].set_ylabel("Surface pressure [Pa]")
 
-    axs[2].set_ylabel("Glottal flow rate [cm^2/s]")
+    axs[2, 0].set_ylabel("Glottal flow rate [cm^2/s]")
 
     # axs[3].set_xlabel("Time [s]")
     # axs[3].set_ylabel("Glottal flow rate rate [cm^2/s^2]")
     return fig, axs
 
-def update_figure(fig, axs, t, x, fluid_info, fluid_props):
+def update_figure(fig, axs, t, x, fluid_info, solid_props, fluid_props):
     """
     Plots the FEM solution into a figure.
 
@@ -129,36 +127,38 @@ def update_figure(fig, axs, t, x, fluid_info, fluid_props):
     -------
     fig, axs
     """
-    axs[0].clear()
+    axs[0, 0].clear()
 
     delta_xy = x[0].vector()[frm.vert_to_vdof.reshape(-1)].reshape(-1, 2)
     xy_current = frm.mesh.coordinates() + delta_xy
     triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
                                       triangles=frm.mesh.cells())
-    axs[0].triplot(triangulation)
+    mappable = axs[0, 0].tripcolor(triangulation, solid_props['elastic_modulus'][frm.vert_to_sdof])
+    fig.colorbar(mappable, cax=axs[0, 1])
 
     xy_surface = xy_current[frm.surface_vertices]
 
     xy_min, xy_sep = fluid_info['xy_min'], fluid_info['xy_sep']
-    axs[0].plot(*xy_min, marker='o', mfc='none', color='C0')
-    axs[0].plot(*xy_sep, marker='o', mfc='none', color='C1')
-    axs[0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
+    axs[0, 0].plot(*xy_min, marker='o', mfc='none', color='C0')
+    axs[0, 0].plot(*xy_sep, marker='o', mfc='none', color='C1')
+    axs[0, 0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
 
-    axs[0].set_title(f'Time: {1e3*t:>5.1f} ms')
 
-    axs[0].axhline(y=frm.y_midline, ls='-.', lw=0.5)
-    axs[0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
+    axs[0, 0].set_title(f'Time: {1e3*t:>5.1f} ms')
 
-    pressure_profile = axs[1].lines[0]
+    axs[0, 0].axhline(y=frm.y_midline, ls='-.', lw=0.5)
+    axs[0, 0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
+
+    pressure_profile = axs[1, 0].lines[0]
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
 
-    line = axs[2].lines[0]
+    line = axs[2, 0].lines[0]
     xdata = np.concatenate((line.get_xdata(), [t]), axis=0)
     ydata = np.concatenate((line.get_ydata(), [fluid_info['flow_rate']]), axis=0)
     line.set_data(xdata, ydata)
 
-    axs[2].set_xlim(0, np.maximum(1.2*t, 0.01))
-    axs[2].set_ylim(0, 200)
+    axs[2, 0].set_xlim(0, np.maximum(1.2*t, 0.01))
+    axs[2, 0].set_ylim(0, 200)
 
     return fig, axs
 
@@ -313,7 +313,7 @@ def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/
 
             ## Plot the solution
             if show_figure:
-                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, fluid_props_ii)
+                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, solid_props, fluid_props_ii)
                 plt.pause(0.001)
 
                 if figure_path is not None:

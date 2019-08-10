@@ -102,7 +102,7 @@ def get_solid_properties(h5file, group='/'):
     """
     solid_props = {}
 
-    # TODO: This is a hardcoded value since I haven't figured out what each solid property will be 
+    # TODO: This is a hardcoded value since I haven't figured out what each solid property will be
     # yet. For this plane strain problem I think only elastic modulus and poisson's ratio will show
     # up
     # Also assumes they are constant in time

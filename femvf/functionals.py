@@ -484,7 +484,7 @@ def dwss_gwidth_du(n, h5file, h5group='/', weights=None, meas_indices=None,
     return dwss_du, info
 
 def dwss_gwidth_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
-                          meas_glottal_widths=None):
+                   meas_glottal_widths=None):
     """
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.
     """

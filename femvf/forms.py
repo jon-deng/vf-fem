@@ -27,7 +27,8 @@ from . import default_mesh
 
 mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
 
-mesh_base_filename = 'geometry-inclusion'
+mesh_base_filename = 'geometry2'
+# mesh_base_filename = 'geometry-inclusion'
 mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
 mesh_surface_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
@@ -36,7 +37,12 @@ mesh = dfn.Mesh(mesh_path)
 boundary_marker = dfn.MeshFunction('size_t', mesh, mesh_facet_path)
 body_marker = dfn.MeshFunction('size_t', mesh, mesh_surface_path)
 
+# IDs for the inclusion mesh
 domainid_pressure = 4
+domainid_fixed = 3
+
+# IDs for the other mesh
+domainid_pressure = 1
 domainid_fixed = 3
 
 # Create a vertex marker from the boundary marker
