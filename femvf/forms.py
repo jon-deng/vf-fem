@@ -26,14 +26,17 @@ from . import default_mesh
 # mesh, boundary_marker, domainid_pressure, domainid_fixed = default_mesh.givemethemesh()
 
 mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
-mesh_base_filename = 'geometry1'
-path_to_mesh = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-path_to_mesh_function = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
 
-mesh = dfn.Mesh(path_to_mesh)
-boundary_marker = dfn.MeshFunction('size_t', mesh, path_to_mesh_function)
+mesh_base_filename = 'geometry-inclusion'
+mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
+mesh_surface_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
 
-domainid_pressure = 1
+mesh = dfn.Mesh(mesh_path)
+boundary_marker = dfn.MeshFunction('size_t', mesh, mesh_facet_path)
+body_marker = dfn.MeshFunction('size_t', mesh, mesh_surface_path)
+
+domainid_pressure = 4
 domainid_fixed = 3
 
 # Create a vertex marker from the boundary marker
