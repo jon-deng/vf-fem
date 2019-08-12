@@ -28,13 +28,13 @@ import ufl
 from petsc4py import PETSc
 
 from . import statefileutils as sfu
-from . import forms as frm
+from . import forms
 
 # Form definitions needed for the fluid work functional
-frm_fluidwork = ufl.dot(frm.fluid_force, frm.u1-frm.u0) * frm.ds(frm.domainid_pressure)
-frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, frm.u0, frm.test)
-frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, frm.pressure, frm.scalar_test)
-frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, frm.u1, frm.test)
+# frm_fluidwork = ufl.dot(frm.fluid_force, frm.u1-frm.u0) * frm.ds(frm.domainid_pressure)
+# frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, frm.u0, frm.test)
+# frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, frm.pressure, frm.scalar_test)
+# frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, frm.u1, frm.test)
 
 ## Functionals defined for a single state index
 def fluidwork(n, h5file, h5group='/'):

@@ -21,8 +21,8 @@ def set_pressure_form(form, coordinates, vertices, vertex_to_sdof, fluid_props):
     ----------
     form : ufl.Coefficient
         The coefficient representing the pressure
-    coordinates : (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        An array containing vertex numbers of the surface vertices
+    coordinates : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
     vertices : (NUM_VERTICES,) np.ndarray
         An array containing vertex numbers of the surface vertices
     vertex_to_sdof : (NUM_VERTICES,) np.ndarray
@@ -112,14 +112,14 @@ def fluid_pressure(x, fluid_props):
             'xy_sep': xy_sep}
     return p, info
 
-def set_flow_sensitivity(coordinates, vertices, vertex_to_sdof, vertex_to_vdof, fluid_props):
+def set_flow_sensitivity(x, vertices, vertex_to_sdof, vertex_to_vdof, fluid_props):
     """
     Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
     Parameters
     ----------
-    coordinates : (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        An array containing vertex numbers of the surface vertices
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
     vertices : (NUM_VERTICES,) np.ndarray
         An array containing vertex numbers of the surface vertices
     vertex_to_sdof : (NUM_VERTICES,) np.ndarray
@@ -136,7 +136,7 @@ def set_flow_sensitivity(coordinates, vertices, vertex_to_sdof, vertex_to_vdof, 
     dq_du : PETSc.Vec
         Sensitivity of flow rate with respect to displacement
     """
-    _dp_du, _dq_du = flow_sensitivity(coordinates, fluid_props)
+    _dp_du, _dq_du = flow_sensitivity(x, fluid_props)
 
     dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
     dp_du.setType('aij')
@@ -165,14 +165,14 @@ def set_flow_sensitivity(coordinates, vertices, vertex_to_sdof, vertex_to_vdof, 
 
     return dp_du, dq_du
 
-def flow_sensitivity(coordinates, fluid_props):
+def flow_sensitivity(x, fluid_props):
     """
     Returns the derivative of flow properties with respect to the displacement.
 
     Parameters
     ----------
-    coordinates : (NUM_VERTICES, 2) np.array
-        Coordinates of surface vertices
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
     fluid_props : dict
         A dictionary of fluid property keyword arguments.
     """
@@ -180,7 +180,7 @@ def flow_sensitivity(coordinates, fluid_props):
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
 
-    area = 2 * (y_midline - coordinates[:, 1])
+    area = 2 * (y_midline - x[0][:, 1])
     darea_dy = -2 # darea_dx = 0
 
     # a_sub = area[0]
@@ -199,13 +199,13 @@ def flow_sensitivity(coordinates, fluid_props):
     dflow_rate_sqr_da_sub = -coeff / (1/a_sub**2-1/a_sep**2)**2 * (-2/a_sub**3)
     dflow_rate_sqr_da_sep = -coeff / (1/a_sub**2-1/a_sep**2)**2 * (2/a_sep**3)
 
-    assert coordinates.size%2 == 0
+    assert x[0].size%2 == 0
     j_sep = 2*idx_sep + 1
     j_min = 2*idx_min + 1
     j_sub = 1
 
     ## Calculate the pressure sensitivity
-    dp_du = np.zeros((coordinates.size//2, coordinates.size))
+    dp_du = np.zeros((x[0].size//2, x[0].size//2))
     for i in range(idx_sep+1):
         j = 2*i + 1
 
@@ -235,7 +235,7 @@ def flow_sensitivity(coordinates, fluid_props):
 
     factor = num/den
 
-    dfactor_du = np.zeros(coordinates.size)
+    dfactor_du = np.zeros(x[0].size)
     dfactor_du[j_min] += dnum_dy_min/den
     dfactor_du[j_sep] += dnum_dy_sep/den - num/den**2*dden_dy_sep
     dfactor_du[j_sep+2] = -num/den**2*dden_dy_sep1
@@ -243,7 +243,7 @@ def flow_sensitivity(coordinates, fluid_props):
     dp_du[idx_sep, :] = factor*dp_sep_du + dfactor_du*p_sep
 
     ## Calculate the flow rate sensitivity
-    dflow_rate_du = np.zeros(coordinates.size)
+    dflow_rate_du = np.zeros(x[0].size)
     dflow_rate_du[j_min] += dflow_rate_sqr_da_sep / (2*flow_rate_sqr**(1/2)) * da_sep_da_min * darea_dy
     dflow_rate_du[j_sub] += dflow_rate_sqr_da_sub / (2*flow_rate_sqr**(1/2)) * darea_dy
 

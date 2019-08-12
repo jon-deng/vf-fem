@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 import dolfin as dfn
 # import ufl
 
-from . import forms as frm
+from . import forms
 from . import fluids
 from . import constants
 # from . import functionals
@@ -162,7 +162,7 @@ def update_figure(fig, axs, t, x, fluid_info, solid_props, fluid_props):
 
     return fig, axs
 
-def increment_forward(x0, dt, solid_props, fluid_props):
+def increment_forward(frm, x0, dt, solid_props, fluid_props):
     """
     Returns the states at the next time, x1 = (u1, v1, a1).
 
@@ -204,13 +204,13 @@ def increment_forward(x0, dt, solid_props, fluid_props):
     dfn.solve(frm.fu_nonlin == 0, frm.u1, bcs=frm.bc_base, J=frm.jac_fu_nonlin)
     u1.assign(frm.u1)
 
-    v1.vector()[:] = frm.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
-    a1.vector()[:] = frm.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
+    v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
+    a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
 
     return (u1, v1, a1), fluid_info
 
-def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', show_figure=False,
-            figure_path=None):
+def forward(frm, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', 
+            show_figure=False, figure_path=None):
     """
     Solves the forward model over a time interval.
 
@@ -295,7 +295,7 @@ def forward(t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/
             ## Increment the state
             fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
             dt_ = times[ii+1] - times[ii]
-            (u1, v1, a1), info = increment_forward([u0, v0, a0], dt_, solid_props, fluid_props_ii)
+            (u1, v1, a1), info = increment_forward(frm, [u0, v0, a0], dt_, solid_props, fluid_props_ii)
 
             ## Write the solution outputs to a file
             # State variables
