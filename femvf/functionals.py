@@ -4,7 +4,7 @@ This module contains definitions of various functionals.
 A functional should take in the entire time history of states from a forward model run and return a
 real number. Each functional has a general signature
 
-functional(h5file, h5group='/', **kwargs) -> float, dict
+functional(model, h5file, h5group='/', **kwargs) -> float, dict
 
 , where h5file is an hdf5 file reference that contains the states history, h5group is the group path
 in the file where the states are stored, and **kwargs are and specific keyword arguments. The
@@ -14,7 +14,7 @@ argument.
 For computing the sensitivity of the functional through the discrete adjoint method, you also need
 the sensitivity of the functional with respect to the n'th state. This function has the signature
 
-dfunctional_du(n, h5file, h5group='/', **kwargs) -> float, dict
+dfunctional_du(model, n, h5file, h5group='/', **kwargs) -> float, dict
 
 , where the parameters have the same uses as defined previously.
 """
@@ -31,13 +31,13 @@ from . import statefileutils as sfu
 from . import forms
 
 # Form definitions needed for the fluid work functional
-# frm_fluidwork = ufl.dot(frm.fluid_force, frm.u1-frm.u0) * frm.ds(frm.domainid_pressure)
-# frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, frm.u0, frm.test)
-# frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, frm.pressure, frm.scalar_test)
-# frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, frm.u1, frm.test)
+# frm_fluidwork = ufl.dot(model.fluid_force, model.u1-model.u0) * model.ds(model.domainid_pressure)
+# frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, model.u0, model.test)
+# frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, model.pressure, model.scalar_test)
+# frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, model.u1, model.test)
 
 ## Functionals defined for a single state index
-def fluidwork(n, h5file, h5group='/'):
+def fluidwork(model, n, h5file, h5group='/'):
     """
     Returns the fluid work from n-1 to n.
 
@@ -49,13 +49,13 @@ def fluidwork(n, h5file, h5group='/'):
         Path to the file containing states from the forward run
     """
     # Set form coefficients to represent the fluidwork at index n
-    sfu.set_form_states(n, h5file, h5group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_form_states(n, h5file, h5group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-    frm.set_pressure(fluid_props)
+    model.set_pressure(fluid_props)
 
     return dfn.assemble(frm_fluidwork)
 
-def vocaleff(n, h5file, h5group='/'):
+def vocaleff(model, n, h5file, h5group='/'):
     """
     Returns the vocal efficiency over the timestep from n to n+1.
 
@@ -63,16 +63,16 @@ def vocaleff(n, h5file, h5group='/'):
         Path to the file containing states from the forward run
     """
     # Set form coefficients to represent the fluidwork at index n
-    sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_states(n, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-    info = frm.set_pressure(fluid_props)
+    info = model.set_pressure(fluid_props)
 
-    dt = float(frm.dt)
+    dt = float(model.dt)
     inputwork = dt*info['flow_rate']*fluid_props['p_sub']
     cost = dfn.assemble(frm_fluidwork)/inputwork
     return cost
 
-def dvocaleff_du(n, h5file, h5group='/'):
+def dvocaleff_du(model, n, h5file, h5group='/'):
     """
     Returns the derivative of the cost function with respect to u_n.
 
@@ -86,12 +86,12 @@ def dvocaleff_du(n, h5file, h5group='/'):
     if n <= num_states-2 or n <= -2:
         ## Calculate the derivative of cost w.r.t u_n due to work from n to n+1.
         # Set the initial conditions for the forms properly
-        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_states(n+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
         sfu.set_time_step(n+1, h5file, group=h5group)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
         sfu.set_time_step
-        info = frm.set_pressure(fluid_props)
-        dp_du, dq_du = frm.set_flow_sensitivity(fluid_props)
+        info = model.set_pressure(fluid_props)
+        dp_du, dq_du = model.set_flow_sensitivity(fluid_props)
 
         fluidwork = dfn.assemble(frm_fluidwork)
 
@@ -105,7 +105,7 @@ def dvocaleff_du(n, h5file, h5group='/'):
 
         dfluidwork_du0 += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
 
-        dt = frm.dt.values()[0]
+        dt = model.dt.values()[0]
         p_sub = fluid_props['p_sub']
         inputwork = dt*info['flow_rate']*p_sub
         dinputwork_du0 = dt*p_sub*dfn.PETScVector(dq_du)
@@ -115,65 +115,65 @@ def dvocaleff_du(n, h5file, h5group='/'):
     # Set form coefficients to represent step from n-1 to n
     if n >= 1:
         # Set the initial conditions for the forms properly
-        sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+        sfu.set_states(n, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
         sfu.set_time_step(n, h5file, group=h5group)
         fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
-        info = frm.set_pressure(fluid_props)
+        info = model.set_pressure(fluid_props)
 
         fluidwork = dfn.assemble(frm_fluidwork)
         dfluidwork_du1 = dfn.assemble(frm_dfluidwork_du1)
 
-        dt = frm.dt.values()[0]
+        dt = model.dt.values()[0]
         inputwork = dt*info['flow_rate']*fluid_props['p_sub']
 
         out += dfluidwork_du1/inputwork
 
     return out
 
-def fdr(n, h5file, h5group='/'):
+def fdr(model, n, h5file, h5group='/'):
     """
     Returns the flow declination rate at n.
 
     This uses finite differencing
     """
     # Set form coefficients to represent the equation at state ii
-    sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_states(n+2, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
     sfu.set_time_step(n+2, h5file, group=h5group)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-    info = frm.set_pressure(fluid_props)
+    info = model.set_pressure(fluid_props)
 
     t_plus = sfu.get_time(n+1, h5file, group=h5group)
     q_plus = info['flow_rate']
 
-    sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_states(n+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
     sfu.set_time_step(n+1, h5file, group=h5group)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-    info = frm.set_pressure(fluid_props)
+    info = model.set_pressure(fluid_props)
 
     t_minus = sfu.get_time(n, h5file, group=h5group)
     q_minus = info['flow_rate']
 
     return (q_plus-q_minus)/(t_plus-t_minus)
 
-def dfdr_du(n, h5file, h5group='/'):
+def dfdr_du(model, n, h5file, h5group='/'):
     """
     Returns the flow declination rate at n.
 
     This uses finite differencing
     """
     # Set form coefficients to represent the equation at state ii
-    sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_states(n+2, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
 
-    q_plus = frm.set_pressure(fluid_props)['flow_rate']
-    dq_plus_du = frm.set_flow_sensitivity(fluid_props)[1]
+    q_plus = model.set_pressure(fluid_props)['flow_rate']
+    dq_plus_du = model.set_flow_sensitivity(fluid_props)[1]
     t_plus = sfu.get_time(n+1, h5file, group=h5group)
 
-    sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
+    sfu.set_states(n+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
 
-    q_minus = frm.set_pressure(fluid_props)['flow_rate']
-    dq_minus_du = frm.set_flow_sensitivity(fluid_props)[1]
+    q_minus = model.set_pressure(fluid_props)['flow_rate']
+    dq_minus_du = model.set_flow_sensitivity(fluid_props)[1]
     t_minus = sfu.get_time(n, h5file, group=h5group)
 
     # if n
@@ -181,7 +181,7 @@ def dfdr_du(n, h5file, h5group='/'):
     return (dq_plus_du-dq_minus_du)/(t_plus-t_minus)
 
 ## Functionals defined over the entire state history
-def totalfluidwork(h5file, h5group='/'):
+def totalfluidwork(model, h5file, h5group='/'):
     """
     Returns the total work done by the fluid on the vocal folds.
     """
@@ -190,16 +190,16 @@ def totalfluidwork(h5file, h5group='/'):
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
-        sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(ii+1, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(ii+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(ii+1, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
-        frm.set_pressure(fluid_props)
+        model.set_pressure(fluid_props)
 
         res += dfn.assemble(frm_fluidwork)
 
     return res, info
 
-def dtotalfluidwork_du(n, h5file, h5group='/'):
+def dtotalfluidwork_du(model, n, h5file, h5group='/'):
     """
     Returns the derivative of fluid work w.r.t state n.
 
@@ -219,11 +219,11 @@ def dtotalfluidwork_du(n, h5file, h5group='/'):
 
     # Set form coefficients to represent the fluidwork over n to n+1
     if n < -1 or n < num_states-1:
-        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(n+1, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(n+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-        frm.set_pressure(fluid_props)
-        dp_du, _ = frm.set_flow_sensitivity(fluid_props)
+        model.set_pressure(fluid_props)
+        dp_du, _ = model.set_flow_sensitivity(fluid_props)
 
         out += dfn.assemble(frm_dfluidwork_du0)
 
@@ -237,16 +237,16 @@ def dtotalfluidwork_du(n, h5file, h5group='/'):
 
     # Set form coefficients to represent the fluidwork over n-1 to n
     if n > 0:
-        sfu.set_states(n, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(n, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(n, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(n, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
-        frm.set_pressure(fluid_props)
+        model.set_pressure(fluid_props)
 
         out += dfn.assemble(frm_dfluidwork_du1)
 
     return out, info
 
-def totalinputwork(h5file, h5group='/'):
+def totalinputwork(model, h5file, h5group='/'):
     """
     Returns the total work input into the fluid.
     """
@@ -256,27 +256,27 @@ def totalinputwork(h5file, h5group='/'):
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
-        sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(ii+1, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(ii+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(ii+1, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
-        fluid_info = frm.set_pressure(fluid_props)
+        fluid_info = model.set_pressure(fluid_props)
 
-        res += float(frm.dt)*fluid_info['flow_rate']*fluid_props['p_sub']
+        res += float(model.dt)*fluid_info['flow_rate']*fluid_props['p_sub']
 
     return res, info
 
-def totalvocaleff(h5file, h5group='/'):
+def totalvocaleff(model, h5file, h5group='/'):
     """
     Returns the total vocal efficiency.
 
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
-    res = totalfluidwork(h5file, h5group)[0]/totalinputwork(h5file, h5group)[0]
+    res = totalfluidwork(model, h5file, h5group)[0]/totalinputwork(model, h5file, h5group)[0]
     info = {}
     return res, info
 
-def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_totalinputwork=None):
+def dtotalvocaleff_du(model, n, h5file, h5group='/', cache_totalfluidwork=None, cache_totalinputwork=None):
     """
     Returns the derivative of the total vocal efficiency w.r.t state n.
 
@@ -302,17 +302,17 @@ def dtotalvocaleff_du(n, h5file, h5group='/', cache_totalfluidwork=None, cache_t
     # Set form coefficients to represent step from n to n+1
     num_states = sfu.get_num_states(h5file, group=h5group)
     if n < num_states-1 or n < -1:
-        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(n+1, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(n+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
-        _, dq_du = frm.set_flow_sensitivity(fluid_props)
+        _, dq_du = model.set_flow_sensitivity(fluid_props)
 
-        dt = frm.dt.values()[0]
+        dt = model.dt.values()[0]
         dtotalinputwork_du = dt*fluid_props['p_sub']*dq_du
 
     return dtotalfluidwork_du_/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du, info
 
-def mfdr(h5file, h5group='/', min_time=0.03):
+def mfdr(model, h5file, h5group='/', min_time=0.03):
     """
     Returns the maximum flow declination rate at a time > min_time (s).
     """
@@ -322,10 +322,10 @@ def mfdr(h5file, h5group='/', min_time=0.03):
     num_states = sfu.get_num_states(h5file, group=h5group)
     for ii in range(num_states-1):
         # Set form coefficients to represent the equation at state ii
-        sfu.set_states(ii+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(ii+1, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(ii+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(ii+1, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
-        info = frm.set_pressure(fluid_props)
+        info = model.set_pressure(fluid_props)
 
         flow_rate.append(info['flow_rate'])
     flow_rate = np.array(flow_rate)
@@ -341,7 +341,7 @@ def mfdr(h5file, h5group='/', min_time=0.03):
     info['idx_mfdr'] = idx_min
     return res, info
 
-def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
+def dmfdr_du(model, n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
     """
     Returns the sensitivity of the maximum flow declination rate at a time > min_time (s).
     """
@@ -353,20 +353,20 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
 
     if n == cache_idx_mfdr or n == cache_idx_mfdr+1:
         # First calculate flow rates at n and n+1
-        sfu.set_states(n+2, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(n+2, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(n+2, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(n+2, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
 
-        q1 = frm.set_pressure(fluid_props)['flow_rate']
-        dq1_du = frm.set_flow_sensitivity(fluid_props)[1]
+        q1 = model.set_pressure(fluid_props)['flow_rate']
+        dq1_du = model.set_flow_sensitivity(fluid_props)[1]
         t1 = sfu.get_time(n+1, h5file, group=h5group)
 
-        sfu.set_states(n+1, h5file, group=h5group, u0=frm.u0, v0=frm.v0, a0=frm.a0, u1=frm.u1)
-        sfu.set_time_step(n+1, h5file, group=h5group, dt=frm.dt)
+        sfu.set_states(n+1, h5file, group=h5group, u0=model.u0, v0=model.v0, a0=model.a0, u1=model.u1)
+        sfu.set_time_step(n+1, h5file, group=h5group, dt=model.dt)
         fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
 
-        q0 = frm.set_pressure(fluid_props)['flow_rate']
-        dq0_du = frm.set_flow_sensitivity(fluid_props)[1]
+        q0 = model.set_pressure(fluid_props)['flow_rate']
+        dq0_du = model.set_flow_sensitivity(fluid_props)[1]
         t0 = sfu.get_time(n, h5file, group=h5group)
 
         # fdr = (q1-q0) / (t1-t0)
@@ -379,11 +379,11 @@ def dmfdr_du(n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
         elif n == cache_idx_mfdr+1:
             res = dfdr_du1
     else:
-        res = dfn.Function(frm.vector_function_space).vector()
+        res = dfn.Function(model.vector_function_space).vector()
 
     return res, info
 
-def wss_gwidth(h5file, h5group='/', weights=None, meas_indices=None,
+def wss_gwidth(model, h5file, h5group='/', weights=None, meas_indices=None,
                       meas_glottal_widths=None):
     """
     Returns the weighted sum of squared differences between a measurement/model glottal widths.
@@ -391,11 +391,11 @@ def wss_gwidth(h5file, h5group='/', weights=None, meas_indices=None,
     wss = 0
     info = {}
 
-    u = dfn.Function(frm.vector_function_space)
-    v = dfn.Function(frm.vector_function_space)
-    a = dfn.Function(frm.vector_function_space)
+    u = dfn.Function(model.vector_function_space)
+    v = dfn.Function(model.vector_function_space)
+    a = dfn.Function(model.vector_function_space)
 
-    ref_surface = frm.mesh.coordinates()[frm.surface_vertices]
+    ref_surface = model.mesh.coordinates()[model.surface_vertices]
 
     # Set default values when kwargs are not provided
     num_states = sfu.get_num_states(h5file, group=h5group)
@@ -412,32 +412,32 @@ def wss_gwidth(h5file, h5group='/', weights=None, meas_indices=None,
     for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
         u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
 
-        u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
+        u_surface = u.vector()[model.vert_to_vdof[model.surface_vertices].reshape(-1)].reshape(-1, 2)
         cur_surface = ref_surface + u_surface
 
         # Find the maximum y coordinate on the surface
         idx_surface = np.argmax(cur_surface[:, 1])
 
         # Find the maximum y coordinate on the surface
-        gw_modl = 2 * (frm.y_midline - cur_surface[idx_surface, 1])
+        gw_modl = 2 * (model.y_midline - cur_surface[idx_surface, 1])
 
         wss += weight * (gw_modl - gw_meas)**2
 
     return wss, info
 
-def dwss_gwidth_du(n, h5file, h5group='/', weights=None, meas_indices=None,
+def dwss_gwidth_du(model, n, h5file, h5group='/', weights=None, meas_indices=None,
                           meas_glottal_widths=None):
     """
     Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
     """
-    dwss_du = dfn.Function(frm.vector_function_space).vector()
+    dwss_du = dfn.Function(model.vector_function_space).vector()
     info = {}
 
-    u = dfn.Function(frm.vector_function_space)
-    v = dfn.Function(frm.vector_function_space)
-    a = dfn.Function(frm.vector_function_space)
+    u = dfn.Function(model.vector_function_space)
+    v = dfn.Function(model.vector_function_space)
+    a = dfn.Function(model.vector_function_space)
 
-    ref_surface = frm.mesh.coordinates()[frm.surface_vertices]
+    ref_surface = model.mesh.coordinates()[model.surface_vertices]
 
     # Set default values when kwargs are not provided
     num_states = sfu.get_num_states(h5file, group=h5group)
@@ -457,7 +457,7 @@ def dwss_gwidth_du(n, h5file, h5group='/', weights=None, meas_indices=None,
 
         u, v, a = sfu.set_state((u, v, a), n, h5file, group=h5group)
 
-        u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
+        u_surface = u.vector()[model.vert_to_vdof[model.surface_vertices].reshape(-1)].reshape(-1, 2)
         cur_surface = ref_surface + u_surface
 
         # Find the surface vertex corresponding to where the glottal width is measured
@@ -466,14 +466,14 @@ def dwss_gwidth_du(n, h5file, h5group='/', weights=None, meas_indices=None,
         idx_surface = np.argmax(cur_surface[:, 1])
 
         # Find the maximum y coordinate on the surface
-        gw_modl = 2 * (frm.y_midline - cur_surface[idx_surface, 1])
+        gw_modl = 2 * (model.y_midline - cur_surface[idx_surface, 1])
         dgw_modl_du_width = -2
 
         # Find the vertex number according to the mesh vertex numbering scheme
-        idx_body = frm.surface_vertices[idx_surface]
+        idx_body = model.surface_vertices[idx_surface]
 
         # Finally convert it to the DOF number of the u-dof that actually influences glottal width
-        dof_width = frm.vert_to_vdof[idx_body, 1]
+        dof_width = model.vert_to_vdof[idx_body, 1]
 
         # wss = weight * (gw_modl - gw_meas)**2
         dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
@@ -483,7 +483,7 @@ def dwss_gwidth_du(n, h5file, h5group='/', weights=None, meas_indices=None,
 
     return dwss_du, info
 
-def dwss_gwidth_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
+def dwss_gwidth_dt(model, n, h5file, h5group='/', weights=None, meas_indices=None,
                    meas_glottal_widths=None):
     """
     Returns the weighted sum of squared difference between a measurement and a model's glottal width.
@@ -491,11 +491,11 @@ def dwss_gwidth_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
     dwss_dt = 0
     info = {}
 
-    u = dfn.Function(frm.vector_function_space)
-    v = dfn.Function(frm.vector_function_space)
-    a = dfn.Function(frm.vector_function_space)
+    u = dfn.Function(model.vector_function_space)
+    v = dfn.Function(model.vector_function_space)
+    a = dfn.Function(model.vector_function_space)
 
-    ref_surface = frm.mesh.coordinates()[frm.surface_vertices]
+    ref_surface = model.mesh.coordinates()[model.surface_vertices]
 
     # Set default values when kwargs are not provided
     num_states = sfu.get_num_states(h5file, group=h5group)
@@ -512,20 +512,20 @@ def dwss_gwidth_dt(n, h5file, h5group='/', weights=None, meas_indices=None,
     for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
         u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
 
-        u_surface = u.vector()[frm.vert_to_vdof[frm.surface_vertices].reshape(-1)].reshape(-1, 2)
+        u_surface = u.vector()[model.vert_to_vdof[model.surface_vertices].reshape(-1)].reshape(-1, 2)
         cur_surface = ref_surface + u_surface
 
         # Find the maximum y coordinate on the surface
         idx_surface = np.argmax(cur_surface[:, 1])
 
         # Find the vertex number according to the mesh vertex numbering scheme
-        idx_body = frm.surface_vertices[idx_surface]
+        idx_body = model.surface_vertices[idx_surface]
 
         # Finally convert it to the DOF number of the u-dof that actually influences glottal width
-        dof_width = frm.vert_to_vdof[idx_body, 1]
+        dof_width = model.vert_to_vdof[idx_body, 1]
 
         # Find the maximum y coordinate on the surface
-        gw_modl = 2 * (frm.y_midline - cur_surface[idx_surface, 1])
+        gw_modl = 2 * (model.y_midline - cur_surface[idx_surface, 1])
         dgw_modl_dt = -2 * v[dof_width]
 
         wss += weight * (gw_modl - gw_meas)**2

@@ -21,9 +21,9 @@ Solid properties are stored under labels:
 ./solid_properties/elastic_modulus : (N_VERTICES,)
 """
 
-import h5py
-
 from os.path import join
+
+import h5py
 
 from . import fluids
 

@@ -14,7 +14,7 @@ import numpy as np
 sys.path.append('../')
 from femvf.forward import forward
 from femvf.adjoint import adjoint
-from femvf import forms as frm
+from femvf import forms
 from femvf import constants
 from femvf import functionals
 
@@ -22,24 +22,17 @@ if __name__ == '__main__':
     dfn.set_log_level(30)
 
     # Solid and Fluid properties
-    emod = frm.emod.vector()[:].copy()
-
-    cell_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(cell)]
-                               for cell in dfn.cells(frm.mesh)])
-    normal_cells = frm.body_marker.where_equal(2)
-    inclusion_cells = frm.body_marker.where_equal(1)
-
-    normal_vertices = np.unique(cell_to_vertex[normal_cells].reshape(-1))
-    inclusion_vertices = np.unique(cell_to_vertex[inclusion_cells].reshape(-1))
-
-    emod[frm.vert_to_sdof[normal_vertices]] = 10e3 * constants.PASCAL_TO_CGS
-    emod[frm.vert_to_sdof[inclusion_vertices]] = 10e3 * constants.PASCAL_TO_CGS
-
-    solid_props = {'elastic_modulus': emod}
-    # import ipdb; ipdb.set_trace()
-
-    # Constant fluid properties
+    solid_props = constants.DEFAULT_SOLID_PROPERTIES
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
+
+    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
+
+    mesh_base_filename = 'geometry2'
+    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+    mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
+    mesh_cell_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
+
+    model = forms.ForwardModel(mesh_path, mesh_facet_path, mesh_cell_path, {'pressure': 1, 'fixed': 3}, {})
 
     dt = 1e-4
     times_meas = [0, 0.1]
@@ -49,5 +42,5 @@ if __name__ == '__main__':
         os.remove(h5file)
 
     runtime_start = perf_counter()
-    forward(0, times_meas, dt, solid_props, fluid_props, h5file=h5file)
+    forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=h5file)
     runtime_end = perf_counter()

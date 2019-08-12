@@ -13,7 +13,7 @@ import numpy as np
 
 sys.path.append('../')
 from femvf.forward import forward
-# from femvf.adjoint import adjoint
+from femvf.adjoint import adjoint
 from femvf import forms
 from femvf import constants
 from femvf import functionals
@@ -22,16 +22,17 @@ if __name__ == '__main__':
     dfn.set_log_level(30)
 
     ## Finite Differences
-    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/optimize-fem/meshes/')
+    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
 
     mesh_base_filename = 'geometry2'
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
     mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
     mesh_cell_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
 
-    frm = forms.ForwardModel(mesh_path, mesh_facet_path, mesh_cell_path, {'pressure': 1, 'fixed': 3}, {})
+    model = forms.ForwardModel(mesh_path, mesh_facet_path, mesh_cell_path,
+                               {'pressure': 1, 'fixed': 3}, {})
     print("Computing Gradient via Finite Differences")
-    emod = frm.emod.vector()[:].copy()
+    emod = model.emod.vector()[:].copy()
     step_size = 0.01*constants.PASCAL_TO_CGS
     num_steps = 5
 
@@ -60,102 +61,102 @@ if __name__ == '__main__':
         solid_props = {'elastic_modulus': emod + ii*step_size}
 
         runtime_start = perf_counter()
-        forward(frm, 0, times_meas, dt, solid_props, fluid_props, h5file=save_path, h5group=f'{ii}/',
-                show_figure=False)
+        forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=save_path,
+                h5group=f'{ii}/')
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    # ## Adjoint
-    # print("Computing Gradient via Adjoint State")
+    ## Adjoint
+    print("Computing Gradient via Adjoint State")
 
-    # # Functional for vocal eff
-    # # totalfluidwork = None
-    # # totalinputwork = None
-    # # with h5py.File(save_path, mode='r') as f:
-    # #     totalfluidwork = functionals.totalfluidwork(f, h5group='0')[0]
-    # #     totalinputwork = functionals.totalinputwork(f, h5group='0')[0]
-    # # fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    # # dg_du = functionals.dtotalvocaleff_du
-    # # functional = functionals.totalvocaleff
-
-    # # Functional for MFDR
-    # idx_mfdr = None
+    # Functional for vocal eff
+    # totalfluidwork = None
+    # totalinputwork = None
     # with h5py.File(save_path, mode='r') as f:
-    #     idx_mfdr = functionals.mfdr(f, h5group='0')[1]['idx_mfdr']
-    # fkwargs = {'cache_idx_mfdr': idx_mfdr}
-    # dg_du = functionals.dmfdr_du
-    # functional = functionals.mfdr
+    #     totalfluidwork = functionals.totalfluidwork(model, f, h5group='0')[0]
+    #     totalinputwork = functionals.totalinputwork(model, f, h5group='0')[0]
+    # fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
+    # dg_du = functionals.dtotalvocaleff_du
+    # functional = functionals.totalvocaleff
 
-    # # Functional for weighted sum of squared glottal widths
-    # # fkwargs = {}
-    # # dg_du = functionals.dwss_glottal_width_du
-    # # functional = functionals.wss_glottal_width
+    # Functional for MFDR
+    idx_mfdr = None
+    with h5py.File(save_path, mode='r') as f:
+        idx_mfdr = functionals.mfdr(model, f, h5group='0')[1]['idx_mfdr']
+    fkwargs = {'cache_idx_mfdr': idx_mfdr}
+    dg_du = functionals.dmfdr_du
+    functional = functionals.mfdr
 
-    # solid_props = {'elastic_modulus': emod}
-    # runtime_start = perf_counter()
-    # gradient = adjoint(save_path, h5group='0', dg_du=dg_du, dg_du_kwargs=fkwargs)
-    # runtime_end = perf_counter()
+    # Functional for weighted sum of squared glottal widths
+    # fkwargs = {}
+    # dg_du = functionals.dwss_glottal_width_du
+    # functional = functionals.wss_glottal_width
 
-    # print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+    solid_props = {'elastic_modulus': emod}
+    runtime_start = perf_counter()
+    gradient = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs=fkwargs)
+    runtime_end = perf_counter()
 
-    # save_path = 'out/Adjoint.h5'
-    # with h5py.File(save_path, mode='w') as f:
-    #     f.create_dataset('gradient', data=gradient)
+    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    # ## Compare adjoint and finite differences
-    # # Load data and caculate gradient from FD steps
-    # emod = None
-    # cost_fd = list()
-    # with h5py.File('out/FiniteDifferenceStates.h5', mode='r') as f:
-    #     step_size = f['step_size'][()]
-    #     num_steps = f['num_steps'][()]
-    #     emod = f['elastic_modulus'] + np.arange(num_steps)*step_size
-    #     for ii in range(num_steps):
-    #         cost_fd.append(functional(f, h5group=f'{ii}')[0])
+    save_path = 'out/Adjoint.h5'
+    with h5py.File(save_path, mode='w') as f:
+        f.create_dataset('gradient', data=gradient)
 
-    # # Load the gradient from the adjoint method
-    # grad_ad = None
-    # with h5py.File('out/Adjoint.h5', mode='r') as f:
-    #     grad_ad = f['gradient'][...]
+    ## Compare adjoint and finite differences
+    # Load data and caculate gradient from FD steps
+    emod = None
+    cost_fd = list()
+    with h5py.File('out/FiniteDifferenceStates.h5', mode='r') as f:
+        step_size = f['step_size'][()]
+        num_steps = f['num_steps'][()]
+        emod = f['elastic_modulus'] + np.arange(num_steps)*step_size
+        for ii in range(num_steps):
+            cost_fd.append(functional(model, f, h5group=f'{ii}')[0])
 
-    # ### Figure generation
-    # fig, axs = plt.subplots(1, 2, figsize=(7, 3))
+    # Load the gradient from the adjoint method
+    grad_ad = None
+    with h5py.File('out/Adjoint.h5', mode='r') as f:
+        grad_ad = f['gradient'][...]
 
-    # ## Plotting
-    # cost_fd = np.array(cost_fd)
-    # axs[0].plot(emod, cost_fd, color='C0', marker='o', label="Functional from F")
+    ### Figure generation
+    fig, axs = plt.subplots(1, 2, figsize=(7, 3))
 
-    # # Project the gradient in the direction of uniform increase in elastic modulus
-    # demod = emod-emod[0]
-    # grad_ad_projected = grad_ad.sum()
-    # cost_ad = cost_fd[0] + grad_ad_projected*demod
-    # axs[0].plot(emod, cost_ad, color='C1', marker='o', label="Linear prediction from gradient")
+    ## Plotting
+    cost_fd = np.array(cost_fd)
+    axs[0].plot(emod, cost_fd, color='C0', marker='o', label="Functional from F")
 
-    # grad_fd_projected = (cost_fd[1:]-cost_fd[0])/(demod[1:])
-    # error = np.abs((grad_ad_projected-grad_fd_projected)/grad_ad_projected)*100
-    # axs[1].plot(np.arange(error.size)+1, error)
+    # Project the gradient in the direction of uniform increase in elastic modulus
+    demod = emod-emod[0]
+    grad_ad_projected = grad_ad.sum()
+    cost_ad = cost_fd[0] + grad_ad_projected*demod
+    axs[0].plot(emod, cost_ad, color='C1', marker='o', label="Linear prediction from gradient")
 
-    # ## Formatting
-    # axs[0].set_xlabel("Elastic modulus [Pa]")
-    # axs[0].set_ylabel("Objective function")
-    # axs[0].legend()
+    grad_fd_projected = (cost_fd[1:]-cost_fd[0])/(demod[1:])
+    error = np.abs((grad_ad_projected-grad_fd_projected)/grad_ad_projected)*100
+    axs[1].plot(np.arange(error.size)+1, error)
 
-    # axs[1].set_ylabel(r"% Error")
+    ## Formatting
+    axs[0].set_xlabel("Elastic modulus [Pa]")
+    axs[0].set_ylabel("Objective function")
+    axs[0].legend()
 
-    # for ax in axs:
-    #     ax.grid()
+    axs[1].set_ylabel(r"% Error")
 
-    # axs[0].set_xlabel(r"$E$")
-    # axs[1].set_xlabel(r"$N_{\Delta h}$")
+    for ax in axs:
+        ax.grid()
 
-    # axs[0].set_xlim(emod[[0, -1]])
-    # axs[1].set_xlim([0, error.size])
-    # axs[1].set_ylim([0, error.max()])
+    axs[0].set_xlabel(r"$E$")
+    axs[1].set_xlabel(r"$N_{\Delta h}$")
 
-    # plt.tight_layout()
-    # plt.show()
+    axs[0].set_xlim(emod[[0, -1]])
+    axs[1].set_xlim([0, error.size])
+    axs[1].set_ylim([0, error.max()])
 
-    # print(f"Linear gradient prediction {grad_ad_projected:.16e}")
-    # print(f"Actual FD values {grad_fd_projected[0]:.16e}")
-    # print(f"% Error {error}")
+    plt.tight_layout()
+    plt.show()
+
+    print(f"Linear gradient prediction {grad_ad_projected:.16e}")
+    print(f"Actual FD values {grad_fd_projected[0]:.16e}")
+    print(f"% Error {error}")

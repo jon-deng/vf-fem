@@ -17,7 +17,6 @@ from matplotlib import tri
 from matplotlib import pyplot as plt
 
 import dolfin as dfn
-# import ufl
 
 from . import forms
 from . import fluids
@@ -79,7 +78,7 @@ def solution_times(t0, meas_times, dt):
 
     return times[1:], np.array(meas_indices, dtype=np.intp)-1
 
-def init_figure(fluid_props):
+def init_figure(model, fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
     """
@@ -87,18 +86,20 @@ def init_figure(fluid_props):
     fig, axs = plt.subplots(3, 2, gridspec_kw=gridspec_kw, figsize=(6, 8))
     axs[0, 0].set_aspect('equal', adjustable='datalim')
 
-    x = np.arange(frm.surface_vertices.shape[0])
-    y = np.arange(frm.surface_vertices.shape[0])
+    thickness_bottom = np.amax(model.mesh.coordinates()[..., 0])
+
+    x = np.arange(model.surface_vertices.shape[0])
+    y = np.arange(model.surface_vertices.shape[0])
 
     axs[1, 0].plot(x, y, marker='o')
 
     # Initialize lines for plotting flow rate and the rate of flow rate
     axs[2, 0].plot([0], [0])
 
-    axs[0, 0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[0, 0].set_xlim(-0.1, thickness_bottom+0.1, auto=False)
     axs[0, 0].set_ylim(0.0, 0.7, auto=False)
 
-    axs[1, 0].set_xlim(-0.1, frm.thickness_bottom+0.1, auto=False)
+    axs[1, 0].set_xlim(-0.1, thickness_bottom+0.1, auto=False)
     p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
     axs[1, 0].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
 
@@ -110,7 +111,7 @@ def init_figure(fluid_props):
     # axs[3].set_ylabel("Glottal flow rate rate [cm^2/s^2]")
     return fig, axs
 
-def update_figure(fig, axs, t, x, fluid_info, solid_props, fluid_props):
+def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     """
     Plots the FEM solution into a figure.
 
@@ -129,14 +130,14 @@ def update_figure(fig, axs, t, x, fluid_info, solid_props, fluid_props):
     """
     axs[0, 0].clear()
 
-    delta_xy = x[0].vector()[frm.vert_to_vdof.reshape(-1)].reshape(-1, 2)
-    xy_current = frm.mesh.coordinates() + delta_xy
+    delta_xy = x[0].vector()[model.vert_to_vdof.reshape(-1)].reshape(-1, 2)
+    xy_current = model.mesh.coordinates() + delta_xy
     triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
-                                      triangles=frm.mesh.cells())
-    mappable = axs[0, 0].tripcolor(triangulation, solid_props['elastic_modulus'][frm.vert_to_sdof])
+                                      triangles=model.mesh.cells())
+    mappable = axs[0, 0].tripcolor(triangulation, solid_props['elastic_modulus'][model.vert_to_sdof])
     fig.colorbar(mappable, cax=axs[0, 1])
 
-    xy_surface = xy_current[frm.surface_vertices]
+    xy_surface = xy_current[model.surface_vertices]
 
     xy_min, xy_sep = fluid_info['xy_min'], fluid_info['xy_sep']
     axs[0, 0].plot(*xy_min, marker='o', mfc='none', color='C0')
@@ -146,8 +147,8 @@ def update_figure(fig, axs, t, x, fluid_info, solid_props, fluid_props):
 
     axs[0, 0].set_title(f'Time: {1e3*t:>5.1f} ms')
 
-    axs[0, 0].axhline(y=frm.y_midline, ls='-.', lw=0.5)
-    axs[0, 0].axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
+    axs[0, 0].axhline(y=model.y_midline, ls='-.', lw=0.5)
+    axs[0, 0].axhline(y=model.y_midline-model.collision_eps, ls='-.', lw=0.5)
 
     pressure_profile = axs[1, 0].lines[0]
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
@@ -162,12 +163,13 @@ def update_figure(fig, axs, t, x, fluid_info, solid_props, fluid_props):
 
     return fig, axs
 
-def increment_forward(frm, x0, dt, solid_props, fluid_props):
+def increment_forward(model, x0, dt, solid_props, fluid_props):
     """
     Returns the states at the next time, x1 = (u1, v1, a1).
 
     Parameters
     ----------
+    model : forms.ForwardModel
     x0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model
     dt : float
@@ -187,35 +189,37 @@ def increment_forward(frm, x0, dt, solid_props, fluid_props):
     """
     u0, v0, a0 = x0
 
-    u1 = dfn.Function(frm.vector_function_space)
-    v1 = dfn.Function(frm.vector_function_space)
-    a1 = dfn.Function(frm.vector_function_space)
+    u1 = dfn.Function(model.vector_function_space)
+    v1 = dfn.Function(model.vector_function_space)
+    a1 = dfn.Function(model.vector_function_space)
 
     ## Update form coefficients
-    frm.emod.vector()[:] = solid_props['elastic_modulus']
-    frm.u0.assign(u0)
-    frm.v0.assign(v0)
-    frm.a0.assign(a0)
-    frm.dt.assign(dt)
-    fluid_info = frm.set_pressure(fluid_props)
+    model.emod.vector()[:] = solid_props['elastic_modulus']
+    model.u0.assign(u0)
+    model.v0.assign(v0)
+    model.a0.assign(a0)
+    model.dt.assign(dt)
+    fluid_info = model.set_pressure(fluid_props)
 
     ## Solve the thing
-    frm.u1.assign(u0)
-    dfn.solve(frm.fu_nonlin == 0, frm.u1, bcs=frm.bc_base, J=frm.jac_fu_nonlin)
-    u1.assign(frm.u1)
+    model.u1.assign(u0)
+    dfn.solve(model.fu_nonlin == 0, model.u1, bcs=model.bc_base, J=model.jac_fu_nonlin)
+    u1.assign(model.u1)
 
-    v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
-    a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), frm.dt)
+    v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
+    a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
 
     return (u1, v1, a1), fluid_info
 
-def forward(frm, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/', 
+def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/',
             show_figure=False, figure_path=None):
     """
     Solves the forward model over a time interval.
 
     Parameters
     ----------
+    model : forms.ForwardModel
+    t0 : float
     tmeas : array_like of float
         Specific times at which the model should be solved. There should be a minimum of two
         entries. The first entry is the starting time while the final entry is the final time. A
@@ -245,22 +249,22 @@ def forward(frm, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5gro
     forward_info = {}
 
     # Allocate functions for states
-    u0 = dfn.Function(frm.vector_function_space)
-    v0 = dfn.Function(frm.vector_function_space)
-    a0 = dfn.Function(frm.vector_function_space)
+    u0 = dfn.Function(model.vector_function_space)
+    v0 = dfn.Function(model.vector_function_space)
+    a0 = dfn.Function(model.vector_function_space)
 
-    u1 = dfn.Function(frm.vector_function_space)
-    v1 = dfn.Function(frm.vector_function_space)
-    a1 = dfn.Function(frm.vector_function_space)
+    u1 = dfn.Function(model.vector_function_space)
+    v1 = dfn.Function(model.vector_function_space)
+    a1 = dfn.Function(model.vector_function_space)
 
     # Set solid material properties
     elastic_modulus = solid_props['elastic_modulus']
-    frm.emod.vector()[:] = elastic_modulus
+    model.emod.vector()[:] = elastic_modulus
 
     ## Allocate a figure for plotting
     fig, axs = None, None
     if show_figure:
-        fig, axs = init_figure(fluid_props)
+        fig, axs = init_figure(model, fluid_props)
 
     # Get the solution times
     tmeas = np.array(tmeas)
@@ -287,7 +291,7 @@ def forward(frm, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5gro
         # Solid properties
         # TODO: Assuming only one time constant solid property here but there may be more.
         f.create_dataset(join(h5group, 'solid_properties', 'elastic_modulus'),
-                         data=frm.emod.vector()[:])
+                         data=model.emod.vector()[:])
 
     ## Loop through solution times and write solution variables to h5file.
     with h5py.File(h5file, mode='a') as f:
@@ -295,7 +299,8 @@ def forward(frm, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5gro
             ## Increment the state
             fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
             dt_ = times[ii+1] - times[ii]
-            (u1, v1, a1), info = increment_forward(frm, [u0, v0, a0], dt_, solid_props, fluid_props_ii)
+            (u1, v1, a1), info = increment_forward(model, [u0, v0, a0], dt_, solid_props,
+                                                   fluid_props_ii)
 
             ## Write the solution outputs to a file
             # State variables
@@ -313,7 +318,8 @@ def forward(frm, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5gro
 
             ## Plot the solution
             if show_figure:
-                fig, axs = update_figure(fig, axs, t, (u0, v0, a0), info, solid_props, fluid_props_ii)
+                fig, axs = update_figure(fig, axs, model, t, (u0, v0, a0), info, solid_props,
+                                         fluid_props_ii)
                 plt.pause(0.001)
 
                 if figure_path is not None:
@@ -334,6 +340,16 @@ if __name__ == '__main__':
     # fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
     # fluid_props['p_sub_time'] = [0, 2.5e-3, 2.5e-3, 0.02]
 
+    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
+
+    mesh_base_filename = 'geometry2'
+    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+    mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
+    mesh_cell_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
+
+    model = forms.ForwardModel(mesh_path, mesh_facet_path, mesh_cell_path,
+                               {'pressure': 1, 'fixed': 3}, {})
+
     save_path = f"out/test.h5"
     try:
         os.remove(save_path)
@@ -342,7 +358,7 @@ if __name__ == '__main__':
 
     dt = 1e-4
     runtime_start = perf_counter()
-    forward(0, [0, 0.05], dt, solid_props, fluid_props, save_path, show_figure=True,
+    forward(model, 0, [0, 0.05], dt, solid_props, fluid_props, save_path, show_figure=True,
             figure_path='out/opt-nlopt/anim_start/frame')
     runtime_end = perf_counter()
 

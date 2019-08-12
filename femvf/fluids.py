@@ -13,35 +13,6 @@ from . import forms as frm
 FLUID_PROP_LABELS = ('p_sub', 'p_sup', 'a_sub', 'a_sup', 'rho', 'y_midline')
 SEPARATION_FACTOR = 1.1
 
-def set_pressure_form(form, coordinates, vertices, vertex_to_sdof, fluid_props):
-    """
-    Sets the nodal values of the pressure ufl.Coefficient.
-
-    Parameters
-    ----------
-    form : ufl.Coefficient
-        The coefficient representing the pressure
-    coordinates : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    vertices : (NUM_VERTICES,) np.ndarray
-        An array containing vertex numbers of the surface vertices
-    vertex_to_sdof : (NUM_VERTICES,) np.ndarray
-        An array containing the scalar degree of freedom corresponding to a vertex
-    fluid_props : dict
-        A dictionary of fluid property keyword arguments.
-
-    Returns
-    -------
-    xy_min, xy_sep :
-        Locations of the minimum and separation areas
-    """
-    pressure, info = fluid_pressure(coordinates, fluid_props)
-
-    form.vector()[vertex_to_sdof[vertices]] = pressure
-
-    info['pressure'] = pressure
-    return info
-
 def fluid_pressure(x, fluid_props):
     """
     Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
@@ -112,62 +83,36 @@ def fluid_pressure(x, fluid_props):
             'xy_sep': xy_sep}
     return p, info
 
-def set_flow_sensitivity(x, vertices, vertex_to_sdof, vertex_to_vdof, fluid_props):
+def set_pressure_form(model, x, fluid_props):
     """
-    Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
+    Sets the nodal values of the pressure ufl.Coefficient.
 
     Parameters
     ----------
+    model : ufl.Coefficient
+        The coefficient representing the pressure
     x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
-    vertices : (NUM_VERTICES,) np.ndarray
-        An array containing vertex numbers of the surface vertices
-    vertex_to_sdof : (NUM_VERTICES,) np.ndarray
-        An array containing the degree of freedom corresponding to each vertex
-    vertex_to_vdof : (NUM_VERTICES, u.geometric_dimension) np.ndarray
-        An array containing the degree of freedom of each u corresponding to each vertex
     fluid_props : dict
-        A dictionary of fluid properties.
+        A dictionary of fluid property keyword arguments.
 
     Returns
     -------
-    dp_du : PETSc.Mat
-        Sensitivity of pressure with respect to displacement
-    dq_du : PETSc.Vec
-        Sensitivity of flow rate with respect to displacement
+    xy_min, xy_sep :
+        Locations of the minimum and separation areas, as well as surface pressures.
     """
-    _dp_du, _dq_du = flow_sensitivity(x, fluid_props)
+    pressure = dfn.Function(model.scalar_function_space)
 
-    dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
-    dp_du.setType('aij')
-    dp_du.setSizes([vertex_to_sdof.size, vertex_to_vdof.size])
+    pressure_vector, info = fluid_pressure(x, fluid_props)
+    surface_verts = model.surface_vertices
+    pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
 
-    nnz = np.zeros(vertex_to_sdof.size, dtype=np.int32)
-    nnz[vertex_to_sdof[vertices]] = vertices.size*2
-    dp_du.setPreallocationNNZ(list(nnz))
-
-    dp_du.setValues(vertex_to_sdof[vertices], vertex_to_vdof[vertices].reshape(-1), _dp_du)
-    dp_du.assemblyBegin()
-    dp_du.assemblyEnd()
-
-    # You should be able to create your own vector from scratch too but there are a couple of things
-    # you have to set like local to global mapping that need to be there in order to interface with
-    # a particular fenics setup. I just don't know what it needs to use.
-    # TODO: Figure this out, since it also applies to matrices
-
-    # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vertex_to_vdof.size)
-    # dq_du.setValues(vertex_to_vdof[vertices].reshape(-1), _dq_du)
-    # dq_du.assemblyBegin()
-    # dq_du.assemblyEnd()
-
-    dq_du = dfn.Function(frm.vector_function_space).vector()
-    dq_du[vertex_to_vdof[vertices].reshape(-1)] = _dq_du
-
-    return dp_du, dq_du
+    info['pressure'] = pressure_vector
+    return pressure, info
 
 def flow_sensitivity(x, fluid_props):
     """
-    Returns the derivative of flow properties with respect to the displacement.
+    Returns the sensitivities of flow properties at a surface state.
 
     Parameters
     ----------
@@ -205,7 +150,7 @@ def flow_sensitivity(x, fluid_props):
     j_sub = 1
 
     ## Calculate the pressure sensitivity
-    dp_du = np.zeros((x[0].size//2, x[0].size//2))
+    dp_du = np.zeros((x[0].size//2, x[0].size))
     for i in range(idx_sep+1):
         j = 2*i + 1
 
@@ -250,6 +195,56 @@ def flow_sensitivity(x, fluid_props):
     #dp_du = pressure_sensitivity_ad(coordinates, fluid_props)
 
     return dp_du, dflow_rate_du
+
+def set_flow_sensitivity(model, x, fluid_props):
+    """
+    Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
+
+    Parameters
+    ----------
+    model
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : dict
+        A dictionary of fluid properties.
+
+    Returns
+    -------
+    dp_du : PETSc.Mat
+        Sensitivity of pressure with respect to displacement
+    dq_du : PETSc.Vec
+        Sensitivity of flow rate with respect to displacement
+    """
+    _dp_du, _dq_du = flow_sensitivity(x, fluid_props)
+
+    dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
+    dp_du.setType('aij')
+    dp_du.setSizes([model.vert_to_sdof.size, model.vert_to_vdof.size])
+
+    pressure_vertices = model.surface_vertices
+    nnz = np.zeros(model.vert_to_sdof.size, dtype=np.int32)
+    nnz[model.vert_to_sdof[pressure_vertices]] = pressure_vertices.size*2
+    dp_du.setPreallocationNNZ(list(nnz))
+
+    dp_du.setValues(model.vert_to_sdof[pressure_vertices],
+                    model.vert_to_vdof[pressure_vertices].reshape(-1), _dp_du)
+    dp_du.assemblyBegin()
+    dp_du.assemblyEnd()
+
+    # You should be able to create your own vector from scratch too but there are a couple of things
+    # you have to set like local to global mapping that need to be there in order to interface with
+    # a particular fenics setup. I just don't know what it needs to use.
+    # TODO: Figure this out, since it also applies to matrices
+
+    # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vert_to_vdof.size)
+    # dq_du.setValues(vert_to_vdof[surface_verts].reshape(-1), _dq_du)
+    # dq_du.assemblyBegin()
+    # dq_du.assemblyEnd()
+
+    dq_du = dfn.Function(model.vector_function_space).vector()
+    dq_du[model.vert_to_vdof[pressure_vertices].reshape(-1)] = _dq_du
+
+    return dp_du, dq_du
 
 def pressure_sensitivity_ad(coordinates, fluid_props):
     """

@@ -22,22 +22,18 @@ import ufl
 #petsc4py.init()
 from petsc4py import PETSc
 
-from . import forms as frm
-# from . import linalg
+# from . import forms as frm
 from . import statefileutils as sfu
 from . import constants
 from . import functionals
-
-# import forms as frm
 
 from .misc import get_dynamic_fluid_props
 
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
 
-dfu_dparam_form_adjoint = dfn.adjoint(ufl.derivative(frm.f1, frm.emod, frm.scalar_trial))
-
-def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1, dcost_du1):
+def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1,
+                      dcost_du1):
     """
     Returns the adjoint at the previous time step.
 
@@ -55,6 +51,7 @@ def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, f
 
     Parameters
     ----------
+    model : forms.ForwardModel
     adj_x2 : tuple of dfn.Function
         A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
     x0, x1, x2 : tuple of dfn.Function
@@ -77,45 +74,46 @@ def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, f
     info : dict
         Additional info computed during the solve that might be useful.
     """
+    dfu_dparam_form_adjoint = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
     adj_u2, adj_v2, adj_a2 = adj_x2
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
-    frm.dt.assign(dt2)
-    frm.u1.vector()[:] = x2[0]
-    frm.u0.vector()[:], frm.v0.vector()[:], frm.a0.vector()[:] = x1
-    frm.set_pressure(fluid_props1)
-    dpressure_du0 = frm.set_flow_sensitivity(fluid_props1)[0]
-    frm.emod.vector()[:] = solid_props['elastic_modulus']
+    model.dt.assign(dt2)
+    model.u1.vector()[:] = x2[0]
+    model.u0.vector()[:], model.v0.vector()[:], model.a0.vector()[:] = x1
+    model.set_pressure(fluid_props1)
+    dpressure_du0 = model.set_flow_sensitivity(fluid_props1)[0]
+    model.emod.vector()[:] = solid_props['elastic_modulus']
 
     # Assemble needed forms
-    df2_du1 = dfn.assemble(frm.df1_du0_adjoint)
-    df2_dv1 = dfn.assemble(frm.df1_dv0_adjoint)
-    df2_da1 = dfn.assemble(frm.df1_da0_adjoint)
+    df2_du1 = dfn.assemble(model.df1_du0_adjoint)
+    df2_dv1 = dfn.assemble(model.df1_dv0_adjoint)
+    df2_da1 = dfn.assemble(model.df1_da0_adjoint)
 
     # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
-    df2_dpressure = dfn.as_backend_type(dfn.assemble(frm.df1_dp_adjoint)).mat()
+    df2_dpressure = dfn.as_backend_type(dfn.assemble(model.df1_dp_adjoint)).mat()
     df2_du1 = df2_du1 + dfn.Matrix(dfn.PETScMatrix(dpressure_du0.transposeMatMult(df2_dpressure)))
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    frm.dt.assign(dt1)
-    frm.u1.vector()[:] = x1[0]
-    frm.u0.vector()[:], frm.v0.vector()[:], frm.a0.vector()[:] = x0
-    frm.set_pressure(fluid_props0)
-    frm.emod.vector()[:] = solid_props['elastic_modulus']
+    model.dt.assign(dt1)
+    model.u1.vector()[:] = x1[0]
+    model.u0.vector()[:], model.v0.vector()[:], model.a0.vector()[:] = x0
+    model.set_pressure(fluid_props0)
+    model.emod.vector()[:] = solid_props['elastic_modulus']
 
     # Assemble needed forms
-    df1_du1 = dfn.assemble(frm.df1_du1_adjoint)
+    df1_du1 = dfn.assemble(model.df1_du1_adjoint)
     df1_dparam = dfn.assemble(dfu_dparam_form_adjoint)
 
     ## Adjoint recurrence relations
     # Allocate adjoint states
-    adj_u1 = dfn.Function(frm.vector_function_space)
-    adj_v1 = dfn.Function(frm.vector_function_space)
-    adj_a1 = dfn.Function(frm.vector_function_space)
+    adj_u1 = dfn.Function(model.vector_function_space)
+    adj_v1 = dfn.Function(model.vector_function_space)
+    adj_a1 = dfn.Function(model.vector_function_space)
 
     # You probably don't need to set Dirichlet BCs on adj_a or adj_v because they are always zeroed
     # out when solving for adj_u (but I'm gonna do it anyway)
-    gamma, beta = frm.gamma.values()[0], frm.beta.values()[0]
+    gamma, beta = model.gamma.values()[0], model.beta.values()[0]
 
     # These are manually implemented matrix multiplications representing adjoint recurrence
     # relations
@@ -124,30 +122,31 @@ def decrement_adjoint(adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, f
     adj_a1.vector()[:] = -1 * (df2_da1 * adj_u2.vector()
                                + dt2 * (gamma/2/beta-1) * adj_v2.vector()
                                + (1/2/beta-1) * adj_a2.vector())
-    frm.bc_base_adjoint.apply(adj_a1.vector())
+    model.bc_base_adjoint.apply(adj_a1.vector())
 
     adj_v1.vector()[:] = -1 * (df2_dv1 * adj_u2.vector()
                                + (gamma/beta-1) * adj_v2.vector()
                                + 1/beta/dt2 * adj_a2.vector())
-    frm.bc_base_adjoint.apply(adj_v1.vector())
+    model.bc_base_adjoint.apply(adj_v1.vector())
 
     adj_u1_lhs = dcost_du1 \
                  + gamma/beta/dt1 * adj_v1.vector() + 1/beta/dt1**2 * adj_a1.vector() \
                  - (df2_du1 * adj_u2.vector()
                     + gamma/beta/dt2 * adj_v2.vector()
                     + 1/beta/dt2**2 * adj_a2.vector())
-    frm.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)
+    model.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs)
 
     return (adj_u1, adj_v1, adj_a1), df1_dparam
 
-def adjoint(h5file, h5group='/', show_figure=False,
+def adjoint(model, h5file, h5group='/', show_figure=False,
             dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs=None):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
 
     Parameters
     ----------
+    model : forms.ForwardModel
     h5file : string
         Path to an hdf5 file containing states from a forward run of the model.
     h5group : string
@@ -163,20 +162,22 @@ def adjoint(h5file, h5group='/', show_figure=False,
     np.array of float
         The sensitivity of the functional wrt parameters.
     """
+    dfu_dparam_form_adjoint = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
+
     if dg_du_kwargs is None:
         dg_du_kwargs = {}
 
     ## Allocate adjoint states
-    adj_u1 = dfn.Function(frm.vector_function_space)
-    adj_v1 = dfn.Function(frm.vector_function_space)
-    adj_a1 = dfn.Function(frm.vector_function_space)
+    adj_u1 = dfn.Function(model.vector_function_space)
+    adj_v1 = dfn.Function(model.vector_function_space)
+    adj_a1 = dfn.Function(model.vector_function_space)
 
-    adj_u2 = dfn.Function(frm.vector_function_space)
-    adj_v2 = dfn.Function(frm.vector_function_space)
-    adj_a2 = dfn.Function(frm.vector_function_space)
+    adj_u2 = dfn.Function(model.vector_function_space)
+    adj_v2 = dfn.Function(model.vector_function_space)
+    adj_a2 = dfn.Function(model.vector_function_space)
 
     ## Allocate space for the gradient
-    gradient = np.zeros(frm.emod.vector().size())
+    gradient = np.zeros(model.emod.vector().size())
 
     times = None
     num_states = None
@@ -190,24 +191,24 @@ def adjoint(h5file, h5group='/', show_figure=False,
     with h5py.File(h5file, mode='r') as f:
         fluid_props = sfu.get_fluid_properties(num_states-2, f, group=h5group)
         solid_props = sfu.get_solid_properties(f, group=h5group)
-        frm.emod.vector()[:] = solid_props['elastic_modulus']
+        model.emod.vector()[:] = solid_props['elastic_modulus']
         x2 = sfu.get_state(num_states-1, f, group=h5group)
         x1 = sfu.get_state(num_states-2, f, group=h5group)
 
-    frm.dt.assign(times[-1]-times[-2])
-    frm.u1.vector()[:] = x2[0]
-    frm.u0.vector()[:], frm.v0.vector()[:], frm.a0.vector()[:] = x1
-    frm.set_pressure(fluid_props)
+    model.dt.assign(times[-1]-times[-2])
+    model.u1.vector()[:] = x2[0]
+    model.u0.vector()[:], model.v0.vector()[:], model.a0.vector()[:] = x1
+    model.set_pressure(fluid_props)
 
-    df2_du2 = dfn.assemble(frm.df1_du1_adjoint)
+    df2_du2 = dfn.assemble(model.df1_du1_adjoint)
     # import ipdb; ipdb.set_trace()
 
     ## Initialize the adjoint state
     dcost_du2 = None
     with h5py.File(h5file, mode='r') as f:
-        dcost_du2 = dg_du(num_states-1, f, h5group=h5group, **dg_du_kwargs)[0]
+        dcost_du2 = dg_du(model, num_states-1, f, h5group=h5group, **dg_du_kwargs)[0]
 
-    frm.bc_base_adjoint.apply(df2_du2, dcost_du2)
+    model.bc_base_adjoint.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
     adj_v2.vector()[:] = 0
     adj_a2.vector()[:] = 0
@@ -230,10 +231,10 @@ def adjoint(h5file, h5group='/', show_figure=False,
             dt1 = times[ii] - times[ii-1]
             dt2 = times[ii+1] - times[ii]
 
-            dcost_du1 = dg_du(ii, f, h5group=h5group, **dg_du_kwargs)[0]
+            dcost_du1 = dg_du(model, ii, f, h5group=h5group, **dg_du_kwargs)[0]
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
-                (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
+                model, (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
                 fluid_props0, fluid_props1, dcost_du1)
 
             # Update gradient using the adjoint state
@@ -252,20 +253,20 @@ def adjoint(h5file, h5group='/', show_figure=False,
         fig, ax = plt.subplots(1, 1)
 
         ax.set_aspect('equal')
-        coords = frm.mesh.coordinates()[...]
-        triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=frm.mesh.cells())
+        coords = model.mesh.coordinates()[...]
+        triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=model.mesh.cells())
 
         ax.set_xlim(-0.1, 0.7, auto=False)
         ax.set_ylim(-0.1, 0.7)
 
-        ax.axhline(y=frm.y_midline, ls='-.')
-        ax.axhline(y=frm.y_midline-frm.collision_eps, ls='-.', lw=0.5)
+        ax.axhline(y=model.y_midline, ls='-.')
+        ax.axhline(y=model.y_midline-model.collision_eps, ls='-.', lw=0.5)
 
         ax.set_title('Gradient')
 
-        mappable = ax.tripcolor(triangulation, gradient[frm.vert_to_sdof],
+        mappable = ax.tripcolor(triangulation, gradient[model.vert_to_sdof],
                                 edgecolors='k', shading='flat')
-        coords_fixed = frm.mesh.coordinates()[frm.fixed_vertices]
+        coords_fixed = model.mesh.coordinates()[model.fixed_vertices]
         ax.plot(coords_fixed[:, 0], coords_fixed[:, 1], color='C1')
 
         fig.colorbar(mappable, ax=ax)
@@ -278,7 +279,7 @@ if __name__ == '__main__':
     input_path = 'out/test.h5'
 
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-    solid_props = {'elastic_modulus': frm.emod.vector()}
+    solid_props = constants.DEFAULT_SOLID_PROPERTIES
 
     runtime_start = perf_counter()
     gradient = adjoint(solid_props, input_path)

@@ -96,24 +96,37 @@ class ForwardModel:
     facet_marker, cell_marker : str
         Paths to fenics facet / cell xml marker files.
     id_facet_marker, id_cell_marker : dict of {str: int}
-        A dictionary of named markers for facets and cells. `facet_marker` needs atleast two 
-        entries {'pressure': ...} and {'fixed': ...} denoting the surfaces with applied pressure 
+        A dictionary of named markers for facets and cells. `facet_marker` needs atleast two
+        entries {'pressure': ...} and {'fixed': ...} denoting the surfaces with applied pressure
         and fixed conditions respectively.
 
     Attributes
     ----------
+    mesh : dfn.Mesh
+
+    list of key vertices ie fsi interface
+
+    vertex_to_vdof
+    vertex_to_sdof
+
+    vector_function_space
+    scalar_function_space
+
+    form coefficients and states
+
+    main forms for solving
     """
     def __init__(self, mesh_path, facet_marker, cell_marker, id_facet_marker, id_cell_marker):
-        
+
         ## Mesh parameters and attributes
         self.mesh = dfn.Mesh(mesh_path)
-        
+
         _facet_marker = dfn.MeshFunction('size_t', self.mesh, facet_marker)
         body_marker = dfn.MeshFunction('size_t', self.mesh, cell_marker)
 
         # Create a vertex marker from the boundary marker
         edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
-                                    for edge in dfn.edges(self.mesh)])
+                                   for edge in dfn.edges(self.mesh)])
         pressure_edges = _facet_marker.where_equal(id_facet_marker['pressure'])
         fixed_edges = _facet_marker.where_equal(id_facet_marker['fixed'])
 
@@ -133,9 +146,6 @@ class ForwardModel:
         self.surface_vertices = self.surface_vertices[idx_sort]
         # surface_coordinates = surface_coordinates[idx_sort]
 
-        ## Geometric parameters
-        thickness_bottom = np.amax(self.mesh.coordinates()[:, 0])
-
         ## Set Variational Forms
         # Newmark update parameters
         self.gamma = dfn.Constant(1/2)
@@ -150,11 +160,11 @@ class ForwardModel:
         self.vert_to_vdof = dfn.vertex_to_dof_map(self.vector_function_space).reshape(-1, 2)
         self.vert_to_sdof = dfn.vertex_to_dof_map(self.scalar_function_space)
 
-        trial_u = dfn.TrialFunction(self.vector_function_space)
-        test = dfn.TestFunction(self.vector_function_space)
+        vector_trial = dfn.TrialFunction(self.vector_function_space)
+        vector_test = dfn.TestFunction(self.vector_function_space)
 
-        scalar_trial = dfn.TrialFunction(self.scalar_function_space)
-        scalar_test = dfn.TestFunction(self.scalar_function_space)
+        self.scalar_trial = dfn.TrialFunction(self.scalar_function_space)
+        self.scalar_test = dfn.TestFunction(self.scalar_function_space)
 
         # Solid material properties
         self.rho = dfn.Constant(1)
@@ -178,17 +188,20 @@ class ForwardModel:
         self.pressure = dfn.Function(self.scalar_function_space)
 
         # Define the variational forms
-        trial_v = newmark_v(trial_u, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
-        trial_a = newmark_a(trial_u, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
+        trial_v = newmark_v(vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
+        trial_a = newmark_a(vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
 
-        inertia = self.rho*ufl.dot(trial_a, test)*ufl.dx
-        stiffness = ufl.inner(linear_elasticity(trial_u, self.emod, self.nu), strain(test))*ufl.dx
+        inertia = self.rho*ufl.dot(trial_a, vector_test)*ufl.dx
+
+        stress = linear_elasticity(vector_trial, self.emod, self.nu)
+        stiffness = ufl.inner(stress, strain(vector_test))*ufl.dx
 
         raleigh_m = dfn.Constant(1e-4)
         raleigh_k = dfn.Constant(1e-4)
 
-        damping = raleigh_m * self.rho*ufl.dot(trial_v, test)*ufl.dx \
-                + raleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu), strain(test))*ufl.dx
+        damping = raleigh_m * self.rho*ufl.dot(trial_v, vector_test)*ufl.dx \
+                  + raleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
+                                          strain(vector_test))*ufl.dx
 
         # Compute the pressure loading neumann boundary condition thru Nanson's formula
         deformation_gradient = ufl.grad(self.u0) + ufl.Identity(2)
@@ -197,27 +210,23 @@ class ForwardModel:
         ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=_facet_marker)
         fluid_force = -self.pressure*deformation_cofactor*dfn.FacetNormal(self.mesh)
 
-        traction = ufl.dot(fluid_force, test)*ds(id_facet_marker['pressure'])
+        traction = ufl.dot(fluid_force, vector_test)*ds(id_facet_marker['pressure'])
 
         fu = inertia + stiffness + damping - traction
-
-        lhs = dfn.lhs(fu)
-        rhs = dfn.rhs(fu)
 
         # Non linear equations during collision. Add a penalty to account for this
         collision_normal = dfn.Constant([0, 1])
         x_reference = dfn.Function(self.vector_function_space)
         x_reference.vector()[self.vert_to_vdof.reshape(-1)] = self.mesh.coordinates().reshape(-1)
-        # gap = (x_reference.sub(1) + u1.sub(1))# - (y_midline-collision_eps)
-        # gap = u1.sub(1)
+
         gap = ufl.dot(x_reference+self.u1, collision_normal) - (self.y_midline - self.collision_eps)
         positive_gap = (gap + abs(gap)) / 2
 
         k_collision = dfn.Constant(1e11)
-        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, test) * ds(id_facet_marker['pressure'])
+        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) * ds(id_facet_marker['pressure'])
 
         self.fu_nonlin = ufl.action(fu, self.u1) - penalty
-        self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, trial_u)
+        self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, vector_trial)
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
@@ -228,20 +237,19 @@ class ForwardModel:
                                                id_facet_marker['fixed'])
 
         # Define some additional forms for diagnostics
-        force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu), strain(test))*ufl.dx - traction
+        # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu), strain(test))*ufl.dx - traction
 
-        ####################################################################################################
         ## Forms needed for adjoint computation
         # Note: For an externally calculated pressure, you have to correct the derivative based on the
         # sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if it's strongly
         # coupled).
         self.f1 = self.fu_nonlin
-        self.df1_du0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u0, trial_u))
-        self.df1_da0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.a0, trial_u))
-        self.df1_dv0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.v0, trial_u))
-        self.df1_dp_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.pressure, scalar_trial))
+        self.df1_du0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u0, vector_trial))
+        self.df1_da0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.a0, vector_trial))
+        self.df1_dv0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.v0, vector_trial))
+        self.df1_dp_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.pressure, self.scalar_trial))
 
-        self.df1_du1_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u1, trial_u))
+        self.df1_du1_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u1, vector_trial))
 
         # Work done by pressure from u0 to u1
         self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(id_facet_marker['pressure'])
@@ -264,8 +272,9 @@ class ForwardModel:
         x_surface = (self.surface_coordinates + _u, _v, _a)
 
         # Update the pressure loading based on the deformed surface
-        info = fluids.set_pressure_form(self.pressure, x_surface, self.surface_vertices, self.vert_to_sdof,
-                                        fluid_props)
+        pressure, info = fluids.set_pressure_form(self, x_surface, fluid_props)
+
+        self.pressure.assign(pressure)
         return info
 
     def set_flow_sensitivity(self, fluid_props):
@@ -285,7 +294,6 @@ class ForwardModel:
         x_surface = (self.surface_coordinates + _u, _v, _a)
 
         # Calculate sensitivities of fluid quantities based on the deformed surface
-        dp_du0, dq_du0 = fluids.set_flow_sensitivity(x_surface, self.surface_vertices, self.vert_to_sdof, self.vert_to_vdof,
-                                                     fluid_props)
+        dp_du0, dq_du0 = fluids.set_flow_sensitivity(self, x_surface, fluid_props)
 
         return dp_du0, dq_du0
