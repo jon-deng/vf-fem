@@ -89,6 +89,11 @@ class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.
 
+    TODO: intialization is kinf of messy and ugly. prettify/clean
+    TODO: Class contains alot of extra, non-essential stuff. Think about what are the essential
+        things that are included.
+    TODO: think about how to include extraneous forms for computing some functional etc...
+
     Parameters
     ----------
     mesh : str
@@ -160,8 +165,8 @@ class ForwardModel:
         self.vert_to_vdof = dfn.vertex_to_dof_map(self.vector_function_space).reshape(-1, 2)
         self.vert_to_sdof = dfn.vertex_to_dof_map(self.scalar_function_space)
 
-        vector_trial = dfn.TrialFunction(self.vector_function_space)
-        vector_test = dfn.TestFunction(self.vector_function_space)
+        self.vector_trial = dfn.TrialFunction(self.vector_function_space)
+        self.vector_test = dfn.TestFunction(self.vector_function_space)
 
         self.scalar_trial = dfn.TrialFunction(self.scalar_function_space)
         self.scalar_test = dfn.TestFunction(self.scalar_function_space)
@@ -188,20 +193,20 @@ class ForwardModel:
         self.pressure = dfn.Function(self.scalar_function_space)
 
         # Define the variational forms
-        trial_v = newmark_v(vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
-        trial_a = newmark_a(vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
+        trial_v = newmark_v(self.vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
+        trial_a = newmark_a(self.vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
 
-        inertia = self.rho*ufl.dot(trial_a, vector_test)*ufl.dx
+        inertia = self.rho*ufl.dot(trial_a, self.vector_test)*ufl.dx
 
-        stress = linear_elasticity(vector_trial, self.emod, self.nu)
-        stiffness = ufl.inner(stress, strain(vector_test))*ufl.dx
+        stress = linear_elasticity(self.vector_trial, self.emod, self.nu)
+        stiffness = ufl.inner(stress, strain(self.vector_test))*ufl.dx
 
         raleigh_m = dfn.Constant(1e-4)
         raleigh_k = dfn.Constant(1e-4)
 
-        damping = raleigh_m * self.rho*ufl.dot(trial_v, vector_test)*ufl.dx \
+        damping = raleigh_m * self.rho*ufl.dot(trial_v, self.vector_test)*ufl.dx \
                   + raleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
-                                          strain(vector_test))*ufl.dx
+                                          strain(self.vector_test))*ufl.dx
 
         # Compute the pressure loading neumann boundary condition thru Nanson's formula
         deformation_gradient = ufl.grad(self.u0) + ufl.Identity(2)
@@ -210,7 +215,7 @@ class ForwardModel:
         ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=_facet_marker)
         fluid_force = -self.pressure*deformation_cofactor*dfn.FacetNormal(self.mesh)
 
-        traction = ufl.dot(fluid_force, vector_test)*ds(id_facet_marker['pressure'])
+        traction = ufl.dot(fluid_force, self.vector_test)*ds(id_facet_marker['pressure'])
 
         fu = inertia + stiffness + damping - traction
 
@@ -223,10 +228,10 @@ class ForwardModel:
         positive_gap = (gap + abs(gap)) / 2
 
         k_collision = dfn.Constant(1e11)
-        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) * ds(id_facet_marker['pressure'])
+        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, self.vector_test) * ds(id_facet_marker['pressure'])
 
         self.fu_nonlin = ufl.action(fu, self.u1) - penalty
-        self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, vector_trial)
+        self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, self.vector_trial)
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
@@ -244,15 +249,18 @@ class ForwardModel:
         # sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if it's strongly
         # coupled).
         self.f1 = self.fu_nonlin
-        self.df1_du0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u0, vector_trial))
-        self.df1_da0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.a0, vector_trial))
-        self.df1_dv0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.v0, vector_trial))
+        self.df1_du0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u0, self.vector_trial))
+        self.df1_da0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.a0, self.vector_trial))
+        self.df1_dv0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.v0, self.vector_trial))
         self.df1_dp_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.pressure, self.scalar_trial))
 
-        self.df1_du1_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u1, vector_trial))
+        self.df1_du1_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u1, self.vector_trial))
 
         # Work done by pressure from u0 to u1
         self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(id_facet_marker['pressure'])
+        self.dfluid_work_du0 = ufl.derivative(self.fluid_work, self.u0, self.vector_test)
+        self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
+        self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
 
     def set_pressure(self, fluid_props):
         """

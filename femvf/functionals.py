@@ -32,9 +32,9 @@ from . import forms
 
 # Form definitions needed for the fluid work functional
 # frm_fluidwork = ufl.dot(model.fluid_force, model.u1-model.u0) * model.ds(model.domainid_pressure)
-# frm_dfluidwork_du0 = ufl.derivative(frm_fluidwork, model.u0, model.test)
-# frm_dfluidwork_dp = ufl.derivative(frm_fluidwork, model.pressure, model.scalar_test)
-# frm_dfluidwork_du1 = ufl.derivative(frm_fluidwork, model.u1, model.test)
+# dfluid_work_du0 = ufl.derivative(frm_fluidwork, model.u0, model.test)
+# dfluid_work_dp = ufl.derivative(frm_fluidwork, model.pressure, model.scalar_test)
+# dfluid_work_du1 = ufl.derivative(frm_fluidwork, model.u1, model.test)
 
 ## Functionals defined for a single state index
 def fluidwork(model, n, h5file, h5group='/'):
@@ -53,7 +53,7 @@ def fluidwork(model, n, h5file, h5group='/'):
     fluid_props = sfu.get_fluid_properties(n, h5file, group=h5group)
     model.set_pressure(fluid_props)
 
-    return dfn.assemble(frm_fluidwork)
+    return dfn.assemble(model.fluid_work)
 
 def vocaleff(model, n, h5file, h5group='/'):
     """
@@ -69,7 +69,7 @@ def vocaleff(model, n, h5file, h5group='/'):
 
     dt = float(model.dt)
     inputwork = dt*info['flow_rate']*fluid_props['p_sub']
-    cost = dfn.assemble(frm_fluidwork)/inputwork
+    cost = dfn.assemble(model.fluid_work)/inputwork
     return cost
 
 def dvocaleff_du(model, n, h5file, h5group='/'):
@@ -93,12 +93,12 @@ def dvocaleff_du(model, n, h5file, h5group='/'):
         info = model.set_pressure(fluid_props)
         dp_du, dq_du = model.set_flow_sensitivity(fluid_props)
 
-        fluidwork = dfn.assemble(frm_fluidwork)
+        fluidwork = dfn.assemble(model.fluid_work)
 
-        dfluidwork_du0 = dfn.assemble(frm_dfluidwork_du0)
+        dfluidwork_du0 = dfn.assemble(model.dfluid_work_du0)
 
         # Correct dfluidwork_du0 since pressure depends on u0
-        dfluidwork_dp = dfn.assemble(frm_dfluidwork_dp, tensor=dfn.PETScVector()).vec()
+        dfluidwork_dp = dfn.assemble(model.dfluid_work_dp, tensor=dfn.PETScVector()).vec()
 
         dfluidwork_du0_correction = dfn.as_backend_type(dfluidwork_du0).vec().copy()
         dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
@@ -120,8 +120,8 @@ def dvocaleff_du(model, n, h5file, h5group='/'):
         fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
         info = model.set_pressure(fluid_props)
 
-        fluidwork = dfn.assemble(frm_fluidwork)
-        dfluidwork_du1 = dfn.assemble(frm_dfluidwork_du1)
+        fluidwork = dfn.assemble(model.fluid_work)
+        dfluidwork_du1 = dfn.assemble(model.dfluid_work_du1)
 
         dt = model.dt.values()[0]
         inputwork = dt*info['flow_rate']*fluid_props['p_sub']
@@ -195,7 +195,7 @@ def totalfluidwork(model, h5file, h5group='/'):
         fluid_props = sfu.get_fluid_properties(ii, h5file, group=h5group)
         model.set_pressure(fluid_props)
 
-        res += dfn.assemble(frm_fluidwork)
+        res += dfn.assemble(model.fluid_work)
 
     return res, info
 
@@ -225,10 +225,10 @@ def dtotalfluidwork_du(model, n, h5file, h5group='/'):
         model.set_pressure(fluid_props)
         dp_du, _ = model.set_flow_sensitivity(fluid_props)
 
-        out += dfn.assemble(frm_dfluidwork_du0)
+        out += dfn.assemble(model.dfluid_work_du0)
 
         # Correct dfluidwork_du0 since pressure depends on u0
-        dfluidwork_dp = dfn.assemble(frm_dfluidwork_dp, tensor=dfn.PETScVector()).vec()
+        dfluidwork_dp = dfn.assemble(model.dfluid_work_dp, tensor=dfn.PETScVector()).vec()
 
         dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
         dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
@@ -242,7 +242,7 @@ def dtotalfluidwork_du(model, n, h5file, h5group='/'):
         fluid_props = sfu.get_fluid_properties(n-1, h5file, group=h5group)
         model.set_pressure(fluid_props)
 
-        out += dfn.assemble(frm_dfluidwork_du1)
+        out += dfn.assemble(model.dfluid_work_du1)
 
     return out, info
 
@@ -290,13 +290,13 @@ def dtotalvocaleff_du(model, n, h5file, h5group='/', cache_totalfluidwork=None, 
 
     tfluidwork = cache_totalfluidwork
     if tfluidwork is None:
-        tfluidwork = totalfluidwork(h5file, h5group=h5group)[0]
+        tfluidwork = totalfluidwork(model, h5file, h5group=h5group)[0]
 
     tinputwork = cache_totalinputwork
     if tinputwork is None:
-        tinputwork = totalinputwork(h5file, h5group=h5group)[0]
+        tinputwork = totalinputwork(model, h5file, h5group=h5group)[0]
 
-    dtotalfluidwork_du_ = dtotalfluidwork_du(n, h5file, h5group=h5group)[0]
+    dtotalfluidwork_du_ = dtotalfluidwork_du(model, n, h5file, h5group=h5group)[0]
 
     dtotalinputwork_du = 0
     # Set form coefficients to represent step from n to n+1
@@ -349,7 +349,7 @@ def dmfdr_du(model, n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
     info = {}
 
     if cache_idx_mfdr is None:
-        cache_idx_mfdr = mfdr(h5file, h5group=h5group, min_time=min_time)[1]['idx_mfdr']
+        cache_idx_mfdr = mfdr(model, h5file, h5group=h5group, min_time=min_time)[1]['idx_mfdr']
 
     if n == cache_idx_mfdr or n == cache_idx_mfdr+1:
         # First calculate flow rates at n and n+1
