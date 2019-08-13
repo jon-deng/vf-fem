@@ -384,7 +384,7 @@ def dmfdr_du(model, n, h5file, h5group='/', min_time=0.03, cache_idx_mfdr=None):
     return res, info
 
 def wss_gwidth(model, h5file, h5group='/', weights=None, meas_indices=None,
-                      meas_glottal_widths=None):
+               meas_glottal_widths=None):
     """
     Returns the weighted sum of squared differences between a measurement/model glottal widths.
     """

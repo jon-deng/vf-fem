@@ -105,10 +105,8 @@ def init_figure(model, fluid_props):
 
     axs[1, 0].set_ylabel("Surface pressure [Pa]")
 
-    axs[2, 0].set_ylabel("Glottal flow rate [cm^2/s]")
+    axs[2, 0].set_ylabel("Glottal width [cm]")
 
-    # axs[3].set_xlabel("Time [s]")
-    # axs[3].set_ylabel("Glottal flow rate rate [cm^2/s^2]")
     return fig, axs
 
 def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
@@ -134,7 +132,9 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     xy_current = model.mesh.coordinates() + delta_xy
     triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
                                       triangles=model.mesh.cells())
-    mappable = axs[0, 0].tripcolor(triangulation, solid_props['elastic_modulus'][model.vert_to_sdof])
+    mappable = axs[0, 0].tripcolor(triangulation,
+                                   solid_props['elastic_modulus'][model.vert_to_sdof],
+                                   edgecolors='k', shading='flat')
     fig.colorbar(mappable, cax=axs[0, 1])
 
     xy_surface = xy_current[model.surface_vertices]
@@ -153,13 +153,14 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     pressure_profile = axs[1, 0].lines[0]
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
 
+    gw = model.y_midline - np.amax(xy_current[:, 1])
     line = axs[2, 0].lines[0]
     xdata = np.concatenate((line.get_xdata(), [t]), axis=0)
-    ydata = np.concatenate((line.get_ydata(), [fluid_info['flow_rate']]), axis=0)
+    ydata = np.concatenate((line.get_ydata(), [gw]), axis=0)
     line.set_data(xdata, ydata)
 
     axs[2, 0].set_xlim(0, np.maximum(1.2*t, 0.01))
-    axs[2, 0].set_ylim(0, 200)
+    axs[2, 0].set_ylim(0, 0.03)
 
     return fig, axs
 

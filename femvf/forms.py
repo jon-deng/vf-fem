@@ -126,14 +126,14 @@ class ForwardModel:
         ## Mesh parameters and attributes
         self.mesh = dfn.Mesh(mesh_path)
 
-        _facet_marker = dfn.MeshFunction('size_t', self.mesh, facet_marker)
-        body_marker = dfn.MeshFunction('size_t', self.mesh, cell_marker)
+        self.facet_marker = dfn.MeshFunction('size_t', self.mesh, facet_marker)
+        self.body_marker = dfn.MeshFunction('size_t', self.mesh, cell_marker)
 
         # Create a vertex marker from the boundary marker
         edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
                                    for edge in dfn.edges(self.mesh)])
-        pressure_edges = _facet_marker.where_equal(id_facet_marker['pressure'])
-        fixed_edges = _facet_marker.where_equal(id_facet_marker['fixed'])
+        pressure_edges = self.facet_marker.where_equal(id_facet_marker['pressure'])
+        fixed_edges = self.facet_marker.where_equal(id_facet_marker['fixed'])
 
         pressure_vertices = np.unique(edge_to_vertex[pressure_edges].reshape(-1))
         fixed_vertices = np.unique(edge_to_vertex[fixed_edges].reshape(-1))
@@ -212,7 +212,7 @@ class ForwardModel:
         deformation_gradient = ufl.grad(self.u0) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
 
-        ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=_facet_marker)
+        ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=self.facet_marker)
         fluid_force = -self.pressure*deformation_cofactor*dfn.FacetNormal(self.mesh)
 
         traction = ufl.dot(fluid_force, self.vector_test)*ds(id_facet_marker['pressure'])
@@ -235,10 +235,10 @@ class ForwardModel:
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
-        self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), _facet_marker,
+        self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), self.facet_marker,
                                        id_facet_marker['fixed'])
 
-        self.bc_base_adjoint = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), _facet_marker,
+        self.bc_base_adjoint = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), self.facet_marker,
                                                id_facet_marker['fixed'])
 
         # Define some additional forms for diagnostics
