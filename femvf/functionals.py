@@ -478,7 +478,7 @@ def dwss_gwidth_du(model, n, h5file, h5group='/', weights=None, meas_indices=Non
         # wss = weight * (gw_modl - gw_meas)**2
         dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
     else:
-        # In this case the derivative is simply 0.
+        # In this case the derivative is simply 0 so the default value is right
         pass
 
     return dwss_du, info
