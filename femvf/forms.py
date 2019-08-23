@@ -5,6 +5,7 @@ Units are in CGS
 """
 import sys
 import os
+from os import path
 
 import numpy as np
 
@@ -91,7 +92,7 @@ class ForwardModel:
 
     TODO: intialization is kinf of messy and ugly. prettify/clean
     TODO: Class contains alot of extra, non-essential stuff. Think about what are the essential
-        things that are included.
+        things that are included, how to compartmentalize the things etc.
     TODO: think about how to include extraneous forms for computing some functional etc...
 
     Parameters
@@ -121,35 +122,43 @@ class ForwardModel:
 
     main forms for solving
     """
-    def __init__(self, mesh_path, facet_marker, cell_marker, id_facet_marker, id_cell_marker):
+    def __init__(self, mesh_path, facet_marker_id, cell_marker_id):
+
+        base_path, ext = path.splitext(mesh_path)
+        facet_marker_path = base_path +  '_facet_region.xml'
+        cell_marker_path = base_path + '_physical_region.xml'
+
+        if ext == '':
+            mesh_path = mesh_path + '.xml'
 
         ## Mesh parameters and attributes
         self.mesh = dfn.Mesh(mesh_path)
-
-        self.facet_marker = dfn.MeshFunction('size_t', self.mesh, facet_marker)
-        self.body_marker = dfn.MeshFunction('size_t', self.mesh, cell_marker)
+        self.facet_marker = dfn.MeshFunction('size_t', self.mesh, facet_marker_path)
+        self.body_marker = dfn.MeshFunction('size_t', self.mesh, cell_marker_path)
 
         # Create a vertex marker from the boundary marker
         edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
                                    for edge in dfn.edges(self.mesh)])
-        pressure_edges = self.facet_marker.where_equal(id_facet_marker['pressure'])
-        fixed_edges = self.facet_marker.where_equal(id_facet_marker['fixed'])
+        pressure_edges = self.facet_marker.where_equal(facet_marker_id['pressure'])
+        fixed_edges = self.facet_marker.where_equal(facet_marker_id['fixed'])
 
         pressure_vertices = np.unique(edge_to_vertex[pressure_edges].reshape(-1))
         fixed_vertices = np.unique(edge_to_vertex[fixed_edges].reshape(-1))
 
         vertex_marker = dfn.MeshFunction('size_t', self.mesh, 0)
         vertex_marker.set_all(0)
-        vertex_marker.array()[pressure_vertices] = id_facet_marker['pressure']
-        vertex_marker.array()[fixed_vertices] = id_facet_marker['fixed']
+        vertex_marker.array()[pressure_vertices] = facet_marker_id['pressure']
+        vertex_marker.array()[fixed_vertices] = facet_marker_id['fixed']
 
-        self.surface_vertices = np.array(vertex_marker.where_equal(id_facet_marker['pressure']))
-        self.surface_coordinates = self.mesh.coordinates()[self.surface_vertices]
+        surface_vertices = np.array(vertex_marker.where_equal(facet_marker_id['pressure']))
+        surface_coordinates = self.mesh.coordinates()[surface_vertices]
 
         # Sort the pressure surface vertices from inferior to superior
-        idx_sort = np.argsort(self.surface_coordinates[..., 0])
-        self.surface_vertices = self.surface_vertices[idx_sort]
-        # surface_coordinates = surface_coordinates[idx_sort]
+        # TODO: This only works if surface coordinates have strictly increasing x-coordinate from
+        # inferior to superior. Meshes that don't follow this will have some weird results.
+        idx_sort = np.argsort(surface_coordinates[..., 0])
+        self.surface_vertices = surface_vertices[idx_sort]
+        self.surface_coordinates = surface_coordinates[idx_sort]
 
         ## Set Variational Forms
         # Newmark update parameters
@@ -215,7 +224,7 @@ class ForwardModel:
         ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=self.facet_marker)
         fluid_force = -self.pressure*deformation_cofactor*dfn.FacetNormal(self.mesh)
 
-        traction = ufl.dot(fluid_force, self.vector_test)*ds(id_facet_marker['pressure'])
+        traction = ufl.dot(fluid_force, self.vector_test)*ds(facet_marker_id['pressure'])
 
         fu = inertia + stiffness + damping - traction
 
@@ -228,7 +237,8 @@ class ForwardModel:
         positive_gap = (gap + abs(gap)) / 2
 
         k_collision = dfn.Constant(1e11)
-        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, self.vector_test) * ds(id_facet_marker['pressure'])
+        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
+                  * ds(facet_marker_id['pressure'])
 
         self.fu_nonlin = ufl.action(fu, self.u1) - penalty
         self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, self.vector_trial)
@@ -236,10 +246,10 @@ class ForwardModel:
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), self.facet_marker,
-                                       id_facet_marker['fixed'])
+                                       facet_marker_id['fixed'])
 
         self.bc_base_adjoint = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), self.facet_marker,
-                                               id_facet_marker['fixed'])
+                                               facet_marker_id['fixed'])
 
         # Define some additional forms for diagnostics
         # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu), strain(test))*ufl.dx - traction
@@ -257,7 +267,7 @@ class ForwardModel:
         self.df1_du1_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u1, self.vector_trial))
 
         # Work done by pressure from u0 to u1
-        self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(id_facet_marker['pressure'])
+        self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(facet_marker_id['pressure'])
         self.dfluid_work_du0 = ufl.derivative(self.fluid_work, self.u0, self.vector_test)
         self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
         self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
