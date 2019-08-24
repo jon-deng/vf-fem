@@ -90,7 +90,7 @@ class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.
 
-    TODO: intialization is kinf of messy and ugly. prettify/clean
+    TODO: Instantiation is kind of messy and ugly. Prettify/clean it up.
     TODO: Class contains alot of extra, non-essential stuff. Think about what are the essential
         things that are included, how to compartmentalize the things etc.
     TODO: think about how to include extraneous forms for computing some functional etc...
@@ -98,11 +98,10 @@ class ForwardModel:
     Parameters
     ----------
     mesh : str
-        Path to a fenics mesh xml file.
-    facet_marker, cell_marker : str
-        Paths to fenics facet / cell xml marker files.
-    id_facet_marker, id_cell_marker : dict of {str: int}
-        A dictionary of named markers for facets and cells. `facet_marker` needs atleast two
+        Path to a fenics mesh xml file. A xml file containing facet and cell markers are also loaded
+        in the directory.
+    facet_marker_id, cell_marker_id : dict of {str: int}
+        A dictionary of named markers for facets and cells. `facet_marker_id` needs atleast two
         entries {'pressure': ...} and {'fixed': ...} denoting the surfaces with applied pressure
         and fixed conditions respectively.
 
@@ -272,6 +271,86 @@ class ForwardModel:
         self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
         self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
 
+    def get_reference_configuration(self):
+        """
+        Returns the current configuration of the body.
+
+        Coordinates of the body are ordered according to vertices.
+
+        Returns
+        -------
+        array_like
+            An array of mesh coordinate point ordered with increasing vertices.
+        """
+
+        return self.mesh.coordinates()
+
+    def get_current_configuration(self):
+        """
+        Returns the current configuration of the body.
+
+        Coordinates of the body are ordered according to vertices.
+
+        Returns
+        -------
+        array_like
+            An array of mesh coordinate point ordered with increasing vertices.
+        """
+        displacement = self.u0.vector()[self.vert_to_vdof]
+        return self.mesh.coordinates() + displacement
+
+    def get_surface_state(self):
+        """
+        Returns the state (u, v, a) of surface vertices of the model.
+
+        The displacement, u, returned is the actual position rather than the displacement relative
+        to the reference configuration. Also, states are ordered according to
+        `self.surface_vertices`.
+
+        Returns
+        -------
+        tuple of array_like
+            A tuple of arrays of surface positions, velocities and accelerations.
+        """
+        surface_dofs = self.vert_to_vdof[self.surface_vertices].reshape(-1)
+
+        u = self.u0.vector()[surface_dofs].reshape(-1, 2)
+        v = self.v0.vector()[surface_dofs].reshape(-1, 2)
+        a = self.a0.vector()[surface_dofs].reshape(-1, 2)
+
+        x_surface = (self.surface_coordinates + u, v, a)
+
+        return x_surface
+
+    def set_current_state(self, u0, v0, a0):
+        """
+        Sets the state variables u, v, and a at the start of the step.
+        """
+        self.u0.assign(u0)
+        self.v0.assign(v0)
+        self.a0.assign(a0)
+
+    def set_future_state(self, u1):
+        """
+        Sets the displacement at the end of the time step.
+
+        This could be an initial guess in the case of non-linear governing equations, or a solved
+        state so that the non-linear form can be linearized for the given state.
+        """
+        self.u1.assign(u1)
+
+    def set_time_step(self, dt):
+        """
+        Sets the time step.
+        """
+        self.dt.assign(dt)
+
+    def set_solid_properties(self, solid_properties):
+        return NotImplementedError
+
+    def set_fluid_properties(self, fluid_properties):
+        return NotImplementedError
+
     def set_pressure(self, fluid_props):
         """
         Updates pressure coefficient using a bernoulli flow model.
@@ -281,15 +360,8 @@ class ForwardModel:
         fluid_props : dict
             A dictionary of fluid properties for the 1d bernoulli fluids model
         """
-
-        # Calculated the deformed pressure surface of the body
-        surface_slice = self.vert_to_vdof[self.surface_vertices].reshape(-1)
-        _u = self.u0.vector()[surface_slice].reshape(-1, 2)
-        _v = self.v0.vector()[surface_slice].reshape(-1, 2)
-        _a = self.a0.vector()[surface_slice].reshape(-1, 2)
-        x_surface = (self.surface_coordinates + _u, _v, _a)
-
         # Update the pressure loading based on the deformed surface
+        x_surface = self.get_surface_state()
         pressure, info = fluids.set_pressure_form(self, x_surface, fluid_props)
 
         self.pressure.assign(pressure)
@@ -303,15 +375,16 @@ class ForwardModel:
         ----------
         fluid_props : dict
             A dictionary of fluid properties
-        """
-        # Calculated the deformed pressure surface of the body
-        surface_slice = self.vert_to_vdof[self.surface_vertices].reshape(-1)
-        _u = self.u0.vector()[surface_slice].reshape(-1, 2)
-        _v = self.v0.vector()[surface_slice].reshape(-1, 2)
-        _a = self.a0.vector()[surface_slice].reshape(-1, 2)
-        x_surface = (self.surface_coordinates + _u, _v, _a)
 
+        Returns
+        -------
+        dp_du0 : np.ndarray
+            Sensitivity of surface pressures w.r.t. the initial displacement.
+        dq_du0 : np.ndarray
+            Sensitivity of the flow rate w.r.t. the initial displacement.
+        """
         # Calculate sensitivities of fluid quantities based on the deformed surface
+        x_surface = self.get_surface_state()
         dp_du0, dq_du0 = fluids.set_flow_sensitivity(self, x_surface, fluid_props)
 
         return dp_du0, dq_du0

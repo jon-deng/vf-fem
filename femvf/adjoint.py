@@ -55,7 +55,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     adj_x2 : tuple of dfn.Function
         A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
     x0, x1, x2 : tuple of dfn.Function
-        Tuple (u, v, a) of states at time indices 0, 1, and 2.
+        Tuples (u, v, a) of states at time indices 0, 1, and 2.
     dt1, dt2 : float
         The timesteps associated with the f1 and f2 forward models respectively.
     solid_props : dict
@@ -78,9 +78,9 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     adj_u2, adj_v2, adj_a2 = adj_x2
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
-    model.dt.assign(dt2)
-    model.u1.vector()[:] = x2[0]
-    model.u0.vector()[:], model.v0.vector()[:], model.a0.vector()[:] = x1
+    model.set_time_step(dt2)
+    model.set_future_state(x2[0])
+    model.set_current_state(*x1)
     model.set_pressure(fluid_props1)
     dpressure_du0 = model.set_flow_sensitivity(fluid_props1)[0]
     model.emod.vector()[:] = solid_props['elastic_modulus']
@@ -95,9 +95,9 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     df2_du1 = df2_du1 + dfn.Matrix(dfn.PETScMatrix(dpressure_du0.transposeMatMult(df2_dpressure)))
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    model.dt.assign(dt1)
-    model.u1.vector()[:] = x1[0]
-    model.u0.vector()[:], model.v0.vector()[:], model.a0.vector()[:] = x0
+    model.set_time_step(dt1)
+    model.set_future_state(x1[0])
+    model.set_current_state(*x0)
     model.set_pressure(fluid_props0)
     model.emod.vector()[:] = solid_props['elastic_modulus']
 
@@ -195,9 +195,9 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
         x2 = sfu.get_state(num_states-1, f, group=h5group)
         x1 = sfu.get_state(num_states-2, f, group=h5group)
 
-    model.dt.assign(times[-1]-times[-2])
-    model.u1.vector()[:] = x2[0]
-    model.u0.vector()[:], model.v0.vector()[:], model.a0.vector()[:] = x1
+    model.set_time_step(times[-1]-times[-2])
+    model.set_future_state(x2[0])
+    model.set_current_state(*x1)
     model.set_pressure(fluid_props)
 
     df2_du2 = dfn.assemble(model.df1_du1_adjoint)

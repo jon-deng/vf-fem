@@ -196,17 +196,15 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 
     ## Update form coefficients
     model.emod.vector()[:] = solid_props['elastic_modulus']
-    model.u0.assign(u0)
-    model.v0.assign(v0)
-    model.a0.assign(a0)
+    model.set_current_state(u0, v0, a0)
     model.dt.assign(dt)
     fluid_info = model.set_pressure(fluid_props)
 
     ## Solve the thing
-    model.u1.assign(u0)
+    model.set_future_state(u0)
     dfn.solve(model.fu_nonlin == 0, model.u1, bcs=model.bc_base, J=model.jac_fu_nonlin)
-    u1.assign(model.u1)
 
+    u1.assign(model.u1)
     v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
     a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
 
@@ -348,8 +346,7 @@ if __name__ == '__main__':
     mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
     mesh_cell_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
 
-    model = forms.ForwardModel(mesh_path, mesh_facet_path, mesh_cell_path,
-                               {'pressure': 1, 'fixed': 3}, {})
+    model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
     save_path = f"out/test.h5"
     try:
