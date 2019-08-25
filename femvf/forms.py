@@ -182,6 +182,8 @@ class ForwardModel:
         # Solid material properties
         self.rho = dfn.Constant(1)
         self.nu = dfn.Constant(0.48)
+        self.raleigh_m = dfn.Constant(1e-4)
+        self.raleigh_k = dfn.Constant(1e-4)
         self.emod = dfn.Function(self.scalar_function_space)
 
         self.emod.vector()[:] = 11.8e3 * const.PASCAL_TO_CGS
@@ -209,11 +211,8 @@ class ForwardModel:
         stress = linear_elasticity(self.vector_trial, self.emod, self.nu)
         stiffness = ufl.inner(stress, strain(self.vector_test))*ufl.dx
 
-        raleigh_m = dfn.Constant(1e-4)
-        raleigh_k = dfn.Constant(1e-4)
-
-        damping = raleigh_m * self.rho*ufl.dot(trial_v, self.vector_test)*ufl.dx \
-                  + raleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
+        damping = self.raleigh_m * self.rho*ufl.dot(trial_v, self.vector_test)*ufl.dx \
+                  + self.raleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
                                           strain(self.vector_test))*ufl.dx
 
         # Compute the pressure loading neumann boundary condition thru Nanson's formula
@@ -345,11 +344,32 @@ class ForwardModel:
         """
         self.dt.assign(dt)
 
-    def set_solid_properties(self, solid_properties):
-        return NotImplementedError
+    def set_solid_properties(self, solid_props):
+        """
+        Sets solid properties given a dictionary of solid properties.
 
-    def set_fluid_properties(self, fluid_properties):
-        return NotImplementedError
+        Parameters
+        ----------
+        solid_properties : dict
+        """
+        labels = ['elastic_modulus', 'poissons_ratio', 'density', 'rayleigh_m', 'rayleigh_k']
+        coefficients = [self.emod, self.nu, self.rho, self.rayleigh_m, self.rayleigh_k]
+
+        for coefficient, label in zip(coefficients, labels):
+            if label in solid_props:
+                coefficient.assign(solid_props[label])
+
+    def set_fluid_properties(self, fluid_props):
+        """
+        Sets fluid properties given a dictionary of fluid properties.
+
+        This just sets the pressure vector given the fluid boundary conditions.
+
+        Parameters
+        ----------
+        fluid_props : dict
+        """
+        self.set_pressure(fluid_props)
 
     def set_pressure(self, fluid_props):
         """
@@ -358,7 +378,7 @@ class ForwardModel:
         Parameters
         ----------
         fluid_props : dict
-            A dictionary of fluid properties for the 1d bernoulli fluids model
+            A dictionary of fluid properties for the 1D bernoulli fluids model
         """
         # Update the pressure loading based on the deformed surface
         x_surface = self.get_surface_state()

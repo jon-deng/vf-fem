@@ -15,6 +15,10 @@ DEFAULT_FLUID_PROPERTIES = {'p_sub': 800*PASCAL_TO_CGS,
                             'rho': 1.1225*SI_DENSITY_TO_CGS,
                             'y_midline': 0.61}
 
+# Rayleigh damping parameters are roughly based on
+# A three-dimensional model of vocal fold abduction/adduction
 DEFAULT_SOLID_PROPERTIES = {'elastic_modulus': 10e3*PASCAL_TO_CGS,
-                            'nu': 0.49,
-                            'density': 1000 * SI_DENSITY_TO_CGS}
+                            'poissons_ratio': 0.49,
+                            'density': 1000 * SI_DENSITY_TO_CGS,
+                            'rayleigh_m': 30,
+                            'rayleigh_k': 1e-3}

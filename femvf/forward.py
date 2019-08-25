@@ -195,10 +195,10 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     a1 = dfn.Function(model.vector_function_space)
 
     ## Update form coefficients
-    model.emod.vector()[:] = solid_props['elastic_modulus']
-    model.set_current_state(u0, v0, a0)
     model.dt.assign(dt)
-    fluid_info = model.set_pressure(fluid_props)
+    model.set_current_state(u0, v0, a0)
+    model.set_solid_properties(solid_props)
+    fluid_info = model.set_fluid_properties(fluid_props)
 
     ## Solve the thing
     model.set_future_state(u0)

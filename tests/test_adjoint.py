@@ -26,11 +26,8 @@ if __name__ == '__main__':
 
     mesh_base_filename = 'geometry2'
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
-    mesh_cell_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
 
-    model = forms.ForwardModel(mesh_path, mesh_facet_path, mesh_cell_path,
-                               {'pressure': 1, 'fixed': 3}, {})
+    model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
     print("Computing Gradient via Finite Differences")
     emod = model.emod.vector()[:].copy()
     step_size = 0.01*constants.PASCAL_TO_CGS

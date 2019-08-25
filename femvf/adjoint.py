@@ -81,9 +81,9 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model.set_time_step(dt2)
     model.set_future_state(x2[0])
     model.set_current_state(*x1)
-    model.set_pressure(fluid_props1)
+    model.set_fluid_properties(fluid_props1)
+    model.set_solid_properties(solid_props)
     dpressure_du0 = model.set_flow_sensitivity(fluid_props1)[0]
-    model.emod.vector()[:] = solid_props['elastic_modulus']
 
     # Assemble needed forms
     df2_du1 = dfn.assemble(model.df1_du0_adjoint)
@@ -98,8 +98,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model.set_time_step(dt1)
     model.set_future_state(x1[0])
     model.set_current_state(*x0)
-    model.set_pressure(fluid_props0)
-    model.emod.vector()[:] = solid_props['elastic_modulus']
+    model.set_fluid_properties(fluid_props0)
+    model.set_solid_properties(solid_props)
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
@@ -191,14 +191,14 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
     with h5py.File(h5file, mode='r') as f:
         fluid_props = sfu.get_fluid_properties(num_states-2, f, group=h5group)
         solid_props = sfu.get_solid_properties(f, group=h5group)
-        model.emod.vector()[:] = solid_props['elastic_modulus']
         x2 = sfu.get_state(num_states-1, f, group=h5group)
         x1 = sfu.get_state(num_states-2, f, group=h5group)
 
     model.set_time_step(times[-1]-times[-2])
-    model.set_future_state(x2[0])
     model.set_current_state(*x1)
-    model.set_pressure(fluid_props)
+    model.set_future_state(x2[0])
+    model.set_fluid_properties(fluid_props)
+    model.set_solid_properties(solid_props)
 
     df2_du2 = dfn.assemble(model.df1_du1_adjoint)
     # import ipdb; ipdb.set_trace()
