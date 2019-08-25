@@ -182,8 +182,8 @@ class ForwardModel:
         # Solid material properties
         self.rho = dfn.Constant(1)
         self.nu = dfn.Constant(0.48)
-        self.raleigh_m = dfn.Constant(1e-4)
-        self.raleigh_k = dfn.Constant(1e-4)
+        self.rayleigh_m = dfn.Constant(1e-4)
+        self.rayleigh_k = dfn.Constant(1e-4)
         self.emod = dfn.Function(self.scalar_function_space)
 
         self.emod.vector()[:] = 11.8e3 * const.PASCAL_TO_CGS
@@ -211,8 +211,8 @@ class ForwardModel:
         stress = linear_elasticity(self.vector_trial, self.emod, self.nu)
         stiffness = ufl.inner(stress, strain(self.vector_test))*ufl.dx
 
-        damping = self.raleigh_m * self.rho*ufl.dot(trial_v, self.vector_test)*ufl.dx \
-                  + self.raleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
+        damping = self.rayleigh_m * self.rho*ufl.dot(trial_v, self.vector_test)*ufl.dx \
+                  + self.rayleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
                                           strain(self.vector_test))*ufl.dx
 
         # Compute the pressure loading neumann boundary condition thru Nanson's formula
@@ -325,9 +325,9 @@ class ForwardModel:
         """
         Sets the state variables u, v, and a at the start of the step.
         """
-        self.u0.assign(u0)
-        self.v0.assign(v0)
-        self.a0.assign(a0)
+        self.u0.assign(u0) 
+        self.v0.assign(v0) 
+        self.a0.assign(a0) 
 
     def set_future_state(self, u1):
         """
@@ -357,7 +357,10 @@ class ForwardModel:
 
         for coefficient, label in zip(coefficients, labels):
             if label in solid_props:
-                coefficient.assign(solid_props[label])
+                if len(solid_props[label]) > 1:
+                    coefficient.vector()[:] = solid_props[label]
+                else:
+                    coefficient.assign(solid_props[label])
 
     def set_fluid_properties(self, fluid_props):
         """

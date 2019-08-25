@@ -257,8 +257,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     a1 = dfn.Function(model.vector_function_space)
 
     # Set solid material properties
-    elastic_modulus = solid_props['elastic_modulus']
-    model.emod.vector()[:] = elastic_modulus
+    model.set_solid_properties(solid_props)
 
     ## Allocate a figure for plotting
     fig, axs = None, None

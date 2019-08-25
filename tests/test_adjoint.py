@@ -22,7 +22,7 @@ if __name__ == '__main__':
     dfn.set_log_level(30)
 
     ## Finite Differences
-    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
+    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/optimize-fem/meshes')
 
     mesh_base_filename = 'geometry2'
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
@@ -30,6 +30,7 @@ if __name__ == '__main__':
     model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
     print("Computing Gradient via Finite Differences")
     emod = model.emod.vector()[:].copy()
+    emod[:] = 10e3 * constants.PASCAL_TO_CGS
     step_size = 0.01*constants.PASCAL_TO_CGS
     num_steps = 5
 

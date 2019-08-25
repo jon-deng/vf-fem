@@ -176,6 +176,12 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
     adj_v2 = dfn.Function(model.vector_function_space)
     adj_a2 = dfn.Function(model.vector_function_space)
 
+    ## Allocate model states
+    _vfspace = model.vector_function_space
+    x0 = (dfn.Function(_vfspace), dfn.Function(_vfspace), dfn.Function(_vfspace))
+    x1 = (dfn.Function(_vfspace), dfn.Function(_vfspace), dfn.Function(_vfspace))
+    x2 = (dfn.Function(_vfspace), dfn.Function(_vfspace), dfn.Function(_vfspace))
+
     ## Allocate space for the gradient
     gradient = np.zeros(model.emod.vector().size())
 
@@ -187,12 +193,12 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
 
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
-    fluid_props, solid_props, x1, x2 = None, None, None, None
+    fluid_props, solid_props = None, None
     with h5py.File(h5file, mode='r') as f:
         fluid_props = sfu.get_fluid_properties(num_states-2, f, group=h5group)
         solid_props = sfu.get_solid_properties(f, group=h5group)
-        x2 = sfu.get_state(num_states-1, f, group=h5group)
-        x1 = sfu.get_state(num_states-2, f, group=h5group)
+        x2 = sfu.set_state(x2, num_states-1, f, group=h5group)
+        x1 = sfu.set_state(x1, num_states-2, f, group=h5group)
 
     model.set_time_step(times[-1]-times[-2])
     model.set_current_state(*x1)
@@ -221,9 +227,9 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
         for ii in range(num_states-2, 0, -1):
             # Note that ii corresponds to the time index of the adjoint state we are solving for.
             # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
-            x0 = sfu.get_state(ii-1, f, group=h5group)
-            x1 = sfu.get_state(ii, f, group=h5group)
-            x2 = sfu.get_state(ii+1, f, group=h5group)
+            x0 = sfu.set_state(x0, ii-1, f, group=h5group)
+            x1 = sfu.set_state(x1, ii, f, group=h5group)
+            x2 = sfu.set_state(x2, ii+1, f, group=h5group)
 
             fluid_props0 = sfu.get_fluid_properties(ii-1, f, group=h5group)
             fluid_props1 = sfu.get_fluid_properties(ii, f, group=h5group)
