@@ -22,7 +22,7 @@ if __name__ == '__main__':
     dfn.set_log_level(30)
 
     ## Finite Differences
-    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/optimize-fem/meshes')
+    mesh_dir = '../meshes'
 
     mesh_base_filename = 'geometry2'
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')

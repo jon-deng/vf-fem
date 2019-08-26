@@ -79,8 +79,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     model.set_time_step(dt2)
-    model.set_future_state(x2[0])
-    model.set_current_state(*x1)
+    model.set_final_state(x2[0])
+    model.set_initial_state(*x1)
     model.set_fluid_properties(fluid_props1)
     model.set_solid_properties(solid_props)
     dpressure_du0 = model.set_flow_sensitivity(fluid_props1)[0]
@@ -96,8 +96,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
     model.set_time_step(dt1)
-    model.set_future_state(x1[0])
-    model.set_current_state(*x0)
+    model.set_final_state(x1[0])
+    model.set_initial_state(*x0)
     model.set_fluid_properties(fluid_props0)
     model.set_solid_properties(solid_props)
 
@@ -201,8 +201,8 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
         x1 = sfu.set_state(x1, num_states-2, f, group=h5group)
 
     model.set_time_step(times[-1]-times[-2])
-    model.set_current_state(*x1)
-    model.set_future_state(x2[0])
+    model.set_initial_state(*x1)
+    model.set_final_state(x2[0])
     model.set_fluid_properties(fluid_props)
     model.set_solid_properties(solid_props)
 

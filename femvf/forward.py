@@ -196,12 +196,12 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 
     ## Update form coefficients
     model.dt.assign(dt)
-    model.set_current_state(u0, v0, a0)
+    model.set_initial_state(u0, v0, a0)
     model.set_solid_properties(solid_props)
     fluid_info = model.set_fluid_properties(fluid_props)
 
     ## Solve the thing
-    model.set_future_state(u0)
+    model.set_final_state(u0)
     dfn.solve(model.fu_nonlin == 0, model.u1, bcs=model.bc_base, J=model.jac_fu_nonlin)
 
     u1.assign(model.u1)

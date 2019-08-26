@@ -321,20 +321,28 @@ class ForwardModel:
 
         return x_surface
 
-    def set_current_state(self, u0, v0, a0):
+    def set_initial_state(self, u0, v0, a0):
         """
         Sets the state variables u, v, and a at the start of the step.
-        """
-        self.u0.assign(u0) 
-        self.v0.assign(v0) 
-        self.a0.assign(a0) 
 
-    def set_future_state(self, u1):
+        Parameters
+        ----------
+        u0, v0, a0 : dfn.Function
+        """
+        self.u0.assign(u0)
+        self.v0.assign(v0)
+        self.a0.assign(a0)
+
+    def set_final_state(self, u1):
         """
         Sets the displacement at the end of the time step.
 
         This could be an initial guess in the case of non-linear governing equations, or a solved
         state so that the non-linear form can be linearized for the given state.
+
+        Parameters
+        ----------
+        u1 : dfn.Function
         """
         self.u1.assign(u1)
 
