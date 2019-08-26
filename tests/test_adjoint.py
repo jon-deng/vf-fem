@@ -21,34 +21,38 @@ from femvf import functionals
 if __name__ == '__main__':
     dfn.set_log_level(30)
 
-    ## Finite Differences
+    ### Finite Differences
+    print("Computing Gradient via Finite Differences")
+
+    ## Mesh Setup
     mesh_dir = '../meshes'
 
     mesh_base_filename = 'geometry2'
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
-    print("Computing Gradient via Finite Differences")
+
     emod = model.emod.vector()[:].copy()
     emod[:] = 10e3 * constants.PASCAL_TO_CGS
     step_size = 0.01*constants.PASCAL_TO_CGS
     num_steps = 5
 
-    # Constant fluid properties
-    fluid_props = constants.DEFAULT_FLUID_PROPERTIES
+    # Set fluid and solid properties
+    fluid_props = constants.DEFAULT_FLUID_PROPERTIES.copy()
 
     # Time varying fluid properties
     # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
     # fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
     # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 
-    dt = 1e-4
-    # times_meas = [0, 0.005+dt/4, 0.01]
-    times_meas = [0, 0.005-dt/4]
-    times_meas = [0, 0.005]
+    solid_props = constants.DEFAULT_SOLID_PROPERTIES.copy()
+    solid_props['rayleigh_m'] = 30
+    solid_props['rayleigh_k'] = 1e-3
 
+    dt = 1e-4
     times_meas = [0, 0.01]
 
+    ## Running finite differences
     save_path = 'out/FiniteDifferenceStates.h5'
     with h5py.File(save_path, mode='w') as f:
         f.create_dataset('elastic_modulus', data=emod[0])
@@ -56,7 +60,7 @@ if __name__ == '__main__':
         f.create_dataset('num_steps', data=num_steps)
 
     for ii in range(num_steps):
-        solid_props = {'elastic_modulus': emod + ii*step_size}
+        solid_props['elastic_modulus'] = emod + ii*step_size
 
         runtime_start = perf_counter()
         forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=save_path,
@@ -65,9 +69,11 @@ if __name__ == '__main__':
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    ## Adjoint
+
+    ### Adjoint
     print("Computing Gradient via Adjoint State")
 
+    ## Different functional setups
     # Functional for vocal eff
     totalfluidwork = None
     totalinputwork = None
@@ -91,7 +97,6 @@ if __name__ == '__main__':
     # dg_du = functionals.dwss_gwidth_du
     # functional = functionals.wss_gwidth
 
-    solid_props = {'elastic_modulus': emod}
     runtime_start = perf_counter()
     gradient = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs=fkwargs)
     runtime_end = perf_counter()
@@ -102,7 +107,8 @@ if __name__ == '__main__':
     with h5py.File(save_path, mode='w') as f:
         f.create_dataset('gradient', data=gradient)
 
-    ## Compare adjoint and finite differences
+
+    ### Comparing adjoint and finite differences
     # Load data and caculate gradient from FD steps
     emod = None
     cost_fd = list()

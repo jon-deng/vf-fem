@@ -292,13 +292,12 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
         f.create_dataset(join(h5group, 'time'), data=times)
 
         # Fluid properties
-        for label in fluids.FLUID_PROP_LABELS:
+        for label in constants.FLUID_PROPERTY_LABELS:
             f.create_dataset(join(h5group, 'fluid_properties', label), shape=(times.size-1,))
 
-        # Solid properties
-        # TODO: Assuming only one time constant solid property here but there may be more.
-        f.create_dataset(join(h5group, 'solid_properties', 'elastic_modulus'),
-                         data=model.emod.vector()[:])
+        # Solid properties (note they're not time varying)
+        for label in constants.SOLID_PROPERTY_LABELS:
+            f.create_dataset(join(h5group, 'solid_properties', label), data=solid_props[label])
 
     ## Loop through solution times and write solution variables to h5file.
     with h5py.File(h5file, mode='a') as f:
@@ -317,7 +316,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
                 f[join(h5group, label)][ii+1] = value.vector()[:]
 
             # Fluid properties
-            for label in fluids.FLUID_PROP_LABELS:
+            for label in constants.FLUID_PROPERTY_LABELS:
                 f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
 
             ## Update initial conditions for the next time step

@@ -25,6 +25,7 @@ from os.path import join
 
 import h5py
 
+from . import constants
 from . import fluids
 
 def get_time(n, h5file, group='/'):
@@ -91,7 +92,7 @@ def get_fluid_properties(n, h5file, group='/'):
     Returns the fluid properties dictionary at index n.
     """
     fluid_props = {}
-    for label in fluids.FLUID_PROP_LABELS:
+    for label in constants.FLUID_PROPERTY_LABELS:
         fluid_props[label] = h5file[join(group, 'fluid_properties', label)][n]
 
     return fluid_props
@@ -101,13 +102,15 @@ def get_solid_properties(h5file, group='/'):
     Returns the solid properties
     """
     solid_props = {}
+    # TODO: You might want to have time variable properties in the future
+    for label in ('elastic_modulus', 'poissons_ratio'):
+        data = h5file[join(group, 'solid_properties', label)]
 
-    # TODO: This is a hardcoded value since I haven't figured out what each solid property will be
-    # yet. For this plane strain problem I think only elastic modulus and poisson's ratio will show
-    # up
-    # Also assumes they are constant in time
-    for label in ('elastic_modulus',):
-        solid_props[label] = h5file[join(group, 'solid_properties', label)][:]
+        if not data.shape:
+            # If `data.shape` is an empty tuple then we have to index differently
+            solid_props[label] = data[()]
+        else:
+            solid_props[label] = data[:]
 
     return solid_props
 

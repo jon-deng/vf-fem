@@ -29,4 +29,3 @@ def get_dynamic_fluid_props(fluid_props, time):
             out[key] = value
 
     return out
-    
