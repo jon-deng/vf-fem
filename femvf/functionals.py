@@ -412,8 +412,8 @@ def wss_gwidth(model, h5file, h5group='/', weights=None, meas_indices=None,
     for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
         u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
 
-        u_surface = u.vector()[model.vert_to_vdof[model.surface_vertices].reshape(-1)].reshape(-1, 2)
-        cur_surface = ref_surface + u_surface
+        model.set_initial_state(u, v, a)
+        cur_surface = model.get_surface_state()[0]
 
         # Find the maximum y coordinate on the surface
         idx_surface = np.argmax(cur_surface[:, 1])
@@ -457,8 +457,8 @@ def dwss_gwidth_du(model, n, h5file, h5group='/', weights=None, meas_indices=Non
 
         u, v, a = sfu.set_state((u, v, a), n, h5file, group=h5group)
 
-        u_surface = u.vector()[model.vert_to_vdof[model.surface_vertices].reshape(-1)].reshape(-1, 2)
-        cur_surface = ref_surface + u_surface
+        model.set_initial_state(u, v, a)
+        cur_surface = model.get_surface_state()[0]
 
         # Find the surface vertex corresponding to where the glottal width is measured
         # This is numbered according to the 'local' numbering scheme of the surface vertices i.e.
@@ -512,8 +512,8 @@ def dwss_gwidth_dt(model, n, h5file, h5group='/', weights=None, meas_indices=Non
     for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
         u, v, a = sfu.set_state((u, v, a), ii, h5file, group=h5group)
 
-        u_surface = u.vector()[model.vert_to_vdof[model.surface_vertices].reshape(-1)].reshape(-1, 2)
-        cur_surface = ref_surface + u_surface
+        model.set_initial_state(u, v, a)
+        cur_surface = model.get_surface_state()[0]
 
         # Find the maximum y coordinate on the surface
         idx_surface = np.argmax(cur_surface[:, 1])

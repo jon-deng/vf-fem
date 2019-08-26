@@ -20,5 +20,5 @@ DEFAULT_FLUID_PROPERTIES = {'p_sub': 800*PASCAL_TO_CGS,
 DEFAULT_SOLID_PROPERTIES = {'elastic_modulus': 10e3*PASCAL_TO_CGS,
                             'poissons_ratio': 0.49,
                             'density': 1000 * SI_DENSITY_TO_CGS,
-                            'rayleigh_m': 30,
-                            'rayleigh_k': 1e-3}
+                            'rayleigh_m': 1e-4,
+                            'rayleigh_k': 1e-4}

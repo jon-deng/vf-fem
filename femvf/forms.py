@@ -15,7 +15,6 @@ import ufl
 from . import transforms
 from . import fluids
 from . import constants as const
-from . import default_mesh
 
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
@@ -213,7 +212,7 @@ class ForwardModel:
 
         damping = self.rayleigh_m * self.rho*ufl.dot(trial_v, self.vector_test)*ufl.dx \
                   + self.rayleigh_k * ufl.inner(linear_elasticity(trial_v, self.emod, self.nu),
-                                          strain(self.vector_test))*ufl.dx
+                                                strain(self.vector_test))*ufl.dx
 
         # Compute the pressure loading neumann boundary condition thru Nanson's formula
         deformation_gradient = ufl.grad(self.u0) + ufl.Identity(2)
@@ -360,15 +359,18 @@ class ForwardModel:
         ----------
         solid_properties : dict
         """
-        labels = ['elastic_modulus', 'poissons_ratio', 'density', 'rayleigh_m', 'rayleigh_k']
-        coefficients = [self.emod, self.nu, self.rho, self.rayleigh_m, self.rayleigh_k]
+        labels = ['poissons_ratio', 'density', 'rayleigh_m', 'rayleigh_k']
+        coefficients = [self.nu, self.rho, self.rayleigh_m, self.rayleigh_k]
+
+        emod = solid_props['elastic_modulus']
+        if isinstance(emod, dfn.Function):
+            self.emod.assign(emod)
+        else:
+            self.emod.vector()[:] = emod
 
         for coefficient, label in zip(coefficients, labels):
             if label in solid_props:
-                if len(solid_props[label]) > 1:
-                    coefficient.vector()[:] = solid_props[label]
-                else:
-                    coefficient.assign(solid_props[label])
+                coefficient.assign(solid_props[label])
 
     def set_fluid_properties(self, fluid_props):
         """
@@ -380,7 +382,7 @@ class ForwardModel:
         ----------
         fluid_props : dict
         """
-        self.set_pressure(fluid_props)
+        return self.set_pressure(fluid_props)
 
     def set_pressure(self, fluid_props):
         """

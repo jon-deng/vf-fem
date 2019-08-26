@@ -20,19 +20,19 @@ import numpy as np
 import dolfin as dfn
 
 sys.path.append('../')
-from femvf import forms as frm
+from femvf import forms
 from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf import constants
 from femvf import functionals
 
-def gradient(tspan, dt, solid_props, fluid_props):
+def gradient(model, t0, tspan, dt, solid_props, fluid_props):
     """
     Returns the gradient and functional value for a functional.
     """
     with h5py.File('_tmp.h5', mode='w') as f:
         pass
-    forward(tspan, dt, solid_props, fluid_props, h5file='_tmp.h5')
+    forward(model, t0, tspan, dt, solid_props, fluid_props, h5file='_tmp.h5')
 
     totalfluidwork = None
     totalinputwork = None
@@ -52,14 +52,22 @@ if __name__ == '__main__':
 
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES
 
+    mesh_dir = '../meshes'
+
+    mesh_base_filename = 'geometry2'
+    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+
+    model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+
     # fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
     # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
     # fluid_props['p_sub'] = 800
 
-    emod = frm.emod.vector()[:].copy()
-    solid_props = {'elastic_modulus': emod}
+    emod = model.emod.vector()[:].copy()
+    solid_props = constants.DEFAULT_SOLID_PROPERTIES
+    solid_props['elastic_modulus'] = emod
 
-    grad = gradient([0, 0.1], dt, solid_props, fluid_props)[1]
+    grad = gradient(model, 0, [0, 0.1], dt, solid_props, fluid_props)[1]
     grad = grad/grad.max()
     elastic_moduli = emod + 100*np.arange(50)[..., None]*grad
     d_elastic_moduli = grad
@@ -73,7 +81,7 @@ if __name__ == '__main__':
         solid_props = {'elastic_modulus': elastic_modulus}
 
         runtime_start = perf_counter()
-        forward([0, 0.05], dt, solid_props, fluid_props, save_path, h5group=f'{ii}', show_figure=True)
+        forward(model, 0, [0, 0.05], dt, solid_props, fluid_props, save_path, h5group=f'{ii}', show_figure=True)
         runtime_end = perf_counter()
 
         objective = None

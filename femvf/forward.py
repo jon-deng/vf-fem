@@ -194,15 +194,24 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     v1 = dfn.Function(model.vector_function_space)
     a1 = dfn.Function(model.vector_function_space)
 
-    ## Update form coefficients
+    # Update form coefficients and initial guess
     model.dt.assign(dt)
     model.set_initial_state(u0, v0, a0)
     model.set_solid_properties(solid_props)
     fluid_info = model.set_fluid_properties(fluid_props)
-
-    ## Solve the thing
     model.set_final_state(u0)
-    dfn.solve(model.fu_nonlin == 0, model.u1, bcs=model.bc_base, J=model.jac_fu_nonlin)
+
+    # Check if collision is happening
+    # x_surface = model.get_surface_state()[0]
+    # print(x_surface[..., 1].max())
+
+    # Solve the thing
+    # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
+    # form. During collision the equations are non-linear but in all other cases they are currently
+    # linear.
+    newton_prm = {'absolute_tolerance': 1e-10, 'relative_tolerance': 1e-7}
+    dfn.solve(model.fu_nonlin == 0, model.u1, bcs=model.bc_base, J=model.jac_fu_nonlin,
+              solver_parameters={"newton_solver": newton_prm})
 
     u1.assign(model.u1)
     v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
@@ -294,9 +303,11 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     ## Loop through solution times and write solution variables to h5file.
     with h5py.File(h5file, mode='a') as f:
         for ii, t in enumerate(times[:-1]):
-            ## Increment the state
+            # Update properties
             fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)
             dt_ = times[ii+1] - times[ii]
+
+            # Increment the state
             (u1, v1, a1), info = increment_forward(model, [u0, v0, a0], dt_, solid_props,
                                                    fluid_props_ii)
 
