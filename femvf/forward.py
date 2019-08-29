@@ -209,7 +209,7 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
     # form. During collision the equations are non-linear but in all other cases they are currently
     # linear.
-    newton_prm = {'absolute_tolerance': 1e-10, 'relative_tolerance': 1e-7}
+    newton_prm = {'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-6}
     dfn.solve(model.fu_nonlin == 0, model.u1, bcs=model.bc_base, J=model.jac_fu_nonlin,
               solver_parameters={"newton_solver": newton_prm})
 

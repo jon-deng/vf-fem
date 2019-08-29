@@ -242,11 +242,11 @@ class ForwardModel:
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
-        self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), self.facet_marker,
-                                       facet_marker_id['fixed'])
+        self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]),
+                                       self.facet_marker, facet_marker_id['fixed'])
 
-        self.bc_base_adjoint = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]), self.facet_marker,
-                                               facet_marker_id['fixed'])
+        self.bc_base_adjoint = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]),
+                                               self.facet_marker, facet_marker_id['fixed'])
 
         # Define some additional forms for diagnostics
         # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu), strain(test))*ufl.dx - traction
@@ -395,6 +395,10 @@ class ForwardModel:
         """
         # Update the pressure loading based on the deformed surface
         x_surface = self.get_surface_state()
+
+        # Check that the surface doesn't cross over the midline
+        assert np.max(x_surface[0][..., 1]) < fluid_props['y_midline']
+
         pressure, info = fluids.set_pressure_form(self, x_surface, fluid_props)
 
         self.pressure.assign(pressure)
