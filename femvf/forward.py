@@ -227,12 +227,13 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     Parameters
     ----------
     model : forms.ForwardModel
+        An object representing the forward model.
     t0 : float
+        Simulation starting time.
     tmeas : array_like of float
         Specific times at which the model should be solved. There should be a minimum of two
-        entries. The first entry is the starting time while the final entry is the final time. A
-        common way to set this would be to set [0, tfinal] to record the first step and final step
-        + all time steps in between.
+        entries. The first/final entries are the first/final measurements. A common way to set this
+        would be to set [0, tfinal] to record the first/final times and all steps in between.
     dt : float
         The time step in seconds.
     solid_props : dict
@@ -240,7 +241,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     fluid_props : dict
         A dictionary of fluid properties.
     h5file : string
-        Path to an hdf5 file where states will be appended.
+        Path to an hdf5 file where solution information will be appended.
     group : string
         An h5 group to save under
     show_figure : bool
