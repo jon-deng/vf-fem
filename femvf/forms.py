@@ -85,6 +85,31 @@ def strain(u):
     """
     return 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
 
+def _sort_surface_vertices(surface_coordinates):
+    """
+    Returns a list sorting the vertices in increasing streamwise direction.
+
+    Assumes the inferior-superior direction is oriented along the positive x axis.
+
+    Parameters
+    ----------
+    surface_coordinates : (..., 2) array_like
+        An array of surface coordinates, with x and y locations stored in the last dimension.
+    """
+    # Determine the very first coordinate
+    idx_sort = [np.argmin(surface_coordinates[..., 0])]
+
+    while len(idx_sort) < surface_coordinates.shape[0]:
+        # Calculate array of distances to every other coordinate
+        vector_distances = surface_coordinates - surface_coordinates[idx_sort[-1]]
+        distances = np.sum(vector_distances**2, axis=-1)**0.5
+        distances[idx_sort] = np.nan
+
+        idx_sort.append(np.nanargmin(distances))
+
+    return np.array(idx_sort)
+
+
 class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.
@@ -153,8 +178,8 @@ class ForwardModel:
 
         # Sort the pressure surface vertices from inferior to superior
         # TODO: This only works if surface coordinates have strictly increasing x-coordinate from
-        # inferior to superior. Meshes that don't follow this will have some weird results.
-        idx_sort = np.argsort(surface_coordinates[..., 0])
+        # inferior to superior. Meshes that don't might have some weird results.
+        idx_sort = _sort_surface_vertices(surface_coordinates)
         self.surface_vertices = surface_vertices[idx_sort]
         self.surface_coordinates = surface_coordinates[idx_sort]
 
