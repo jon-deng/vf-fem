@@ -188,8 +188,8 @@ class ForwardModel:
         self.gamma = dfn.Constant(1/2)
         self.beta = dfn.Constant(1/4)
 
-        self.collision_eps = 0.001
-        self.y_midline = const.DEFAULT_FLUID_PROPERTIES['y_midline']
+        self.y_collision = dfn.Constant(const.DEFAULT_SOLID_PROPERTIES['y_collision'])
+        # self.y_midline = const.DEFAULT_FLUID_PROPERTIES['y_midline']
 
         self.scalar_function_space = dfn.FunctionSpace(self.mesh, 'CG', 1)
         self.vector_function_space = dfn.VectorFunctionSpace(self.mesh, 'CG', 1)
@@ -255,11 +255,11 @@ class ForwardModel:
         x_reference = dfn.Function(self.vector_function_space)
         x_reference.vector()[self.vert_to_vdof.reshape(-1)] = self.mesh.coordinates().reshape(-1)
 
-        gap = ufl.dot(x_reference+self.u1, collision_normal) - (self.y_midline - self.collision_eps)
+        gap = ufl.dot(x_reference+self.u1, collision_normal) - (self.y_collision)
         positive_gap = (gap + abs(gap)) / 2
 
-        k_collision = dfn.Constant(1e11)
-        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
+        self.k_collision = dfn.Constant(1e11)
+        penalty = ufl.dot(self.k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
                   * ds(facet_marker_id['pressure'])
 
         self.fu_nonlin = ufl.action(fu, self.u1) - penalty
@@ -384,18 +384,16 @@ class ForwardModel:
         ----------
         solid_properties : dict
         """
-        labels = ['poissons_ratio', 'density', 'rayleigh_m', 'rayleigh_k']
-        coefficients = [self.nu, self.rho, self.rayleigh_m, self.rayleigh_k]
-
-        emod = solid_props['elastic_modulus']
-        if isinstance(emod, dfn.Function):
-            self.emod.assign(emod)
-        else:
-            self.emod.vector()[:] = emod
+        labels = const.DEFAULT_SOLID_PROPERTIES
+        coefficients = [self.emod, self.nu, self.rho, self.rayleigh_m, self.rayleigh_k,
+                        self.y_collision]
 
         for coefficient, label in zip(coefficients, labels):
             if label in solid_props:
-                coefficient.assign(solid_props[label])
+                if label == 'elastic_modulus' and not isinstance(solid_props[label], dfn.Function):
+                    coefficient.vector()[:] = solid_props[label]
+                else:
+                    coefficient.assign(solid_props[label])
 
     def set_fluid_properties(self, fluid_props):
         """
@@ -422,6 +420,7 @@ class ForwardModel:
         x_surface = self.get_surface_state()
 
         # Check that the surface doesn't cross over the midline
+        # print(np.max(x_surface[0][..., 1]))
         assert np.max(x_surface[0][..., 1]) < fluid_props['y_midline']
 
         pressure, info = fluids.set_pressure_form(self, x_surface, fluid_props)

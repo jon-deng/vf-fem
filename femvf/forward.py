@@ -105,6 +105,7 @@ def init_figure(model, fluid_props):
 
     axs[1, 0].set_ylabel("Surface pressure [Pa]")
 
+    axs[2, 0].set_ylim(-0.01, 0.1)
     axs[2, 0].set_ylabel("Glottal width [cm]")
 
     return fig, axs
@@ -147,13 +148,13 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
 
     axs[0, 0].set_title(f'Time: {1e3*t:>5.1f} ms')
 
-    axs[0, 0].axhline(y=model.y_midline, ls='-.', lw=0.5)
-    axs[0, 0].axhline(y=model.y_midline-model.collision_eps, ls='-.', lw=0.5)
+    axs[0, 0].axhline(y=fluid_props['y_midline'], ls='-.', lw=0.5)
+    axs[0, 0].axhline(y=model.y_collision.values()[0], ls='-.', lw=0.5)
 
     pressure_profile = axs[1, 0].lines[0]
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
 
-    gw = model.y_midline - np.amax(xy_current[:, 1])
+    gw = fluid_props['y_midline'] - np.amax(xy_current[:, 1])
     line = axs[2, 0].lines[0]
     xdata = np.concatenate((line.get_xdata(), [t]), axis=0)
     ydata = np.concatenate((line.get_ydata(), [gw]), axis=0)
