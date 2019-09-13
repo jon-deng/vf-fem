@@ -395,8 +395,6 @@ def wss_gwidth(model, h5file, h5group='/', weights=None, meas_indices=None,
     v = dfn.Function(model.vector_function_space)
     a = dfn.Function(model.vector_function_space)
 
-    ref_surface = model.mesh.coordinates()[model.surface_vertices]
-
     # Set default values when kwargs are not provided
     num_states = sfu.get_num_states(h5file, group=h5group)
     if weights is None:
@@ -426,7 +424,7 @@ def wss_gwidth(model, h5file, h5group='/', weights=None, meas_indices=None,
     return wss, info
 
 def dwss_gwidth_du(model, n, h5file, h5group='/', weights=None, meas_indices=None,
-                          meas_glottal_widths=None):
+                   meas_glottal_widths=None):
     """
     Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
     """
@@ -436,8 +434,6 @@ def dwss_gwidth_du(model, n, h5file, h5group='/', weights=None, meas_indices=Non
     u = dfn.Function(model.vector_function_space)
     v = dfn.Function(model.vector_function_space)
     a = dfn.Function(model.vector_function_space)
-
-    ref_surface = model.mesh.coordinates()[model.surface_vertices]
 
     # Set default values when kwargs are not provided
     num_states = sfu.get_num_states(h5file, group=h5group)
