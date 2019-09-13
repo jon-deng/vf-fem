@@ -28,6 +28,22 @@ import h5py
 from . import constants
 from . import fluids
 
+class StateFile:
+    """
+    Represents a state file.
+    """
+
+    def __init__(self, name, group, **kwargs):
+        self.file = h5py.File(name, **kwargs)
+        self.group = group
+
+    def __enter__(self):
+        return self.file
+
+    def __exit__(self, type, value, traceback):
+        self.file.close()
+
+
 def get_time(n, h5file, group='/'):
     """
     Returns the time vector.
@@ -67,7 +83,7 @@ def get_state(n, h5file, group='/'):
 
 def set_state(x, n, h5file, group='/'):
     """
-    Sets the function x (u, v, a) to values at index n.
+    Sets the tuple x (u, v, a) to its values at index n.
 
     Parameters
     ----------
