@@ -53,11 +53,53 @@ class StateFile:
     def __exit__(self, type, value, traceback):
         self.file.close()
 
-    def initialize(self):
+    def initialize(self, u0, v0, a0, solid_props, fluid_props, solution_times):
         """
         Initializes the layout of the state file.
+
+        Parameters
+        ----------
+        u0, v0, a0 : dfn.Function
+            The initial velocity, displacement and acceleration respectively.
+        solid_props : dict
+            A dictionary of solid properties
+        fluid_props : dict
+            A dictionary of fluid properties
+        solution_times : array_like
+            Times at which the model will be solved
         """
-        pass
+        N = solution_times.size
+
+        # Kinematic states
+        for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
+            self.file.create_dataset(join(self.group, dataset_name),
+                                     shape=(N, data.vector()[:].size),
+                                     dtype='f8')
+            self.file[join(self.group, dataset_name)][0] = data.vector()
+
+        self.file.create_dataset(join(self.group, 'time'), data=solution_times)
+
+        # Fluid properties
+        for label in constants.FLUID_PROPERTY_LABELS:
+            self.file.create_dataset(join(self.group, 'fluid_properties', label), shape=(N,))
+
+        # Solid properties (Assumed to not be time-varying)
+        for label in constants.SOLID_PROPERTY_LABELS:
+            self.file.create_dataset(join(self.group, 'solid_properties', label),
+                                     data=solid_props[label])
+
+    def write_state(self, x, n):
+        """
+        Writes the n'th state.
+
+        Parameters
+        ----------
+        x : tuple of dfn.Function
+        n : int
+            State index to write to.
+        """
+        for function, label in zip(x, ('u', 'v', 'a')):
+            self.file[join(self.group, label)][n] = function.vector()
 
     def get_time(self, n):
         """

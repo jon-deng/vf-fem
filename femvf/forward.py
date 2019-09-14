@@ -280,6 +280,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     forward_info['meas_indices'] = meas_indices
 
     ## Initialize datasets to save in h5 file
+    # TODO: Use the `StateFile` initialization
     with h5py.File(h5file, mode='a') as f:
         # Kinematic states
         for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
