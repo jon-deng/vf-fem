@@ -78,12 +78,9 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     adj_u2, adj_v2, adj_a2 = adj_x2
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
-    model.set_time_step(dt2)
-    model.set_final_state(x2[0])
-    model.set_initial_state(*x1)
-    model.set_fluid_properties(fluid_props1)
-    model.set_solid_properties(solid_props)
-    dpressure_du0 = model.set_flow_sensitivity(fluid_props1)[0]
+    model.set_iteration(x1, dt2, fluid_props1, solid_props, u1=x2[0])
+
+    dpressure_du0 = model.get_flow_sensitivity()[0]
 
     # Assemble needed forms
     df2_du1 = dfn.assemble(model.df1_du0_adjoint)
@@ -95,11 +92,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     df2_du1 = df2_du1 + dfn.Matrix(dfn.PETScMatrix(dpressure_du0.transposeMatMult(df2_dpressure)))
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    model.set_time_step(dt1)
-    model.set_final_state(x1[0])
-    model.set_initial_state(*x0)
-    model.set_fluid_properties(fluid_props0)
-    model.set_solid_properties(solid_props)
+    model.set_iteration(x0, dt1, fluid_props0, solid_props, u1=x1[0])
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
@@ -168,51 +161,35 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
         dg_du_kwargs = {}
 
     ## Allocate adjoint states
-    adj_u1 = dfn.Function(model.vector_function_space)
-    adj_v1 = dfn.Function(model.vector_function_space)
-    adj_a1 = dfn.Function(model.vector_function_space)
+    vfunc_space = model.vector_function_space
+    adj_u1 = dfn.Function(vfunc_space)
+    adj_v1 = dfn.Function(vfunc_space)
+    adj_a1 = dfn.Function(vfunc_space)
 
-    adj_u2 = dfn.Function(model.vector_function_space)
-    adj_v2 = dfn.Function(model.vector_function_space)
-    adj_a2 = dfn.Function(model.vector_function_space)
+    adj_u2 = dfn.Function(vfunc_space)
+    adj_v2 = dfn.Function(vfunc_space)
+    adj_a2 = dfn.Function(vfunc_space)
 
     ## Allocate model states
-    _vfspace = model.vector_function_space
-    x0 = (dfn.Function(_vfspace), dfn.Function(_vfspace), dfn.Function(_vfspace))
-    x1 = (dfn.Function(_vfspace), dfn.Function(_vfspace), dfn.Function(_vfspace))
-    x2 = (dfn.Function(_vfspace), dfn.Function(_vfspace), dfn.Function(_vfspace))
+    x0 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
+    x1 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
+    x2 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
 
     ## Allocate space for the gradient
     gradient = np.zeros(model.emod.vector().size())
 
-    times = None
-    num_states = None
-    with h5py.File(h5file, mode='r') as f:
-        times = sfu.get_times(f, group=h5group)
-        num_states = sfu.get_num_states(f, group=h5group)
-
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
-    fluid_props, solid_props = None, None
-    with h5py.File(h5file, mode='r') as f:
-        fluid_props = sfu.get_fluid_properties(num_states-2, f, group=h5group)
-        solid_props = sfu.get_solid_properties(f, group=h5group)
-        x2 = sfu.set_state(x2, num_states-1, f, group=h5group)
-        x1 = sfu.set_state(x1, num_states-2, f, group=h5group)
-
-    model.set_time_step(times[-1]-times[-2])
-    model.set_initial_state(*x1)
-    model.set_final_state(x2[0])
-    model.set_fluid_properties(fluid_props)
-    model.set_solid_properties(solid_props)
+    with sfu.StateFile(h5file, mode='r', group=h5group) as f:
+        num_states = f.get_num_states()
+        model.set_iteration_fromfile(f, num_states-1)
 
     df2_du2 = dfn.assemble(model.df1_du1_adjoint)
-    # import ipdb; ipdb.set_trace()
 
     ## Initialize the adjoint state
     dcost_du2 = None
-    with h5py.File(h5file, mode='r') as f:
-        dcost_du2 = dg_du(model, num_states-1, f, h5group=h5group, **dg_du_kwargs)[0]
+    with sfu.StateFile(h5file, mode='r', group=h5group) as f:
+        dcost_du2 = dg_du(model, num_states-1, f, **dg_du_kwargs)[0]
 
     model.bc_base_adjoint.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
@@ -223,21 +200,25 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
     gradient += -1*df2_dparam*adj_u2.vector() + 0
 
     ## Loop through states for adjoint computation
-    with h5py.File(h5file, mode='r') as f:
+    with sfu.StateFile(h5file, mode='r', group=h5group) as f:
+        num_states = f.get_num_states()
+        times = f.get_solution_times()
+        solid_props = f.get_solid_properties()
+
         for ii in range(num_states-2, 0, -1):
             # Note that ii corresponds to the time index of the adjoint state we are solving for.
             # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
-            x0 = sfu.set_state(x0, ii-1, f, group=h5group)
-            x1 = sfu.set_state(x1, ii, f, group=h5group)
-            x2 = sfu.set_state(x2, ii+1, f, group=h5group)
+            x0 = f.set_state(ii-1, x0)
+            x1 = f.set_state(ii, x1)
+            x2 = f.set_state(ii+1, x2)
 
-            fluid_props0 = sfu.get_fluid_properties(ii-1, f, group=h5group)
-            fluid_props1 = sfu.get_fluid_properties(ii, f, group=h5group)
+            fluid_props0 = f.get_fluid_properties(ii-1)
+            fluid_props1 = f.get_fluid_properties(ii)
 
             dt1 = times[ii] - times[ii-1]
             dt2 = times[ii+1] - times[ii]
 
-            dcost_du1 = dg_du(model, ii, f, h5group=h5group, **dg_du_kwargs)[0]
+            dcost_du1 = dg_du(model, ii, f, **dg_du_kwargs)[0]
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
                 model, (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,

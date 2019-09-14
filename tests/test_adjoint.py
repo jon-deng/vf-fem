@@ -17,6 +17,7 @@ from femvf.adjoint import adjoint
 from femvf import forms
 from femvf import constants
 from femvf import functionals
+from femvf import statefileutils as sfu
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
@@ -75,27 +76,27 @@ if __name__ == '__main__':
 
     ## Different functional setups
     # Functional for vocal eff
-    totalfluidwork = None
-    totalinputwork = None
-    with h5py.File(save_path, mode='r') as f:
-        totalfluidwork = functionals.totalfluidwork(model, f, h5group='0')[0]
-        totalinputwork = functionals.totalinputwork(model, f, h5group='0')[0]
-    fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    dg_du = functionals.dtotalvocaleff_du
-    functional = functionals.totalvocaleff
+    # totalfluidwork = None
+    # totalinputwork = None
+    # with sfu.StateFile(save_path, group='0', mode='r') as f:
+    #     totalfluidwork = functionals.totalfluidwork(model, f)[0]
+    #     totalinputwork = functionals.totalinputwork(model, f)[0]
+    # fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
+    # dg_du = functionals.dtotalvocaleff_du
+    # functional = functionals.totalvocaleff
 
     # Functional for MFDR
     # idx_mfdr = None
-    # with h5py.File(save_path, mode='r') as f:
-    #     idx_mfdr = functionals.mfdr(model, f, h5group='0')[1]['idx_mfdr']
+    # with sfu.StateFile(save_path, group='0', mode='r') as f:
+    #     idx_mfdr = functionals.mfdr(model, f)[1]['idx_mfdr']
     # fkwargs = {'cache_idx_mfdr': idx_mfdr}
     # dg_du = functionals.dmfdr_du
     # functional = functionals.mfdr
 
     # Functional for weighted sum of squared glottal widths
-    # fkwargs = {}
-    # dg_du = functionals.dwss_gwidth_du
-    # functional = functionals.wss_gwidth
+    fkwargs = {}
+    dg_du = functionals.dwss_gwidth_du
+    functional = functionals.wss_gwidth
 
     runtime_start = perf_counter()
     gradient = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs=fkwargs)
@@ -103,21 +104,21 @@ if __name__ == '__main__':
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    save_path = 'out/Adjoint.h5'
-    with h5py.File(save_path, mode='w') as f:
+    with h5py.File( 'out/Adjoint.h5', mode='w') as f:
         f.create_dataset('gradient', data=gradient)
-
 
     ### Comparing adjoint and finite differences
     # Load data and caculate gradient from FD steps
     emod = None
     cost_fd = list()
-    with h5py.File('out/FiniteDifferenceStates.h5', mode='r') as f:
-        step_size = f['step_size'][()]
-        num_steps = f['num_steps'][()]
-        emod = f['elastic_modulus'] + np.arange(num_steps)*step_size
+    with sfu.StateFile('out/FiniteDifferenceStates.h5', group=f'{ii}', mode='r') as f:
+        # import ipdb; ipdb.set_trace()
+        step_size = f.file['step_size'][()]
+        num_steps = f.file['num_steps'][()]
+        emod = f.file['elastic_modulus'] + np.arange(num_steps)*step_size
         for ii in range(num_steps):
-            cost_fd.append(functional(model, f, h5group=f'{ii}')[0])
+            f.group = f'{ii}'
+            cost_fd.append(functional(model, f)[0])
 
     # Load the gradient from the adjoint method
     grad_ad = None

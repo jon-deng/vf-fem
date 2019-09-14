@@ -196,11 +196,7 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     a1 = dfn.Function(model.vector_function_space)
 
     # Update form coefficients and initial guess
-    model.dt.assign(dt)
-    model.set_initial_state(u0, v0, a0)
-    model.set_solid_properties(solid_props)
-    fluid_info = model.set_fluid_properties(fluid_props)
-    model.set_final_state(u0)
+    fluid_info = model.set_iteration((u0, v0, a0), dt, fluid_props, solid_props, u1=u0)
 
     # Check if collision is happening
     # x_surface = model.get_surface_state()[0]
@@ -309,7 +305,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
             dt_ = times[ii+1] - times[ii]
 
             # Increment the state
-            (u1, v1, a1), info = increment_forward(model, [u0, v0, a0], dt_, solid_props,
+            (u1, v1, a1), info = increment_forward(model, (u0, v0, a0), dt_, solid_props,
                                                    fluid_props_ii)
 
             ## Write the solution outputs to a file

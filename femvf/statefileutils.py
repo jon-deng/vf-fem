@@ -24,6 +24,7 @@ Solid properties are stored under labels:
 from os.path import join
 
 import h5py
+import dolfin as dfn
 
 from . import constants
 from . import fluids
@@ -31,132 +32,151 @@ from . import fluids
 class StateFile:
     """
     Represents a state file.
+
+    Parameters
+    ----------
+    name : str
+        Path to the hdf5 file.
+    group : str
+        Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, name, group, **kwargs):
+    def __init__(self, name, group='/', **kwargs):
         self.file = h5py.File(name, **kwargs)
         self.group = group
 
+        # self.data = self.file[self.group]
+
     def __enter__(self):
-        return self.file
+        return self
 
     def __exit__(self, type, value, traceback):
         self.file.close()
 
+    def initialize(self):
+        """
+        Initializes the layout of the state file.
+        """
+        pass
 
-def get_time(n, h5file, group='/'):
-    """
-    Returns the time vector.
-    """
-    return h5file[join(group, 'time')][n]
+    def get_time(self, n):
+        """
+        Returns the time at state n.
+        """
+        return self.file[join(self.group, 'time')][n]
 
-def get_times(h5file, group='/'):
-    """
-    Returns the time vector.
-    """
-    return h5file[join(group, 'time')][:]
+    def get_solution_times(self):
+        """
+        Returns the time vector.
+        """
+        return self.file[join(self.group, 'time')][:]
 
-def get_num_states(h5file, group='/'):
-    """
-    Returns the number of states in the solution
-    """
-    return h5file[join(group, 'u')].shape[0]
+    def get_num_states(self):
+        """
+        Returns the number of states in the solution
+        """
+        return self.file[join(self.group, 'u')].shape[0]
 
-def get_state(n, h5file, group='/'):
-    """
-    Returns form coefficient vectors for states (u, v, a) at index n.
-
-    Parameters
-    ----------
-    n : int
-        Index to set the functions for.
-    path : string
-        The path of the hdf5 file containing states.
-    group : string
-        The group where states are stored.
-    """
-    u = h5file[join(group, 'u')][n, ...]
-    v = h5file[join(group, 'v')][n, ...]
-    a = h5file[join(group, 'a')][n, ...]
-
-    return (u, v, a)
-
-def set_state(x, n, h5file, group='/'):
-    """
-    Sets the tuple x (u, v, a) to its values at index n.
-
-    Parameters
-    ----------
-    x : tuple of dolfin.Function
-        A tuple of function values
-    n : int
-        Index to set the functions for.
-    group : string
-        The group where states are stored.
-    path : string
-        The path of the hdf5 file containing states.
-    """
-    u, v, a = get_state(n, h5file, group=group)
-    x[0].vector()[:] = u
-    x[1].vector()[:] = v
-    x[2].vector()[:] = a
-
-    return x
-
-def get_fluid_properties(n, h5file, group='/'):
-    """
-    Returns the fluid properties dictionary at index n.
-    """
-    fluid_props = {}
-    for label in constants.FLUID_PROPERTY_LABELS:
-        fluid_props[label] = h5file[join(group, 'fluid_properties', label)][n]
-
-    return fluid_props
-
-def get_solid_properties(h5file, group='/'):
-    """
-    Returns the solid properties
-    """
-    solid_props = {}
-    # TODO: You might want to have time variable properties in the future
-    for label in ('elastic_modulus', 'poissons_ratio'):
-        data = h5file[join(group, 'solid_properties', label)]
-
-        if not data.shape:
-            # If `data.shape` is an empty tuple then we have to index differently
-            solid_props[label] = data[()]
+    def get_u(self, n, function_space=None):
+        """
+        Returns displacement at index `n`.
+        """
+        ret = None
+        _ret = self.file[join(self.group, 'u')][n, ...]
+        if function_space is None:
+            ret = _ret
         else:
-            solid_props[label] = data[:]
+            ret = dfn.Function(function_space)
+            ret.vector()[:] = _ret
 
-    return solid_props
+        return ret
 
-def set_states(n, h5file, group='/', u0=None, v0=None, a0=None, u1=None):
-    """
-    Sets form coefficient vectors for states u_n-1, v_n-1, a_n-1, u_n at index n.
+    # def get_v(self, n):
 
-    Parameters
-    ----------
-    n : int
-        Index to set the functions for.
-    group : string
-        The group where states are stored.
-    path : string
-        The path of the hdf5 file containing states.
-    """
-    if u0 is not None:
-        u0.vector()[:] = h5file[join(group, 'u')][n-1]
-    if v0 is not None:
-        v0.vector()[:] = h5file[join(group, 'v')][n-1]
-    if a0 is not None:
-        a0.vector()[:] = h5file[join(group, 'a')][n-1]
-    if u1 is not None:
-        u1.vector()[:] = h5file[join(group, 'u')][n]
+    # def get_a(self, n):
 
-def set_time_step(n, h5file, group='/', dt=None):
-    if dt is not None:
-        tspan = h5file[join(group, 'time')][n-1:n+1]
-        dt.assign(tspan[1]-tspan[0])
+    def get_state(self, n, function_space=None):
+        """
+        Returns form coefficient vectors for states (u, v, a) at index n.
 
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        function_space : dfn.FunctionSpace
+            If a function space is supplied, an instance of `dfn.Function` is returned.
+        """
+        labels = ('u', 'v', 'a')
 
-# class StateFile:
-#     pass
+        ret = None
+        _ret = [self.file[join(self.group, label)][n, ...] for label in labels]
+
+        if function_space is None:
+            ret = _ret
+        else:
+            ret = []
+            for ii, label in enumerate(labels):
+                function = dfn.Function(function_space)
+
+                function.vector()[:] = _ret[ii]
+                ret.append(function)
+
+        return tuple(ret)
+
+    def set_state(self, n, x):
+        _x = self.get_state(n)
+
+        for function, vec in zip(x, _x):
+            function.vector()[:] = vec
+
+        return x
+
+    def get_fluid_properties(self, n):
+        """
+        Returns the fluid properties dictionary at index n.
+        """
+        fluid_props = {}
+        for label in constants.FLUID_PROPERTY_LABELS:
+            fluid_props[label] = self.file[join(self.group, 'fluid_properties', label)][n]
+
+        return fluid_props
+
+    def get_solid_properties(self):
+        """
+        Returns the solid properties
+        """
+        solid_props = {}
+        # TODO: You might want to have time variable properties in the future
+        for label in constants.SOLID_PROPERTY_LABELS:
+            data = self.file[join(self.group, 'solid_properties', label)]
+
+            if not data.shape:
+                # If `data.shape` is an empty tuple then we have to index differently
+                solid_props[label] = data[()]
+            else:
+                solid_props[label] = data[:]
+
+        return solid_props
+
+    def set_iteration_states(self, n, u0=None, v0=None, a0=None, u1=None):
+        """
+        Sets form coefficient vectors for states u_n-1, v_n-1, a_n-1, u_n at index n.
+
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        """
+        if u0 is not None:
+            u0.vector()[:] = self.file[join(self.group, 'u')][n-1]
+        if v0 is not None:
+            v0.vector()[:] = self.file[join(self.group, 'v')][n-1]
+        if a0 is not None:
+            a0.vector()[:] = self.file[join(self.group, 'a')][n-1]
+        if u1 is not None:
+            u1.vector()[:] = self.file[join(self.group, 'u')][n]
+
+    def set_time_step(self, n, dt=None):
+        if dt is not None:
+            tspan = self.file[join(self.group, 'time')][n-1:n+1]
+            dt.assign(tspan[1]-tspan[0])

@@ -197,7 +197,7 @@ def flow_sensitivity(x, fluid_props):
 
     return dp_du, dflow_rate_du
 
-def set_flow_sensitivity(model, x, fluid_props):
+def get_flow_sensitivity(model, x, fluid_props):
     """
     Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
