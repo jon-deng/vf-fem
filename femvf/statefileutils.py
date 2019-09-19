@@ -1,24 +1,5 @@
 """
 Module to work with state values from a forward pass stored in an hdf5 file.
-
-The hdf5 file is organized as:
-
-Information concerning a run is stored under a containing group:
-/.../container_group
-
-States are stored under labels:
-./u : (N_STATES, N_DOFS)
-./v : (N_STATES, N_DOFS)
-./a : (N_STATES, N_DOFS)
-
-Fluid properties are stored under labels:
-./fluid_properties/p_sub : (N_STATES-1,)
-./fluid_properties/p_sup : (N_STATES-1,)
-./fluid_properties/rho : (N_STATES-1,)
-./fluid_properties/y_midline : (N_STATES-1,)
-
-Solid properties are stored under labels:
-./solid_properties/elastic_modulus : (N_VERTICES,)
 """
 
 from os.path import join
@@ -32,6 +13,23 @@ from . import fluids
 class StateFile:
     """
     Represents a state file.
+
+    State information is stored in the hdf5 file under a containing group:
+    /.../group
+
+    States are stored under labels:
+    ./u : (N_STATES, N_DOFS)
+    ./v : (N_STATES, N_DOFS)
+    ./a : (N_STATES, N_DOFS)
+
+    Fluid properties are stored under labels:
+    ./fluid_properties/p_sub : (N_STATES-1,)
+    ./fluid_properties/p_sup : (N_STATES-1,)
+    ./fluid_properties/rho : (N_STATES-1,)
+    ./fluid_properties/y_midline : (N_STATES-1,)
+
+    Solid properties are stored under labels:
+    ./solid_properties/elastic_modulus : (N_VERTICES,)
 
     Parameters
     ----------

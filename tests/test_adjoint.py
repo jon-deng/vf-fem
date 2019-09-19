@@ -36,7 +36,7 @@ if __name__ == '__main__':
     emod = model.emod.vector()[:].copy()
     emod[:] = 10e3 * constants.PASCAL_TO_CGS
     step_size = 0.01*constants.PASCAL_TO_CGS
-    num_steps = 5
+    num_steps = 4
 
     # Set fluid and solid properties
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES.copy()
@@ -76,14 +76,16 @@ if __name__ == '__main__':
 
     ## Different functional setups
     # Functional for vocal eff
-    # totalfluidwork = None
-    # totalinputwork = None
-    # with sfu.StateFile(save_path, group='0', mode='r') as f:
-    #     totalfluidwork = functionals.totalfluidwork(model, f)[0]
-    #     totalinputwork = functionals.totalinputwork(model, f)[0]
-    # fkwargs = {'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    # dg_du = functionals.dtotalvocaleff_du
-    # functional = functionals.totalvocaleff
+    n_start = 50
+    totalfluidwork = None
+    totalinputwork = None
+    with sfu.StateFile(save_path, group='0', mode='r') as f:
+        totalfluidwork = functionals.totalfluidwork(model, f, n_start)[0]
+        totalinputwork = functionals.totalinputwork(model, f, n_start)[0]
+    fkwargs = {'n_start': n_start,
+               'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
+    dg_du = functionals.dtotalvocaleff_du
+    functional = functionals.totalvocaleff
 
     # Functional for MFDR
     # idx_mfdr = None
@@ -94,9 +96,9 @@ if __name__ == '__main__':
     # functional = functionals.mfdr
 
     # Functional for weighted sum of squared glottal widths
-    fkwargs = {}
-    dg_du = functionals.dwss_gwidth_du
-    functional = functionals.wss_gwidth
+    # fkwargs = {}
+    # dg_du = functionals.dwss_gwidth_du
+    # functional = functionals.wss_gwidth
 
     runtime_start = perf_counter()
     gradient = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs=fkwargs)
@@ -104,7 +106,7 @@ if __name__ == '__main__':
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    with h5py.File( 'out/Adjoint.h5', mode='w') as f:
+    with h5py.File('out/Adjoint.h5', mode='w') as f:
         f.create_dataset('gradient', data=gradient)
 
     ### Comparing adjoint and finite differences
@@ -118,7 +120,7 @@ if __name__ == '__main__':
         emod = f.file['elastic_modulus'] + np.arange(num_steps)*step_size
         for ii in range(num_steps):
             f.group = f'{ii}'
-            cost_fd.append(functional(model, f)[0])
+            cost_fd.append(functional(model, f, n_start)[0])
 
     # Load the gradient from the adjoint method
     grad_ad = None

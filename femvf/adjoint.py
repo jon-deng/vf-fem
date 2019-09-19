@@ -80,16 +80,17 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     model.set_iteration(x1, dt2, fluid_props1, solid_props, u1=x2[0])
 
-    dpressure_du0 = model.get_flow_sensitivity()[0]
 
     # Assemble needed forms
-    df2_du1 = dfn.assemble(model.df1_du0_adjoint)
+    df2_du1 = dfn.assemble(model.df1_du0_adjoint) # This is a partial derivative
     df2_dv1 = dfn.assemble(model.df1_dv0_adjoint)
     df2_da1 = dfn.assemble(model.df1_da0_adjoint)
 
     # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
-    df2_dpressure = dfn.as_backend_type(dfn.assemble(model.df1_dp_adjoint)).mat()
-    df2_du1 = df2_du1 + dfn.Matrix(dfn.PETScMatrix(dpressure_du0.transposeMatMult(df2_dpressure)))
+    df2_dpressure = dfn.assemble(model.df1_dp_adjoint)
+    dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
+
+    # pf2_pu1_pressure = dfn.Matrix(dfn.PETScMatrix(dpressure_du1.transposeMatMult(df2_dpressure)))
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
     model.set_iteration(x0, dt1, fluid_props0, solid_props, u1=x1[0])
@@ -122,9 +123,12 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
                                + 1/beta/dt2 * adj_a2.vector())
     model.bc_base_adjoint.apply(adj_v1.vector())
 
+    # import ipdb; ipdb.set_trace()
+    df2_du1_correction = dfn.Function(model.vector_function_space)
+    dpressure_du1.transpmult(df2_dpressure * adj_u2.vector(), df2_du1_correction.vector())
     adj_u1_lhs = dcost_du1 \
                  + gamma/beta/dt1 * adj_v1.vector() + 1/beta/dt1**2 * adj_a1.vector() \
-                 - (df2_du1 * adj_u2.vector()
+                 - (df2_du1 * adj_u2.vector() + df2_du1_correction.vector()
                     + gamma/beta/dt2 * adj_v2.vector()
                     + 1/beta/dt2**2 * adj_a2.vector())
     model.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)

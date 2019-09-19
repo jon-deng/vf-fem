@@ -82,7 +82,7 @@ def init_figure(model, fluid_props):
     """
     Returns a figure and tuple of axes to plot the solution into.
     """
-    gridspec_kw = {'height_ratios': [4, 2, 2], 'width_ratios': [9, 1]}
+    gridspec_kw = {'height_ratios': [4, 2, 2], 'width_ratios': [10, 0.5]}
     fig, axs = plt.subplots(3, 2, gridspec_kw=gridspec_kw, figsize=(6, 8))
     axs[0, 0].set_aspect('equal', adjustable='datalim')
 
@@ -96,10 +96,7 @@ def init_figure(model, fluid_props):
     # Initialize lines for plotting flow rate and the rate of flow rate
     axs[2, 0].plot([0], [0])
 
-    axs[0, 0].set_xlim(-0.1, thickness_bottom+0.1, auto=False)
-    axs[0, 0].set_ylim(0.0, 0.7, auto=False)
-
-    axs[1, 0].set_xlim(-0.1, thickness_bottom+0.1, auto=False)
+    axs[1, 0].set_xlim(-0.2, 1.4, auto=False)
     p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
     axs[1, 0].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
 
@@ -107,6 +104,9 @@ def init_figure(model, fluid_props):
 
     axs[2, 0].set_ylim(-0.01, 0.1)
     axs[2, 0].set_ylabel("Glottal width [cm]")
+
+    for ax in axs[1:, -1]:
+        ax.set_axis_off()
 
     return fig, axs
 
@@ -137,6 +137,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
                                    solid_props['elastic_modulus'][model.vert_to_sdof],
                                    edgecolors='k', shading='flat')
     fig.colorbar(mappable, cax=axs[0, 1])
+    axs[0, 1].set_ylabel('[kPa]')
 
     xy_surface = xy_current[model.surface_vertices]
 
@@ -145,8 +146,9 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     axs[0, 0].plot(*xy_sep, marker='o', mfc='none', color='C1')
     axs[0, 0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
 
-
     axs[0, 0].set_title(f'Time: {1e3*t:>5.1f} ms')
+    axs[0, 0].set_xlim(-0.2, 1.4, auto=False)
+    axs[0, 0].set_ylim(0.0, 1.0, auto=False)
 
     axs[0, 0].axhline(y=fluid_props['y_midline'], ls='-.', lw=0.5)
     axs[0, 0].axhline(y=model.y_collision.values()[0], ls='-.', lw=0.5)

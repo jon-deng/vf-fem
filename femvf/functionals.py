@@ -180,22 +180,22 @@ def dfdr_du(model, n, statefile):
     return (dq_plus_du-dq_minus_du)/(t_plus-t_minus)
 
 ## Functionals defined over the entire state history
-def totalfluidwork(model, statefile):
+def totalfluidwork(model, statefile, n_start=0):
     """
     Returns the total work done by the fluid on the vocal folds.
     """
     res = 0
     info = {}
     num_states = statefile.get_num_states()
-    for ii in range(num_states-1):
-        # Set form coefficients to represent the equation at state ii
+    for ii in range(n_start, num_states-1):
+        # Set form coefficients to represent the equation at state ii to ii+1
         model.set_iteration_fromfile(statefile, ii+1)
 
         res += dfn.assemble(model.fluid_work)
 
     return res, info
 
-def dtotalfluidwork_du(model, n, statefile):
+def dtotalfluidwork_du(model, n, statefile, n_start=0):
     """
     Returns the derivative of fluid work w.r.t state n.
 
@@ -213,57 +213,89 @@ def dtotalfluidwork_du(model, n, statefile):
     info = {}
     num_states = statefile.get_num_states()
 
-    # Set form coefficients to represent the fluidwork over n to n+1
-    if n < -1 or n < num_states-1:
-        model.set_iteration_fromfile(statefile, n+1)
-        dp_du, _ = model.get_flow_sensitivity()
+    if n < n_start:
+        out += dfn.Function(model.vector_function_space).vector()
+    else:
+        # Add the sensitivity component due to work from n to n+1
+        if n < num_states-1:
+            model.set_iteration_fromfile(statefile, n+1)
+            dp_du, _ = model.get_flow_sensitivity()
 
-        out += dfn.assemble(model.dfluid_work_du0)
+            out += dfn.assemble(model.dfluid_work_du0)
 
-        # Correct dfluidwork_du0 since pressure depends on u0
-        dfluidwork_dp = dfn.assemble(model.dfluid_work_dp, tensor=dfn.PETScVector()).vec()
+            # Correct dfluidwork_du0 since pressure depends on u0
+            dfluidwork_dp = dfn.assemble(model.dfluid_work_dp, tensor=dfn.PETScVector()).vec()
 
-        dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
-        dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
+            dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
+            dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
 
-        out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
+            out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
 
-    # Set form coefficients to represent the fluidwork over n-1 to n
-    if n > 0:
-        model.set_iteration_fromfile(statefile, n)
+        # Add the sensitviity component due to work from n-1 to n
+        if n > n_start:
+            model.set_iteration_fromfile(statefile, n)
 
-        out += dfn.assemble(model.dfluid_work_du1)
+            out += dfn.assemble(model.dfluid_work_du1)
 
     return out, info
 
-def totalinputwork(model, statefile):
+def totalinputwork(model, statefile, n_start=0):
     """
     Returns the total work input into the fluid.
     """
-    res = 0
+    ret = 0
     info = {}
 
     num_states = statefile.get_num_states()
-    for ii in range(num_states-1):
+    for ii in range(n_start, num_states-1):
         # Set form coefficients to represent the equation at state ii
         fluid_info, fluid_props = model.set_iteration_fromfile(statefile, ii+1)
 
-        res += float(model.dt)*fluid_info['flow_rate']*fluid_props['p_sub']
+        ret += model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
 
-    return res, info
+    return ret, info
 
-def totalvocaleff(model, statefile):
+def dtotalinputwork_du(model, n, statefile, n_start=0):
+    """
+    Returns the derivative of input work w.r.t state n.
+
+    Since fluid work over both time intervals [n-1, n] and [n, n+1] involve state n, this derivative
+    incorporates both timesteps.
+
+    Parameters
+    ----------
+    n : int
+        State index
+    h5path : str
+        Path to the file containing states from the forward run
+    """
+    ret = 0
+
+    num_states = statefile.get_num_states()
+
+    if n >= n_start and n < num_states-1:
+        _, fluid_props = model.set_iteration_fromfile(statefile, n+1)
+        _, dq_du = model.get_flow_sensitivity()
+
+        ret += model.dt.values()[0]*fluid_props['p_sub']*dq_du
+    else:
+        ret += dfn.Function(model.vector_function_space).vector()
+
+    return ret, {}
+
+def totalvocaleff(model, statefile, n_start=0):
     """
     Returns the total vocal efficiency.
 
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
-    res = totalfluidwork(model, statefile)[0]/totalinputwork(model, statefile)[0]
+    res = totalfluidwork(model, statefile, n_start)[0]/totalinputwork(model, statefile, n_start)[0]
     info = {}
     return res, info
 
-def dtotalvocaleff_du(model, n, statefile, cache_totalfluidwork=None, cache_totalinputwork=None):
+def dtotalvocaleff_du(model, n, statefile, cache_totalfluidwork=None, cache_totalinputwork=None,
+                      n_start=0):
     """
     Returns the derivative of the total vocal efficiency w.r.t state n.
 
@@ -277,25 +309,20 @@ def dtotalvocaleff_du(model, n, statefile, cache_totalfluidwork=None, cache_tota
 
     tfluidwork = cache_totalfluidwork
     if tfluidwork is None:
-        tfluidwork = totalfluidwork(model, statefile)[0]
+        tfluidwork = totalfluidwork(model, statefile, n_start)[0]
 
     tinputwork = cache_totalinputwork
     if tinputwork is None:
-        tinputwork = totalinputwork(model, statefile)[0]
+        tinputwork = totalinputwork(model, statefile, n_start)[0]
 
-    dtotalfluidwork_du_ = dtotalfluidwork_du(model, n, statefile)[0]
+    dtotalfluidwork_dun = dtotalfluidwork_du(model, n, statefile, n_start)[0]
+    dtotalinputwork_dun = dtotalinputwork_du(model, n, statefile, n_start)[0]
 
-    dtotalinputwork_du = 0
-    # Set form coefficients to represent step from n to n+1
-    num_states = statefile.get_num_states()
-    if n < num_states-1 or n < -1:
-        _, fluid_props = model.set_iteration_fromfile(statefile, n+1)
-        _, dq_du = model.get_flow_sensitivity()
-
-        dt = model.dt.values()[0]
-        dtotalinputwork_du = dt*fluid_props['p_sub']*dq_du
-
-    return dtotalfluidwork_du_/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_du, info
+    # import ipdb; ipdb.set_trace()
+    if n < n_start:
+        return dfn.Function(model.vector_function_space).vector()
+    else:
+        return dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun, info
 
 def mfdr(model, statefile, min_time=0.03):
     """
