@@ -31,9 +31,9 @@ from .misc import get_dynamic_fluid_props
 
 # dfn.parameters['form_compiler']['optimize'] = True
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
-
+# @profile
 def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1,
-                      dcost_du1):
+                      dcost_du1, df1_dparam_form_adj):
     """
     Returns the adjoint at the previous time step.
 
@@ -74,12 +74,10 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     info : dict
         Additional info computed during the solve that might be useful.
     """
-    dfu_dparam_form_adjoint = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
     adj_u2, adj_v2, adj_a2 = adj_x2
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     model.set_iteration(x1, dt2, fluid_props1, solid_props, u1=x2[0])
-
 
     # Assemble needed forms
     df2_du1 = dfn.assemble(model.df1_du0_adjoint) # This is a partial derivative
@@ -97,7 +95,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
-    df1_dparam = dfn.assemble(dfu_dparam_form_adjoint)
+    df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
     ## Adjoint recurrence relations
     # Allocate adjoint states
@@ -159,7 +157,7 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
     np.array of float
         The sensitivity of the functional wrt parameters.
     """
-    dfu_dparam_form_adjoint = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
+    df1_dparam_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
 
     if dg_du_kwargs is None:
         dg_du_kwargs = {}
@@ -200,7 +198,7 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
     adj_v2.vector()[:] = 0
     adj_a2.vector()[:] = 0
 
-    df2_dparam = dfn.assemble(dfu_dparam_form_adjoint)
+    df2_dparam = dfn.assemble(df1_dparam_form_adj)
     gradient += -1*df2_dparam*adj_u2.vector() + 0
 
     ## Loop through states for adjoint computation
@@ -226,7 +224,7 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
 
             (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
                 model, (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
-                fluid_props0, fluid_props1, dcost_du1)
+                fluid_props0, fluid_props1, dcost_du1, df1_dparam_form_adj)
 
             # Update gradient using the adjoint state
             # TODO: Here we assumed that functionals never depend on the velocity or acceleration
