@@ -300,7 +300,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
         for label in constants.SOLID_PROPERTY_LABELS:
             f.create_dataset(join(h5group, 'solid_properties', label), data=solid_props[label])
 
-    ## Loop through solution times and write solution variables to h5file.
+    ## Loop through solution times and write solution variables to the h5file.
     with h5py.File(h5file, mode='a') as f:
         for ii, t in enumerate(times[:-1]):
             # Update properties
