@@ -429,7 +429,7 @@ class ForwardModel:
         # print(np.max(x_surface[0][..., 1]))
         assert np.max(x_surface[0][..., 1]) < self.fluid_properties['y_midline']
 
-        pressure, fluid_info = fluids.set_pressure_form(self, x_surface, self.fluid_properties)
+        pressure, fluid_info = fluids.get_pressure_form(self, x_surface, self.fluid_properties)
 
         self.pressure.assign(pressure)
         return fluid_info
