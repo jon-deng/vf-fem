@@ -86,6 +86,36 @@ class StateFile:
             self.file.create_dataset(join(self.group, 'solid_properties', label),
                                      data=solid_props[label])
 
+    def initialize_fluid_properties(self, fluid_properties=None):
+        """
+        Initializes the fluid properties layout of the file.
+        """
+
+        for label in constants.FLUID_PROPERTY_LABELS:
+            self.file.create_dataset(join(self.group, 'fluid_properties', label), shape=(1,),
+                                     maxshape=(None,))
+
+        if fluid_properties is not None:
+            for label in constants.FLUID_PROPERTY_LABELS:
+                self.file[join(self.group, 'fluid_properties', label)][0] = fluid_properties[label]
+
+    def initialize_solid_properties(self, model, solid_properties=None):
+        """
+        Initializes the solid properties layout of the file.
+        """
+        for label in constants.SOLID_PROPERTY_LABELS:
+            shape = None
+            if label == 'elastic_modulus':
+                shape=(model.mesh.num_vertices(),)
+            else:
+                shape=(0,)
+
+            self.file.create_dataset(join(self.group, 'solid_properties', label), shape=shape)
+
+        if solid_properties is not None:
+            for label in constants.SOLID_PROPERTY_LABELS:
+                self.file[join(self.group, 'solid_properties', label)][...] = solid_properties[label]
+
     def write_state(self, x, n):
         """
         Writes the n'th state.
