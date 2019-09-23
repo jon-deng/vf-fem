@@ -84,9 +84,9 @@ def fluid_pressure(x, fluid_props):
             'xy_sep': xy_sep}
     return p, info
 
-def set_pressure_form(model, x, fluid_props):
+def get_pressure_form(model, x, fluid_props):
     """
-    Sets the nodal values of the pressure ufl.Coefficient.
+    Returns the ufl.Coefficient pressure.
 
     Parameters
     ----------
