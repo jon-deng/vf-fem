@@ -33,7 +33,7 @@ from .misc import get_dynamic_fluid_props
 # dfn.parameters['form_compiler']['cpp_optimize'] = True
 # @profile
 def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1,
-                      dcost_du1, df1_dparam_form_adj):
+                      dcost_du1):
     """
     Returns the adjoint at the previous time step.
 
@@ -95,7 +95,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
-    df1_dparam = dfn.assemble(df1_dparam_form_adj)
+    # df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
     ## Adjoint recurrence relations
     # Allocate adjoint states
@@ -132,7 +132,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs)
 
-    return (adj_u1, adj_v1, adj_a1), df1_dparam
+    return (adj_u1, adj_v1, adj_a1)
 
 def adjoint(model, h5file, h5group='/', show_figure=False,
             dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs=None):
@@ -222,14 +222,19 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
 
             dcost_du1 = dg_du(model, ii, f, **dg_du_kwargs)[0]
 
-            (adj_u1, adj_v1, adj_a1), df1_dparam = decrement_adjoint(
+            (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
                 model, (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
-                fluid_props0, fluid_props1, dcost_du1, df1_dparam_form_adj)
+                fluid_props0, fluid_props1, dcost_du1)
 
             # Update gradient using the adjoint state
             # TODO: Here we assumed that functionals never depend on the velocity or acceleration
             # states so we only multiply by adj_u1. In the future you might have to use adj_v1 and
             # adj_a1 too.
+
+            # Assemble needed forms
+            model.set_iteration(x0, dt1, fluid_props0, solid_props, u1=x1[0])
+            df1_dparam = dfn.assemble(df1_dparam_form_adj)
+
             gradient = gradient - 1*df1_dparam*adj_u1.vector()
 
             # Update adjoint recurrence relations for the next iteration
