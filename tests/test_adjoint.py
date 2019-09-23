@@ -36,7 +36,7 @@ if __name__ == '__main__':
     emod = model.emod.vector()[:].copy()
     emod[:] = 10e3 * constants.PASCAL_TO_CGS
     step_size = 0.01*constants.PASCAL_TO_CGS
-    num_steps = 4
+    num_steps = 7
 
     # Set fluid and solid properties
     fluid_props = constants.DEFAULT_FLUID_PROPERTIES.copy()
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 
     solid_props = constants.DEFAULT_SOLID_PROPERTIES.copy()
-    solid_props['rayleigh_m'] = 30
+    solid_props['rayleigh_m'] = 1e-3
     solid_props['rayleigh_k'] = 1e-3
 
     dt = 1e-4
@@ -76,22 +76,13 @@ if __name__ == '__main__':
 
     ## Different functional setups
     # Functional for vocal eff
-    n_start = 50
-    totalfluidwork = None
-    totalinputwork = None
-    with sfu.StateFile(save_path, group='0', mode='r') as f:
-        totalfluidwork = functionals.totalfluidwork(model, f, n_start)[0]
-        totalinputwork = functionals.totalinputwork(model, f, n_start)[0]
-    fkwargs = {'n_start': n_start,
-               'cache_totalfluidwork': totalfluidwork, 'cache_totalinputwork': totalinputwork}
-    dg_du = functionals.dtotalvocaleff_du
-    functional = functionals.totalvocaleff
+    # n_start = 50
+    # fkwargs = {'n_start': n_start}
+    # dg_du = functionals.dtotalvocaleff_du
+    # functional = functionals.totalvocaleff
 
     # Functional for MFDR
-    # idx_mfdr = None
-    # with sfu.StateFile(save_path, group='0', mode='r') as f:
-    #     idx_mfdr = functionals.mfdr(model, f)[1]['idx_mfdr']
-    # fkwargs = {'cache_idx_mfdr': idx_mfdr}
+    # fkwargs = {}
     # dg_du = functionals.dmfdr_du
     # functional = functionals.mfdr
 
@@ -100,8 +91,17 @@ if __name__ == '__main__':
     # dg_du = functionals.dwss_gwidth_du
     # functional = functionals.wss_gwidth
 
+    # Functional for total flow
+    n_start = 0
+    fkwargs = {'n_start': n_start}
+    dg_du = functionals.dtotalflow_du
+    functional = functionals.totalflow
+
     runtime_start = perf_counter()
-    gradient = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs=fkwargs)
+    info = None
+    with sfu.StateFile(save_path, group='0') as f:
+        _, info = functional(model, f, **fkwargs)
+    gradient = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs={**fkwargs, **info})
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -120,7 +120,8 @@ if __name__ == '__main__':
         emod = f.file['elastic_modulus'] + np.arange(num_steps)*step_size
         for ii in range(num_steps):
             f.group = f'{ii}'
-            cost_fd.append(functional(model, f, n_start)[0])
+            # import ipdb; ipdb.set_trace()
+            cost_fd.append(functional(model, f, **fkwargs)[0])
 
     # Load the gradient from the adjoint method
     grad_ad = None
