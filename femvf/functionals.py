@@ -2,13 +2,14 @@
 This module contains definitions of various functionals.
 
 A functional should take in the entire time history of states from a forward model run and return a
-real number. Each functional has a general signature
+real number. Each functional has the signature
 
 functional(model, f, **kwargs) -> float, dict
 
 , where `model` is a `ForwardModel` instance, `f` is a `StateFile` instance, and **kwargs are
-specific keyword arguments. The functional returns it's value as the first argument and a dictionary
-of additional info as a second argument.
+keyword arguments specific to the functional. The functional returns its value as the first argument
+and a dictionary of additional info as a second argument. The dictionary of additional info
+can also be fed into the the sensitivity function of the functional to speed up the calculation.
 
 For computing the sensitivity of the functional through the discrete adjoint method, you also need
 the sensitivity of the functional with respect to the n'th state. This function has the signature

@@ -23,7 +23,7 @@ import ufl
 from petsc4py import PETSc
 
 # from . import forms as frm
-from . import statefileutils as sfu
+from . import statefile as sfu
 from . import constants
 from . import functionals
 
