@@ -135,7 +135,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     return (adj_u1, adj_v1, adj_a1)
 
 def adjoint(model, h5file, h5group='/', show_figure=False,
-            dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs=None):
+            dg_du=functionals.dtotalvocaleff_du, dg_du_kwargs=None,
+            dg_dparam=None, dg_dparam_kwargs=None):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
 
@@ -236,6 +237,9 @@ def adjoint(model, h5file, h5group='/', show_figure=False,
             df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
             gradient = gradient - 1*df1_dparam*adj_u1.vector()
+
+            if dg_dparam is not None:
+                gradient = gradient + dg_dparam(model, f, **dg_dparam_kwargs)[0]
 
             # Update adjoint recurrence relations for the next iteration
             adj_a2.assign(adj_a1)
