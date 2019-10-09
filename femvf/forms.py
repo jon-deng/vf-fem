@@ -508,3 +508,47 @@ class ForwardModel:
         fluid_info = self.set_iteration(x0, dt, fluid_props, solid_props, u1=u1)
 
         return fluid_info, fluid_props
+
+    def set_state(self, x0, fluid_props, solid_props):
+        """
+        Sets all initial coefficient values for a step, based on a recorded solution.
+
+        Parameters
+        ----------
+        statefile : statefileutils.StateFile
+
+        n : int
+            Index of iteration to set
+        """
+        self.set_initial_state(*x0)
+        self.set_fluid_properties(fluid_props)
+        self.set_solid_properties(solid_props)
+
+        fluid_info = self.set_pressure()
+
+        return fluid_info
+
+    def set_state_fromfile(self, statefile, n):
+        """
+        Sets all coefficient values based on a recorded iteration.
+
+        Iteration `n` is the implicit relation
+        :math: f^{n}(u_n, u_{n-1}, p)
+        that gives the displacement at index `n`, given the state at `n-1` and all additional
+        parameters.
+
+        Parameters
+        ----------
+        statefile : statefileutils.StateFile
+        n : int
+            Index of iteration to set
+        """
+        # Get data from the state file
+        fluid_props = statefile.get_fluid_properties(n)
+        solid_props = statefile.get_solid_properties()
+        x0 = statefile.get_state(n, function_space=self.vector_function_space)
+
+        # Assign the values to the model
+        fluid_info = self.set_state(x0, fluid_props, solid_props)
+
+        return fluid_info, fluid_props
