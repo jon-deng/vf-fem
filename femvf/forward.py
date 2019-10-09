@@ -294,7 +294,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
 
         # Fluid properties
         for label in constants.FLUID_PROPERTY_LABELS:
-            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(times.size-1,))
+            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(times.size,))
 
         # Solid properties (note they're not time varying)
         for label in constants.SOLID_PROPERTY_LABELS:
@@ -334,6 +334,11 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
                 if figure_path is not None:
                     ext = '.png'
                     fig.savefig(f'{figure_path}_{ii}{ext}')
+
+        # Write the final fluid properties
+        fluid_props_ii = get_dynamic_fluid_props(fluid_props, times[-1])
+        for label in constants.FLUID_PROPERTY_LABELS:
+            f[join(h5group, 'fluid_properties', label)][-1] = fluid_props_ii[label]
 
         return forward_info
 
