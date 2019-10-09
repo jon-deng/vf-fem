@@ -412,3 +412,6 @@ def dwss_gwidth_dt(model, n, f, **kwargs):
         dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
 
     return dwss_dt, info
+
+# TODO: Previously had a lagrangian regularization term here but accidentally
+# deleted that code... need to make it again.
