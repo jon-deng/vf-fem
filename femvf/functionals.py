@@ -31,387 +31,445 @@ from petsc4py import PETSc
 # from . import statefileutils as sfu
 from . import forms
 
-# Form definitions needed for the fluid work functional
-# frm_fluidwork = ufl.dot(model.fluid_force, model.u1-model.u0) * model.ds(model.domainid_pressure)
-# dfluid_work_du0 = ufl.derivative(frm_fluidwork, model.u0, model.test)
-# dfluid_work_dp = ufl.derivative(frm_fluidwork, model.pressure, model.scalar_test)
-# dfluid_work_du1 = ufl.derivative(frm_fluidwork, model.u1, model.test)
 
-def totalfluidwork(model, f, **kwargs):
+class GenericFunctional():
     """
-    Returns the total work done by the fluid on the vocal folds.
-    """
-    res = 0
-    info = {}
-
-    n_start = kwargs.get('n_start', 0)
-    num_states = f.get_num_states()
-    for ii in range(n_start, num_states-1):
-        # Set form coefficients to represent the equation at state ii to ii+1
-        model.set_iteration_fromfile(f, ii+1)
-
-        res += dfn.assemble(model.fluid_work)
-
-    return res, info
-
-def dtotalfluidwork_du(model, n, f, **kwargs):
-    """
-    Returns the derivative of fluid work w.r.t state n.
-
-    Since fluid work over both time intervals [n-1, n] and [n, n+1] involve state n, this derivative
-    incorporates both timesteps.
+    Represents a functional over the solution history of a forward model run.
 
     Parameters
     ----------
-    n : int
-        State index
-    h5path : str
-        Path to the file containing states from the forward run
+    model : ForwardModel
+        The forward model instance
+    f : StateFile
+        A file object containing the solution history of the model run.
+    kwargs : optional
+        Additional arguments that specify how the functional should be computed
+
+    Attributes
+    ----------
+    f : statefile.StateFile
+    model : forms.ForwardModel
+    kwargs : dict
+        A dictionary of additional options of how to compute the functional
+    funcs : dict of callable
+        Dictionary containing sub-functionals instances that are used in computing the functional
     """
-    out = 0
-    info = {}
-    num_states = f.get_num_states()
-    n_start = kwargs.get('n_start', 0)
+    def __init__(self, model, f, **kwargs):
+        self.model = model
+        self.f = f
+        self.kwargs = kwargs
 
-    if n < n_start:
-        out += dfn.Function(model.vector_function_space).vector()
-    else:
-        # Add the sensitivity component due to work from n to n+1
-        if n < num_states-1:
-            model.set_iteration_fromfile(f, n+1)
-            dp_du, _ = model.get_flow_sensitivity()
+        self.funcs = dict()
+        self.cache = dict()
 
-            out += dfn.assemble(model.dfluid_work_du0)
+    def __func__(self):
+        """
+        Return the value of the functional.
+        """
+        raise NotImplementedError("Method not implemented")
 
-            # Correct dfluidwork_du0 since pressure depends on u0
-            dfluidwork_dp = dfn.assemble(model.dfluid_work_dp, tensor=dfn.PETScVector()).vec()
+    def du(self, n):
+        """
+        Return the sensitivity of the functional with respect to the the `n`th state.
+        """
+        raise NotImplementedError("Method not implemented")
 
-            dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
-            dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
+    def dparam(self):
+        """
+        Return the sensitivity of the functional with respect to the parameters.
+        """
+        raise NotImplementedError("Method not implemented")
 
-            out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
-
-        # Add the sensitviity component due to work from n-1 to n
-        if n > n_start:
-            model.set_iteration_fromfile(f, n)
-
-            out += dfn.assemble(model.dfluid_work_du1)
-
-    return out, info
-
-def totalflow(model, f, **kwargs):
+class FluidWork(GenericFunctional):
     """
-    Returns the total volume of flow that passes through the glottis.
-    """
-    num_states = f.get_num_states()
-    n_start = kwargs.get('n_start', 0)
-
-    totalflow = 0
-    info = {}
-    for ii in range(n_start, num_states-1):
-        fluid_info, _ = model.set_iteration_fromfile(f, ii+1)
-
-        totalflow += fluid_info['flow_rate']*model.dt.values()[0]
-
-    return totalflow, info
-
-def dtotalflow_du(model, n, f, **kwargs):
-    """
-    Returns the sensitivity of total volume of flow that passes through the glottis.
-    """
-    dtotalflow_dun = None
-    info = {}
-    n_start = kwargs.get('n_start', 0)
-
-    num_states = f.get_num_states()
-    if n < n_start or n == num_states-1:
-        dtotalflow_dun = dfn.Function(model.vector_function_space).vector()
-    else:
-        model.set_iteration_fromfile(f, n+1)
-        _, dq_dun = model.get_flow_sensitivity()
-        dtotalflow_dun = dq_dun * model.dt.values()[0]
-
-    return dtotalflow_dun, info
-
-def totalinputwork(model, f, **kwargs):
-    """
-    Returns the total work input into the fluid.
-    """
-    ret = 0
-    info = {}
-    n_start = kwargs.get('n_start', 0)
-
-    num_states = f.get_num_states()
-    for ii in range(n_start, num_states-1):
-        # Set form coefficients to represent the equation at state ii
-        fluid_info, fluid_props = model.set_iteration_fromfile(f, ii+1)
-
-        ret += model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
-
-    return ret, info
-
-def dtotalinputwork_du(model, n, f, **kwargs):
-    """
-    Returns the derivative of input work w.r.t state n.
-
-    Since fluid work over both time intervals [n-1, n] and [n, n+1] involve state n, this derivative
-    incorporates both timesteps.
+    Returns the work done by the fluid on the vocal folds.
 
     Parameters
     ----------
-    n : int
-        State index
-    h5path : str
-        Path to the file containing states from the forward run
+    n_start : int, optional
+        Starting index to compute the functional over
     """
-    ret = 0
+    # TODO: fluid_work is implemented in the ForwardModel class, but you could (should) shift it
+    # into here.
+    def __init__(self, model, f, **kwargs):
+        super(FluidWork, self).__init__(model, f, **kwargs)
 
-    n_start = kwargs.get('n_start', 0)
-    num_states = f.get_num_states()
+        self.kwargs.setdefault('n_start', 0)
 
-    if n >= n_start and n < num_states-1:
-        _, fluid_props = model.set_iteration_fromfile(f, n+1)
-        _, dq_du = model.get_flow_sensitivity()
+    def __func__(self):
+        N_START = self.kwargs['n_start']
+        N_STATE = self.f.get_num_states()
 
-        ret += model.dt.values()[0]*fluid_props['p_sub']*dq_du
-    else:
-        ret += dfn.Function(model.vector_function_space).vector()
+        res = 0
+        for ii in range(N_START, N_STATE-1):
+            # Set form coefficients to represent the equation from state ii to ii+1
+            self.model.set_iteration_fromfile(self.f, ii+1)
+            res += dfn.assemble(self.model.fluid_work)
 
-    return ret, {}
+        return res, {}
 
-def totalvocaleff(model, f, **kwargs):
+    def du(self, n):
+        out = 0
+        info = {}
+
+        N_START = self.kwargs['n_start']
+        N_STATE = self.f.get_num_states()
+
+        if n < N_START:
+            out += dfn.Function(self.model.vector_function_space).vector()
+        else:
+            # Add the sensitivity component due to work from n to n+1
+            if n < N_STATE-1:
+                self.model.set_iteration_fromfile(self.f, n+1)
+                dp_du, _ = self.model.get_flow_sensitivity()
+
+                out += dfn.assemble(self.model.dfluid_work_du0)
+
+                # Correct dfluidwork_du0 since pressure depends on u0
+                dfluidwork_dp = dfn.assemble(self.model.dfluid_work_dp,
+                                             tensor=dfn.PETScVector()).vec()
+
+                dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
+                dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
+
+                out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
+
+            # Add the sensitviity component due to work from n-1 to n
+            if n > N_START:
+                self.model.set_iteration_fromfile(self.f, n)
+
+                out += dfn.assemble(self.model.dfluid_work_du1)
+
+        return out, info
+
+    def dparam(self):
+        return None
+
+class VolumeFlow(GenericFunctional):
+    """
+    Returns the volume of fluid that flowed through the vocal folds.
+
+    Parameters
+    ----------
+    n_start : int, optional
+        Starting index to compute the functional over
+    """
+    def __init__(self, model, f, **kwargs):
+        super(VolumeFlow, self).__init__(model, f, **kwargs)
+
+        self.kwargs.setdefault('n_start', 0)
+
+    def __func__(self):
+        N_STATE = self.f.get_num_states()
+        N_START = self.kwargs['n_start']
+
+        totalflow = 0
+        info = {}
+        for ii in range(N_START, N_STATE-1):
+            fluid_info, _ = self.model.set_iteration_fromfile(self.f, ii+1)
+
+            totalflow += fluid_info['flow_rate'] * self.model.dt.values()[0]
+
+        return totalflow, info
+
+    def du(self, n):
+        dtotalflow_dun = None
+        info = {}
+        N_START = self.kwargs['n_start']
+
+        num_states = self.f.get_num_states()
+        if n < N_START or n == num_states-1:
+            dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
+        else:
+            self.model.set_iteration_fromfile(self.f, n+1)
+            _, dq_dun = self.model.get_flow_sensitivity()
+            dtotalflow_dun = dq_dun * self.model.dt.values()[0]
+
+        return dtotalflow_dun, info
+
+    def dparam(self):
+        return None
+
+class SubglottalWork(GenericFunctional):
+    """
+    Returns the total work input into the fluid from the subglottal region (lungs).
+    """
+    def __init__(self, model, f, **kwargs):
+        super(SubglottalWork, self).__init__(model, f, **kwargs)
+
+        self.kwargs.setdefault('n_start', 0)
+
+    def __func__(self):
+        N_START = self.kwargs['n_start']
+        N_STATE = self.f.get_num_states()
+
+        ret = 0
+        info = {}
+        for ii in range(N_START, N_STATE-1):
+            # Set form coefficients to represent the equation mapping state ii->ii+1
+            fluid_info, fluid_props = self.model.set_iteration_fromfile(self.f, ii+1)
+
+            ret += self.model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
+
+        return ret, info
+
+    def du(self, n):
+        ret = dfn.Function(self.model.vector_function_space).vector()
+
+        N_START = self.kwargs['n_start']
+        N_STATE = self.f.get_num_states()
+
+        if n >= N_START and n < N_STATE-1:
+            _, fluid_props = self.model.set_iteration_fromfile(self.f, n+1)
+            _, dq_du = self.model.get_flow_sensitivity()
+
+            ret += self.model.dt.values()[0] * fluid_props['p_sub'] * dq_du
+        else:
+            pass
+
+        return ret, {}
+
+    def dparam(self):
+        return None
+
+class VocalEfficiency(GenericFunctional):
     """
     Returns the total vocal efficiency.
 
     This is the ratio of the total work done by the fluid on the folds to the total input work on
     the fluid.
     """
-    # n_start = kwargs.get('n_start', 0)
-    totalfluidwork_ = totalfluidwork(model, f, **kwargs)[0]
-    totalinputwork_ = totalinputwork(model, f, **kwargs)[0]
+    def __init__(self, model, f, **kwargs):
+        super(VocalEfficiency, self).__init__(model, f, **kwargs)
 
-    res = totalfluidwork_/totalinputwork_
-    info = {'totalfluidwork': totalfluidwork_, 'totalinputwork': totalinputwork_}
-    return res, info
+        self.kwargs.setdefault('n_start', 0)
 
-def dtotalvocaleff_du(model, n, f, **kwargs):
+        self.funcs['FluidWork'] = FluidWork(model, f, **kwargs)
+        self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
+
+    def __func__(self):
+        totalfluidwork = self.funcs['FluidWork']()[0]
+        totalinputwork = self.funcs['SubglottalWork']()[0]
+
+        res = totalfluidwork/totalinputwork
+
+        info = {'totalfluidwork': totalfluidwork, 'totalinputwork': totalinputwork}
+        self.cache.update(info)
+        return res, info
+
+    def du(self, n):
+        # TODO : Is there something slightly wrong with this one? Seems slightly wrong from
+        # comparing with FD. The error is small but it is not propto step size?
+        info = {}
+        N_START = self.kwargs['n_start']
+
+        tfluidwork = self.cache.get('totalfluidwork', None)
+        tinputwork = self.cache.get('totalinputwork', None)
+
+        dtotalfluidwork_dun = self.funcs['FluidWork'].du(n)[0]
+        dtotalinputwork_dun = self.funcs['SubglottalWork'].du(n)[0]
+
+        if n < N_START:
+            return dfn.Function(self.model.vector_function_space).vector(), info
+        else:
+            return (dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun,
+                    info)
+
+    def dparam(self):
+        return None
+
+class MFDR(GenericFunctional):
     """
-    Returns the derivative of the total vocal efficiency w.r.t state n.
-
-    This is the ratio of the total work done by the fluid on the folds to the total input work on
-    the fluid.
-
-    # TODO : Something is slightly wrong with this one. You can tell from comparing with FD. The
-    # error is small but is not propto step size!
+    Return the maximum flow declination rate.
     """
-    info = {}
-    n_start = kwargs.get('n_start', 0)
+    def __init__(self, model, f, **kwargs):
+        super(MFDR, self).__init__(model, f, **kwargs)
 
-    tfluidwork = kwargs.get('totalfluidwork', None)
-    if tfluidwork is None:
-        tfluidwork = totalfluidwork(model, f, **kwargs)[0]
+        self.kwargs.setdefault('n_start', 0)
 
-    tinputwork = kwargs.get('totalinputwork', None)
-    if tinputwork is None:
-        tinputwork = totalinputwork(model, f, **kwargs)[0]
+    def __func__(self):
+        flow_rate = []
+        info = {}
 
-    dtotalfluidwork_dun = dtotalfluidwork_du(model, n, f, **kwargs)[0]
-    dtotalinputwork_dun = dtotalinputwork_du(model, n, f, **kwargs)[0]
+        num_states = self.f.get_num_states()
+        for ii in range(num_states-1):
+            # Set form coefficients to represent the equation at state ii
+            info, _ = self.model.set_iteration_fromfile(self.f, ii+1)
 
-    # import ipdb; ipdb.set_trace()
-    if n < n_start:
-        return dfn.Function(model.vector_function_space).vector(), info
-    else:
-        return dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun, info
+            flow_rate.append(info['flow_rate'])
+        flow_rate = np.array(flow_rate)
 
-def mfdr(model, f, **kwargs):
+        times = self.f.get_solution_times()[:-1]
+        dflow_rate_dt = (flow_rate[1:]-flow_rate[:-1]) / (times[1:] - times[:-1])
+
+        N_START = self.kwargs['n_start']
+        idx_min = np.argmin(dflow_rate_dt[N_START:]) + N_START
+
+        res = dflow_rate_dt[idx_min]
+
+        info['idx_mfdr'] = idx_min
+        self.cache.update(info)
+
+        return res, info
+
+    def du(self, n):
+        res = None
+        info = {}
+
+        idx_mfdr = self.cache.get('idx_mfdr', None)
+
+        if n == idx_mfdr or n == idx_mfdr+1:
+            # First calculate flow rates at n and n+1
+            # fluid_info, _ = model.set_iteration_fromfile(f, n+2)
+
+            # q1 = fluid_info['flow_rate']
+            dq1_du = self.model.get_flow_sensitivity()[1]
+            t1 = self.f.get_time(n+1)
+
+            # fluid_info, _ = model.set_iteration_fromfile(f, n+1)
+
+            # q0 = fluid_info['flow_rate']
+            dq0_du = self.model.get_flow_sensitivity()[1]
+            t0 = self.f.get_time(n)
+
+            dfdr_du0 = -dq0_du / (t1-t0)
+            dfdr_du1 = dq1_du / (t1-t0)
+
+            if n == idx_mfdr:
+                res = dfdr_du0
+            elif n == idx_mfdr+1:
+                res = dfdr_du1
+        else:
+            res = dfn.Function(self.model.vector_function_space).vector()
+
+        return res, info
+
+    def dparam(self):
+        return None
+
+class WSSGlottalWidth(GenericFunctional):
     """
-    Returns the maximum flow declination rate at a time > min_time (s).
+    Returns the weighted sum of squared glottal widths.
     """
-    flow_rate = []
-    info = {}
+    def __init__(self, model, f, **kwargs):
+        super(WSSGlottalWidth, self).__init__(model, f, **kwargs)
 
-    num_states = f.get_num_states()
-    for ii in range(num_states-1):
-        # Set form coefficients to represent the equation at state ii
-        info, _ = model.set_iteration_fromfile(f, ii+1)
+        # Set default values of kwargs if they were not passed
+        N_STATE = self.f.get_num_states()
+        self.kwargs.setdefault('weights', np.ones(N_STATE) / N_STATE)
+        self.kwargs.setdefault('meas_indices', np.arange(N_STATE))
+        self.kwargs.setdefault('meas_glottal_widths', np.zeros(N_STATE))
 
-        flow_rate.append(info['flow_rate'])
-    flow_rate = np.array(flow_rate)
+        assert kwargs['meas_indices'].size == kwargs['meas_glottal_widths'].size
 
-    times = f.get_solution_times()[:-1]
-    dflow_rate_dt = (flow_rate[1:]-flow_rate[:-1]) / (times[1:] - times[:-1])
+    def __func__(self):
+        wss = 0
+        info = {}
 
-    idx_start = 50 # TODO: should base this on min_time
-    idx_min = np.argmin(dflow_rate_dt[idx_start:]) + idx_start
+        u = dfn.Function(self.model.vector_function_space)
+        v = dfn.Function(self.model.vector_function_space)
+        a = dfn.Function(self.model.vector_function_space)
 
-    res = dflow_rate_dt[idx_min]
+        weights = self.kwargs['weights']
+        meas_indices = self.kwargs['meas_indices']
+        meas_glottal_widths = self.kwargs['meas_glottal_widths']
 
-    info['idx_mfdr'] = idx_min
-    return res, info
+        # Loop through every state
+        for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
 
-def dmfdr_du(model, n, f, **kwargs):
-    """
-    Returns the sensitivity of the maximum flow declination rate at a time > min_time (s).
-    """
-    res = None
-    info = {}
+            u, v, a = self.f.get_state(ii, function_space=self.model.vector_function_space)
+            self.model.set_initial_state(u, v, a)
 
-    idx_mfdr = kwargs.get('idx_mfdr', None)
-    if idx_mfdr is None:
-        idx_mfdr = mfdr(model, f, **kwargs)[1]['idx_mfdr']
+            # Find the maximum y coordinate on the surface
+            cur_surface = self.model.get_surface_state()[0]
+            idx_surface = np.argmax(cur_surface[:, 1])
 
-    if n == idx_mfdr or n == idx_mfdr+1:
-        # First calculate flow rates at n and n+1
-        # fluid_info, _ = model.set_iteration_fromfile(f, n+2)
+            # Find the maximum y coordinate on the surface
+            fluid_props = self.f.get_fluid_properties(0)
+            gw_modl = 2 * (fluid_props['y_midline'] - cur_surface[idx_surface, 1])
 
-        # q1 = fluid_info['flow_rate']
-        dq1_du = model.get_flow_sensitivity()[1]
-        t1 = f.get_time(n+1)
+            wss += weight * (gw_modl - gw_meas)**2
 
-        # fluid_info, _ = model.set_iteration_fromfile(f, n+1)
+        return wss, info
 
-        # q0 = fluid_info['flow_rate']
-        dq0_du = model.get_flow_sensitivity()[1]
-        t0 = f.get_time(n)
+    def du(self, n):
+        dwss_du = dfn.Function(self.model.vector_function_space).vector()
+        info = {}
 
-        dfdr_du0 = -dq0_du / (t1-t0)
-        dfdr_du1 = dq1_du / (t1-t0)
+        weights = self.kwargs['weights']
+        meas_indices = self.kwargs['meas_indices']
+        meas_glottal_widths = self.kwargs['meas_glottal_widths']
 
-        if n == idx_mfdr:
-            res = dfdr_du0
-        elif n == idx_mfdr+1:
-            res = dfdr_du1
-    else:
-        res = dfn.Function(model.vector_function_space).vector()
+        # The sensitivity is only non-zero if n corresponds to a measurement index
+        if n in set(meas_indices):
+            weight = weights[n]
+            gw_meas = meas_glottal_widths[n]
 
-    return res, info
+            u, v, a = self.f.get_state(n, function_space=self.model.vector_function_space)
+            self.model.set_initial_state(u, v, a)
 
-def wss_gwidth(model, f, **kwargs):
-    """
-    Returns the weighted sum of squared differences between a measurement/model glottal widths.
-    """
-    wss = 0
-    info = {}
+            # Find the surface vertex corresponding to where the glottal width is measured
+            # This is numbered according to the 'local' numbering scheme of the surface vertices
+            # (from downstream to upstream)
+            cur_surface = self.model.get_surface_state()[0]
+            idx_surface = np.argmax(cur_surface[:, 1])
 
-    u = dfn.Function(model.vector_function_space)
-    v = dfn.Function(model.vector_function_space)
-    a = dfn.Function(model.vector_function_space)
+            # Find the maximum y coordinate on the surface
+            fluid_props = self.f.get_fluid_properties(0)
+            gw_modl = 2 * (fluid_props['y_midline'] - cur_surface[idx_surface, 1])
+            dgw_modl_du_width = -2
 
-    # Set default values when kwargs are not provided
-    num_states = f.get_num_states()
-    weights = kwargs.get('weights', np.ones(num_states) / num_states)
-    meas_indices = kwargs.get('meas_indices', np.arange(num_states))
-    meas_glottal_widths = kwargs.get('meas_glottal_widths', np.zeros(num_states))
+            # Find the vertex number according to the mesh vertex numbering scheme
+            idx_body = self.model.surface_vertices[idx_surface]
 
-    assert meas_indices.size == meas_glottal_widths.size
+            # Finally convert it to the u-DOF number that actually influences glottal width
+            dof_width = self.model.vert_to_vdof[idx_body, 1]
 
-    # Loop through every state
-    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
+            # wss = weight * (gw_modl - gw_meas)**2
+            dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
+        else:
+            # In this case the derivative is simply 0 so the default value is right
+            pass
 
-        u, v, a = f.get_state(ii, function_space=model.vector_function_space)
-        model.set_initial_state(u, v, a)
+        return dwss_du, info
 
-        # Find the maximum y coordinate on the surface
-        cur_surface = model.get_surface_state()[0]
-        idx_surface = np.argmax(cur_surface[:, 1])
+    def dparam(self):
+        """
+        Returns the sensitivity of the thing wrt to the starting time.
+        """
+        dwss_dt = 0
+        info = {}
 
-        # Find the maximum y coordinate on the surface
-        fluid_props = f.get_fluid_properties(0)
-        gw_modl = 2 * (fluid_props['y_midline'] - cur_surface[idx_surface, 1])
+        weights = self.kwargs['weights']
+        meas_indices = self.kwargs['meas_indices']
+        meas_glottal_widths = self.kwargs['meas_glottal_widths']
 
-        wss += weight * (gw_modl - gw_meas)**2
+        assert meas_indices.size == meas_glottal_widths.size
 
-    return wss, info
+        # Loop through every state
+        for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
+            u, v, a = self.f.get_state(ii, function_space=self.model.vector_function_space)
+            self.model.set_initial_state(u, v, a)
 
-def dwss_gwidth_du(model, n, f, **kwargs):
-    """
-    Returns the sensitivy of the wss difference of measurement/model glottal width w.r.t state n.
-    """
-    dwss_du = dfn.Function(model.vector_function_space).vector()
-    info = {}
+            cur_surface = self.model.get_surface_state()[0]
 
-    # Set default values when kwargs are not provided
-    num_states = f.get_num_states()
-    weights = kwargs.get('weights', np.ones(num_states) / num_states)
-    meas_indices = kwargs.get('meas_indices', np.arange(num_states))
-    meas_glottal_widths = kwargs.get('meas_glottal_widths', np.zeros(num_states))
+            # Find the maximum y coordinate on the surface
+            idx_surface = np.argmax(cur_surface[:, 1])
 
-    assert meas_indices.size == meas_glottal_widths.size
+            # Find the vertex number according to the mesh vertex numbering scheme
+            idx_body = self.model.surface_vertices[idx_surface]
 
-    # The sensitivity is only non-zero if n corresponds to a measurement index
-    if n in set(meas_indices):
-        weight = weights[n]
-        gw_meas = meas_glottal_widths[n]
+            # Finally convert it to the u-DOF number that actually influences glottal width
+            dof_width = self.model.vert_to_vdof[idx_body, 1]
 
-        u, v, a = f.get_state(n, function_space=model.vector_function_space)
-        model.set_initial_state(u, v, a)
+            # Find the maximum y coordinate on the surface
+            gw_modl = 2 * (self.model.y_midline - cur_surface[idx_surface, 1])
+            dgw_modl_dt = -2 * v[dof_width]
 
-        # Find the surface vertex corresponding to where the glottal width is measured
-        # This is numbered according to the 'local' numbering scheme of the surface vertices i.e.
-        # 0 is the most upstream node, 1 the next node etc.
-        cur_surface = model.get_surface_state()[0]
-        idx_surface = np.argmax(cur_surface[:, 1])
+            wss += weight * (gw_modl - gw_meas)**2
+            dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
 
-        # Find the maximum y coordinate on the surface
-        # TODO: The midline shouldn't vary but maybe it can in the future.
-        fluid_props = f.get_fluid_properties(0)
-        gw_modl = 2 * (fluid_props['y_midline'] - cur_surface[idx_surface, 1])
-        dgw_modl_du_width = -2
-
-        # Find the vertex number according to the mesh vertex numbering scheme
-        idx_body = model.surface_vertices[idx_surface]
-
-        # Finally convert it to the DOF number of the u-dof that actually influences glottal width
-        dof_width = model.vert_to_vdof[idx_body, 1]
-
-        # wss = weight * (gw_modl - gw_meas)**2
-        dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
-    else:
-        # In this case the derivative is simply 0 so the default value is right
-        pass
-
-    return dwss_du, info
-
-def dwss_gwidth_dt(model, n, f, **kwargs):
-    """
-    Returns the weighted sum of squared differences between a measurement / model's glottal widths.
-    """
-    dwss_dt = 0
-    info = {}
-
-    # Set default values when kwargs are not provided
-    num_states = f.get_num_states()
-    weights = kwargs.get('weights', np.ones(num_states) / num_states)
-    meas_indices = kwargs.get('meas_indices', np.arange(num_states))
-    meas_glottal_widths = kwargs.get('meas_glottal_widths', np.zeros(num_states))
-
-    assert meas_indices.size == meas_glottal_widths.size
-
-    # Loop through every state
-    for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
-        u, v, a = f.get_state(ii, function_space=model.vector_function_space)
-        model.set_initial_state(u, v, a)
-
-        cur_surface = model.get_surface_state()[0]
-
-        # Find the maximum y coordinate on the surface
-        idx_surface = np.argmax(cur_surface[:, 1])
-
-        # Find the vertex number according to the mesh vertex numbering scheme
-        idx_body = model.surface_vertices[idx_surface]
-
-        # Finally convert it to the DOF number of the u-dof that actually influences glottal width
-        dof_width = model.vert_to_vdof[idx_body, 1]
-
-        # Find the maximum y coordinate on the surface
-        gw_modl = 2 * (model.y_midline - cur_surface[idx_surface, 1])
-        dgw_modl_dt = -2 * v[dof_width]
-
-        wss += weight * (gw_modl - gw_meas)**2
-        dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
-
-    return dwss_dt, info
+        return dwss_dt, info
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
 # deleted that code... need to make it again.
