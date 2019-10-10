@@ -63,33 +63,27 @@ solid_props['rayleigh_k'] = 1e-3
 
 
 ## Set a functional
-dg_dparam = None
 fkwargs = {}
 # Functional for vocal eff
 # n_start = 50
 # fkwargs = {'n_start': n_start}
-functional = functionals.totalvocaleff
-dg_du = functionals.dtotalvocaleff_du
+Functional = functionals.VocalEfficiency
 
 # Functional for MFDR
 # fkwargs = {}
-# functional = functionals.mfdr
-# dg_du = functionals.dmfdr_du
+# Functional = functionals.MFDR
 
 # Functional for weighted sum of squared glottal widths
 # fkwargs = {}
-# functional = functionals.wss_gwidth
-# dg_du = functionals.dwss_gwidth_du
+# Functional = functionals.WSSGlottalWidth
 
 # Functional for total flow
 # n_start = 0
 # fkwargs = {'n_start': n_start}
-# functional = functionals.totalflow
-# dg_du = functionals.dtotalflow_du
+# Functional = functionals.VolumeFlow
 
 # Functional for acoustic efficiency
-# functional = extra_functionals.acoustic_efficiency
-# dg_du = extra_functionals.dacoustic_efficiency_du
+# Functional = functionals.AcousticEfficiency
 
 
 ## Finite Differences
@@ -111,7 +105,7 @@ functional_fd = list()
 with sfu.StateFile('out/FiniteDifferenceStates.h5', group='0', mode='r') as f:
     for n in range(num_steps):
         f.group = f'{n}'
-        functional_fd.append(functional(model, f, **fkwargs)[0])
+        functional_fd.append(Functional(model, f, **fkwargs)())
 
 functional_fd = np.array(functional_fd)
 
@@ -122,9 +116,7 @@ print("Computing Gradient via Adjoint State")
 runtime_start = perf_counter()
 info = None
 with sfu.StateFile(save_path, group='0') as f:
-    _, info = functional(model, f, **fkwargs)
-gradient_ad = adjoint(model, save_path, h5group='0', dg_du=dg_du, dg_du_kwargs={**fkwargs, **info},
-                      dg_dparam=dg_dparam, dg_dparam_kwargs={**fkwargs, **info})
+    gradient_ad = adjoint(model, f, Functional, fkwargs)
 runtime_end = perf_counter()
 
 print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
