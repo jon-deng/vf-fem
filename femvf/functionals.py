@@ -106,11 +106,10 @@ class FluidWork(GenericFunctional):
             self.model.set_iteration_fromfile(self.f, ii+1)
             res += dfn.assemble(self.model.fluid_work)
 
-        return res, {}
+        return res
 
     def du(self, n):
         out = 0
-        info = {}
 
         N_START = self.kwargs['n_start']
         N_STATE = self.f.get_num_states()
@@ -140,7 +139,7 @@ class FluidWork(GenericFunctional):
 
                 out += dfn.assemble(self.model.dfluid_work_du1)
 
-        return out, info
+        return out
 
     def dparam(self):
         return None
@@ -164,17 +163,15 @@ class VolumeFlow(GenericFunctional):
         N_START = self.kwargs['n_start']
 
         totalflow = 0
-        info = {}
         for ii in range(N_START, N_STATE-1):
             fluid_info, _ = self.model.set_iteration_fromfile(self.f, ii+1)
 
             totalflow += fluid_info['flow_rate'] * self.model.dt.values()[0]
 
-        return totalflow, info
+        return totalflow
 
     def du(self, n):
         dtotalflow_dun = None
-        info = {}
         N_START = self.kwargs['n_start']
 
         num_states = self.f.get_num_states()
@@ -185,7 +182,7 @@ class VolumeFlow(GenericFunctional):
             _, dq_dun = self.model.get_flow_sensitivity()
             dtotalflow_dun = dq_dun * self.model.dt.values()[0]
 
-        return dtotalflow_dun, info
+        return dtotalflow_dun
 
     def dparam(self):
         return None
@@ -204,14 +201,13 @@ class SubglottalWork(GenericFunctional):
         N_STATE = self.f.get_num_states()
 
         ret = 0
-        info = {}
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation mapping state ii->ii+1
             fluid_info, fluid_props = self.model.set_iteration_fromfile(self.f, ii+1)
 
             ret += self.model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
 
-        return ret, info
+        return ret
 
     def du(self, n):
         ret = dfn.Function(self.model.vector_function_space).vector()
@@ -227,7 +223,7 @@ class SubglottalWork(GenericFunctional):
         else:
             pass
 
-        return ret, {}
+        return ret
 
     def dparam(self):
         return None
@@ -253,14 +249,12 @@ class VocalEfficiency(GenericFunctional):
 
         res = totalfluidwork/totalinputwork
 
-        info = {'totalfluidwork': totalfluidwork, 'totalinputwork': totalinputwork}
-        self.cache.update(info)
-        return res, info
+        self.cache.update({'totalfluidwork': totalfluidwork, 'totalinputwork': totalinputwork})
+        return res
 
     def du(self, n):
         # TODO : Is there something slightly wrong with this one? Seems slightly wrong from
         # comparing with FD. The error is small but it is not propto step size?
-        info = {}
         N_START = self.kwargs['n_start']
 
         tfluidwork = self.cache.get('totalfluidwork', None)
@@ -270,10 +264,9 @@ class VocalEfficiency(GenericFunctional):
         dtotalinputwork_dun = self.funcs['SubglottalWork'].du(n)[0]
 
         if n < N_START:
-            return dfn.Function(self.model.vector_function_space).vector(), info
+            return dfn.Function(self.model.vector_function_space).vector()
         else:
-            return (dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun,
-                    info)
+            return dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
 
     def dparam(self):
         return None
@@ -307,14 +300,12 @@ class MFDR(GenericFunctional):
 
         res = dflow_rate_dt[idx_min]
 
-        info['idx_mfdr'] = idx_min
-        self.cache.update(info)
+        self.cache.update({'idx_mfdr': idx_min})
 
-        return res, info
+        return res
 
     def du(self, n):
         res = None
-        info = {}
 
         idx_mfdr = self.cache.get('idx_mfdr', None)
 
@@ -342,7 +333,7 @@ class MFDR(GenericFunctional):
         else:
             res = dfn.Function(self.model.vector_function_space).vector()
 
-        return res, info
+        return res
 
     def dparam(self):
         return None
@@ -364,7 +355,6 @@ class WSSGlottalWidth(GenericFunctional):
 
     def __func__(self):
         wss = 0
-        info = {}
 
         u = dfn.Function(self.model.vector_function_space)
         v = dfn.Function(self.model.vector_function_space)
@@ -390,11 +380,10 @@ class WSSGlottalWidth(GenericFunctional):
 
             wss += weight * (gw_modl - gw_meas)**2
 
-        return wss, info
+        return wss
 
     def du(self, n):
         dwss_du = dfn.Function(self.model.vector_function_space).vector()
-        info = {}
 
         weights = self.kwargs['weights']
         meas_indices = self.kwargs['meas_indices']
@@ -431,14 +420,13 @@ class WSSGlottalWidth(GenericFunctional):
             # In this case the derivative is simply 0 so the default value is right
             pass
 
-        return dwss_du, info
+        return dwss_du
 
     def dparam(self):
         """
         Returns the sensitivity of the thing wrt to the starting time.
         """
         dwss_dt = 0
-        info = {}
 
         weights = self.kwargs['weights']
         meas_indices = self.kwargs['meas_indices']
@@ -469,7 +457,7 @@ class WSSGlottalWidth(GenericFunctional):
             wss += weight * (gw_modl - gw_meas)**2
             dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
 
-        return dwss_dt, info
+        return dwss_dt
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
 # deleted that code... need to make it again.
