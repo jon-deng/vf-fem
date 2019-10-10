@@ -32,7 +32,7 @@ from petsc4py import PETSc
 from . import forms
 
 
-class GenericFunctional():
+class AbstractFunctional():
     """
     Represents a functional over the solution history of a forward model run.
 
@@ -80,7 +80,7 @@ class GenericFunctional():
         """
         raise NotImplementedError("Method not implemented")
 
-class FluidWork(GenericFunctional):
+class FluidWork(AbstractFunctional):
     """
     Returns the work done by the fluid on the vocal folds.
 
@@ -144,7 +144,7 @@ class FluidWork(GenericFunctional):
     def dparam(self):
         return None
 
-class VolumeFlow(GenericFunctional):
+class VolumeFlow(AbstractFunctional):
     """
     Returns the volume of fluid that flowed through the vocal folds.
 
@@ -187,7 +187,7 @@ class VolumeFlow(GenericFunctional):
     def dparam(self):
         return None
 
-class SubglottalWork(GenericFunctional):
+class SubglottalWork(AbstractFunctional):
     """
     Returns the total work input into the fluid from the subglottal region (lungs).
     """
@@ -228,7 +228,7 @@ class SubglottalWork(GenericFunctional):
     def dparam(self):
         return None
 
-class VocalEfficiency(GenericFunctional):
+class VocalEfficiency(AbstractFunctional):
     """
     Returns the total vocal efficiency.
 
@@ -244,8 +244,8 @@ class VocalEfficiency(GenericFunctional):
         self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
 
     def __call__(self):
-        totalfluidwork = self.funcs['FluidWork']()[0]
-        totalinputwork = self.funcs['SubglottalWork']()[0]
+        totalfluidwork = self.funcs['FluidWork']()
+        totalinputwork = self.funcs['SubglottalWork']()
 
         res = totalfluidwork/totalinputwork
 
@@ -260,8 +260,8 @@ class VocalEfficiency(GenericFunctional):
         tfluidwork = self.cache.get('totalfluidwork', None)
         tinputwork = self.cache.get('totalinputwork', None)
 
-        dtotalfluidwork_dun = self.funcs['FluidWork'].du(n)[0]
-        dtotalinputwork_dun = self.funcs['SubglottalWork'].du(n)[0]
+        dtotalfluidwork_dun = self.funcs['FluidWork'].du(n)
+        dtotalinputwork_dun = self.funcs['SubglottalWork'].du(n)
 
         if n < N_START:
             return dfn.Function(self.model.vector_function_space).vector()
@@ -271,7 +271,7 @@ class VocalEfficiency(GenericFunctional):
     def dparam(self):
         return None
 
-class MFDR(GenericFunctional):
+class MFDR(AbstractFunctional):
     """
     Return the maximum flow declination rate.
     """
@@ -338,7 +338,7 @@ class MFDR(GenericFunctional):
     def dparam(self):
         return None
 
-class WSSGlottalWidth(GenericFunctional):
+class WSSGlottalWidth(AbstractFunctional):
     """
     Returns the weighted sum of squared glottal widths.
     """
