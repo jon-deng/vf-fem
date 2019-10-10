@@ -62,7 +62,7 @@ class GenericFunctional():
         self.funcs = dict()
         self.cache = dict()
 
-    def __func__(self):
+    def __call__(self):
         """
         Return the value of the functional.
         """
@@ -96,7 +96,7 @@ class FluidWork(GenericFunctional):
 
         self.kwargs.setdefault('n_start', 0)
 
-    def __func__(self):
+    def __call__(self):
         N_START = self.kwargs['n_start']
         N_STATE = self.f.get_num_states()
 
@@ -158,7 +158,7 @@ class VolumeFlow(GenericFunctional):
 
         self.kwargs.setdefault('n_start', 0)
 
-    def __func__(self):
+    def __call__(self):
         N_STATE = self.f.get_num_states()
         N_START = self.kwargs['n_start']
 
@@ -196,7 +196,7 @@ class SubglottalWork(GenericFunctional):
 
         self.kwargs.setdefault('n_start', 0)
 
-    def __func__(self):
+    def __call__(self):
         N_START = self.kwargs['n_start']
         N_STATE = self.f.get_num_states()
 
@@ -243,7 +243,7 @@ class VocalEfficiency(GenericFunctional):
         self.funcs['FluidWork'] = FluidWork(model, f, **kwargs)
         self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
 
-    def __func__(self):
+    def __call__(self):
         totalfluidwork = self.funcs['FluidWork']()[0]
         totalinputwork = self.funcs['SubglottalWork']()[0]
 
@@ -280,7 +280,7 @@ class MFDR(GenericFunctional):
 
         self.kwargs.setdefault('n_start', 0)
 
-    def __func__(self):
+    def __call__(self):
         flow_rate = []
         info = {}
 
@@ -353,7 +353,7 @@ class WSSGlottalWidth(GenericFunctional):
 
         assert kwargs['meas_indices'].size == kwargs['meas_glottal_widths'].size
 
-    def __func__(self):
+    def __call__(self):
         wss = 0
 
         u = dfn.Function(self.model.vector_function_space)
