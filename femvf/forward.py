@@ -21,6 +21,7 @@ import dolfin as dfn
 from . import forms
 from . import fluids
 from . import constants
+from . import statefile as sf
 # from . import functionals
 # from . import visualization as vis
 
@@ -282,23 +283,8 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     forward_info['meas_indices'] = meas_indices
 
     ## Initialize datasets to save in h5 file
-    # TODO: Use the `StateFile` initialization
-    with h5py.File(h5file, mode='a') as f:
-        # Kinematic states
-        for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
-            f.create_dataset(join(h5group, dataset_name), shape=(times.size, data.vector()[:].size),
-                             dtype=np.float64)
-            f[join(h5group, dataset_name)][0] = data.vector()
-
-        f.create_dataset(join(h5group, 'time'), data=times)
-
-        # Fluid properties
-        for label in constants.FLUID_PROPERTY_LABELS:
-            f.create_dataset(join(h5group, 'fluid_properties', label), shape=(times.size,))
-
-        # Solid properties (note they're not time varying)
-        for label in constants.SOLID_PROPERTY_LABELS:
-            f.create_dataset(join(h5group, 'solid_properties', label), data=solid_props[label])
+    with sf.StateFile(h5file, mode='a') as f:
+        f.initialize_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
 
     ## Loop through solution times and write solution variables to the h5file.
     with h5py.File(h5file, mode='a') as f:
@@ -312,13 +298,8 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
                                                    fluid_props_ii)
 
             ## Write the solution outputs to a file
-            # State variables
-            for label, value in zip(['u', 'v', 'a'], [u1, v1, a1]):
-                f[join(h5group, label)][ii+1] = value.vector()[:]
-
-            # Fluid properties
-            for label in constants.FLUID_PROPERTY_LABELS:
-                f[join(h5group, 'fluid_properties', label)][ii] = fluid_props_ii[label]
+            f.append_state((u1, v1, a1))
+            f.append_fluid_props(fluid_props_ii)
 
             ## Update initial conditions for the next time step
             u0.assign(u1)
@@ -337,8 +318,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
 
         # Write the final fluid properties
         fluid_props_ii = get_dynamic_fluid_props(fluid_props, times[-1])
-        for label in constants.FLUID_PROPERTY_LABELS:
-            f[join(h5group, 'fluid_properties', label)][-1] = fluid_props_ii[label]
+        f.append_fluid_props(fluid_props_ii)
 
         return forward_info
 
