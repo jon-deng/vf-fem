@@ -283,11 +283,12 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     forward_info['meas_indices'] = meas_indices
 
     ## Initialize datasets to save in h5 file
-    with sf.StateFile(h5file, mode='a') as f:
+    with sf.StateFile(h5file, group=h5group, mode='a') as f:
         f.initialize_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
+        f.append_time(times)
 
     ## Loop through solution times and write solution variables to the h5file.
-    with h5py.File(h5file, mode='a') as f:
+    with sf.StateFile(h5file, group=h5group, mode='a') as f:
         for ii, t in enumerate(times[:-1]):
             # Update properties
             fluid_props_ii = get_dynamic_fluid_props(fluid_props, t)

@@ -66,23 +66,32 @@ class StateFile:
         solution_times : array_like
             Times at which the model will be solved
         """
-        # Kinematic states
-        for ii, dataset_name in enumerate(['u', 'v', 'a']):
-            dset = self.file.create_dataset(join(self.group, dataset_name),
-                                            maxshape=(None, model.vector_function_space.dim()),
-                                            chunks=True, dtype='f8')
+        self.file.create_dataset(join(self.group, 'time'), (0,), maxshape=(None,))
 
-            if x0 is not None:
-                dset.resize(dset.shape[0]+1, axis=0)
-                dset[-1] = x0[ii].vector()
-
-        self.file.create_dataset(join(self.group, 'time'), )
+        self._initialize_state(model, x0=x0)
 
         # Fluid properties
         self._initialize_fluid_props(model, fluid_props=fluid_props)
 
-        # Solid properties (Assumed to not be time-varying)
+        # Solid properties (assumed to not be time-varying)
         self._initialize_solid_props(model, solid_props=solid_props)
+
+    def _initialize_state(self, model, x0=None):
+        """
+        Initializes the states layout of the file.
+
+        Parameters
+        ----------
+        model : femvf.ForwardModel
+        """
+        # Kinematic states
+        NDOF = model.vector_function_space.dim()
+        for dataset_name in ['u', 'v', 'a']:
+            self.file.create_dataset(join(self.group, dataset_name), (0, NDOF),
+                                     maxshape=(None, NDOF), chunks=(1, NDOF), dtype='f8')
+
+        if x0 is not None:
+            self.append_state(x0)
 
     def _initialize_fluid_props(self, model, fluid_props=None):
         """
@@ -98,8 +107,7 @@ class StateFile:
                                      maxshape=(None,))
 
         if fluid_props is not None:
-            for label in constants.FLUID_PROPERTY_LABELS:
-                self.file[join(self.group, 'fluid_properties', label)][0] = fluid_props[label]
+            self.append_fluid_props(fluid_props)
 
     def _initialize_solid_props(self, model, solid_props=None):
         """
@@ -111,17 +119,17 @@ class StateFile:
 
         """
         for label in constants.SOLID_PROPERTY_LABELS:
+            # Only elastic modulus is a vector, other solid properties are currently scalars
             shape = None
             if label == 'elastic_modulus':
                 shape = (model.scalar_function_space.dim(),)
             else:
-                shape = (0,)
+                shape = ()
 
-            self.file.create_dataset(join(self.group, 'solid_properties', label), shape=shape)
+            self.file.create_dataset(join(self.group, 'solid_properties', label), shape)
 
         if solid_props is not None:
-            for label in constants.SOLID_PROPERTY_LABELS:
-                self.file[join(self.group, 'solid_properties', label)][...] = solid_props[label]
+            self.append_solid_props(solid_props)
 
     def append_state(self, x):
         """
@@ -132,8 +140,8 @@ class StateFile:
         x : tuple of dfn.Function
             (u, v, a) states to append
         """
-        for label, value in zip(['u', 'v', 'a'], x):
-            dset = self.file[join(self.group, label)]
+        for dset_name, value in zip(['u', 'v', 'a'], x):
+            dset = self.file[join(self.group, dset_name)]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value.vector()[:]
 
@@ -150,6 +158,38 @@ class StateFile:
             dset = self.file[join(self.group, 'fluid_properties', label)]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = fluid_props[label]
+
+    def append_time(self, time):
+        """
+        Append times to the file.
+
+        Parameters
+        ----------
+        time : array_like
+            Times to append
+        """
+        dset = self.file[join(self.group, 'time')]
+        dset.resize(dset.shape[0]+time.size, axis=0)
+        dset[-time.size:] = time
+
+    def append_solid_props(self, solid_props):
+        """
+        Append solid properties to the file.
+
+        It doesn't actually append, it just rewrites the previous values if they exist.
+
+        Parameters
+        ----------
+        solid_props : dict
+            Dictionary of solid properties to append
+        """
+        for label in constants.SOLID_PROPERTY_LABELS:
+            dset = self.file[join(self.group, 'solid_properties', label)]
+
+            if label == 'elastic_modulus':
+                dset[:] = solid_props[label]
+            else:
+                dset[()] = solid_props[label]
 
     def write_state(self, x, n):
         """
@@ -251,15 +291,14 @@ class StateFile:
         Returns the solid properties
         """
         solid_props = {}
-        # TODO: You might want to have time variable properties in the future
         for label in constants.SOLID_PROPERTY_LABELS:
             data = self.file[join(self.group, 'solid_properties', label)]
 
-            if not data.shape:
-                # If `data.shape` is an empty tuple then we have to index differently
-                solid_props[label] = data[()]
-            else:
+            if label == 'elastic_modulus':
                 solid_props[label] = data[:]
+            else:
+                # have to index differently for scalar datasets
+                solid_props[label] = data[()]
 
         return solid_props
 

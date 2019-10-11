@@ -116,7 +116,7 @@ print("Computing Gradient via Adjoint State")
 runtime_start = perf_counter()
 info = None
 with sfu.StateFile(save_path, group='0') as f:
-    gradient_ad = adjoint(model, f, Functional, fkwargs)
+    _, gradient_ad = adjoint(model, f, Functional, fkwargs)
 runtime_end = perf_counter()
 
 print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
