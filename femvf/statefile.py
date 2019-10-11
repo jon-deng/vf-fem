@@ -191,19 +191,6 @@ class StateFile:
             else:
                 dset[()] = solid_props[label]
 
-    def write_state(self, x, n):
-        """
-        Writes the n'th state.
-
-        Parameters
-        ----------
-        x : tuple of dfn.Function
-        n : int
-            State index to write to.
-        """
-        for function, label in zip(x, ('u', 'v', 'a')):
-            self.file[join(self.group, label)][n] = function.vector()
-
     def get_time(self, n):
         """
         Returns the time at state n.
@@ -222,17 +209,18 @@ class StateFile:
         """
         return self.file[join(self.group, 'u')].shape[0]
 
-    def get_u(self, n, function_space=None):
+    def get_u(self, n, function_space, out=None):
         """
         Returns displacement at index `n`.
         """
         ret = None
-        _ret = self.file[join(self.group, 'u')][n, ...]
-        if function_space is None:
-            ret = _ret
-        else:
+        dset = self.file[join(self.group, 'u')]
+        if out is None:
             ret = dfn.Function(function_space)
-            ret.vector()[:] = _ret
+            ret.vector()[:] = dset[n]
+        else:
+            out.vector()[:] = dset[n]
+            ret = out
 
         return ret
 
@@ -240,7 +228,7 @@ class StateFile:
 
     # def get_a(self, n):
 
-    def get_state(self, n, function_space=None):
+    def get_state(self, n, function_space, out=None):
         """
         Returns form coefficient vectors for states (u, v, a) at index n.
 
@@ -249,32 +237,28 @@ class StateFile:
         n : int
             Index to set the functions for.
         function_space : dfn.FunctionSpace
-            If a function space is supplied, an instance of `dfn.Function` is returned.
+            The function space corresponding to the dataset.
+        out : tuple of 3 dfn.Function
+            A set of functions to assign into.
         """
+
         labels = ('u', 'v', 'a')
-
-        ret = None
-        _ret = [self.file[join(self.group, label)][n, ...] for label in labels]
-
-        if function_space is None:
-            ret = _ret
-        else:
-            ret = []
-            for ii, label in enumerate(labels):
+        ret = []
+        if out is None:
+            for label in labels:
+                dset = self.file[join(self.group, label)]
                 function = dfn.Function(function_space)
 
-                function.vector()[:] = _ret[ii]
+                function.vector()[:] = dset[n]
                 ret.append(function)
+        else:
+            for function, label in zip(out, labels):
+                dset = self.file[join(self.group, label)]
+                function.vector()[:] = dset[n]
+
+            ret = out
 
         return tuple(ret)
-
-    def set_state(self, n, x):
-        _x = self.get_state(n)
-
-        for function, vec in zip(x, _x):
-            function.vector()[:] = vec
-
-        return x
 
     def get_fluid_properties(self, n):
         """
@@ -301,26 +285,3 @@ class StateFile:
                 solid_props[label] = data[()]
 
         return solid_props
-
-    def set_iteration_states(self, n, u0=None, v0=None, a0=None, u1=None):
-        """
-        Sets form coefficient vectors for states u_n-1, v_n-1, a_n-1, u_n at index n.
-
-        Parameters
-        ----------
-        n : int
-            Index to set the functions for.
-        """
-        if u0 is not None:
-            u0.vector()[:] = self.file[join(self.group, 'u')][n-1]
-        if v0 is not None:
-            v0.vector()[:] = self.file[join(self.group, 'v')][n-1]
-        if a0 is not None:
-            a0.vector()[:] = self.file[join(self.group, 'a')][n-1]
-        if u1 is not None:
-            u1.vector()[:] = self.file[join(self.group, 'u')][n]
-
-    def set_time_step(self, n, dt=None):
-        if dt is not None:
-            tspan = self.file[join(self.group, 'time')][n-1:n+1]
-            dt.assign(tspan[1]-tspan[0])
