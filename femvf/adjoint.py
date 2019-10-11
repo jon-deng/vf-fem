@@ -203,9 +203,9 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     for ii in range(num_states-2, 0, -1):
         # Note that ii corresponds to the time index of the adjoint state we are solving for.
         # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
-        x0 = f.set_state(ii-1, x0)
-        x1 = f.set_state(ii, x1)
-        x2 = f.set_state(ii+1, x2)
+        x0 = f.get_state(ii-1, model.vector_function_space, out=x0)
+        x1 = f.get_state(ii, model.vector_function_space, out=x1)
+        x2 = f.get_state(ii+1, model.vector_function_space, out=x2)
 
         fluid_props0 = f.get_fluid_properties(ii-1)
         fluid_props1 = f.get_fluid_properties(ii)

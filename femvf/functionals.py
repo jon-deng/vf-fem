@@ -367,7 +367,7 @@ class WSSGlottalWidth(AbstractFunctional):
         # Loop through every state
         for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
 
-            u, v, a = self.f.get_state(ii, function_space=self.model.vector_function_space)
+            u, v, a = self.f.get_state(ii, self.model.vector_function_space)
             self.model.set_initial_state(u, v, a)
 
             # Find the maximum y coordinate on the surface
@@ -394,7 +394,7 @@ class WSSGlottalWidth(AbstractFunctional):
             weight = weights[n]
             gw_meas = meas_glottal_widths[n]
 
-            u, v, a = self.f.get_state(n, function_space=self.model.vector_function_space)
+            u, v, a = self.f.get_state(n, self.model.vector_function_space)
             self.model.set_initial_state(u, v, a)
 
             # Find the surface vertex corresponding to where the glottal width is measured
@@ -436,7 +436,7 @@ class WSSGlottalWidth(AbstractFunctional):
 
         # Loop through every state
         for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
-            u, v, a = self.f.get_state(ii, function_space=self.model.vector_function_space)
+            u, v, a = self.f.get_state(ii, self.model.vector_function_space)
             self.model.set_initial_state(u, v, a)
 
             cur_surface = self.model.get_surface_state()[0]
