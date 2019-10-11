@@ -155,7 +155,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     """
     # Initialize the functional instance and run it once to initialize any cached values
     functional = Functional(model, f, **functional_kwargs)
-    functional()
+    functional_value = functional()
 
     df1_dparam_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
 
@@ -263,4 +263,4 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         plt.show()
 
-    return gradient
+    return functional_value, gradient
