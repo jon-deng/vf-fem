@@ -6,10 +6,9 @@ import sys
 import os
 from time import perf_counter
 
-import h5py
-import dolfin as dfn
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+import dolfin as dfn
 
 sys.path.append('../')
 from femvf.forward import forward
@@ -17,7 +16,7 @@ from femvf.adjoint import adjoint
 from femvf import forms
 from femvf.constants import DEFAULT_FLUID_PROPERTIES, DEFAULT_SOLID_PROPERTIES, PASCAL_TO_CGS
 from femvf import functionals
-from femvf import statefile as sfu
+from femvf import statefile as sf
 
 sys.path.append(os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/'))
 import functionals as extra_functionals
@@ -102,7 +101,7 @@ for n in range(num_steps):
 
 # Calculate functional values at each finite difference step
 functional_fd = list()
-with sfu.StateFile('out/FiniteDifferenceStates.h5', group='0', mode='r') as f:
+with sf.StateFile('out/FiniteDifferenceStates.h5', group='0', mode='r') as f:
     for n in range(num_steps):
         f.group = f'{n}'
         functional_fd.append(Functional(model, f, **fkwargs)())
@@ -115,7 +114,7 @@ print("Computing Gradient via Adjoint State")
 
 runtime_start = perf_counter()
 info = None
-with sfu.StateFile(save_path, group='0') as f:
+with sf.StateFile(save_path, group='0') as f:
     _, gradient_ad = adjoint(model, f, Functional, fkwargs)
 runtime_end = perf_counter()
 

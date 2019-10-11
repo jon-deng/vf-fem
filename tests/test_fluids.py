@@ -8,11 +8,8 @@ import dolfin as dfn
 import autograd
 import autograd.numpy as np
 
-import matplotlib.pyplot as plt
-
 import petsc4py
 petsc4py.init()
-from petsc4py import PETSc
 
 sys.path.append('../')
 from femvf import fluids
