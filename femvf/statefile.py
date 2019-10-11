@@ -51,7 +51,7 @@ class StateFile:
     def __exit__(self, type, value, traceback):
         self.file.close()
 
-    def initialize(self, u0, v0, a0, solid_props, fluid_props, solution_times):
+    def initialize_layout(self, model, x0=None, fluid_props=None, solid_props=None):
         """
         Initializes the layout of the state file.
 
@@ -66,55 +66,90 @@ class StateFile:
         solution_times : array_like
             Times at which the model will be solved
         """
-        N = solution_times.size
-
         # Kinematic states
-        for data, dataset_name in zip([u0, v0, a0], ['u', 'v', 'a']):
-            self.file.create_dataset(join(self.group, dataset_name),
-                                     shape=(N, data.vector()[:].size),
-                                     dtype='f8')
-            self.file[join(self.group, dataset_name)][0] = data.vector()
+        for ii, dataset_name in enumerate(['u', 'v', 'a']):
+            dset = self.file.create_dataset(join(self.group, dataset_name),
+                                            maxshape=(None, model.vector_function_space.dim()),
+                                            chunks=True, dtype='f8')
 
-        self.file.create_dataset(join(self.group, 'time'), data=solution_times)
+            if x0 is not None:
+                dset.resize(dset.shape[0]+1, axis=0)
+                dset[-1] = x0[ii].vector()
+
+        self.file.create_dataset(join(self.group, 'time'), )
 
         # Fluid properties
-        for label in constants.FLUID_PROPERTY_LABELS:
-            self.file.create_dataset(join(self.group, 'fluid_properties', label), shape=(N,))
+        self._initialize_fluid_props(model, fluid_props=fluid_props)
 
         # Solid properties (Assumed to not be time-varying)
-        for label in constants.SOLID_PROPERTY_LABELS:
-            self.file.create_dataset(join(self.group, 'solid_properties', label),
-                                     data=solid_props[label])
+        self._initialize_solid_props(model, solid_props=solid_props)
 
-    def initialize_fluid_properties(self, fluid_properties=None):
+    def _initialize_fluid_props(self, model, fluid_props=None):
         """
         Initializes the fluid properties layout of the file.
-        """
 
+        Parameters
+        ----------
+        model :
+            Not really needed for this one but left the arg here since it's in solid properties init
+        """
         for label in constants.FLUID_PROPERTY_LABELS:
-            self.file.create_dataset(join(self.group, 'fluid_properties', label), shape=(1,),
+            self.file.create_dataset(join(self.group, 'fluid_properties', label), shape=(0,),
                                      maxshape=(None,))
 
-        if fluid_properties is not None:
+        if fluid_props is not None:
             for label in constants.FLUID_PROPERTY_LABELS:
-                self.file[join(self.group, 'fluid_properties', label)][0] = fluid_properties[label]
+                self.file[join(self.group, 'fluid_properties', label)][0] = fluid_props[label]
 
-    def initialize_solid_properties(self, model, solid_properties=None):
+    def _initialize_solid_props(self, model, solid_props=None):
         """
         Initializes the solid properties layout of the file.
+
+        Parameters
+        ----------
+        model :
+
         """
         for label in constants.SOLID_PROPERTY_LABELS:
             shape = None
             if label == 'elastic_modulus':
-                shape=(model.mesh.num_vertices(),)
+                shape = (model.scalar_function_space.dim(),)
             else:
-                shape=(0,)
+                shape = (0,)
 
             self.file.create_dataset(join(self.group, 'solid_properties', label), shape=shape)
 
-        if solid_properties is not None:
+        if solid_props is not None:
             for label in constants.SOLID_PROPERTY_LABELS:
-                self.file[join(self.group, 'solid_properties', label)][...] = solid_properties[label]
+                self.file[join(self.group, 'solid_properties', label)][...] = solid_props[label]
+
+    def append_state(self, x):
+        """
+        Append state to the file.
+
+        Parameters
+        ----------
+        x : tuple of dfn.Function
+            (u, v, a) states to append
+        """
+        for label, value in zip(['u', 'v', 'a'], x):
+            dset = self.file[join(self.group, label)]
+            dset.resize(dset.shape[0]+1, axis=0)
+            dset[-1] = value.vector()[:]
+
+    def append_fluid_props(self, fluid_props):
+        """
+        Append fluid properties to the file.
+
+        Parameters
+        ----------
+        fluid_props : dict
+            Dictionary of fluid properties to append
+        """
+        for label in constants.FLUID_PROPERTY_LABELS:
+            dset = self.file[join(self.group, 'fluid_properties', label)]
+            dset.resize(dset.shape[0]+1, axis=0)
+            dset[-1] = fluid_props[label]
 
     def write_state(self, x, n):
         """
