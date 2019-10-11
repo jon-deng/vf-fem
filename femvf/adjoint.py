@@ -6,31 +6,15 @@ Makes a vocal fold go elggiw elggiw.
 I'm using CGS : cm-g-s units
 """
 
-from time import perf_counter
-
 import numpy as np
 
 from matplotlib import tri
 from matplotlib import pyplot as plt
 
-import h5py
-
 import dolfin as dfn
 import ufl
 
-#import petsc4py
-#petsc4py.init()
-from petsc4py import PETSc
 
-# from . import forms as frm
-from . import statefile as sfu
-from . import constants
-from . import functionals
-
-from .misc import get_dynamic_fluid_props
-
-# dfn.parameters['form_compiler']['optimize'] = True
-# dfn.parameters['form_compiler']['cpp_optimize'] = True
 # @profile
 def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1,
                       dcost_du1):

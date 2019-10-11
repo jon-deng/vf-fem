@@ -20,16 +20,8 @@ dfunctional_du(model, n, f, **kwargs) -> float, dict
 compute the sensitivity with respect to.
 """
 
-import os.path as path
-
 import numpy as np
 import dolfin as dfn
-import ufl
-
-from petsc4py import PETSc
-
-# from . import statefileutils as sfu
-from . import forms
 
 
 class AbstractFunctional():

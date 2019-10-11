@@ -8,7 +8,6 @@ import h5py
 import dolfin as dfn
 
 from . import constants
-from . import fluids
 
 class StateFile:
     """

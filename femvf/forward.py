@@ -5,25 +5,18 @@ Uses CGS (cm-g-s) units unless otherwise stated
 """
 from time import perf_counter
 import os
-from os.path import join
 
 from math import isclose, ceil, floor, remainder
 
 import h5py
-
 import numpy as np
-
 from matplotlib import tri
 from matplotlib import pyplot as plt
-
 import dolfin as dfn
 
 from . import forms
-from . import fluids
 from . import constants
 from . import statefile as sf
-# from . import functionals
-# from . import visualization as vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props

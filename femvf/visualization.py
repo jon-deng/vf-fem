@@ -1,9 +1,4 @@
-import dolfin as dfn
-
-import matplotlib
 from matplotlib import tri
-
-from . import forms as frm
 
 def triangulation(mesh, x, vert_to_vdof):
     """

@@ -3,8 +3,6 @@ Module for definitions of weak forms.
 
 Units are in CGS
 """
-import sys
-import os
 from os import path
 
 import numpy as np
@@ -12,7 +10,6 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from . import transforms
 from . import fluids
 from . import constants as const
 
