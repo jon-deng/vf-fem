@@ -17,18 +17,15 @@ class StateFile:
     /.../group
 
     States are stored under labels:
-    ./u : (N_STATES, N_DOFS)
-    ./v : (N_STATES, N_DOFS)
-    ./a : (N_STATES, N_DOFS)
+    ./u : (N_TIME, N_VECTOR_DOF)
+    ./v : (N_TIME, N_VECTOR_DOF)
+    ./a : (N_TIME, N_VECTOR_DOF)
 
     Fluid properties are stored under labels:
-    ./fluid_properties/p_sub : (N_STATES-1,)
-    ./fluid_properties/p_sup : (N_STATES-1,)
-    ./fluid_properties/rho : (N_STATES-1,)
-    ./fluid_properties/y_midline : (N_STATES-1,)
+    ./fluid_properties/label : (N_TIME,)
 
     Solid properties are stored under labels:
-    ./solid_properties/elastic_modulus : (N_VERTICES,)
+    ./solid_properties/label : (N_SCALAR_DOF,) or ()
 
     Parameters
     ----------
@@ -51,8 +48,17 @@ class StateFile:
         self.file.close()
 
     def initialize_layout(self, model, x0=None, fluid_props=None, solid_props=None):
-        """
+        r"""
         Initializes the layout of the state file.
+
+        This creates groups and/or datasets in the hdf5 file:
+        \u : dataset, (None, N_VECTOR_DOF)
+        \v : dataset, (None, N_VECTOR_DOF)
+        \a : dataset, (None, N_VECTOR_DOF)
+        \fluid_properties
+            \fluid_property_label : dataset, (None,)
+        \solid_properties
+            \solid_property_label : dataset, ()
 
         Parameters
         ----------
@@ -70,10 +76,12 @@ class StateFile:
         self.init_state(model, x0=x0)
 
         # Fluid properties
-        self.init_fluid_props(model, fluid_props=fluid_props)
+        if 'fluid_properties' not in self.file[self.group]:
+            self.init_fluid_props(model, fluid_props=fluid_props)
 
         # Solid properties (assumed to not be time-varying)
-        self.init_solid_props(model, solid_props=solid_props)
+        if 'solid_properties' not in self.file[self.group]:
+            self.init_solid_props(model, solid_props=solid_props)
 
     def init_state(self, model, x0=None):
         """
@@ -98,12 +106,12 @@ class StateFile:
 
         Parameters
         ----------
-        model :
+        model : femvf.forms.ForwardModel
             Not really needed for this one but left the arg here since it's in solid properties init
         """
+        group = self.file.create_group(join(self.group, 'fluid_properties'))
         for label in constants.FLUID_PROPERTY_LABELS:
-            self.file.create_dataset(join(self.group, 'fluid_properties', label), shape=(0,),
-                                     maxshape=(None,))
+            group.create_dataset(label, shape=(0,), maxshape=(None,))
 
         if fluid_props is not None:
             self.append_fluid_props(fluid_props)
@@ -117,6 +125,7 @@ class StateFile:
         model :
 
         """
+        group = self.file.create_group(join(self.group, 'solid_properties'))
         for label in constants.SOLID_PROPERTY_LABELS:
             # Only elastic modulus is a vector, other solid properties are currently scalars
             shape = None
@@ -125,7 +134,7 @@ class StateFile:
             else:
                 shape = ()
 
-            self.file.create_dataset(join(self.group, 'solid_properties', label), shape)
+            group.create_dataset(label, shape)
 
         if solid_props is not None:
             self.append_solid_props(solid_props)

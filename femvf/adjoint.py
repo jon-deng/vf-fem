@@ -182,7 +182,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     ## Loop through states for adjoint computation
     num_states = f.get_num_states()
     times = f.get_solution_times()
-    solid_props = f.get_solid_properties()
+    solid_props = f.get_solid_props()
 
     for ii in range(num_states-2, 0, -1):
         # Note that ii corresponds to the time index of the adjoint state we are solving for.
