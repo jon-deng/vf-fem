@@ -278,18 +278,26 @@ class StateFile:
 
         return fluid_props
 
-    def get_solid_props(self):
+    def get_solid_props(self, function_space, out=None):
         """
         Returns the solid properties
         """
         solid_props = {}
         for label in constants.SOLID_PROPERTY_LABELS:
             data = self.file[join(self.group, 'solid_properties', label)]
+            print(data)
 
             if label == 'elastic_modulus':
-                solid_props[label] = data[:]
+                if out is None:
+                    _data = dfn.Function(function_space)
+                    _data.vector()[:] = data[:]
+                    solid_props[label] = _data
+                else:
+                    out.vector()[:] = data[:]
+                    solid_props[label] = out
             else:
                 # have to index differently for scalar datasets
+                print(data[()])
                 solid_props[label] = data[()]
 
         return solid_props

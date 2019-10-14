@@ -391,10 +391,8 @@ class ForwardModel:
 
         for coefficient, label in zip(coefficients, labels):
             if label in solid_props:
-                if label == 'elastic_modulus' and not isinstance(solid_props[label], dfn.Function):
-                    coefficient.vector()[:] = solid_props[label]
-                else:
-                    coefficient.assign(solid_props[label])
+                print(solid_props[label])
+                coefficient.assign(solid_props[label])
 
     def set_fluid_properties(self, fluid_props):
         """
@@ -493,7 +491,7 @@ class ForwardModel:
         """
         # Get data from the state file
         fluid_props = statefile.get_fluid_props(n-1)
-        solid_props = statefile.get_solid_props()
+        solid_props = statefile.get_solid_props(self.scalar_function_space)
         x0 = statefile.get_state(n-1, self.vector_function_space)
         u1 = None
         if set_final_state:
@@ -542,7 +540,7 @@ class ForwardModel:
         """
         # Get data from the state file
         fluid_props = statefile.get_fluid_props(n)
-        solid_props = statefile.get_solid_props()
+        solid_props = statefile.get_solid_props(self.scalar_function_space)
         x0 = statefile.get_state(n, self.vector_function_space)
 
         # Assign the values to the model
