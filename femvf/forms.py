@@ -542,8 +542,8 @@ class ForwardModel:
         """
         # Get data from the state file
         fluid_props = statefile.get_fluid_props(n)
-        solid_props = statefile.get_solid_props(self.scalar_function_space)
-        x0 = statefile.get_state(n, self.vector_function_space)
+        solid_props = statefile.get_solid_props()
+        x0 = statefile.get_state(n)
 
         # Assign the values to the model
         fluid_info = self.set_state(x0, fluid_props, solid_props)
