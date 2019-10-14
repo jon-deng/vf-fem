@@ -367,7 +367,7 @@ class WSSGlottalWidth(AbstractFunctional):
             idx_surface = np.argmax(cur_surface[:, 1])
 
             # Find the maximum y coordinate on the surface
-            fluid_props = self.f.get_fluid_properties(0)
+            fluid_props = self.f.get_fluid_props(0)
             gw_modl = 2 * (fluid_props['y_midline'] - cur_surface[idx_surface, 1])
 
             wss += weight * (gw_modl - gw_meas)**2
@@ -396,7 +396,7 @@ class WSSGlottalWidth(AbstractFunctional):
             idx_surface = np.argmax(cur_surface[:, 1])
 
             # Find the maximum y coordinate on the surface
-            fluid_props = self.f.get_fluid_properties(0)
+            fluid_props = self.f.get_fluid_props(0)
             gw_modl = 2 * (fluid_props['y_midline'] - cur_surface[idx_surface, 1])
             dgw_modl_du_width = -2
 

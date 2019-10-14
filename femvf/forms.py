@@ -492,8 +492,8 @@ class ForwardModel:
             Index of iteration to set
         """
         # Get data from the state file
-        fluid_props = statefile.get_fluid_properties(n-1)
-        solid_props = statefile.get_solid_properties()
+        fluid_props = statefile.get_fluid_props(n-1)
+        solid_props = statefile.get_solid_props()
         x0 = statefile.get_state(n-1, self.vector_function_space)
         u1 = None
         if set_final_state:
@@ -541,8 +541,8 @@ class ForwardModel:
             Index of iteration to set
         """
         # Get data from the state file
-        fluid_props = statefile.get_fluid_properties(n)
-        solid_props = statefile.get_solid_properties()
+        fluid_props = statefile.get_fluid_props(n)
+        solid_props = statefile.get_solid_props()
         x0 = statefile.get_state(n, self.vector_function_space)
 
         # Assign the values to the model
