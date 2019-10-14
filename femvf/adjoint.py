@@ -61,7 +61,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     adj_u2, adj_v2, adj_a2 = adj_x2
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
-    model.set_iteration(x1, dt2, fluid_props1, solid_props, u1=x2[0])
+    _x1 = (x1[0].vector(), x1[1].vector(), x1[2].vector())
+    model.set_iteration(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
 
     # Assemble needed forms
     df2_du1 = dfn.assemble(model.df1_du0_adjoint) # This is a partial derivative
@@ -75,7 +76,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     # pf2_pu1_pressure = dfn.Matrix(dfn.PETScMatrix(dpressure_du1.transposeMatMult(df2_dpressure)))
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    model.set_iteration(x0, dt1, fluid_props0, solid_props, u1=x1[0])
+    _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
+    model.set_iteration(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
@@ -182,14 +184,14 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     ## Loop through states for adjoint computation
     num_states = f.get_num_states()
     times = f.get_solution_times()
-    solid_props = f.get_solid_props(model.scalar_function_space)
+    solid_props = f.get_solid_props()
 
     for ii in range(num_states-2, 0, -1):
         # Note that ii corresponds to the time index of the adjoint state we are solving for.
         # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
-        x0 = f.get_state(ii-1, model.vector_function_space, out=x0)
-        x1 = f.get_state(ii, model.vector_function_space, out=x1)
-        x2 = f.get_state(ii+1, model.vector_function_space, out=x2)
+        x0 = f.get_state(ii-1, out=x0)
+        x1 = f.get_state(ii, out=x1)
+        x2 = f.get_state(ii+1, out=x2)
 
         fluid_props0 = f.get_fluid_props(ii-1)
         fluid_props1 = f.get_fluid_props(ii)
@@ -209,7 +211,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         # adj_a1 too.
 
         # Assemble needed forms
-        model.set_iteration(x0, dt1, fluid_props0, solid_props, u1=x1[0])
+        _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
+        model.set_iteration(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
         gradient = gradient - 1*df1_dparam*adj_u1.vector()

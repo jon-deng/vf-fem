@@ -47,7 +47,7 @@ class StateFile:
     def __exit__(self, type, value, traceback):
         self.file.close()
 
-    def initialize_layout(self, model, x0=None, fluid_props=None, solid_props=None):
+    def init_layout(self, model, x0=None, fluid_props=None, solid_props=None):
         r"""
         Initializes the layout of the state file.
 
@@ -139,6 +139,7 @@ class StateFile:
         if solid_props is not None:
             self.append_solid_props(solid_props)
 
+
     def append_state(self, x):
         """
         Append state to the file.
@@ -167,19 +168,6 @@ class StateFile:
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = fluid_props[label]
 
-    def append_time(self, time):
-        """
-        Append times to the file.
-
-        Parameters
-        ----------
-        time : array_like
-            Times to append
-        """
-        dset = self.file[join(self.group, 'time')]
-        dset.resize(dset.shape[0]+time.size, axis=0)
-        dset[-time.size:] = time
-
     def append_solid_props(self, solid_props):
         """
         Append solid properties to the file.
@@ -199,6 +187,20 @@ class StateFile:
             else:
                 dset[()] = solid_props[label]
 
+    def append_time(self, time):
+        """
+        Append times to the file.
+
+        Parameters
+        ----------
+        time : array_like
+            Times to append
+        """
+        dset = self.file[join(self.group, 'time')]
+        dset.resize(dset.shape[0]+time.size, axis=0)
+        dset[-time.size:] = time
+
+
     def get_time(self, n):
         """
         Returns the time at state n.
@@ -217,15 +219,14 @@ class StateFile:
         """
         return self.file[join(self.group, 'u')].shape[0]
 
-    def get_u(self, n, function_space, out=None):
+    def get_u(self, n, out=None):
         """
         Returns displacement at index `n`.
         """
         ret = None
         dset = self.file[join(self.group, 'u')]
         if out is None:
-            ret = dfn.Function(function_space)
-            ret.vector()[:] = dset[n]
+            ret = dset[n]
         else:
             out.vector()[:] = dset[n]
             ret = out
@@ -236,7 +237,7 @@ class StateFile:
 
     # def get_a(self, n):
 
-    def get_state(self, n, function_space, out=None):
+    def get_state(self, n, out=None):
         """
         Returns form coefficient vectors for states (u, v, a) at index n.
 
@@ -244,8 +245,6 @@ class StateFile:
         ----------
         n : int
             Index to set the functions for.
-        function_space : dfn.FunctionSpace
-            The function space corresponding to the dataset.
         out : tuple of 3 dfn.Function
             A set of functions to assign into.
         """
@@ -255,10 +254,7 @@ class StateFile:
         if out is None:
             for label in labels:
                 dset = self.file[join(self.group, label)]
-                function = dfn.Function(function_space)
-
-                function.vector()[:] = dset[n]
-                ret.append(function)
+                ret.append(dset[n])
         else:
             for function, label in zip(out, labels):
                 dset = self.file[join(self.group, label)]
@@ -278,26 +274,18 @@ class StateFile:
 
         return fluid_props
 
-    def get_solid_props(self, function_space, out=None):
+    def get_solid_props(self):
         """
         Returns the solid properties
         """
         solid_props = {}
         for label in constants.SOLID_PROPERTY_LABELS:
             data = self.file[join(self.group, 'solid_properties', label)]
-            print(data)
 
             if label == 'elastic_modulus':
-                if out is None:
-                    _data = dfn.Function(function_space)
-                    _data.vector()[:] = data[:]
-                    solid_props[label] = _data
-                else:
-                    out.vector()[:] = data[:]
-                    solid_props[label] = out
+                solid_props[label] = data[:]
             else:
                 # have to index differently for scalar datasets
-                print(data[()])
                 solid_props[label] = data[()]
 
         return solid_props

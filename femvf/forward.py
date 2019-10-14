@@ -192,7 +192,8 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     a1 = dfn.Function(model.vector_function_space)
 
     # Update form coefficients and initial guess
-    fluid_info = model.set_iteration((u0, v0, a0), dt, fluid_props, solid_props, u1=u0)
+    fluid_info = model.set_iteration((u0.vector(), v0.vector(), a0.vector()), dt,
+                                     fluid_props, solid_props, u1=u0.vector())
 
     # Check if collision is happening
     # x_surface = model.get_surface_state()[0]
@@ -277,7 +278,7 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
 
     ## Initialize datasets to save in h5 file
     with sf.StateFile(h5file, group=h5group, mode='a') as f:
-        f.initialize_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
+        f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(times)
 
     ## Loop through solution times and write solution variables to the h5file.

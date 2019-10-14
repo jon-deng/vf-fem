@@ -352,11 +352,11 @@ class ForwardModel:
 
         Parameters
         ----------
-        u0, v0, a0 : dfn.Function
+        u0, v0, a0 : array_like
         """
-        self.u0.assign(u0)
-        self.v0.assign(v0)
-        self.a0.assign(a0)
+        self.u0.vector()[:] = u0
+        self.v0.vector()[:] = v0
+        self.a0.vector()[:] = a0
 
     def set_final_displacement(self, u1):
         """
@@ -367,9 +367,9 @@ class ForwardModel:
 
         Parameters
         ----------
-        u1 : dfn.Function
+        u1 : array_like
         """
-        self.u1.assign(u1)
+        self.u1.vector()[:] = u1
 
     def set_time_step(self, dt):
         """
@@ -391,8 +391,10 @@ class ForwardModel:
 
         for coefficient, label in zip(coefficients, labels):
             if label in solid_props:
-                print(solid_props[label])
-                coefficient.assign(solid_props[label])
+                if label == 'elastic_modulus':
+                    coefficient.vector()[:] = solid_props[label]
+                else:
+                    coefficient.assign(solid_props[label])
 
     def set_fluid_properties(self, fluid_props):
         """
@@ -491,11 +493,11 @@ class ForwardModel:
         """
         # Get data from the state file
         fluid_props = statefile.get_fluid_props(n-1)
-        solid_props = statefile.get_solid_props(self.scalar_function_space)
-        x0 = statefile.get_state(n-1, self.vector_function_space)
+        solid_props = statefile.get_solid_props()
+        x0 = statefile.get_state(n-1)
         u1 = None
         if set_final_state:
-            u1 = statefile.get_u(n, self.vector_function_space)
+            u1 = statefile.get_u(n)
 
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
