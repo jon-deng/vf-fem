@@ -259,7 +259,7 @@ class StateFile:
 
         return tuple(ret)
 
-    def get_fluid_properties(self, n):
+    def get_fluid_props(self, n):
         """
         Returns the fluid properties dictionary at index n.
         """
@@ -269,7 +269,7 @@ class StateFile:
 
         return fluid_props
 
-    def get_solid_properties(self):
+    def get_solid_props(self):
         """
         Returns the solid properties
         """

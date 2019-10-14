@@ -191,8 +191,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         x1 = f.get_state(ii, model.vector_function_space, out=x1)
         x2 = f.get_state(ii+1, model.vector_function_space, out=x2)
 
-        fluid_props0 = f.get_fluid_properties(ii-1)
-        fluid_props1 = f.get_fluid_properties(ii)
+        fluid_props0 = f.get_fluid_props(ii-1)
+        fluid_props1 = f.get_fluid_props(ii)
 
         dt1 = times[ii] - times[ii-1]
         dt2 = times[ii+1] - times[ii]
