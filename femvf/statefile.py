@@ -67,15 +67,15 @@ class StateFile:
         """
         self.file.create_dataset(join(self.group, 'time'), (0,), maxshape=(None,))
 
-        self._initialize_state(model, x0=x0)
+        self.init_state(model, x0=x0)
 
         # Fluid properties
-        self._initialize_fluid_props(model, fluid_props=fluid_props)
+        self.init_fluid_props(model, fluid_props=fluid_props)
 
         # Solid properties (assumed to not be time-varying)
-        self._initialize_solid_props(model, solid_props=solid_props)
+        self.init_solid_props(model, solid_props=solid_props)
 
-    def _initialize_state(self, model, x0=None):
+    def init_state(self, model, x0=None):
         """
         Initializes the states layout of the file.
 
@@ -92,7 +92,7 @@ class StateFile:
         if x0 is not None:
             self.append_state(x0)
 
-    def _initialize_fluid_props(self, model, fluid_props=None):
+    def init_fluid_props(self, model, fluid_props=None):
         """
         Initializes the fluid properties layout of the file.
 
@@ -108,7 +108,7 @@ class StateFile:
         if fluid_props is not None:
             self.append_fluid_props(fluid_props)
 
-    def _initialize_solid_props(self, model, solid_props=None):
+    def init_solid_props(self, model, solid_props=None):
         """
         Initializes the solid properties layout of the file.
 
