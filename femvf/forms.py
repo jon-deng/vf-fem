@@ -142,7 +142,7 @@ class ForwardModel:
 
     main forms for solving
     """
-    def __init__(self, mesh_path, facet_marker_id, cell_marker_id):
+    def __init__(self, mesh_path, facet_marker, cell_marker):
 
         base_path, ext = path.splitext(mesh_path)
         facet_marker_path = base_path +  '_facet_region.xml'
@@ -162,18 +162,18 @@ class ForwardModel:
         # Create a vertex marker from the boundary marker
         edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
                                    for edge in dfn.edges(self.mesh)])
-        pressure_edges = self.facet_marker.where_equal(facet_marker_id['pressure'])
-        fixed_edges = self.facet_marker.where_equal(facet_marker_id['fixed'])
+        pressure_edges = self.facet_marker.where_equal(facet_marker['pressure'])
+        fixed_edges = self.facet_marker.where_equal(facet_marker['fixed'])
 
         pressure_vertices = np.unique(edge_to_vertex[pressure_edges].reshape(-1))
         fixed_vertices = np.unique(edge_to_vertex[fixed_edges].reshape(-1))
 
         vertex_marker = dfn.MeshFunction('size_t', self.mesh, 0)
         vertex_marker.set_all(0)
-        vertex_marker.array()[pressure_vertices] = facet_marker_id['pressure']
-        vertex_marker.array()[fixed_vertices] = facet_marker_id['fixed']
+        vertex_marker.array()[pressure_vertices] = facet_marker['pressure']
+        vertex_marker.array()[fixed_vertices] = facet_marker['fixed']
 
-        surface_vertices = np.array(vertex_marker.where_equal(facet_marker_id['pressure']))
+        surface_vertices = np.array(vertex_marker.where_equal(facet_marker['pressure']))
         surface_coordinates = self.mesh.coordinates()[surface_vertices]
 
         # Sort the pressure surface vertices from inferior to superior
@@ -246,7 +246,7 @@ class ForwardModel:
         ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=self.facet_marker)
         fluid_force = -self.pressure*deformation_cofactor*dfn.FacetNormal(self.mesh)
 
-        traction = ufl.dot(fluid_force, self.vector_test)*ds(facet_marker_id['pressure'])
+        traction = ufl.dot(fluid_force, self.vector_test)*ds(facet_marker['pressure'])
 
         fu = inertia + stiffness + damping - traction
 
@@ -260,7 +260,7 @@ class ForwardModel:
 
         self.k_collision = dfn.Constant(1e11)
         penalty = ufl.dot(self.k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
-                  * ds(facet_marker_id['pressure'])
+                  * ds(facet_marker['pressure'])
 
         self.fu_nonlin = ufl.action(fu, self.u1) - penalty
         self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, self.vector_trial)
@@ -268,10 +268,10 @@ class ForwardModel:
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]),
-                                       self.facet_marker, facet_marker_id['fixed'])
+                                       self.facet_marker, facet_marker['fixed'])
 
         self.bc_base_adjoint = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]),
-                                               self.facet_marker, facet_marker_id['fixed'])
+                                               self.facet_marker, facet_marker['fixed'])
 
         # Define some additional forms for diagnostics
         # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu), strain(test))*ufl.dx - traction
@@ -289,7 +289,7 @@ class ForwardModel:
         self.df1_du1_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u1, self.vector_trial))
 
         # Work done by pressure from u0 to u1
-        self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(facet_marker_id['pressure'])
+        self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(facet_marker['pressure'])
         self.dfluid_work_du0 = ufl.derivative(self.fluid_work, self.u0, self.vector_test)
         self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
         self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
