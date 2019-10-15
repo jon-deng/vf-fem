@@ -548,4 +548,4 @@ class ForwardModel:
         # Assign the values to the model
         fluid_info = self.set_state(x0, fluid_props, solid_props)
 
-        return fluid_info, fluid_props
+        return fluid_info

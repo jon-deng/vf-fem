@@ -81,7 +81,9 @@ def fluid_pressure(x, fluid_props):
     info = {'flow_rate': flow_rate,
             'dt_flow_rate': dt_flow_rate,
             'xy_min': xy_min,
-            'xy_sep': xy_sep}
+            'xy_sep': xy_sep,
+            'a_min': a_min,
+            'a_sep': a_sep}
     return p, info
 
 def get_pressure_form(model, x, fluid_props):
