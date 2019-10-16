@@ -248,7 +248,7 @@ class ForwardModel:
 
         traction = ufl.dot(fluid_force, self.vector_test)*ds(facet_marker['pressure'])
 
-        fu = inertia + stiffness + damping - traction
+        self.fu = inertia + stiffness + damping - traction
 
         # Non linear equations during collision. Add a penalty to account for this
         collision_normal = dfn.Constant([0, 1])
@@ -262,7 +262,7 @@ class ForwardModel:
         penalty = ufl.dot(self.k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
                   * ds(facet_marker['pressure'])
 
-        self.fu_nonlin = ufl.action(fu, self.u1) - penalty
+        self.fu_nonlin = ufl.action(self.fu, self.u1) - penalty
         self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, self.vector_trial)
 
         ## Boundary conditions
@@ -408,8 +408,6 @@ class ForwardModel:
         """
         self.fluid_properties = fluid_props
 
-        return self.set_pressure()
-
     def set_pressure(self):
         """
         Updates pressure coefficient using a bernoulli flow model.
@@ -423,12 +421,12 @@ class ForwardModel:
         x_surface = self.get_surface_state()
 
         # Check that the surface doesn't cross over the midline
-        # print(np.max(x_surface[0][..., 1]))
         assert np.max(x_surface[0][..., 1]) < self.fluid_properties['y_midline']
 
         pressure, fluid_info = fluids.get_pressure_form(self, x_surface, self.fluid_properties)
 
         self.pressure.assign(pressure)
+
         return fluid_info
 
     def get_flow_sensitivity(self):
