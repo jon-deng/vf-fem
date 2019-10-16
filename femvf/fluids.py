@@ -8,10 +8,6 @@ from autograd import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
-# from . import forms as frm
-# import constants.FLUID_PROPERTY_LABELS as FLUID_PROP_LABELS
-
-# FLUID_PROP_LABELS = ('p_sub', 'p_sup', 'a_sub', 'a_sup', 'rho', 'y_midline')
 SEPARATION_FACTOR = 1.1
 
 def fluid_pressure(x, fluid_props):
