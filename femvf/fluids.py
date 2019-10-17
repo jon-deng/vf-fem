@@ -2,8 +2,7 @@
 Functionality related to fluids
 """
 
-import autograd
-from autograd import numpy as np
+import numpy as np
 
 import dolfin as dfn
 from petsc4py import PETSc
@@ -244,22 +243,3 @@ def get_flow_sensitivity(model, x, fluid_props):
     dq_du[model.vert_to_vdof[pressure_vertices].reshape(-1)] = _dq_du
 
     return dp_du, dq_du
-
-def pressure_sensitivity_ad(coordinates, fluid_props):
-    """
-    Returns the derivative of fluid pressure with respect to displacement u.
-
-    This is done via the autograd, autodifferentiation package.
-
-    Parameters
-    ----------
-    coordinates : (NUM_VERTICES, 2) np.array
-        Coordinates of surface vertices
-    fluid_props : dict
-        A dictionary of fluid property keyword arguments.
-    """
-    dp_du = autograd.jacobian(
-        lambda x: fluid_pressure(np.reshape(x, (-1, 2)), fluid_props)[0])
-    dp_du_ad = dp_du(coordinates.reshape(-1))
-
-    return dp_du_ad
