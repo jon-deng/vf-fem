@@ -116,7 +116,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
                     + gamma/beta/dt2 * adj_v2.vector()
                     + 1/beta/dt2**2 * adj_a2.vector())
     model.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)
-    dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs)
+    dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs, 'petsc')
 
     return (adj_u1, adj_v1, adj_a1)
 
