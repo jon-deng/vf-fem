@@ -106,7 +106,6 @@ def _sort_surface_vertices(surface_coordinates):
 
     return np.array(idx_sort)
 
-
 class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.
