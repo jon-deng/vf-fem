@@ -3,20 +3,16 @@ Forward model
 
 Uses CGS (cm-g-s) units unless otherwise stated
 """
-from time import perf_counter
-import os
 
 from math import isclose, ceil, floor, remainder
 
-import h5py
 import numpy as np
-from matplotlib import tri
 from matplotlib import pyplot as plt
 import dolfin as dfn
 
 from . import forms
-from . import constants
 from . import statefile as sf
+from . import visualization as vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
@@ -72,98 +68,9 @@ def solution_times(t0, meas_times, dt):
 
     return times[1:], np.array(meas_indices, dtype=np.intp)-1
 
-def init_figure(model, fluid_props):
-    """
-    Returns a figure and tuple of axes to plot the solution into.
-    """
-    gridspec_kw = {'height_ratios': [4, 2, 2], 'width_ratios': [10, 0.5]}
-    fig, axs = plt.subplots(3, 2, gridspec_kw=gridspec_kw, figsize=(6, 8))
-    axs[0, 0].set_aspect('equal', adjustable='datalim')
-
-    thickness_bottom = np.amax(model.mesh.coordinates()[..., 0])
-
-    x = np.arange(model.surface_vertices.shape[0])
-    y = np.arange(model.surface_vertices.shape[0])
-
-    axs[1, 0].plot(x, y, marker='o')
-
-    # Initialize lines for plotting flow rate and the rate of flow rate
-    axs[2, 0].plot([0], [0])
-
-    axs[1, 0].set_xlim(-0.2, 1.4, auto=False)
-    p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
-    axs[1, 0].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
-
-    axs[1, 0].set_ylabel("Surface pressure [Pa]")
-
-    axs[2, 0].set_ylim(-0.01, 0.1)
-    axs[2, 0].set_ylabel("Glottal width [cm]")
-
-    for ax in axs[1:, -1]:
-        ax.set_axis_off()
-
-    return fig, axs
-
-def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
-    """
-    Plots the FEM solution into a figure.
-
-    Parameters
-    ----------
-    fig : matplotlib.Figure
-    axs : tuple of matplotlib.Axes
-    x : tuple of dfn.Function
-        Kinematic states (u, v, a)
-    fluid_props : dict
-        Fluid properties at time t
-
-    Returns
-    -------
-    fig, axs
-    """
-    axs[0, 0].clear()
-
-    delta_xy = x[0].vector()[model.vert_to_vdof.reshape(-1)].reshape(-1, 2)
-    xy_current = model.mesh.coordinates() + delta_xy
-    triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
-                                      triangles=model.mesh.cells())
-    mappable = axs[0, 0].tripcolor(triangulation,
-                                   solid_props['elastic_modulus'][model.vert_to_sdof],
-                                   edgecolors='k', shading='flat')
-    fig.colorbar(mappable, cax=axs[0, 1])
-    axs[0, 1].set_ylabel('[kPa]')
-
-    xy_surface = xy_current[model.surface_vertices]
-
-    xy_min, xy_sep = fluid_info['xy_min'], fluid_info['xy_sep']
-    axs[0, 0].plot(*xy_min, marker='o', mfc='none', color='C0')
-    axs[0, 0].plot(*xy_sep, marker='o', mfc='none', color='C1')
-    axs[0, 0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
-
-    axs[0, 0].set_title(f'Time: {1e3*t:>5.1f} ms')
-    axs[0, 0].set_xlim(-0.2, 1.4, auto=False)
-    axs[0, 0].set_ylim(0.0, 1.0, auto=False)
-
-    axs[0, 0].axhline(y=fluid_props['y_midline'], ls='-.', lw=0.5)
-    axs[0, 0].axhline(y=model.y_collision.values()[0], ls='-.', lw=0.5)
-
-    pressure_profile = axs[1, 0].lines[0]
-    pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
-
-    gw = fluid_props['y_midline'] - np.amax(xy_current[:, 1])
-    line = axs[2, 0].lines[0]
-    xdata = np.concatenate((line.get_xdata(), [t]), axis=0)
-    ydata = np.concatenate((line.get_ydata(), [gw]), axis=0)
-    line.set_data(xdata, ydata)
-
-    axs[2, 0].set_xlim(0, np.maximum(1.2*t, 0.01))
-    axs[2, 0].set_ylim(0, 0.03)
-
-    return fig, axs
-
 def increment_forward(model, x0, dt, solid_props, fluid_props):
     """
-    Returns the states at the next time, x1 = (u1, v1, a1).
+    Return the state at the end of `dt` `x1 = (u1, v1, a1)`.
 
     Parameters
     ----------
@@ -175,7 +82,7 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     solid_props : dict
         A dictionary of solid properties
     fluid_props : dict
-        A dictionary storing fluid properties.
+        A dictionary of fluid properties.
 
     Returns
     -------
@@ -195,10 +102,6 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     fluid_info = model.set_iteration((u0.vector(), v0.vector(), a0.vector()), dt,
                                      fluid_props, solid_props, u1=u0.vector())
 
-    # Check if collision is happening
-    # x_surface = model.get_surface_state()[0]
-    # print(x_surface[..., 1].max())
-
     # Solve the thing
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
     # form. During collision the equations are non-linear but in all other cases they are currently
@@ -216,7 +119,10 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5group='/',
             show_figure=False, figure_path=None):
     """
-    Solves the forward model over a time interval.
+    Solves the forward model over specific time instants.
+
+    The `model` is solved over specific time instants. All intermediate solution states are saved to
+    an hdf5 file.
 
     Parameters
     ----------
@@ -266,13 +172,14 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
     ## Allocate a figure for plotting
     fig, axs = None, None
     if show_figure:
-        fig, axs = init_figure(model, fluid_props)
+        fig, axs = vis.init_figure(model, fluid_props)
 
     # Get the solution times
     tmeas = np.array(tmeas)
     assert tmeas.size >= 2
     assert tmeas[-1] > tmeas[0]
 
+    # TODO: Add adaptive time stepping so that `dt` acts as a maximum time step the solver can take
     times, meas_indices = solution_times(t0, tmeas, dt)
     forward_info['meas_indices'] = meas_indices
 
@@ -311,8 +218,8 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
 
             ## Plot the solution
             if show_figure:
-                fig, axs = update_figure(fig, axs, model, t, (u0, v0, a0), info, solid_props,
-                                         fluid_props_ii)
+                fig, axs = vis.update_figure(fig, axs, model, t, (u0, v0, a0), info, solid_props,
+                                             fluid_props_ii)
                 plt.pause(0.001)
 
                 if figure_path is not None:
@@ -332,39 +239,3 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
         forward_info['flow_rate'] = np.array(flow_rate)
 
         return forward_info
-
-if __name__ == '__main__':
-    dfn.set_log_level(30)
-    emod = None
-    with h5py.File('out/opt-nlopt/ElasticModuli.h5') as f:
-        emod = f['elastic_modulus'][0, :]
-    # emod = constants.DEFAULT_SOLID_PROPERTIES['elastic_modulus']
-
-    solid_props = {'elastic_modulus': emod}
-    fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-    # fluid_props['p_sub'] = [1800 * constants.PASCAL_TO_CGS, 1800 * constants.PASCAL_TO_CGS, 1, 1]
-    # fluid_props['p_sub_time'] = [0, 2.5e-3, 2.5e-3, 0.02]
-
-    mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
-
-    mesh_base_filename = 'geometry2'
-    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    mesh_facet_path = os.path.join(mesh_dir, mesh_base_filename + '_facet_region.xml')
-    mesh_cell_path = os.path.join(mesh_dir, mesh_base_filename + '_physical_region.xml')
-
-    model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
-
-    save_path = f"out/test.h5"
-    try:
-        os.remove(save_path)
-    except FileNotFoundError:
-        pass
-
-    dt = 1e-4
-    runtime_start = perf_counter()
-    forward(model, 0, [0, 0.05], dt, solid_props, fluid_props, save_path, show_figure=True,
-            figure_path='out/opt-nlopt/anim_start/frame')
-    runtime_end = perf_counter()
-
-    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
-    plt.show()

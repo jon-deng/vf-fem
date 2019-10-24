@@ -227,8 +227,10 @@ class ForwardModel:
         self.pressure = dfn.Function(self.scalar_function_space)
 
         # Define the variational forms
-        trial_v = newmark_v(self.vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
-        trial_a = newmark_a(self.vector_trial, self.u0, self.v0, self.a0, self.dt, self.gamma, self.beta)
+        trial_v = newmark_v(self.vector_trial, self.u0, self.v0, self.a0, self.dt,
+                            self.gamma, self.beta)
+        trial_a = newmark_a(self.vector_trial, self.u0, self.v0, self.a0, self.dt,
+                            self.gamma, self.beta)
 
         inertia = self.rho*ufl.dot(trial_a, self.vector_test)*ufl.dx
 
@@ -274,12 +276,13 @@ class ForwardModel:
                                                self.facet_marker, facet_marker['fixed'])
 
         # Define some additional forms for diagnostics
-        # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu), strain(test))*ufl.dx - traction
+        # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu),
+        # strain(test))*ufl.dx - traction
 
         ## Forms needed for adjoint computation
-        # Note: For an externally calculated pressure, you have to correct the derivative based on the
-        # sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if it's strongly
-        # coupled).
+        # Note: For an externally calculated pressure, you have to correct the derivative based on
+        # the sensitivity of the pressure loading in f1 to either u0 or u1 (or both depending if
+        # it's strongly coupled).
         self.f1 = self.fu_nonlin
         self.df1_du0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u0, self.vector_trial))
         self.df1_da0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.a0, self.vector_trial))
