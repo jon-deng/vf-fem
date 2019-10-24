@@ -38,27 +38,33 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
 dt = 1e-4
-times_meas = [0, 0.01]
+times_meas = [0, 0.25]
 
 
 ## Set the fluid/solid parameters
 emod = model.emod.vector()[:].copy()
-emod[:] = 10e3 * PASCAL_TO_CGS
+emod[:] = 5e3 * PASCAL_TO_CGS
 step_size = 1e1 * PASCAL_TO_CGS
-num_steps = 7
+num_steps = 4
 
 emod_dir = np.random.rand(emod.size)
-
-fluid_props = DEFAULT_FLUID_PROPERTIES.copy()
 
 # Time varying fluid properties
 # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
 # fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
 # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
-
+p_sub = 1000
+y_gap = 0.005
 solid_props = DEFAULT_SOLID_PROPERTIES.copy()
-solid_props['rayleigh_m'] = 1e-3
-solid_props['rayleigh_k'] = 1e-3
+solid_props['rayleigh_m'] = 0
+solid_props['rayleigh_k'] = 3e-4
+solid_props['k_collision'] = 1e12
+solid_props['y_collision'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap - 0.002
+
+# Constant fluid properties
+fluid_props = DEFAULT_FLUID_PROPERTIES.copy()
+fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+fluid_props['p_sub'] = p_sub*PASCAL_TO_CGS
 
 
 ## Set a functional
@@ -66,7 +72,7 @@ fkwargs = {}
 # Functional for vocal eff
 # n_start = 50
 # fkwargs = {'n_start': n_start}
-Functional = functionals.VocalEfficiency
+Functional = extra_functionals.AcousticEfficiency
 
 # Functional for MFDR
 # fkwargs = {}
@@ -156,6 +162,7 @@ axs[1].set_ylabel(r"% Error")
 plt.tight_layout()
 plt.show()
 
+print(f"Gradient norm {np.linalg.norm(gradient_ad):.16e}")
 print(f"Linear gradient prediction {grad_ad_projected:.16e}")
 print(f"Actual FD values {grad_fd_projected[0]:.16e}")
 print(f"% Error {error}")
