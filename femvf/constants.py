@@ -6,6 +6,7 @@ Module containing some unit conversions and other constants
 PASCAL_TO_CGS = 1000/100
 SI_DENSITY_TO_CGS = 1/1000
 SI_VISCOSITY_TO_CGS = PASCAL_TO_CGS
+SI_POWER_TO_CGS = 1e7
 
 ## Default properties you can use if you can't think of anything else
 FLUID_PROPERTY_LABELS = ('p_sub', 'p_sup', 'a_sub', 'a_sup', 'rho', 'y_midline')

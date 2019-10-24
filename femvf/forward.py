@@ -282,6 +282,12 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
         f.append_time(times)
 
     ## Loop through solution times and write solution variables to the h5file.
+
+    # TODO: Hardcoded the calculation of glottal width here, but it should be an option you
+    # can pass in along with other functionals of interest you may want to calculate a time-history
+    # of
+    glottal_width = []
+    flow_rate = []
     with sf.StateFile(h5file, group=h5group, mode='a') as f:
         for ii, t in enumerate(times[:-1]):
             # Update properties
@@ -291,6 +297,8 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
             # Increment the state
             (u1, v1, a1), info = increment_forward(model, (u0, v0, a0), dt_, solid_props,
                                                    fluid_props_ii)
+            glottal_width.append(info['a_min'])
+            flow_rate.append(info['flow_rate'])
 
             ## Write the solution outputs to a file
             f.append_state((u1, v1, a1))
@@ -314,6 +322,14 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
         # Write the final fluid properties
         fluid_props_ii = get_dynamic_fluid_props(fluid_props, times[-1])
         f.append_fluid_props(fluid_props_ii)
+
+        # Write the final functionals
+        info = model.set_state((u1.vector(), v1.vector(), a1.vector()), fluid_props_ii, solid_props)
+        glottal_width.append(info['a_min'])
+        flow_rate.append(info['flow_rate'])
+
+        forward_info['glottal_width'] = np.array(glottal_width)
+        forward_info['flow_rate'] = np.array(flow_rate)
 
         return forward_info
 
