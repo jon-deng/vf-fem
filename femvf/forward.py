@@ -236,8 +236,8 @@ def forward(model, t0, tmeas, dt, solid_props, fluid_props, h5file='tmp.h5', h5g
         A dictionary of fluid properties.
     h5file : string
         Path to an hdf5 file where solution information will be appended.
-    group : string
-        An h5 group to save under
+    h5group : string
+        A group in the h5 file to save solution information under.
     show_figure : bool
         Determines whether to display figures of the solution or not.
     figure_path : string
