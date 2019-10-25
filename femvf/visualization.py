@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib import tri
 import matplotlib.pyplot as plt
 
-import constants
+from . import constants
 
 def triangulation(mesh, x, vert_to_vdof):
     """
