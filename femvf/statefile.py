@@ -231,6 +231,12 @@ class StateFile:
         """
         return self.file[join(self.group, 'time')][:]
 
+    def get_meas_indices(self):
+        """
+        Returns the measured indices.
+        """
+        return self.file[join(self.group, 'meas_indices')][:]
+
     def get_num_states(self):
         """
         Returns the number of states in the solution

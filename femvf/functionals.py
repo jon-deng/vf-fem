@@ -220,7 +220,7 @@ class SubglottalWork(AbstractFunctional):
     def dparam(self):
         return None
 
-class VocalEfficiency(AbstractFunctional):
+class TransferEfficiency(AbstractFunctional):
     """
     Returns the total vocal efficiency.
 
@@ -228,7 +228,7 @@ class VocalEfficiency(AbstractFunctional):
     the fluid.
     """
     def __init__(self, model, f, **kwargs):
-        super(VocalEfficiency, self).__init__(model, f, **kwargs)
+        super(TransferEfficiency, self).__init__(model, f, **kwargs)
 
         self.kwargs.setdefault('n_start', 0)
 

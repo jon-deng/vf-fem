@@ -41,6 +41,8 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props, adaptive=True,
         A dictionary of solid properties.
     fluid_props : dict
         A dictionary of fluid properties.
+    adaptive : bool
+        Indicate whether or not to use adaptive time stepping.
     h5file : string
         Path to an hdf5 file where solution information will be appended.
     h5group : string
