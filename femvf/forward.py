@@ -85,6 +85,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props, adaptive=True,
     ## Initialize datasets to save in h5 file
     with sf.StateFile(h5file, group=h5group, mode='a') as f:
         f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
+        f.append_time(t0)
 
     ## Loop through solution times and write solution variables to the h5file.
 
