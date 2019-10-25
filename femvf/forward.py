@@ -112,9 +112,6 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props, adaptive=True,
                 n_state += 1
                 t_current += dt_actual
 
-                if dt_actual < dt_target:
-                    print('yo')
-
                 glottal_width.append(info['a_min'])
                 flow_rate.append(info['flow_rate'])
 
