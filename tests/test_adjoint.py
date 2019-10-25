@@ -45,7 +45,7 @@ times_meas = [0, 0.25]
 emod = model.emod.vector()[:].copy()
 emod[:] = 5e3 * PASCAL_TO_CGS
 step_size = 1e1 * PASCAL_TO_CGS
-num_steps = 4
+num_steps = 8
 
 emod_dir = np.random.rand(emod.size)
 
@@ -64,11 +64,11 @@ solid_props['y_collision'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap - 
 # Constant fluid properties
 fluid_props = DEFAULT_FLUID_PROPERTIES.copy()
 fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-fluid_props['p_sub'] = p_sub*PASCAL_TO_CGS
+fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
 
 ## Set a functional
-fkwargs = {}
+fkwargs = {'tukey_alpha': 0.25}
 # Functional for vocal eff
 # n_start = 50
 # fkwargs = {'n_start': n_start}
