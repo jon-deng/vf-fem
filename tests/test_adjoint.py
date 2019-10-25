@@ -38,7 +38,7 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
 dt = 1e-4
-times_meas = [0, 0.25]
+times_meas = [0, 0.05]
 
 
 ## Set the fluid/solid parameters

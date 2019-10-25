@@ -26,8 +26,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     at n, n+1, and n+2.
 
     This is done because the adjoint calculation to solve for :math:`lambda_{n+1}` given
-    :math:`lambda_{n+2}` requires the forward equations :math:`f^{n+2}=0`, and :math:`f^{n+1}=0`, which in
-    turn require states :math:`x^{n}`, :math:`x^{n+1}`, and :math:`x^{n+2}` to be defined.
+    :math:`lambda_{n+2}` requires the forward equations :math:`f^{n+2}=0`, and :math:`f^{n+1}=0`,
+    which in turn requires states :math:`x^{n}`, :math:`x^{n+1}`, and :math:`x^{n+2}` to be defined.
 
     Note that :math:`f^{n+1} = f^{n+1}([u, v, a]^{n+1}, [u, v, a]^{n}) = 0` involves the FEM
     approximation and time stepping scheme that defines the state :math`x^{n+1} = (u, v, a)^{n+1}`
@@ -62,7 +62,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     _x1 = (x1[0].vector(), x1[1].vector(), x1[2].vector())
-    model.set_iteration(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
+    model.set_iteration_params(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
 
     # Assemble needed forms
     df2_du1 = dfn.assemble(model.df1_du0_adjoint) # This is a partial derivative
@@ -77,7 +77,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
     _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
-    model.set_iteration(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
+    model.set_iteration_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
@@ -166,7 +166,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
     num_states = f.get_num_states()
-    model.set_iteration_fromfile(f, num_states-1)
+    model.set_iteration_params_fromfile(f, num_states-1)
 
     df2_du2 = dfn.assemble(model.df1_du1_adjoint)
 
@@ -212,7 +212,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         # Assemble needed forms
         _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
-        model.set_iteration(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
+        model.set_iteration_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
         gradient = gradient - 1*df1_dparam*adj_u1.vector()

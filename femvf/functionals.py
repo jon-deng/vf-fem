@@ -95,7 +95,7 @@ class FluidWork(AbstractFunctional):
         res = 0
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation from state ii to ii+1
-            self.model.set_iteration_fromfile(self.f, ii+1)
+            self.model.set_iteration_params_fromfile(self.f, ii+1)
             res += dfn.assemble(self.model.fluid_work)
 
         return res
@@ -111,7 +111,7 @@ class FluidWork(AbstractFunctional):
         else:
             # Add the sensitivity component due to work from n to n+1
             if n < N_STATE-1:
-                self.model.set_iteration_fromfile(self.f, n+1)
+                self.model.set_iteration_params_fromfile(self.f, n+1)
                 dp_du, _ = self.model.get_flow_sensitivity()
 
                 out += dfn.assemble(self.model.dfluid_work_du0)
@@ -127,7 +127,7 @@ class FluidWork(AbstractFunctional):
 
             # Add the sensitviity component due to work from n-1 to n
             if n > N_START:
-                self.model.set_iteration_fromfile(self.f, n)
+                self.model.set_iteration_params_fromfile(self.f, n)
 
                 out += dfn.assemble(self.model.dfluid_work_du1)
 
@@ -156,7 +156,7 @@ class VolumeFlow(AbstractFunctional):
 
         totalflow = 0
         for ii in range(N_START, N_STATE-1):
-            fluid_info, _ = self.model.set_iteration_fromfile(self.f, ii+1)
+            fluid_info, _ = self.model.set_iteration_params_fromfile(self.f, ii+1)
 
             totalflow += fluid_info['flow_rate'] * self.model.dt.values()[0]
 
@@ -170,7 +170,7 @@ class VolumeFlow(AbstractFunctional):
         if n < N_START or n == num_states-1:
             dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
         else:
-            self.model.set_iteration_fromfile(self.f, n+1)
+            self.model.set_iteration_params_fromfile(self.f, n+1)
             _, dq_dun = self.model.get_flow_sensitivity()
             dtotalflow_dun = dq_dun * self.model.dt.values()[0]
 
@@ -195,7 +195,7 @@ class SubglottalWork(AbstractFunctional):
         ret = 0
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            fluid_info, fluid_props = self.model.set_iteration_fromfile(self.f, ii+1)
+            fluid_info, fluid_props = self.model.set_iteration_params_fromfile(self.f, ii+1)
 
             ret += self.model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
 
@@ -208,7 +208,7 @@ class SubglottalWork(AbstractFunctional):
         N_STATE = self.f.get_num_states()
 
         if n >= N_START and n < N_STATE-1:
-            _, fluid_props = self.model.set_iteration_fromfile(self.f, n+1)
+            _, fluid_props = self.model.set_iteration_params_fromfile(self.f, n+1)
             _, dq_du = self.model.get_flow_sensitivity()
 
             ret += self.model.dt.values()[0] * fluid_props['p_sub'] * dq_du
@@ -279,7 +279,7 @@ class MFDR(AbstractFunctional):
         num_states = self.f.get_num_states()
         for ii in range(num_states-1):
             # Set form coefficients to represent the equation at state ii
-            info, _ = self.model.set_iteration_fromfile(self.f, ii+1)
+            info, _ = self.model.set_iteration_params_fromfile(self.f, ii+1)
 
             flow_rate.append(info['flow_rate'])
         flow_rate = np.array(flow_rate)
@@ -303,13 +303,13 @@ class MFDR(AbstractFunctional):
 
         if n == idx_mfdr or n == idx_mfdr+1:
             # First calculate flow rates at n and n+1
-            # fluid_info, _ = model.set_iteration_fromfile(f, n+2)
+            # fluid_info, _ = model.set_iteration_params_fromfile(f, n+2)
 
             # q1 = fluid_info['flow_rate']
             dq1_du = self.model.get_flow_sensitivity()[1]
             t1 = self.f.get_time(n+1)
 
-            # fluid_info, _ = model.set_iteration_fromfile(f, n+1)
+            # fluid_info, _ = model.set_iteration_params_fromfile(f, n+1)
 
             # q0 = fluid_info['flow_rate']
             dq0_du = self.model.get_flow_sensitivity()[1]

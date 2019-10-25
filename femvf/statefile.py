@@ -6,6 +6,7 @@ from os.path import join
 
 import h5py
 import dolfin as dfn
+import numpy as np
 
 from . import constants
 
@@ -59,6 +60,8 @@ class StateFile:
             \fluid_property_label : dataset, (None,)
         \solid_properties
             \solid_property_label : dataset, ()
+        \meas_indices : dataset, (None,)
+        \time : dataset, (None,)
 
         Parameters
         ----------
@@ -71,7 +74,11 @@ class StateFile:
         solution_times : array_like
             Times at which the model will be solved
         """
-        self.file.create_dataset(join(self.group, 'time'), (0,), maxshape=(None,))
+        self.file.create_dataset(join(self.group, 'time'), (0,), maxshape=(None,),
+                                 dtype=np.float)
+
+        self.file.create_dataset(join(self.group, 'meas_indices'), (0,), maxshape=(None,),
+                                 dtype=np.intp)
 
         self.init_state(model, x0=x0)
 
@@ -139,6 +146,17 @@ class StateFile:
         if solid_props is not None:
             self.append_solid_props(solid_props)
 
+    def append_meas_index(self, index):
+        """
+        Append measured indices to the file.
+
+        Parameters
+        ----------
+        index : int
+        """
+        dset = self.file[join(self.group, 'meas_indices')]
+        dset.resize(dset.shape[0]+1, axis=0)
+        dset[-1] = index
 
     def append_state(self, x):
         """
@@ -193,12 +211,12 @@ class StateFile:
 
         Parameters
         ----------
-        time : array_like
-            Times to append
+        time : float
+            Time to append
         """
         dset = self.file[join(self.group, 'time')]
-        dset.resize(dset.shape[0]+time.size, axis=0)
-        dset[-time.size:] = time
+        dset.resize(dset.shape[0]+1, axis=0)
+        dset[-1] = time
 
 
     def get_time(self, n):

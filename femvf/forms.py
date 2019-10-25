@@ -296,6 +296,7 @@ class ForwardModel:
         self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
         self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
 
+    # Core solver functions
     def get_reference_configuration(self):
         """
         Returns the current configuration of the body.
@@ -307,7 +308,6 @@ class ForwardModel:
         array_like
             An array of mesh coordinate point ordered with increasing vertices.
         """
-
         return self.mesh.coordinates()
 
     def get_current_configuration(self):
@@ -347,7 +347,77 @@ class ForwardModel:
 
         return x_surface
 
+    def get_pressure(self):
+        """
+        Updates pressure coefficient using a bernoulli flow model.
 
+        Parameters
+        ----------
+        fluid_props : dict
+            A dictionary of fluid properties for the 1D bernoulli fluids model
+        """
+        # Update the pressure loading based on the deformed surface
+        x_surface = self.get_surface_state()
+
+        # Check that the surface doesn't cross over the midline
+        assert np.max(x_surface[0][..., 1]) < self.fluid_properties['y_midline']
+
+        pressure, fluid_info = fluids.get_pressure_form(self, x_surface, self.fluid_properties)
+
+        self.pressure.assign(pressure)
+
+        return fluid_info
+
+    def get_flow_sensitivity(self):
+        """
+        Updates pressure sensitivity using a bernoulli flow model.
+
+        Parameters
+        ----------
+        fluid_props : dict
+            A dictionary of fluid properties
+
+        Returns
+        -------
+        dp_du0 : np.ndarray
+            Sensitivity of surface pressures w.r.t. the initial displacement.
+        dq_du0 : np.ndarray
+            Sensitivity of the flow rate w.r.t. the initial displacement.
+        """
+        # Calculate sensitivities of fluid quantities based on the deformed surface
+        x_surface = self.get_surface_state()
+        dp_du0, dq_du0 = fluids.get_flow_sensitivity(self, x_surface, self.fluid_properties)
+
+        return dp_du0, dq_du0
+
+
+    # Convenience functions
+    def get_glottal_width(self):
+        """
+        Return glottal width
+        """
+        x_surface = self.get_surface_state()
+
+        return self.fluid_properties['y_midline'] - np.max(x_surface[0][..., 1])
+
+    def get_collision_gap(self):
+        """
+        Return the smallest distance to the collision plane
+        """
+        x_surface = self.get_surface_state()
+
+        return self.solid_properties['y_collision'] - np.max(x_surface[0][..., 1])
+
+    def get_ymax(self):
+        """
+        Return the maximum y-coordinate of the reference configuration
+        """
+        x_surface = self.get_surface_state()
+
+        return np.max(x_surface[0][..., 1])
+
+
+    # Parameter value setting functions
     def set_initial_state(self, u0, v0, a0):
         """
         Sets the state variables u, v, and a at the start of the step.
@@ -360,9 +430,12 @@ class ForwardModel:
         self.v0.vector()[:] = v0
         self.a0.vector()[:] = a0
 
-    def set_final_displacement(self, u1):
+    def set_final_state(self, u1):
         """
         Sets the displacement at the end of the time step.
+
+        Named `set_final_state` so that it pairs up with `set_initial_state`,  even though there is
+        only an input `u`, instead of `u`, `v` and `a`.
 
         This could be an initial guess in the case of non-linear governing equations, or a solved
         state so that the non-linear form can be linearized for the given state.
@@ -410,59 +483,61 @@ class ForwardModel:
         """
         self.fluid_properties = fluid_props
 
-    def set_pressure(self):
+    def set_params(self, x0, fluid_props, solid_props):
         """
-        Updates pressure coefficient using a bernoulli flow model.
+        Set all parameters needed to integrate the model.
 
         Parameters
         ----------
+        x0 : array_like
+        dt : float
         fluid_props : dict
-            A dictionary of fluid properties for the 1D bernoulli fluids model
+        solid_props : dict
         """
-        # Update the pressure loading based on the deformed surface
-        x_surface = self.get_surface_state()
+        self.set_initial_state(*x0)
+        self.set_fluid_properties(fluid_props)
+        self.set_solid_properties(solid_props)
 
-        # Check that the surface doesn't cross over the midline
-        assert np.max(x_surface[0][..., 1]) < self.fluid_properties['y_midline']
-
-        pressure, fluid_info = fluids.get_pressure_form(self, x_surface, self.fluid_properties)
-
-        self.pressure.assign(pressure)
+        fluid_info = self.get_pressure()
 
         return fluid_info
 
-    def get_flow_sensitivity(self):
+    def set_params_fromfile(self, statefile, n):
         """
-        Updates pressure sensitivity using a bernoulli flow model.
+        Set all parameters needed to integrate the model from a recorded value.
 
-        Parameters
-        ----------
-        fluid_props : dict
-            A dictionary of fluid properties
-
-        Returns
-        -------
-        dp_du0 : np.ndarray
-            Sensitivity of surface pressures w.r.t. the initial displacement.
-        dq_du0 : np.ndarray
-            Sensitivity of the flow rate w.r.t. the initial displacement.
-        """
-        # Calculate sensitivities of fluid quantities based on the deformed surface
-        x_surface = self.get_surface_state()
-        dp_du0, dq_du0 = fluids.get_flow_sensitivity(self, x_surface, self.fluid_properties)
-
-        return dp_du0, dq_du0
-
-    def set_iteration(self, x0, dt, fluid_props, solid_props, u1=None):
-        """
-        Sets all initial coefficient values for a step, based on a recorded solution.
+        Iteration `n` is the implicit relation
+        :math: f^{n}(u_n, u_{n-1}, p)
+        that gives the displacement at index `n`, given the state at `n-1` and all additional
+        parameters.
 
         Parameters
         ----------
         statefile : statefileutils.StateFile
-
         n : int
             Index of iteration to set
+        """
+        # Get data from the state file
+        fluid_props = statefile.get_fluid_props(n)
+        solid_props = statefile.get_solid_props()
+        x0 = statefile.get_state(n)
+
+        # Assign the values to the model
+        fluid_info = self.set_params(x0, fluid_props, solid_props)
+
+        return fluid_info
+
+    def set_iteration_params(self, x0, dt, fluid_props, solid_props, u1=None):
+        """
+        Set all parameters needed to integrate the model and an initial guess.
+
+        Parameters
+        ----------
+        x0 : array_like
+        dt : float
+        fluid_props : dict
+        solid_props : dict
+        u1 : array_like, optional
         """
         self.set_time_step(dt)
         self.set_initial_state(*x0)
@@ -470,15 +545,16 @@ class ForwardModel:
         self.set_solid_properties(solid_props)
 
         if u1 is not None:
-            self.set_final_displacement(u1)
+            self.set_final_state(u1)
 
-        fluid_info = self.set_pressure()
+        fluid_info = self.get_pressure()
 
         return fluid_info
 
-    def set_iteration_fromfile(self, statefile, n, set_final_state=True):
+    def set_iteration_params_fromfile(self, statefile, n, set_final_state=True):
         """
-        Sets all coefficient values based on a recorded iteration.
+        Set all parameters needed to integrate the model and an initial guess, based on a recorded
+        iteration.
 
         Iteration `n` is the implicit relation
         :math: f^{n}(u_n, u_{n-1}, p)
@@ -502,50 +578,6 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iteration(x0, dt, fluid_props, solid_props, u1=u1)
+        fluid_info = self.set_iteration_params(x0, dt, fluid_props, solid_props, u1=u1)
 
         return fluid_info, fluid_props
-
-    def set_state(self, x0, fluid_props, solid_props):
-        """
-        Sets all initial coefficient values for a step, based on a recorded solution.
-
-        Parameters
-        ----------
-        statefile : statefileutils.StateFile
-
-        n : int
-            Index of iteration to set
-        """
-        self.set_initial_state(*x0)
-        self.set_fluid_properties(fluid_props)
-        self.set_solid_properties(solid_props)
-
-        fluid_info = self.set_pressure()
-
-        return fluid_info
-
-    def set_state_fromfile(self, statefile, n):
-        """
-        Sets all coefficient values based on a recorded iteration.
-
-        Iteration `n` is the implicit relation
-        :math: f^{n}(u_n, u_{n-1}, p)
-        that gives the displacement at index `n`, given the state at `n-1` and all additional
-        parameters.
-
-        Parameters
-        ----------
-        statefile : statefileutils.StateFile
-        n : int
-            Index of iteration to set
-        """
-        # Get data from the state file
-        fluid_props = statefile.get_fluid_props(n)
-        solid_props = statefile.get_solid_props()
-        x0 = statefile.get_state(n)
-
-        # Assign the values to the model
-        fluid_info = self.set_state(x0, fluid_props, solid_props)
-
-        return fluid_info
