@@ -267,7 +267,6 @@ def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     model.set_initial_state(u1.vector(), v1.vector(), a1.vector())
     ymax1 = model.get_ymax()
     gap1 = solid_props['y_collision'] - ymax1
-    print(gap0, gap1)
 
     # Initial collision penetration tolerance
     tol = 1/10 * (fluid_props['y_midline'] - solid_props['y_collision'])

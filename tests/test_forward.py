@@ -19,7 +19,7 @@ from femvf import functionals
 dfn.set_log_level(30)
 np.random.seed(123)
 
-save_path = 'out/FiniteDifferenceStates.h5'
+save_path = 'out/test_forward.h5'
 if os.path.isfile(save_path):
     os.remove(save_path)
 
