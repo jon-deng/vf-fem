@@ -145,6 +145,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props, adaptive=True,
         f.append_fluid_props(fluid_props_ii)
 
         # Write the final functionals
+        u1, v1, a1 = x1
         info = model.set_params((u1.vector(), v1.vector(), a1.vector()), fluid_props_ii,
                                 solid_props)
         glottal_width.append(info['a_min'])
