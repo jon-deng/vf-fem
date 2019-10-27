@@ -17,8 +17,8 @@ from . import visualization as vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 
-def forward(model, t0, tmeas, dt_max, solid_props, fluid_props, adaptive=True,
-            h5file='tmp.h5', h5group='/', show_figure=False, figure_path=None):
+def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
+            h5file='tmp.h5', h5group='/', adaptive=True, show_figure=False, figure_path=None):
     """
     Solves the forward model over specific time instants.
 
