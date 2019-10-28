@@ -33,13 +33,13 @@ mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
-dt = 1e-4
-times_meas = [0, 0.05]
+dt = 2.5e-6
+times_meas = [0, 0.01]
 
 
 ## Set the fluid/solid parameters
 emod = model.emod.vector()[:].copy()
-emod[:] = 5e3 * PASCAL_TO_CGS
+emod[:] = 2e3 * PASCAL_TO_CGS
 
 # Time varying fluid properties
 # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
@@ -62,8 +62,11 @@ fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 print("Running forward model")
 runtime_start = perf_counter()
 
-forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=save_path, h5group='/')
+info = forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=save_path, h5group='/')
 
 runtime_end = perf_counter()
 
 print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+plt.plot(info['time'], info['glottal_width'])
+plt.show()

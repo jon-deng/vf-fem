@@ -128,6 +128,9 @@ class ForwardModel:
     Attributes
     ----------
     mesh : dfn.Mesh
+    surface_vertices : array_like
+        A list of vertex numbers on the pressure surface. They are ordered in increasing streamwise
+        direction.
 
     list of key vertices ie fsi interface
 
@@ -176,8 +179,6 @@ class ForwardModel:
         surface_coordinates = self.mesh.coordinates()[surface_vertices]
 
         # Sort the pressure surface vertices from inferior to superior
-        # TODO: This only works if surface coordinates have strictly increasing x-coordinate from
-        # inferior to superior. Meshes that don't might have some weird results.
         idx_sort = _sort_surface_vertices(surface_coordinates)
         self.surface_vertices = surface_vertices[idx_sort]
         self.surface_coordinates = surface_coordinates[idx_sort]
@@ -415,6 +416,15 @@ class ForwardModel:
         x_surface = self.get_surface_state()
 
         return np.max(x_surface[0][..., 1])
+
+    def get_collision_verts(self):
+        """
+        Return vertex numbers of nodes in collision.
+        """
+        # import ipdb; ipdb.set_trace()
+        u_surface = self.get_surface_state()[0]
+        verts = self.surface_vertices[u_surface[..., 1] > self.y_collision.values()[0]]
+        return verts
 
 
     # Parameter value setting functions

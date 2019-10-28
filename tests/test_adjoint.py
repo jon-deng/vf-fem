@@ -6,6 +6,7 @@ import sys
 import os
 from time import perf_counter
 
+# from math import round
 import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dfn
@@ -38,14 +39,16 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
 dt = 1e-4
-times_meas = [0, 0.05]
+t_final = 0.05
+times_meas = np.linspace(0, t_final, round(t_final/dt)+1)
+dtmax = 1e-4
 
 
 ## Set the fluid/solid parameters
 emod = model.emod.vector()[:].copy()
 emod[:] = 5e3 * PASCAL_TO_CGS
-step_size = 1e1 * PASCAL_TO_CGS
-num_steps = 8
+step_size = 1e-2 * PASCAL_TO_CGS
+num_steps = 5
 
 emod_dir = np.random.rand(emod.size)
 
@@ -68,7 +71,7 @@ fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
 
 ## Set a functional
-fkwargs = {'tukey_alpha': 0.25}
+fkwargs = {'tukey_alpha': 0.25, 'm_start': 250}
 # Functional for vocal eff
 # n_start = 50
 # fkwargs = {'n_start': n_start}
@@ -100,7 +103,7 @@ if os.path.exists(save_path):
 for n in range(num_steps):
     runtime_start = perf_counter()
     solid_props['elastic_modulus'] = emod + n*step_size*emod_dir
-    forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=save_path, h5group=f'{n}')
+    forward(model, 0, times_meas, dtmax, solid_props, fluid_props, h5file=save_path, h5group=f'{n}')
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -116,11 +119,11 @@ functional_fd = np.array(functional_fd)
 
 
 ## Adjoint
-print("Computing Gradient via Adjoint State")
+print("Computing Gradient via Adjoint Method")
 
 runtime_start = perf_counter()
 info = None
-with sf.StateFile(save_path, group='0') as f:
+with sf.StateFile(save_path, group='0', mode='r') as f:
     _, gradient_ad = adjoint(model, f, Functional, fkwargs)
 runtime_end = perf_counter()
 

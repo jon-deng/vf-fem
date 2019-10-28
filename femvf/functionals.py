@@ -86,10 +86,10 @@ class FluidWork(AbstractFunctional):
     def __init__(self, model, f, **kwargs):
         super(FluidWork, self).__init__(model, f, **kwargs)
 
-        self.kwargs.setdefault('n_start', 0)
+        self.kwargs.setdefault('m_start', 0)
 
     def __call__(self):
-        N_START = self.kwargs['n_start']
+        N_START = self.kwargs['m_start']
         N_STATE = self.f.get_num_states()
 
         res = 0
@@ -103,7 +103,7 @@ class FluidWork(AbstractFunctional):
     def du(self, n):
         out = 0
 
-        N_START = self.kwargs['n_start']
+        N_START = self.kwargs['m_start']
         N_STATE = self.f.get_num_states()
 
         if n < N_START:
@@ -148,11 +148,11 @@ class VolumeFlow(AbstractFunctional):
     def __init__(self, model, f, **kwargs):
         super(VolumeFlow, self).__init__(model, f, **kwargs)
 
-        self.kwargs.setdefault('n_start', 0)
+        self.kwargs.setdefault('m_start', 0)
 
     def __call__(self):
         N_STATE = self.f.get_num_states()
-        N_START = self.kwargs['n_start']
+        N_START = self.kwargs['m_start']
 
         totalflow = 0
         for ii in range(N_START, N_STATE-1):
@@ -164,7 +164,7 @@ class VolumeFlow(AbstractFunctional):
 
     def du(self, n):
         dtotalflow_dun = None
-        N_START = self.kwargs['n_start']
+        N_START = self.kwargs['m_start']
 
         num_states = self.f.get_num_states()
         if n < N_START or n == num_states-1:
@@ -186,10 +186,11 @@ class SubglottalWork(AbstractFunctional):
     def __init__(self, model, f, **kwargs):
         super(SubglottalWork, self).__init__(model, f, **kwargs)
 
-        self.kwargs.setdefault('n_start', 0)
+        self.kwargs.setdefault('m_start', 0)
 
     def __call__(self):
-        N_START = self.kwargs['n_start']
+        meas_ind = self.f.get_meas_indices()
+        N_START = meas_ind[self.kwargs['m_start']]
         N_STATE = self.f.get_num_states()
 
         ret = 0
@@ -199,13 +200,15 @@ class SubglottalWork(AbstractFunctional):
 
             ret += self.model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
 
+        self.cache.update({'m_start': N_START, 'N_STATE': N_STATE})
+
         return ret
 
     def du(self, n):
         ret = dfn.Function(self.model.vector_function_space).vector()
 
-        N_START = self.kwargs['n_start']
-        N_STATE = self.f.get_num_states()
+        N_START = self.cache['m_start']
+        N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
             _, fluid_props = self.model.set_iteration_params_fromfile(self.f, n+1)
@@ -230,7 +233,7 @@ class TransferEfficiency(AbstractFunctional):
     def __init__(self, model, f, **kwargs):
         super(TransferEfficiency, self).__init__(model, f, **kwargs)
 
-        self.kwargs.setdefault('n_start', 0)
+        self.kwargs.setdefault('m_start', 0)
 
         self.funcs['FluidWork'] = FluidWork(model, f, **kwargs)
         self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
@@ -247,7 +250,7 @@ class TransferEfficiency(AbstractFunctional):
     def du(self, n):
         # TODO : Is there something slightly wrong with this one? Seems slightly wrong from
         # comparing with FD. The error is small but it is not propto step size?
-        N_START = self.kwargs['n_start']
+        N_START = self.kwargs['m_start']
 
         tfluidwork = self.cache.get('totalfluidwork', None)
         tinputwork = self.cache.get('totalinputwork', None)
@@ -270,7 +273,7 @@ class MFDR(AbstractFunctional):
     def __init__(self, model, f, **kwargs):
         super(MFDR, self).__init__(model, f, **kwargs)
 
-        self.kwargs.setdefault('n_start', 0)
+        self.kwargs.setdefault('m_start', 0)
 
     def __call__(self):
         flow_rate = []
@@ -287,7 +290,7 @@ class MFDR(AbstractFunctional):
         times = self.f.get_solution_times()[:-1]
         dflow_rate_dt = (flow_rate[1:]-flow_rate[:-1]) / (times[1:] - times[:-1])
 
-        N_START = self.kwargs['n_start']
+        N_START = self.kwargs['m_start']
         idx_min = np.argmin(dflow_rate_dt[N_START:]) + N_START
 
         res = dflow_rate_dt[idx_min]

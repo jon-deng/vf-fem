@@ -151,6 +151,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props, adaptive=True,
         glottal_width.append(info['a_min'])
         flow_rate.append(info['flow_rate'])
 
+        forward_info['time'] = f.get_solution_times()
         forward_info['glottal_width'] = np.array(glottal_width)
         forward_info['flow_rate'] = np.array(flow_rate)
 
@@ -215,7 +216,7 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
     model : forms.ForwardModel
     x0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model.
-    dt : float
+    dt_max : float
         The time step to increment over.
     solid_props : dict
         A dictionary of solid properties.
@@ -241,6 +242,7 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
     refine = True
     while refine:
         x1, info = increment_forward(model, x0, dt, solid_props, fluid_props)
+        # coll_verts = model.get_collision_verts()
 
         refine = None
         if adaptive:
@@ -269,13 +271,11 @@ def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     ymax1 = model.get_ymax()
     gap1 = solid_props['y_collision'] - ymax1
 
-    # Initial collision penetration tolerance
-    tol = 1/10 * (fluid_props['y_midline'] - solid_props['y_collision'])
+    # Refinement condition is based on initial collision penetration tolerance
+    tol = 1/50 * (fluid_props['y_midline'] - solid_props['y_collision'])
     if gap0 >= 0 and gap1 < 0:
         if -gap1 > tol:
             refine = True
-
-    if refine:
-        dt_refine = 0.5 * dt
+            dt_refine = 0.5 * dt
 
     return refine, dt_refine
