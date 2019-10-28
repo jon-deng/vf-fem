@@ -151,6 +151,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         glottal_width.append(info['a_min'])
         flow_rate.append(info['flow_rate'])
 
+        forward_info['meas_ind'] = f.get_meas_indices()
         forward_info['time'] = f.get_solution_times()
         forward_info['glottal_width'] = np.array(glottal_width)
         forward_info['flow_rate'] = np.array(flow_rate)
