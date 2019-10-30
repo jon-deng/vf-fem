@@ -120,6 +120,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     return (adj_u1, adj_v1, adj_a1)
 
+# @profile
 def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
@@ -161,7 +162,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     x2 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
 
     ## Allocate space for the gradient
-    gradient = np.zeros(model.emod.vector().size())
+    gradient = dfn.Function(model.scalar_function_space).vector() #np.zeros(model.emod.vector().size())
 
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
@@ -179,7 +180,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     adj_a2.vector()[:] = 0
 
     df2_dparam = dfn.assemble(df1_dparam_form_adj)
-    gradient += -1*df2_dparam*adj_u2.vector() + 0
+    gradient -= df2_dparam*adj_u2.vector()
 
     ## Loop through states for adjoint computation
     num_states = f.get_num_states()
@@ -215,10 +216,10 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         model.set_iteration_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
-        gradient = gradient - 1*df1_dparam*adj_u1.vector()
+        gradient -= df1_dparam*adj_u1.vector()
 
         if functional.dparam() is not None:
-            gradient = gradient + functional.dparam()
+            gradient += functional.dparam()
 
         # Update adjoint recurrence relations for the next iteration
         adj_a2.assign(adj_a1)

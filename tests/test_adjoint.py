@@ -123,6 +123,7 @@ print("Computing Gradient via Adjoint Method")
 
 runtime_start = perf_counter()
 info = None
+gradient_ad = None
 with sf.StateFile(save_path, group='0', mode='r') as f:
     _, gradient_ad = adjoint(model, f, Functional, fkwargs)
 runtime_end = perf_counter()
@@ -138,7 +139,7 @@ axs[0].plot(step_points, functional_fd, color='C0', marker='o',
             label="Directly computed functionals")
 
 # Project the gradient in the direction of elastic modulus increase
-grad_ad_projected = np.sum(gradient_ad * emod_dir)
+grad_ad_projected = np.sum(np.array(gradient_ad) * emod_dir)
 functional_ad = functional_fd[0] + grad_ad_projected*step_points
 axs[0].plot(step_points, functional_ad, color='C1', marker='o',
             label="Linear prediction from gradient")

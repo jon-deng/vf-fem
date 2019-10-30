@@ -4,6 +4,7 @@
 *.vtu
 *.json
 *.lprof
+*.prof
 *.pvd
 *.png
 out
