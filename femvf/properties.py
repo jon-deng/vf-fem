@@ -2,21 +2,95 @@
 Classes for definining property values
 """
 
-class SolidProperties:
+from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+
+class Properties:
+    """
+    Represents a collection of properties
+    """
+
+    TYPES = {'foo': ('field', None),
+             'bar': ('const', (3,))}
+
+    LABELS = tuple(TYPES.keys())
+
+    DEFAULTS = {'foo': 1.0,
+                'bar': -2.0}
+
+    def __init__(self, **kwargs):
+        self.data = dict(self.LABELS)
+
+        for key in self.LABELS:
+            self.data[key] = kwargs.get(key, self.DEFAULTS[key])
+
+    def __getitem__(self, key):
+        """
+        Gives dictionary like behaviour.
+
+        Raises an errors if the key does not exist.
+        """
+        if key not in self.labels:
+            raise ValueError(f"{key} is not a valid property")
+        else:
+            return self.data[key]
+
+    def __setitem__(self, key, value):
+        """
+        Gives dictionary like behaviour.
+
+        Raises an errors if the key does not exist.
+
+        TODO: You might want to raise an error if you set the property wrong. For example and error
+        should be raised if you try to set a field of values to a constant property.
+        """
+        if key not in self.labels:
+            raise ValueError(f"{key} is not a valid property")
+        else:
+            self.data[key] = value
+
+class SolidProperties(Properties):
     """
     Represents a collection of linear-elastic solid properties
     """
 
-    SOLID_PROPERTY_LABELS = ('elastic_modulus', 'poissons_ratio', 'density',
-                             'rayleigh_m', 'rayleigh_k', 'y_collision')
-    def __init__(self):
-        self.elastic_modulus
-        self.rayleigh_m
-        self.rayleigh_k
-        self.nu
-        self.y_collision
+    # `types` indicates if each property is either a field or constant variable
+    # and its shape in a tuple. A shape of `None` indicates a scalar value
 
-class FluidProperties:
+    TYPES = {'elastic_modulus': ('field', None),
+             'poissons_ratio': ('const', None),
+             'density': ('const', None),
+             'rayleigh_m': ('const', None),
+             'rayleigh_k': ('const', None),
+             'y_collision': ('const', None),
+             'k_collision': ('const', None)}
+
+    LABELS = tuple(TYPES.keys())
+
+    DEFAULTS = {'elastic_modulus': 10e3 * PASCAL_TO_CGS,
+                'poissons_ratio': 0.49,
+                'density': 1000 * SI_DENSITY_TO_CGS,
+                'rayleigh_m': 10,
+                'rayleigh_k': 1e-3,
+                'y_collision': 0.61-0.001,
+                'k_collision': 1e11}
+
+class FluidProperties(Properties):
     """
     Represents a collection of 1D potential flow fluid properties
     """
+
+    TYPES = {'p_sub': ('const', None),
+             'p_sup': ('const', None),
+             'a_sub': ('const', None),
+             'a_sup': ('const', None),
+             'rho': ('const', None),
+             'y_midline': ('const', None)}
+
+    LABELS = tuple(TYPES.keys())
+
+    DEFAULTS = {'p_sub': 800 * PASCAL_TO_CGS,
+                'p_sup': 0 * PASCAL_TO_CGS,
+                'a_sub': 100000,
+                'a_sup': 0.6,
+                'rho': 1.1225 * SI_DENSITY_TO_CGS,
+                'y_midline': 0.61}
