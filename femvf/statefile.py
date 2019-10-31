@@ -9,6 +9,7 @@ import dolfin as dfn
 import numpy as np
 
 from . import constants
+from .properties import SolidProperties, FluidProperties
 
 class StateFile:
     """
@@ -117,8 +118,9 @@ class StateFile:
             Not really needed for this one but left the arg here since it's in solid properties init
         """
         group = self.file.create_group(join(self.group, 'fluid_properties'))
-        for label in constants.FLUID_PROPERTY_LABELS:
-            group.create_dataset(label, shape=(0,), maxshape=(None,))
+        for key, prop_desc in FluidProperties.TYPES.items():
+            shape = _property_shape(prop_desc, model)
+            group.create_dataset(key, shape=(0,)+shape, maxshape=(None,)+shape)
 
         if fluid_props is not None:
             self.append_fluid_props(fluid_props)
@@ -133,15 +135,9 @@ class StateFile:
 
         """
         group = self.file.create_group(join(self.group, 'solid_properties'))
-        for label in constants.SOLID_PROPERTY_LABELS:
-            # Only elastic modulus is a vector, other solid properties are currently scalars
-            shape = None
-            if label == 'elastic_modulus':
-                shape = (model.scalar_function_space.dim(),)
-            else:
-                shape = ()
-
-            group.create_dataset(label, shape)
+        for key, prop_desc in SolidProperties.TYPES.items():
+            shape = _property_shape(prop_desc, model)
+            group.create_dataset(key, shape)
 
         if solid_props is not None:
             self.append_solid_props(solid_props)
@@ -313,3 +309,15 @@ class StateFile:
                 solid_props[label] = data[()]
 
         return solid_props
+
+def _property_shape(property_desc, model):
+    const_or_field = property_desc[0]
+    data_shape = property_desc[1]
+
+    shape = None
+    if const_or_field == 'field':
+        shape = (model.mesh.num_vertices(),) + data_shape
+    else:
+        shape = data_shape
+
+    return shape

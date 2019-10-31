@@ -15,12 +15,13 @@ sys.path.append('../')
 from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf import forms
-from femvf.constants import DEFAULT_FLUID_PROPERTIES, DEFAULT_SOLID_PROPERTIES, PASCAL_TO_CGS
+from femvf.constants import PASCAL_TO_CGS
+from femvf.properties import FluidProperties, SolidProperties
 from femvf import functionals
 from femvf import statefile as sf
 
 sys.path.append(os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/'))
-import functionals as extra_functionals
+# import functionals as extra_functionals
 
 dfn.set_log_level(30)
 np.random.seed(123)
@@ -58,14 +59,14 @@ emod_dir = np.random.rand(emod.size)
 # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 p_sub = 1000
 y_gap = 0.005
-solid_props = DEFAULT_SOLID_PROPERTIES.copy()
+solid_props = SolidProperties()
 solid_props['rayleigh_m'] = 0
 solid_props['rayleigh_k'] = 3e-4
 solid_props['k_collision'] = 1e12
 solid_props['y_collision'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap - 0.002
 
 # Constant fluid properties
-fluid_props = DEFAULT_FLUID_PROPERTIES.copy()
+fluid_props = FluidProperties()
 fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
 fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
@@ -75,11 +76,11 @@ fkwargs = {'tukey_alpha': 0.25, 'm_start': 250}
 # Functional for vocal eff
 # n_start = 50
 # fkwargs = {'n_start': n_start}
-Functional = extra_functionals.AcousticEfficiency
+# Functional = extra_functionals.AcousticEfficiency
 
 # Functional for MFDR
-# fkwargs = {}
-# Functional = functionals.MFDR
+fkwargs = {}
+Functional = functionals.MFDR
 
 # Functional for weighted sum of squared glottal widths
 # fkwargs = {}

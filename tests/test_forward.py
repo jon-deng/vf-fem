@@ -13,7 +13,8 @@ import dolfin as dfn
 sys.path.append('../')
 from femvf.forward import forward
 from femvf import forms
-from femvf.constants import DEFAULT_FLUID_PROPERTIES, DEFAULT_SOLID_PROPERTIES, PASCAL_TO_CGS
+from femvf.properties import SolidProperties, FluidProperties
+from femvf.constants import PASCAL_TO_CGS
 from femvf import functionals
 
 dfn.set_log_level(30)
@@ -47,7 +48,7 @@ emod[:] = 2e3 * PASCAL_TO_CGS
 # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
 p_sub = 1000
 y_gap = 0.005
-solid_props = DEFAULT_SOLID_PROPERTIES.copy()
+solid_props = SolidProperties()
 solid_props['elastic_modulus'] = emod
 solid_props['rayleigh_m'] = 0
 solid_props['rayleigh_k'] = 3e-4
@@ -55,7 +56,7 @@ solid_props['k_collision'] = 1e12
 solid_props['y_collision'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap - 0.002
 
 # Constant fluid properties
-fluid_props = DEFAULT_FLUID_PROPERTIES.copy()
+fluid_props = FluidProperties()
 fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
 fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 

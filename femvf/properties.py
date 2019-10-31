@@ -4,23 +4,21 @@ Classes for definining property values
 
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
-class Properties:
+class Properties(dict):
     """
     Represents a collection of properties
     """
 
-    TYPES = {'foo': ('field', None),
+    TYPES = {'foo': ('field', ()),
              'bar': ('const', (3,))}
-
-    LABELS = tuple(TYPES.keys())
 
     DEFAULTS = {'foo': 1.0,
                 'bar': -2.0}
 
-    def __init__(self, **kwargs):
-        self.data = dict(self.LABELS)
+    def __init__(self, *args, **kwargs):
+        self.data = dict()
 
-        for key in self.LABELS:
+        for key in self.TYPES.keys():
             self.data[key] = kwargs.get(key, self.DEFAULTS[key])
 
     def __getitem__(self, key):
@@ -29,7 +27,7 @@ class Properties:
 
         Raises an errors if the key does not exist.
         """
-        if key not in self.labels:
+        if key not in self.TYPES:
             raise ValueError(f"{key} is not a valid property")
         else:
             return self.data[key]
@@ -43,10 +41,19 @@ class Properties:
         TODO: You might want to raise an error if you set the property wrong. For example and error
         should be raised if you try to set a field of values to a constant property.
         """
-        if key not in self.labels:
+        if key not in self.TYPES:
             raise ValueError(f"{key} is not a valid property")
         else:
             self.data[key] = value
+
+    def __contains__(self, key):
+        return key in self.TYPES
+
+    def items(self):
+        return self.data.items()
+
+    def keys(self):
+        return self.data.keys()
 
 class SolidProperties(Properties):
     """
@@ -56,13 +63,13 @@ class SolidProperties(Properties):
     # `types` indicates if each property is either a field or constant variable
     # and its shape in a tuple. A shape of `None` indicates a scalar value
 
-    TYPES = {'elastic_modulus': ('field', None),
-             'poissons_ratio': ('const', None),
-             'density': ('const', None),
-             'rayleigh_m': ('const', None),
-             'rayleigh_k': ('const', None),
-             'y_collision': ('const', None),
-             'k_collision': ('const', None)}
+    TYPES = {'elastic_modulus': ('field', ()),
+             'poissons_ratio': ('const', ()),
+             'density': ('const', ()),
+             'rayleigh_m': ('const', ()),
+             'rayleigh_k': ('const', ()),
+             'y_collision': ('const', ()),
+             'k_collision': ('const', ())}
 
     LABELS = tuple(TYPES.keys())
 
@@ -79,12 +86,12 @@ class FluidProperties(Properties):
     Represents a collection of 1D potential flow fluid properties
     """
 
-    TYPES = {'p_sub': ('const', None),
-             'p_sup': ('const', None),
-             'a_sub': ('const', None),
-             'a_sup': ('const', None),
-             'rho': ('const', None),
-             'y_midline': ('const', None)}
+    TYPES = {'p_sub': ('const', ()),
+             'p_sup': ('const', ()),
+             'a_sub': ('const', ()),
+             'a_sup': ('const', ()),
+             'rho': ('const', ()),
+             'y_midline': ('const', ())}
 
     LABELS = tuple(TYPES.keys())
 
