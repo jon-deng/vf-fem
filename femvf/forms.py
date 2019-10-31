@@ -122,8 +122,8 @@ class ForwardModel:
         Path to a fenics mesh xml file. An xml file containing facet and cell functions are also
         loaded in the directory.
     facet_labels, cell_labels : dict of {str: int}
-        A dictionary of named markers for facets and cells. `facet_marker_id` needs atleast two
-        entries {'pressure': ...} and {'fixed': ...} denoting the surfaces with applied pressure
+        A dictionary of named markers for facets and cells. `facet_labels` needs atleast two
+        entries {'pressure': ...} and {'fixed': ...} denoting the facets with applied pressure
         and fixed conditions respectively.
 
     Attributes
