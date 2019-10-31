@@ -4,7 +4,7 @@ Classes for definining property values
 
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
-class Properties(dict):
+class Properties:
     """
     Represents a collection of properties
     """
@@ -50,9 +50,15 @@ class Properties(dict):
         return key in self.TYPES
 
     def items(self):
+        """
+        Return underlying property dict's iterms
+        """
         return self.data.items()
 
     def keys(self):
+        """
+        Return underlying property dict's keys
+        """
         return self.data.keys()
 
 class SolidProperties(Properties):
