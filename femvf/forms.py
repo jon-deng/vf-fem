@@ -129,17 +129,21 @@ class ForwardModel:
     Attributes
     ----------
     mesh : dfn.Mesh
+    facet_function : dfn.MeshFunction
+    cell_function : dfn.MeshFunction
+
+    fluid_props : .properties.FluidProperties
+    solid_props : .properties.SolidProperties
+
     surface_vertices : array_like
         A list of vertex numbers on the pressure surface. They are ordered in increasing streamwise
         direction.
 
-    list of key vertices ie fsi interface
 
-    vertex_to_vdof
-    vertex_to_sdof
-
-    vector_function_space
-    scalar_function_space
+    vector_function_space : dfn.VectorFunctionSpace
+    scalar_function_space : dfn.FunctionSpace
+    vertex_to_vdof : array_like
+    vertex_to_sdof : array_like
 
     form coefficients and states
 
@@ -255,12 +259,12 @@ class ForwardModel:
 
         self.fu = inertia + stiffness + damping - traction
 
-        # Non linear equations during collision. Add a penalty to account for this
+        # Use the penalty method to account for collision
         collision_normal = dfn.Constant([0, 1])
         x_reference = dfn.Function(self.vector_function_space)
         x_reference.vector()[self.vert_to_vdof.reshape(-1)] = self.mesh.coordinates().reshape(-1)
 
-        gap = ufl.dot(x_reference+self.u1, collision_normal) - (self.y_collision)
+        gap = ufl.dot(x_reference+self.u1, collision_normal) - self.y_collision
         positive_gap = (gap + abs(gap)) / 2
 
 
