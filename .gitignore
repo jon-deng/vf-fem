@@ -7,6 +7,7 @@
 *.prof
 *.pvd
 *.png
+*.txt
 out
 
 # Byte-compiled / optimized / DLL files

@@ -16,7 +16,7 @@ from . import visualization as vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
-
+# @profile
 def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
             h5file='tmp.h5', h5group='/', adaptive=True, show_figure=False, figure_path=None):
     """
@@ -158,6 +158,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
         return forward_info
 
+# @profile
 def increment_forward(model, x0, dt, solid_props, fluid_props):
     """
     Return the state at the end of `dt` `x1 = (u1, v1, a1)`.
