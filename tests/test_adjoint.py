@@ -113,7 +113,7 @@ for n in range(num_steps):
 functional_fd = list()
 with sf.StateFile('out/FiniteDifferenceStates.h5', group='0', mode='r') as f:
     for n in range(num_steps):
-        f.group = f'{n}'
+        f.root_group_name = f'{n}'
         functional_fd.append(Functional(model, f, **fkwargs)())
 
 functional_fd = np.array(functional_fd)

@@ -39,7 +39,7 @@ class StateFile:
 
     def __init__(self, name, group='/', **kwargs):
         self.file = h5py.File(name, **kwargs)
-        self.group = group
+        self.root_group_name = group
 
         # self.data = self.file[self.group]
 
@@ -48,6 +48,40 @@ class StateFile:
 
     def __exit__(self, type, value, traceback):
         self.file.close()
+
+    def __len__(self):
+        return self.get_num_states()
+
+    @property
+    def size(self):
+        """
+        Return the number of states in the file.
+        """
+        return self.get_num_states()
+
+    @property
+    def root_group_name(self):
+        """
+        Return the group path the states are stored under
+        """
+        return self._root_group_name
+
+    @root_group_name.setter
+    def root_group_name(self, name):
+        """
+        Set the root group path and creates the group if it doesn't exist
+        """
+        self._root_group_name = name
+
+        if name not in self.file:
+            self.file.create_group(name)
+
+    @property
+    def root_group(self):
+        """
+        Return the `h5py.Group` object where states are stored
+        """
+        return self.file[self.root_group_name]
 
     def init_layout(self, model, x0=None, fluid_props=None, solid_props=None):
         r"""
@@ -75,20 +109,18 @@ class StateFile:
         solution_times : array_like
             Times at which the model will be solved
         """
-        self.file.create_dataset(join(self.group, 'time'), (0,), maxshape=(None,),
-                                 dtype=np.float)
+        self.root_group.create_dataset('time', (0,), maxshape=(None,), dtype=np.float)
 
-        self.file.create_dataset(join(self.group, 'meas_indices'), (0,), maxshape=(None,),
-                                 dtype=np.intp)
+        self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,), dtype=np.intp)
 
         self.init_state(model, x0=x0)
 
         # Fluid properties
-        if 'fluid_properties' not in self.file[self.group]:
+        if 'fluid_properties' not in self.root_group:
             self.init_fluid_props(model, fluid_props=fluid_props)
 
         # Solid properties (assumed to not be time-varying)
-        if 'solid_properties' not in self.file[self.group]:
+        if 'solid_properties' not in self.root_group:
             self.init_solid_props(model, solid_props=solid_props)
 
     def init_state(self, model, x0=None):
@@ -102,8 +134,8 @@ class StateFile:
         # Kinematic states
         NDOF = model.vector_function_space.dim()
         for dataset_name in ['u', 'v', 'a']:
-            self.file.create_dataset(join(self.group, dataset_name), (0, NDOF),
-                                     maxshape=(None, NDOF), chunks=(1, NDOF), dtype='f8')
+            self.root_group.create_dataset(dataset_name, (0, NDOF),
+                                      maxshape=(None, NDOF), chunks=(1, NDOF), dtype='f8')
 
         if x0 is not None:
             self.append_state(x0)
@@ -117,10 +149,10 @@ class StateFile:
         model : femvf.forms.ForwardModel
             Not really needed for this one but left the arg here since it's in solid properties init
         """
-        group = self.file.create_group(join(self.group, 'fluid_properties'))
+        group_fluid = self.root_group.create_group('fluid_properties')
         for key, prop_desc in FluidProperties.TYPES.items():
             shape = _property_shape(prop_desc, model)
-            group.create_dataset(key, shape=(0,)+shape, maxshape=(None,)+shape)
+            group_fluid.create_dataset(key, shape=(0,)+shape, maxshape=(None,)+shape)
 
         if fluid_props is not None:
             self.append_fluid_props(fluid_props)
@@ -134,10 +166,10 @@ class StateFile:
         model :
 
         """
-        group = self.file.create_group(join(self.group, 'solid_properties'))
+        solid_group = self.root_group.create_group('solid_properties')
         for key, prop_desc in SolidProperties.TYPES.items():
             shape = _property_shape(prop_desc, model)
-            group.create_dataset(key, shape)
+            solid_group.create_dataset(key, shape)
 
         if solid_props is not None:
             self.append_solid_props(solid_props)
@@ -150,7 +182,7 @@ class StateFile:
         ----------
         index : int
         """
-        dset = self.file[join(self.group, 'meas_indices')]
+        dset = self.root_group['meas_indices']
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = index
 
@@ -164,7 +196,7 @@ class StateFile:
             (u, v, a) states to append
         """
         for dset_name, value in zip(['u', 'v', 'a'], x):
-            dset = self.file[join(self.group, dset_name)]
+            dset = self.root_group[dset_name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value.vector()[:]
 
@@ -177,8 +209,10 @@ class StateFile:
         fluid_props : dict
             Dictionary of fluid properties to append
         """
-        for label in constants.FLUID_PROPERTY_LABELS:
-            dset = self.file[join(self.group, 'fluid_properties', label)]
+        fluid_group = self.root_group['fluid_properties']
+
+        for label in FluidProperties.TYPES:
+            dset = fluid_group[label]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = fluid_props[label]
 
@@ -193,8 +227,9 @@ class StateFile:
         solid_props : dict
             Dictionary of solid properties to append
         """
-        for label in constants.SOLID_PROPERTY_LABELS:
-            dset = self.file[join(self.group, 'solid_properties', label)]
+        solid_group = self.root_group['solid_properties']
+        for label in SolidProperties.TYPES:
+            dset = solid_group[label]
 
             if label == 'elastic_modulus':
                 dset[:] = solid_props[label]
@@ -210,7 +245,7 @@ class StateFile:
         time : float
             Time to append
         """
-        dset = self.file[join(self.group, 'time')]
+        dset = self.root_group['time']
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
 
@@ -219,32 +254,32 @@ class StateFile:
         """
         Returns the time at state n.
         """
-        return self.file[join(self.group, 'time')][n]
+        return self.root_group['time'][n]
 
     def get_solution_times(self):
         """
         Returns the time vector.
         """
-        return self.file[join(self.group, 'time')][:]
+        return self.root_group['time'][:]
 
     def get_meas_indices(self):
         """
         Returns the measured indices.
         """
-        return self.file[join(self.group, 'meas_indices')][:]
+        return self.root_group['meas_indices'][:]
 
     def get_num_states(self):
         """
         Returns the number of states in the solution
         """
-        return self.file[join(self.group, 'u')].shape[0]
+        return self.root_group['u'].shape[0]
 
     def get_u(self, n, out=None):
         """
         Returns displacement at index `n`.
         """
         ret = None
-        dset = self.file[join(self.group, 'u')]
+        dset = self.root_group['u']
         if out is None:
             ret = dset[n]
         else:
@@ -273,24 +308,39 @@ class StateFile:
         ret = []
         if out is None:
             for label in labels:
-                dset = self.file[join(self.group, label)]
+                dset = self.root_group[label]
                 ret.append(dset[n])
         else:
             for function, label in zip(out, labels):
-                dset = self.file[join(self.group, label)]
+                dset = self.root_group[label]
                 function.vector()[:] = dset[n]
 
             ret = out
 
         return tuple(ret)
 
+    def set_state(self, n, x):
+        """
+        Set form coefficient vectors for states `x=(u, v, a)` at index n.
+
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        x : tuple of 3 array_like
+            A set of vectors to assign.
+        """
+        for label, value in zip(('u', 'v', 'a'), x):
+            self.root_group[label][n] = value
+
     def get_fluid_props(self, n):
         """
         Returns the fluid properties dictionary at index n.
         """
         fluid_props = {}
+        fluid_group = self.root_group['fluid_properties']
         for label in constants.FLUID_PROPERTY_LABELS:
-            fluid_props[label] = self.file[join(self.group, 'fluid_properties', label)][n]
+            fluid_props[label] = fluid_group[label][n]
 
         return fluid_props
 
@@ -299,8 +349,9 @@ class StateFile:
         Returns the solid properties
         """
         solid_props = {}
+        solid_group = self.root_group['solid_properties']
         for label in constants.SOLID_PROPERTY_LABELS:
-            data = self.file[join(self.group, 'solid_properties', label)]
+            data = solid_group[label]
 
             if label == 'elastic_modulus':
                 solid_props[label] = data[:]
