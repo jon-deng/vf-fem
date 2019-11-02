@@ -62,7 +62,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     _x1 = (x1[0].vector(), x1[1].vector(), x1[2].vector())
-    model.set_iteration_params(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
+    model.set_iter_params(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
 
     # Assemble needed forms
     df2_du1 = dfn.assemble(model.df1_du0_adjoint) # This is a partial derivative
@@ -77,7 +77,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
     _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
-    model.set_iteration_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
+    model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
 
     # Assemble needed forms
     df1_du1 = dfn.assemble(model.df1_du1_adjoint)
@@ -167,7 +167,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
     num_states = f.get_num_states()
-    model.set_iteration_params_fromfile(f, num_states-1)
+    model.set_iter_params_fromfile(f, num_states-1)
 
     df2_du2 = dfn.assemble(model.df1_du1_adjoint)
 
@@ -213,7 +213,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         # Assemble needed forms
         _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
-        model.set_iteration_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
+        model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
         gradient -= df1_dparam*adj_u1.vector()

@@ -69,9 +69,6 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     v1 = dfn.Function(model.vector_function_space)
     a1 = dfn.Function(model.vector_function_space)
 
-    # Set solid material properties
-    model.set_solid_properties(solid_props)
-
     ## Allocate a figure for plotting
     fig, axs = None, None
     if show_figure:
@@ -190,7 +187,7 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     a1 = dfn.Function(model.vector_function_space)
 
     # Update form coefficients and initial guess
-    fluid_info = model.set_iteration_params((u0.vector(), v0.vector(), a0.vector()), dt,
+    fluid_info = model.set_iter_params((u0.vector(), v0.vector(), a0.vector()), dt,
                                             fluid_props, solid_props, u1=u0.vector())
 
     # Solve the thing
@@ -265,11 +262,11 @@ def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     u1, v1, a1 = x1
 
     # Refine the time step if there is a transition from no-collision to collision
-    model.set_initial_state(u0.vector(), v0.vector(), a0.vector())
+    model.set_ini_state(u0.vector(), v0.vector(), a0.vector())
     ymax0 = model.get_ymax()
     gap0 = solid_props['y_collision'] - ymax0
 
-    model.set_initial_state(u1.vector(), v1.vector(), a1.vector())
+    model.set_ini_state(u1.vector(), v1.vector(), a1.vector())
     ymax1 = model.get_ymax()
     gap1 = solid_props['y_collision'] - ymax1
 

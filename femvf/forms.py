@@ -305,7 +305,7 @@ class ForwardModel:
         self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
 
     # Core solver functions
-    def get_reference_configuration(self):
+    def get_ref_config(self):
         """
         Returns the current configuration of the body.
 
@@ -318,7 +318,7 @@ class ForwardModel:
         """
         return self.mesh.coordinates()
 
-    def get_current_configuration(self):
+    def get_cur_config(self):
         """
         Returns the current configuration of the body.
 
@@ -435,7 +435,7 @@ class ForwardModel:
 
 
     # Parameter value setting functions
-    def set_initial_state(self, u0, v0, a0):
+    def set_ini_state(self, u0, v0, a0):
         """
         Sets the state variables u, v, and a at the start of the step.
 
@@ -447,7 +447,7 @@ class ForwardModel:
         self.v0.vector()[:] = v0
         self.a0.vector()[:] = a0
 
-    def set_final_state(self, u1):
+    def set_fin_state(self, u1):
         """
         Sets the displacement at the end of the time step.
 
@@ -469,13 +469,13 @@ class ForwardModel:
         """
         self.dt.assign(dt)
 
-    def set_solid_properties(self, solid_props):
+    def set_solid_props(self, solid_props):
         """
         Sets solid properties given a dictionary of solid properties.
 
         Parameters
         ----------
-        solid_properties : dict
+        solid_props : properties.SolidProperties
         """
         labels = const.DEFAULT_SOLID_PROPERTIES
         coefficients = [self.emod, self.nu, self.rho, self.rayleigh_m, self.rayleigh_k,
@@ -488,7 +488,7 @@ class ForwardModel:
                 else:
                     coefficient.assign(solid_props[label])
 
-    def set_fluid_properties(self, fluid_props):
+    def set_fluid_props(self, fluid_props):
         """
         Sets fluid properties given a dictionary of fluid properties.
 
@@ -496,7 +496,7 @@ class ForwardModel:
 
         Parameters
         ----------
-        fluid_props : dict
+        fluid_props : properties.FluidProperties
         """
         self.fluid_props = fluid_props
 
@@ -511,9 +511,9 @@ class ForwardModel:
         fluid_props : dict
         solid_props : dict
         """
-        self.set_initial_state(*x0)
-        self.set_fluid_properties(fluid_props)
-        self.set_solid_properties(solid_props)
+        self.set_ini_state(*x0)
+        self.set_fluid_props(fluid_props)
+        self.set_solid_props(solid_props)
 
         fluid_info = self.get_pressure()
 
@@ -544,7 +544,7 @@ class ForwardModel:
 
         return fluid_info
 
-    def set_iteration_params(self, x0, dt, fluid_props, solid_props, u1=None):
+    def set_iter_params(self, x0, dt, fluid_props, solid_props, u1=None):
         """
         Set all parameters needed to integrate the model and an initial guess.
 
@@ -557,18 +557,18 @@ class ForwardModel:
         u1 : array_like, optional
         """
         self.set_time_step(dt)
-        self.set_initial_state(*x0)
-        self.set_fluid_properties(fluid_props)
-        self.set_solid_properties(solid_props)
+        self.set_ini_state(*x0)
+        self.set_fluid_props(fluid_props)
+        self.set_solid_props(solid_props)
 
         if u1 is not None:
-            self.set_final_state(u1)
+            self.set_fin_state(u1)
 
         fluid_info = self.get_pressure()
 
         return fluid_info
 
-    def set_iteration_params_fromfile(self, statefile, n, set_final_state=True):
+    def set_iter_params_fromfile(self, statefile, n, set_final_state=True):
         """
         Set all parameters needed to integrate the model and an initial guess, based on a recorded
         iteration.
@@ -595,6 +595,6 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iteration_params(x0, dt, fluid_props, solid_props, u1=u1)
+        fluid_info = self.set_iter_params(x0, dt, fluid_props, solid_props, u1=u1)
 
         return fluid_info, fluid_props
