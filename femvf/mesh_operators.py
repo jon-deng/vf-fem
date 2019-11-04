@@ -22,6 +22,11 @@ def grad_lsq(mesh, vert_to_dof):
     """
 
     # Assemble the matrix row-by-row
-    for vertex in mesh.vertices():
-        for edge in mesh.edges(vertex):
+    for vertex in dfn.vertices(mesh):
+        a_op = np.zeros((mesh.num_ed, 2))
+
+        edges = [edge for edge in dfn.edges(vertex)]
+
+        vertex_neighbors = [v for v in dfn.vertices(edge) if v.index() != vertex.index()
+                            for edge in edges]
 
