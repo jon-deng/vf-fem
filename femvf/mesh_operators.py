@@ -3,17 +3,21 @@ Operators on meshed
 """
 
 import dolfin as dfn
+import ufl
+import numpy as np
 from petsc4py import PETSc
 
-def grad_lsq(mesh, vert_to_dof):
+def grad_fem_p1(scalar_trial, scalar_test):
     """
-    Return the gradient operator for a scalar function in dof order
+    Return the gradient norm operator
+
+    This return the product :math: A = L^T L :math:, such that a smoothness penalty term can be
+    constructed with :math: f^T L^T L f = f^T A f :math:
 
     Parameters
     ----------
-    mesh : dfn.mesh
-    vert_to_dof : array_like
-        Mapping from vertices to degrees of freedom
+    trial : dfn.TrialFunction
+    test : dfn.TestFunction
 
     Returns
     -------
@@ -21,12 +25,5 @@ def grad_lsq(mesh, vert_to_dof):
         Operator
     """
 
-    # Assemble the matrix row-by-row
-    for vertex in dfn.vertices(mesh):
-        a_op = np.zeros((mesh.num_ed, 2))
-
-        edges = [edge for edge in dfn.edges(vertex)]
-
-        vertex_neighbors = [v for v in dfn.vertices(edge) if v.index() != vertex.index()
-                            for edge in edges]
-
+    op_form = ufl.dot(ufl.grad(scalar_trial), ufl.grad(scalar_test)) * dfn.dx
+    return dfn.assemble(op_form)
