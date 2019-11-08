@@ -251,6 +251,9 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
 
     return x1, dt, info
 
+def newton_solve(u0, res, jac, **kwargs):
+    pass
+
 def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     """
     Return whether to refine the time step, and a proposed time step to use.

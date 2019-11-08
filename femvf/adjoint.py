@@ -65,12 +65,12 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model.set_iter_params(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
 
     # Assemble needed forms
-    df2_du1 = dfn.assemble(model.df1_du0_adjoint) # This is a partial derivative
-    df2_dv1 = dfn.assemble(model.df1_dv0_adjoint)
-    df2_da1 = dfn.assemble(model.df1_da0_adjoint)
+    df2_du1 = dfn.assemble(model.df1_du0_adj) # This is a partial derivative
+    df2_dv1 = dfn.assemble(model.df1_dv0_adj)
+    df2_da1 = dfn.assemble(model.df1_da0_adj)
 
     # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
-    df2_dpressure = dfn.assemble(model.df1_dp_adjoint)
+    df2_dpressure = dfn.assemble(model.df1_dp_adj)
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
 
     # pf2_pu1_pressure = dfn.Matrix(dfn.PETScMatrix(dpressure_du1.transposeMatMult(df2_dpressure)))
@@ -80,7 +80,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
 
     # Assemble needed forms
-    df1_du1 = dfn.assemble(model.df1_du1_adjoint)
+    df1_du1 = dfn.assemble(model.df1_du1_adj)
     # df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
     ## Adjoint recurrence relations
@@ -100,12 +100,12 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     adj_a1.vector()[:] = -1 * (df2_da1 * adj_u2.vector()
                                + dt2 * (gamma/2/beta-1) * adj_v2.vector()
                                + (1/2/beta-1) * adj_a2.vector())
-    model.bc_base_adjoint.apply(adj_a1.vector())
+    model.bc_base_adj.apply(adj_a1.vector())
 
     adj_v1.vector()[:] = -1 * (df2_dv1 * adj_u2.vector()
                                + (gamma/beta-1) * adj_v2.vector()
                                + 1/beta/dt2 * adj_a2.vector())
-    model.bc_base_adjoint.apply(adj_v1.vector())
+    model.bc_base_adj.apply(adj_v1.vector())
 
     # import ipdb; ipdb.set_trace()
     df2_du1_correction = dfn.Function(model.vector_function_space)
@@ -115,7 +115,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
                  - (df2_du1 * adj_u2.vector() + df2_du1_correction.vector()
                     + gamma/beta/dt2 * adj_v2.vector()
                     + 1/beta/dt2**2 * adj_a2.vector())
-    model.bc_base_adjoint.apply(df1_du1, adj_u1_lhs)
+    model.bc_base_adj.apply(df1_du1, adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs, 'petsc')
 
     return (adj_u1, adj_v1, adj_a1)
@@ -169,12 +169,12 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     num_states = f.get_num_states()
     model.set_iter_params_fromfile(f, num_states-1)
 
-    df2_du2 = dfn.assemble(model.df1_du1_adjoint)
+    df2_du2 = dfn.assemble(model.df1_du1_adj)
 
     ## Initialize the adjoint state
     dcost_du2 = functional.du(num_states-1)
 
-    model.bc_base_adjoint.apply(df2_du2, dcost_du2)
+    model.bc_base_adj.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
     adj_v2.vector()[:] = 0
     adj_a2.vector()[:] = 0
