@@ -226,29 +226,4 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         adj_v2.assign(adj_v1)
         adj_u2.assign(adj_u1)
 
-    ## Plot the gradient
-    if show_figure:
-        fig, ax = plt.subplots(1, 1)
-
-        ax.set_aspect('equal')
-        coords = model.mesh.coordinates()[...]
-        triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=model.mesh.cells())
-
-        ax.set_xlim(-0.1, 0.7, auto=False)
-        ax.set_ylim(-0.1, 0.7)
-
-        ax.axhline(y=model.y_midline, ls='-.')
-        ax.axhline(y=model.y_midline-model.collision_eps, ls='-.', lw=0.5)
-
-        ax.set_title('Gradient')
-
-        mappable = ax.tripcolor(triangulation, gradient[model.vert_to_sdof],
-                                edgecolors='k', shading='flat')
-        coords_fixed = model.mesh.coordinates()[model.fixed_vertices]
-        ax.plot(coords_fixed[:, 0], coords_fixed[:, 1], color='C1')
-
-        fig.colorbar(mappable, ax=ax)
-
-        plt.show()
-
     return functional_value, gradient

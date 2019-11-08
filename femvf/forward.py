@@ -12,7 +12,7 @@ import dolfin as dfn
 
 from . import forms
 from . import statefile as sf
-from . import visualization as vis
+from . import vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props

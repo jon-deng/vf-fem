@@ -8,26 +8,23 @@ import matplotlib.pyplot as plt
 
 from . import constants
 
-def triangulation(mesh, x, vert_to_vdof):
+def triangulation(model):
     """
     Returns a triangulation for a mesh.
 
     Parameters
     ----------
-    mesh : dolfin.mesh
-    x : dolfin.vector
-    scalar : dolfin.vector, optional
+    model : ForwardModel
 
     Returns
     -------
     matplotlib.triangulation
     """
-    delta_xy = x[0].vector()[vert_to_vdof.reshape(-1)].reshape(-1, 2)
-    xy_current = mesh.coordinates() + delta_xy
+    xy = model.get_ref_config()
 
-    out = tri.Triangulation(xy_current[:, 0], xy_current[:, 1], triangles=mesh.cells())
+    triangu = tri.Triangulation(xy[..., 0], xy[..., 1], triangles=model.mesh.cells())
 
-    return out
+    return triangu
 
 def init_figure(model, fluid_props):
     """
@@ -117,3 +114,28 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     axs[2, 0].set_ylim(0, 0.03)
 
     return fig, axs
+
+def plot_grad(model):
+    ## Plot the gradient
+    fig, ax = plt.subplots(1, 1)
+
+    ax.set_aspect('equal')
+    coords = model.get_ref_config()
+    triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=model.mesh.cells())
+
+    ax.set_xlim(-0.1, 0.7, auto=False)
+    ax.set_ylim(-0.1, 0.7)
+
+    ax.axhline(y=model.y_midline, ls='-.')
+    ax.axhline(y=model.y_midline-model.collision_eps, ls='-.', lw=0.5)
+
+    ax.set_title('Gradient')
+
+    mappable = ax.tripcolor(triangulation, gradient[model.vert_to_sdof],
+                            edgecolors='k', shading='flat')
+    coords_fixed = coords[model.fixed_vertices]
+    ax.plot(coords_fixed[:, 0], coords_fixed[:, 1], color='C1')
+
+    fig.colorbar(mappable, ax=ax)
+
+    plt.show()

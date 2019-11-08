@@ -37,6 +37,12 @@ if __name__ == '__main__':
     dt = 1e-4
     times_meas = [0, 0.1]
 
+    coords = model.mesh.coordinates()[...]
+    triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=model.mesh.cells())
+
+    # dt = 1e-4
+    # times_meas = [0, 0.1]
+
     h5file = 'forward-noinclusion.h5'
     if os.path.exists(h5file):
         os.remove(h5file)
