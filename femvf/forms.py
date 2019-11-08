@@ -257,8 +257,6 @@ class ForwardModel:
 
         traction = ufl.dot(fluid_force, self.vector_test)*ds(facet_labels['pressure'])
 
-        self.fu = inertia + stiffness + damping - traction
-
         # Use the penalty method to account for collision
         collision_normal = dfn.Constant([0, 1])
         x_reference = dfn.Function(self.vector_function_space)
@@ -271,8 +269,8 @@ class ForwardModel:
         penalty = ufl.dot(self.k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
                   * ds(facet_labels['pressure'])
 
-        self.fu_nonlin = ufl.action(self.fu, self.u1) - penalty
-        self.jac_fu_nonlin = ufl.derivative(self.fu_nonlin, self.u1, self.vector_trial)
+        self.f1 = ufl.action(inertia + stiffness + damping - traction, self.u1) - penalty
+        self.df1_du1 = ufl.derivative(self.f1, self.u1, self.vector_trial)
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
@@ -290,7 +288,6 @@ class ForwardModel:
         # Note: For an externally calculated pressure, you have to correct the derivative based on
         # the sensitivity of pressure loading in `f1` to either `u0` and/or `u1` depending on if
         # it's strongly coupled.
-        self.f1 = self.fu_nonlin
         self.df1_du0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.u0, self.vector_trial))
         self.df1_da0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.a0, self.vector_trial))
         self.df1_dv0_adjoint = dfn.adjoint(ufl.derivative(self.f1, self.v0, self.vector_trial))

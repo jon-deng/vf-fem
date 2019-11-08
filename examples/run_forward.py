@@ -38,13 +38,15 @@ if __name__ == '__main__':
     # coords = model.mesh.coordinates()[...]
     # triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=model.mesh.cells())
 
-    # dt = 1e-4
-    # times_meas = [0, 0.1]
+    dt = 1e-4
+    times_meas = [0, 0.1]
 
     h5file = 'forward-noinclusion.h5'
     if os.path.exists(h5file):
         os.remove(h5file)
 
-    # runtime_start = perf_counter()
-    # forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=h5file)
-    # runtime_end = perf_counter()
+    runtime_start = perf_counter()
+    forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=h5file)
+    runtime_end = perf_counter()
+
+    print(f"Duration: {runtime_end-runtime_start:.2f} s")
