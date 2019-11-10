@@ -521,6 +521,10 @@ class ForwardModel:
 
         return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
 
+    # TODO: Adding matrices has an overhead due to differen sparsity patterns of the component
+    # matrices. You may be able to speed up addition by having an output matrix with sparsity that
+    # is a superset of all the component matrix sparsities. I believe, fenics does not directly 
+    # support this type of add, so you need to use petsc directly.
     def assem_df1_du1(self, u1=None):
         """
         Return the residual vector jacobian
