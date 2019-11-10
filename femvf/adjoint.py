@@ -15,7 +15,7 @@ import dolfin as dfn
 import ufl
 
 
-@profile
+# @profile
 def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1,
                       dcost_du1):
     """
@@ -117,7 +117,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     return (adj_u1, adj_v1, adj_a1)
 
-@profile
+# @profile
 def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.

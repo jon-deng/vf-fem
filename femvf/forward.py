@@ -84,6 +84,10 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 
+    # you don't have to recompute M or K matrices unless rho, e, or nu change
+    model.set_solid_props(solid_props)
+    model.reset_cache()
+
     ## Loop through solution times and write solution variables to the h5file.
 
     # TODO: Hardcoded the calculation of glottal width here, but it should be an option you
@@ -188,7 +192,8 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 
     # Update form coefficients and initial guess
     fluid_info = model.set_iter_params((u0.vector(), v0.vector(), a0.vector()), dt,
-                                            fluid_props, solid_props, u1=u0.vector())
+                                       fluid_props, solid_props, u1=u0.vector())
+
 
     # Solve the thing
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
@@ -197,8 +202,14 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     newton_prm = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-6}
     dfn.solve(model.f1 == 0, model.u1, bcs=model.bc_base, J=model.df1_du1,
               solver_parameters={"newton_solver": newton_prm})
-
     u1.assign(model.u1)
+
+    # u1.assign(u0)
+    # du = dfn.Function(model.vector_function_space)
+    # _u1, _ = newton_solve(u1.vector(), du.vector(), model.assem_df1_du1, model.assem_f1,
+    #                       [model.bc_base], **newton_prm)
+    # u1.vector()[:] = _u1
+
     v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
     a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
 
@@ -251,23 +262,62 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
 
     return x1, dt, info
 
-# def newton_solve(model, u1, u0, res, jac, **kwargs):
-#     u1
-#     omega = 1.0       # relaxation parameter
-#     eps = 1.0
-#     tol = 1.0E-5
-#     iter = 0
-#     maxiter = 25
-#     while eps > tol and iter < maxiter:
-#         iter += 1
-#         A, b = assemble_system(a, L, bcs_du)
-#         solve(A, du.vector(), b)
-#         eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
-#         print 'Norm:', eps
-#         u.vector()[:] = u_k.vector() + omega*du.vector()
-#         u_k.assign(u)
+# @profile
+def newton_solve(u, du, jac, res, bcs, **kwargs):
+    """
+    Solves the system using a newton method.
 
-#     return u_k, info
+    Parameters
+    ----------
+    u : dfn.cpp.la.Vector
+        The initial guess of the solution.
+    du : dfn.cpp.la.Vector
+        A vector for storing increments in the solution.
+    res : callable(dfn.GenericVector) -> dfn.cpp.la.Vector
+    jac : callable(dfn.GenericVector) -> dfn.cpp.la.Matrix
+    bcs : list of dfn.DirichletBC
+
+    Returns
+    -------
+    u1 : dfn.Function
+    """
+    omega = kwargs.get('relaxation', 1.0)
+    linear_solver = kwargs.get('linear_solver', 'petsc')
+    abs_tol = kwargs.get('abs_tol', 1e-8)
+    rel_tol = kwargs.get('rel_tol', 1e-6)
+    maxiter = kwargs.get('maxiter', 25)
+
+    abs_err = 1.0
+    rel_err = 1.0
+
+    _res = res(u)
+    for bc in bcs:
+        bc.apply(_res)
+    res_norm0 = _res.norm('l2')
+    res_norm1 = 1.0
+
+    ii = 0
+    while abs_err > abs_tol and rel_err > rel_tol and ii < maxiter:
+        _jac = jac(u)
+        for bc in bcs:
+            bc.apply(_jac, _res)
+
+        dfn.solve(_jac, du, _res, linear_solver)
+
+        u[:] = u - omega*du
+
+        _res = res(u)
+        for bc in bcs:
+            bc.apply(_res)
+        res_norm1 = _res.norm('l2')
+
+        rel_err = abs((res_norm1 - res_norm0)/res_norm0)
+        abs_err = res_norm1
+
+        ii += 1
+
+    info = {'niter': ii, 'abs_err': abs_err, 'rel_err': rel_err}
+    return u, info
 
 def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     """

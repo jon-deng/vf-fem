@@ -370,6 +370,9 @@ class ForwardModel:
         self.reset_cache()
         self.reset_adj_cache()
 
+
+        self.df1_du1_mat_template = dfn.assemble(self.df1_du1)
+
     def reset_cache(self):
         """
         Sets cached stiffness and mass matrices.
@@ -484,9 +487,14 @@ class ForwardModel:
 
         return dp_du0, dq_du0
 
-    def assem_f1(self):
+    # @profile
+    def assem_f1(self, u1=None):
         """
         Return the residual vector
+
+        Parameters
+        ----------
+        u1 : dfn.cpp.la.Vector
         """
         M = self.assem_cache['M']
         K = self.assem_cache['K']
@@ -501,16 +509,24 @@ class ForwardModel:
         v0 = self.v0.vector()
         a0 = self.a0.vector()
 
-        u1 = self.u1.vector()
+        if u1 is None:
+            u1 = self.u1.vector()
+
         v1 = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
         a1 = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
 
-    def assem_df1_du1(self):
+    def assem_df1_du1(self, u1=None):
         """
         Return the residual vector jacobian
+
+        Parameters
+        ----------
+        u1 : dfn.cpp.la.Vector
         """
+        out = self.df1_du1_mat_template.copy()
+        out.zero()
         M = self.assem_cache['M']
         K = self.assem_cache['K']
 
@@ -523,8 +539,14 @@ class ForwardModel:
         dv1_du1 = newmark_v_du1(dt, gamma, beta)
         da1_du1 = newmark_a_du1(dt, gamma, beta)
 
+        if u1 is not None:
+            self.set_fin_state(u1)
+
         df1_du1_nonlin = self.df1_du1_nonlin
-        return (da1_du1 + rm*dv1_du1)*M + (1 + rk*dv1_du1)*K + dfn.assemble(df1_du1_nonlin)
+        out.axpy(da1_du1 + rm*dv1_du1, M, True)
+        out.axpy(1 + rk*dv1_du1, K, True)
+        out.axpy(1, dfn.assemble(df1_du1_nonlin), True)
+        return out
 
     #TODO : Use proper sparsity pattern for fast addition of matrices?
     def assem_df1_du1_adj(self):
@@ -559,7 +581,7 @@ class ForwardModel:
 
         df1_du0_adj_nonlin = self.df1_du0_adj_nonlin
 
-        x = self.u0.vector()
+        # x = self.u0.vector()
 
         # out = (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
         # out*x

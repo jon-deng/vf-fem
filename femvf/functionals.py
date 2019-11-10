@@ -125,7 +125,7 @@ class FluidWork(AbstractFunctional):
 
                 out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
 
-            # Add the sensitviity component due to work from n-1 to n
+            # Add the sensitivity component due to work from n-1 to n
             if n > N_START:
                 self.model.set_iter_params_fromfile(self.f, n)
 
@@ -204,7 +204,7 @@ class SubglottalWork(AbstractFunctional):
 
         return ret
 
-    @profile
+    # @profile
     def du(self, n):
         ret = dfn.Function(self.model.vector_function_space).vector()
 
