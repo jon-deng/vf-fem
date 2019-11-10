@@ -65,23 +65,20 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model.set_iter_params(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
 
     # Assemble needed forms
-    df2_du1 = dfn.assemble(model.df1_du0_adj) # This is a partial derivative
-    df2_dv1 = dfn.assemble(model.df1_dv0_adj)
-    df2_da1 = dfn.assemble(model.df1_da0_adj)
+    df2_du1 = model.assem_df1_du0_adj()
+    df2_dv1 = model.assem_df1_dv0_adj()
+    df2_da1 = model.assem_df1_da0_adj()
 
     # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
     df2_dpressure = dfn.assemble(model.df1_dp_adj)
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
-
-    # pf2_pu1_pressure = dfn.Matrix(dfn.PETScMatrix(dpressure_du1.transposeMatMult(df2_dpressure)))
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
     _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
     model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
 
     # Assemble needed forms
-    df1_du1 = dfn.assemble(model.df1_du1_adj)
-    # df1_dparam = dfn.assemble(df1_dparam_form_adj)
+    df1_du1 = model.assem_df1_du1_adj()
 
     ## Adjoint recurrence relations
     # Allocate adjoint states
@@ -168,6 +165,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     # for the final state)
     num_states = f.get_num_states()
     model.set_iter_params_fromfile(f, num_states-1)
+    model.reset_cache()
+    model.reset_adj_cache()
 
     df2_du2 = dfn.assemble(model.df1_du1_adj)
 

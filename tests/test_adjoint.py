@@ -20,8 +20,8 @@ from femvf.properties import FluidProperties, SolidProperties
 from femvf import functionals
 from femvf import statefile as sf
 
-sys.path.append(os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/'))
-# import functionals as extra_functionals
+sys.path.append(os.path.expanduser('~/lib/vf-optimization'))
+from vfopt import functionals as extra_functionals
 
 dfn.set_log_level(30)
 np.random.seed(123)
@@ -40,7 +40,7 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
 dt = 1e-4
-t_final = 0.05
+t_final = 0.02
 times_meas = np.linspace(0, t_final, round(t_final/dt)+1)
 dtmax = 1e-4
 
@@ -49,7 +49,7 @@ dtmax = 1e-4
 emod = model.emod.vector()[:].copy()
 emod[:] = 5e3 * PASCAL_TO_CGS
 step_size = 1e-2 * PASCAL_TO_CGS
-num_steps = 5
+num_steps = 4
 
 emod_dir = np.random.rand(emod.size)
 
@@ -72,15 +72,15 @@ fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
 
 ## Set a functional
-fkwargs = {'tukey_alpha': 0.25, 'm_start': 250}
+fkwargs = {'tukey_alpha': 0.25, 'm_start': 0}
 # Functional for vocal eff
-# n_start = 50
-# fkwargs = {'n_start': n_start}
-# Functional = extra_functionals.AcousticEfficiency
+# m_start = 0
+# fkwargs = {'m_start': m_start}
+Functional = extra_functionals.AcousticEfficiency
 
 # Functional for MFDR
-fkwargs = {}
-Functional = functionals.MFDR
+# fkwargs = {}
+# Functional = functionals.MFDR
 
 # Functional for weighted sum of squared glottal widths
 # fkwargs = {}
@@ -90,10 +90,6 @@ Functional = functionals.MFDR
 # n_start = 0
 # fkwargs = {'n_start': n_start}
 # Functional = functionals.VolumeFlow
-
-# Functional for acoustic efficiency
-# Functional = functionals.AcousticEfficiency
-
 
 ## Finite Differences
 print("Computing Gradient via Finite Differences")

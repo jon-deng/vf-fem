@@ -14,12 +14,14 @@ from . import fluids
 from . import constants as const
 from .properties import FluidProperties, SolidProperties
 
-# dfn.parameters['form_compiler']['optimize'] = True
-# dfn.parameters['form_compiler']['cpp_optimize'] = True
+from .operators import LinCombOfMats
+
+dfn.parameters['form_compiler']['optimize'] = True
+dfn.parameters['form_compiler']['cpp_optimize'] = True
 
 def newmark_v(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     """
-    Returns the Newmark method displacement update.
+    Returns the Newmark method velocity update.
 
     Parameters
     ----------
@@ -35,6 +37,22 @@ def newmark_v(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     v1
     """
     return gamma/beta/dt*(u-u0) - (gamma/beta-1.0)*v0 - dt*(gamma/2.0/beta-1.0)*a0
+
+def newmark_v_du1(dt, gamma=1/2, beta=1/4):
+    """See `newmark_v`"""
+    return gamma/beta/dt
+
+def newmark_v_du0(dt, gamma=1/2, beta=1/4):
+    """See `newmark_v`"""
+    return -gamma/beta/dt
+
+def newmark_v_dv0(dt, gamma=1/2, beta=1/4):
+    """See `newmark_v`"""
+    return - (gamma/beta-1.0)
+
+def newmark_v_da0(dt, gamma=1/2, beta=1/4):
+    """See `newmark_v`"""
+    return - dt*(gamma/2.0/beta-1.0)
 
 def newmark_a(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     """
@@ -53,6 +71,22 @@ def newmark_a(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     a1
     """
     return 1/beta/dt**2*(u-u0-dt*v0) - (1/2/beta-1)*a0
+
+def newmark_a_du1(dt, gamma=1/2, beta=1/4):
+    """See `newmark_a`"""
+    return 1/beta/dt**2
+
+def newmark_a_du0(dt, gamma=1/2, beta=1/4):
+    """See `newmark_a`"""
+    return -1/beta/dt**2
+
+def newmark_a_dv0(dt, gamma=1/2, beta=1/4):
+    """See `newmark_a`"""
+    return -dt*1/beta/dt**2
+
+def newmark_a_da0(dt, gamma=1/2, beta=1/4):
+    """See `newmark_a`"""
+    return -(1/2/beta-1)
 
 def linear_elasticity(u, emod, nu):
     """
@@ -107,13 +141,13 @@ def _sort_surface_vertices(surface_coordinates):
 
     return np.array(idx_sort)
 
-def biform_m(a, b):
+def biform_m(a, b, rho):
     """
     Return the mass bilinear form
 
     Integrates a with b
     """
-    return ufl.dot(a, b) * ufl.dx
+    return rho*ufl.dot(a, b) * ufl.dx
 
 def biform_k(a, b, emod, nu):
     """
@@ -254,13 +288,13 @@ class ForwardModel:
         trial_a = newmark_a(self.vector_trial, self.u0, self.v0, self.a0, self.dt,
                             self.gamma, self.beta)
 
-        inertia = self.rho*biform_m(trial_a, self.vector_test)
+        self.inertia = biform_m(trial_a, self.vector_test, self.rho)
 
-        self.stress = linear_elasticity(self.vector_trial, self.emod, self.nu)
+        # self.stress = linear_elasticity(self.vector_trial, self.emod, self.nu)
 
-        stiffness = biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)
+        self.stiffness = biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)
 
-        damping = self.rayleigh_m * self.rho * biform_m(trial_v, self.vector_test) \
+        self.damping = self.rayleigh_m * biform_m(trial_v, self.vector_test, self.rho) \
                   + self.rayleigh_k * biform_k(trial_v, self.vector_test, self.emod, self.nu)
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
@@ -284,7 +318,7 @@ class ForwardModel:
 
         self.penalty = ufl.dot(self.k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
                        * ds(facet_labels['pressure'])
-        self.f1_linear = ufl.action(inertia + stiffness + damping, self.u1)
+        self.f1_linear = ufl.action(self.inertia + self.stiffness + self.damping, self.u1)
         self.f1_nonlin = -self.traction - self.penalty
         self.f1 = self.f1_linear + self.f1_nonlin
 
@@ -320,11 +354,10 @@ class ForwardModel:
         self.df1_da0_adj_nonlin = 0
         self.df1_da0_adj = self.df1_da0_adj_linear + self.df1_da0_adj_nonlin
 
-
         self.df1_dp_adj = dfn.adjoint(ufl.derivative(self.f1, self.pressure, self.scalar_trial))
 
-        self.df1_du1_adj_linear = dfn.adjoint(ufl.derivative(self.f1_linear, self.u1, self.vector_trial))
-        self.df1_du1_adj_nonlin = dfn.adjoint(ufl.derivative(self.f1_nonlin, self.u1, self.vector_trial))
+        self.df1_du1_adj_linear = dfn.adjoint(self.df1_du1_linear)
+        self.df1_du1_adj_nonlin = dfn.adjoint(self.df1_du1_nonlin)
         self.df1_du1_adj = self.df1_du1_adj_linear + self.df1_du1_adj_nonlin
 
         # Work done by pressure from u0 to u1
@@ -333,21 +366,29 @@ class ForwardModel:
         self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
         self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
 
-        self.assem_cache = self.reset_cache()
+        self.assem_cache = {}
+        self.reset_cache()
+        self.reset_adj_cache()
 
     def reset_cache(self):
         """
-        Resets cached forms that often stay constant.
+        Sets cached stiffness and mass matrices.
         """
         out = {
-            'M': dfn.assemble(biform_m(self.vector_trial, self.vector_test)),
-            'K': dfn.assemble(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)),
-            'df1_du1_linear' : dfn.assemble(self.df1_du1_linear),
-            'df1_du1_adj_linear': dfn.assemble(self.df1_du1_adj_linear),
-            'df1_du0_adj_linear': dfn.assemble(self.df1_du0_adj_linear),
-            'df1_dv0_adj_linear': dfn.assemble(self.df1_dv0_adj_linear),
-            'df1_da0_adj_linear': dfn.assemble(self.df1_da0_adj_linear)}
-        return out
+            'M': dfn.assemble(biform_m(self.vector_trial, self.vector_test, self.rho)),
+            'K': dfn.assemble(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu))}
+        self.assem_cache.update(out)
+
+    def reset_adj_cache(self):
+        """
+        Sets cached adjoint stiffness and mass matrices.
+        """
+        out = {
+            'M.adj': dfn.assemble(
+                dfn.adjoint(biform_m(self.vector_trial, self.vector_test, self.rho))),
+            'K.adj': dfn.assemble(
+                dfn.adjoint(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)))}
+        self.assem_cache.update(out)
 
     # Core solver functions
     def get_ref_config(self):
@@ -464,26 +505,96 @@ class ForwardModel:
         v1 = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
         a1 = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
-        return M*a1 + K*u1 + rm*(M*v1) + rk*(K*v1) - dfn.assemble(self.traction) - dfn.assemble(self.penalty)
+        return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
 
     def assem_df1_du1(self):
         """
         Return the residual vector jacobian
         """
-        return dfn.assemble(self.df1_du1_nonlin) + self.assem_cache['df1_du1_linear']
+        M = self.assem_cache['M']
+        K = self.assem_cache['K']
 
+        dt = self.dt.values()[0]
+        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+
+        rm = self.rayleigh_m.values()[0]
+        rk = self.rayleigh_k.values()[0]
+
+        dv1_du1 = newmark_v_du1(dt, gamma, beta)
+        da1_du1 = newmark_a_du1(dt, gamma, beta)
+
+        df1_du1_nonlin = self.df1_du1_nonlin
+        return (da1_du1 + rm*dv1_du1)*M + (1 + rk*dv1_du1)*K + dfn.assemble(df1_du1_nonlin)
+
+    #TODO : Use proper sparsity pattern for fast addition of matrices?
     def assem_df1_du1_adj(self):
-        return dfn.assemble(self.df1_du1_adj_nonlin) + self.assem_cache['df1_du1_adj_linear']
+        M = self.assem_cache['M.adj']
+        K = self.assem_cache['K.adj']
 
+        dt = self.dt.values()[0]
+        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+
+        rm = self.rayleigh_m.values()[0]
+        rk = self.rayleigh_k.values()[0]
+
+        dv1_du1 = newmark_v_du1(dt, gamma, beta)
+        da1_du1 = newmark_a_du1(dt, gamma, beta)
+
+        df1_du1_adj_nonlin = self.df1_du1_adj_nonlin
+        return (da1_du1 + rm*dv1_du1)*M + (1+rk*dv1_du1)*K + dfn.assemble(df1_du1_adj_nonlin)
+
+    #TODO : Use proper sparsity pattern for fast addition of matrices?
     def assem_df1_du0_adj(self):
-        return dfn.assemble(self.df1_du0_adj_nonlin) + self.assem_cache['df1_du0_adj_linear']
+        M = self.assem_cache['M.adj']
+        K = self.assem_cache['K.adj']
+
+        dt = self.dt.values()[0]
+        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+
+        rm = self.rayleigh_m.values()[0]
+        rk = self.rayleigh_k.values()[0]
+
+        dv1_du0 = newmark_v_du0(dt, gamma, beta)
+        da1_du0 = newmark_a_du0(dt, gamma, beta)
+
+        df1_du0_adj_nonlin = self.df1_du0_adj_nonlin
+
+        x = self.u0.vector()
+
+        # out = (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
+        # out*x
+
+        # (da1_du0 + rm*dv1_du0)*(M*x) + (rk*dv1_du0)*(K*x) + dfn.assemble(df1_du0_adj_nonlin)*x
+
+        return (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
 
     def assem_df1_dv0_adj(self):
-        return dfn.assemble(self.df1_dv0_adj_nonlin) + self.assem_cache['df1_dv0_adj_linear']
+        M = self.assem_cache['M.adj']
+        K = self.assem_cache['K.adj']
+
+        dt = self.dt.values()[0]
+        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+
+        rm = self.rayleigh_m.values()[0]
+        rk = self.rayleigh_k.values()[0]
+
+        dv1_dv0 = newmark_v_dv0(dt, gamma, beta)
+        da1_dv0 = newmark_a_dv0(dt, gamma, beta)
+        return (da1_dv0 + rm*dv1_dv0)*M + (rk*dv1_dv0)*K #+ dfn.assemble(self.df1_dv0_adj_nonlin)
 
     def assem_df1_da0_adj(self):
-        return dfn.assemble(self.df1_da0_adj_nonlin) + self.assem_cache['df1_da0_adj_linear']
+        M = self.assem_cache['M.adj']
+        K = self.assem_cache['K.adj']
 
+        dt = self.dt.values()[0]
+        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+
+        rm = self.rayleigh_m.values()[0]
+        rk = self.rayleigh_k.values()[0]
+
+        dv1_da0 = newmark_v_da0(dt, gamma, beta)
+        da1_da0 = newmark_a_da0(dt, gamma, beta)
+        return (da1_da0 + rm*dv1_da0)*M + (rk*dv1_da0)*K #+ dfn.assemble(self.df1_da0_adj_nonlin)
 
     # Convenience functions
     def get_glottal_width(self):
@@ -498,9 +609,9 @@ class ForwardModel:
         """
         Return the smallest distance to the collision plane
         """
-        x_surface = self.get_surface_state()
+        u_surface = self.get_surface_state()[0]
 
-        return self.solid_props['y_collision'] - np.max(x_surface[0][..., 1])
+        return self.y_collision.values()[0] - np.max(u_surface[..., 1])
 
     def get_ymax(self):
         """
