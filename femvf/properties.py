@@ -65,7 +65,6 @@ class SolidProperties(Properties):
     """
     Represents a collection of linear-elastic solid properties
     """
-
     # `types` indicates if each property is either a field or constant variable
     # and its shape in a tuple. A shape of `None` indicates a scalar value
 
@@ -77,7 +76,7 @@ class SolidProperties(Properties):
              'y_collision': ('const', ()),
              'k_collision': ('const', ())}
 
-    LABELS = tuple(TYPES.keys())
+    # LABELS = tuple(TYPES.keys())
 
     DEFAULTS = {'elastic_modulus': 10e3 * PASCAL_TO_CGS,
                 'poissons_ratio': 0.49,
@@ -99,7 +98,7 @@ class FluidProperties(Properties):
              'rho': ('const', ()),
              'y_midline': ('const', ())}
 
-    LABELS = tuple(TYPES.keys())
+    # LABELS = tuple(TYPES.keys())
 
     DEFAULTS = {'p_sub': 800 * PASCAL_TO_CGS,
                 'p_sup': 0 * PASCAL_TO_CGS,

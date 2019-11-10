@@ -674,7 +674,7 @@ class ForwardModel:
         ----------
         solid_props : properties.SolidProperties
         """
-        labels = const.DEFAULT_SOLID_PROPERTIES
+        labels = SolidProperties.TYPES.keys()
         coefficients = [self.emod, self.nu, self.rho, self.rayleigh_m, self.rayleigh_k,
                         self.y_collision]
 

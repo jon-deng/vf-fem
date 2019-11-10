@@ -50,7 +50,7 @@ class StateFile:
         self.file.close()
 
     def __len__(self):
-        return self.get_num_states()
+        return self.size
 
     @property
     def size(self):
@@ -339,7 +339,7 @@ class StateFile:
         """
         fluid_props = {}
         fluid_group = self.root_group['fluid_properties']
-        for label in constants.FLUID_PROPERTY_LABELS:
+        for label in FluidProperties.TYPES:
             fluid_props[label] = fluid_group[label][n]
 
         return fluid_props
@@ -350,7 +350,7 @@ class StateFile:
         """
         solid_props = {}
         solid_group = self.root_group['solid_properties']
-        for label in constants.SOLID_PROPERTY_LABELS:
+        for label in SolidProperties.TYPES:
             data = solid_group[label]
 
             if label == 'elastic_modulus':

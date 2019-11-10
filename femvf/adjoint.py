@@ -168,7 +168,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     model.reset_cache()
     model.reset_adj_cache()
 
-    df2_du2 = dfn.assemble(model.df1_du1_adj)
+    df2_du2 = model.assem_df1_du1_adj()
 
     ## Initialize the adjoint state
     dcost_du2 = functional.du(num_states-1)
