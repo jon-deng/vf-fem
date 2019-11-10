@@ -371,7 +371,11 @@ class ForwardModel:
         self.reset_adj_cache()
 
 
-        self.df1_du1_mat_template = dfn.assemble(self.df1_du1)
+        self.df1_du1_mat = dfn.assemble(self.df1_du1)
+        self.df1_du1_adj_mat = dfn.assemble(self.df1_du1_adj)
+        self.df1_du0_adj_mat = dfn.assemble(self.df1_du0_adj)
+        self.df1_dv0_adj_mat = dfn.assemble(self.df1_dv0_adj)
+        self.df1_da0_adj_mat = dfn.assemble(self.df1_da0_adj)
 
     def reset_cache(self):
         """
@@ -525,7 +529,7 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
-        out = self.df1_du1_mat_template.copy()
+        out = self.df1_du1_mat.copy()
         out.zero()
         M = self.assem_cache['M']
         K = self.assem_cache['K']
@@ -548,8 +552,9 @@ class ForwardModel:
         out.axpy(1, dfn.assemble(df1_du1_nonlin), True)
         return out
 
-    #TODO : Use proper sparsity pattern for fast addition of matrices?
     def assem_df1_du1_adj(self):
+        out = self.df1_du1_adj_mat.copy()
+        out.zero()
         M = self.assem_cache['M.adj']
         K = self.assem_cache['K.adj']
 
@@ -563,10 +568,15 @@ class ForwardModel:
         da1_du1 = newmark_a_du1(dt, gamma, beta)
 
         df1_du1_adj_nonlin = self.df1_du1_adj_nonlin
-        return (da1_du1 + rm*dv1_du1)*M + (1+rk*dv1_du1)*K + dfn.assemble(df1_du1_adj_nonlin)
 
-    #TODO : Use proper sparsity pattern for fast addition of matrices?
+        out.axpy(da1_du1 + rm*dv1_du1, M, True)
+        out.axpy(1+rk*dv1_du1, K, True)
+        out.axpy(1.0, dfn.assemble(df1_du1_adj_nonlin), True)
+        return out
+
     def assem_df1_du0_adj(self):
+        out = self.df1_du0_adj_mat.copy()
+        out.zero()
         M = self.assem_cache['M.adj']
         K = self.assem_cache['K.adj']
 
@@ -581,16 +591,15 @@ class ForwardModel:
 
         df1_du0_adj_nonlin = self.df1_du0_adj_nonlin
 
-        # x = self.u0.vector()
+        out.axpy(da1_du0 + rm*dv1_du0, M, True)
+        out.axpy(rk*dv1_du0, K, True)
+        out.axpy(1.0, dfn.assemble(df1_du0_adj_nonlin), True)
 
-        # out = (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
-        # out*x
-
-        # (da1_du0 + rm*dv1_du0)*(M*x) + (rk*dv1_du0)*(K*x) + dfn.assemble(df1_du0_adj_nonlin)*x
-
-        return (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
+        return out
 
     def assem_df1_dv0_adj(self):
+        out = self.df1_dv0_adj_mat.copy()
+        out.zero()
         M = self.assem_cache['M.adj']
         K = self.assem_cache['K.adj']
 
@@ -602,9 +611,14 @@ class ForwardModel:
 
         dv1_dv0 = newmark_v_dv0(dt, gamma, beta)
         da1_dv0 = newmark_a_dv0(dt, gamma, beta)
-        return (da1_dv0 + rm*dv1_dv0)*M + (rk*dv1_dv0)*K #+ dfn.assemble(self.df1_dv0_adj_nonlin)
+
+        out.axpy(da1_dv0 + rm*dv1_dv0, M, True)
+        out.axpy(rk*dv1_dv0, K, True)
+        return out #+ dfn.assemble(self.df1_dv0_adj_nonlin)
 
     def assem_df1_da0_adj(self):
+        out = self.df1_da0_adj_mat.copy()
+        out.zero()
         M = self.assem_cache['M.adj']
         K = self.assem_cache['K.adj']
 
@@ -616,7 +630,10 @@ class ForwardModel:
 
         dv1_da0 = newmark_v_da0(dt, gamma, beta)
         da1_da0 = newmark_a_da0(dt, gamma, beta)
-        return (da1_da0 + rm*dv1_da0)*M + (rk*dv1_da0)*K #+ dfn.assemble(self.df1_da0_adj_nonlin)
+
+        out.axpy(da1_da0 + rm*dv1_da0, M, True)
+        out.axpy(rk*dv1_da0, K, True)
+        return out #+ dfn.assemble(self.df1_da0_adj_nonlin)
 
     # Convenience functions
     def get_glottal_width(self):
