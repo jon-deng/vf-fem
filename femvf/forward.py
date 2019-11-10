@@ -251,8 +251,23 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
 
     return x1, dt, info
 
-def newton_solve(u0, res, jac, **kwargs):
-    pass
+# def newton_solve(model, u1, u0, res, jac, **kwargs):
+#     u1
+#     omega = 1.0       # relaxation parameter
+#     eps = 1.0
+#     tol = 1.0E-5
+#     iter = 0
+#     maxiter = 25
+#     while eps > tol and iter < maxiter:
+#         iter += 1
+#         A, b = assemble_system(a, L, bcs_du)
+#         solve(A, du.vector(), b)
+#         eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
+#         print 'Norm:', eps
+#         u.vector()[:] = u_k.vector() + omega*du.vector()
+#         u_k.assign(u)
+
+#     return u_k, info
 
 def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     """

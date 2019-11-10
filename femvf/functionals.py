@@ -204,6 +204,7 @@ class SubglottalWork(AbstractFunctional):
 
         return ret
 
+    @profile
     def du(self, n):
         ret = dfn.Function(self.model.vector_function_space).vector()
 
