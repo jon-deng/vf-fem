@@ -40,16 +40,16 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
 dt = 1e-4
-t_final = 0.02
+t_final = 0.05
 times_meas = np.linspace(0, t_final, round(t_final/dt)+1)
-dtmax = 1e-4
+dtmax = 5e-5
 
 
 ## Set the fluid/solid parameters
 emod = model.emod.vector()[:].copy()
 emod[:] = 5e3 * PASCAL_TO_CGS
 step_size = 1e-2 * PASCAL_TO_CGS
-num_steps = 4
+num_steps = 8
 
 emod_dir = np.random.rand(emod.size)
 
@@ -72,7 +72,7 @@ fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
 
 ## Set a functional
-fkwargs = {'tukey_alpha': 0.25, 'm_start': 0}
+fkwargs = {'tukey_alpha': 0.1, 'm_start': 0}
 # Functional for vocal eff
 # m_start = 0
 # fkwargs = {'m_start': m_start}
@@ -100,7 +100,7 @@ if os.path.exists(save_path):
 for n in range(num_steps):
     runtime_start = perf_counter()
     solid_props['elastic_modulus'] = emod + n*step_size*emod_dir
-    forward(model, 0, times_meas, dtmax, solid_props, fluid_props, h5file=save_path, h5group=f'{n}')
+    forward(model, 0, times_meas, dtmax, solid_props, fluid_props, abs_tol=None, h5file=save_path, h5group=f'{n}')
     runtime_end = perf_counter()
 
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
