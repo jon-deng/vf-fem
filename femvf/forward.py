@@ -18,7 +18,8 @@ from . import vis
 from .misc import get_dynamic_fluid_props
 # @profile
 def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
-            h5file='tmp.h5', h5group='/', adaptive=True, show_figure=False, figure_path=None):
+            h5file='tmp.h5', h5group='/', abs_tol=1e-5, abs_tol_bounds=(0, 1.2),
+            show_figure=False, figure_path=None):
     """
     Solves the forward model over specific time instants.
 
@@ -41,12 +42,15 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         A dictionary of solid properties.
     fluid_props : dict
         A dictionary of fluid properties.
-    adaptive : bool
-        Indicate whether or not to use adaptive time stepping.
     h5file : string
         Path to an hdf5 file where solution information will be appended.
     h5group : string
         A group in the h5 file to save solution information under.
+    abs_tol : float or None
+        A desired tolerance that the norm of the displacement solution should meet
+    abs_tol_bounds : tuple of float
+        Bounds on the solution norm tolerance. Time steps are adjusted so that the local error in
+        :math:`u_{n+1}` is between `abs_tol_bounds[0]*abs_tol` and `abs_tol_bounds[1]*abs_tol`.
     show_figure : bool
         Determines whether to display figures of the solution or not.
     figure_path : string
@@ -101,7 +105,8 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
         for t_target in tmeas:
 
-            # Here we keep incrementing until we reach the target time
+            # keep incrementing until you reach the target time
+            dt_proposal = dt_max
             while not isclose(t_current, t_target, rel_tol=1e-10, abs_tol=10*2**-52):
                 assert t_current < t_target
                 x0 = (u0, v0, a0)
@@ -109,15 +114,28 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
                 # Update properties
                 fluid_props_ii = get_dynamic_fluid_props(fluid_props, t_current)
 
-                # Increment the state
-                dt_target = min(dt_max, t_target - t_current)
+                # Increment the state using a target time step. If the previous time step was
+                # refined to be smaller than the max time step, then try using that time step again.
+                # If the local error is super low, the refinement time step will be predicted to be
+                # high and so it will go back to the max time step.
+                dt_target = min(dt_proposal, dt_max, t_target - t_current)
+                # print("\nIteration start")
+                # print(dt_proposal, dt_max, t_target - t_current)
                 x1, dt_actual, info = adaptive_step(model, x0, dt_target, solid_props, fluid_props,
-                                                    adaptive=adaptive)
+                                                    abs_tol=abs_tol, abs_tol_bounds=abs_tol_bounds)
                 n_state += 1
                 t_current += dt_actual
 
-                glottal_width.append(info['a_min'])
-                flow_rate.append(info['flow_rate'])
+                # print("dt_proposal", dt_proposal)
+                # print("dt_target", dt_target)
+                # print("dt_actual", dt_actual)
+                # print("# refinements", info['nrefine'])
+                # print("error norm", info['err_norm'])
+
+                dt_proposal = dt_actual
+
+                glottal_width.append(info['fluid_info']['a_min'])
+                flow_rate.append(info['fluid_info']['flow_rate'])
 
                 ## Write the solution outputs to a file
                 f.append_time(t_current)
@@ -131,7 +149,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
                 ## Plot the solution
                 if show_figure:
-                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), info,
+                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), info['fluid_info'],
                                                  solid_props, fluid_props_ii)
                     plt.pause(0.001)
 
@@ -171,9 +189,9 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
-    solid_props : dict
+    solid_props : properties.SolidProperties
         A dictionary of solid properties
-    fluid_props : dict
+    fluid_props : properties.FluidProperties
         A dictionary of fluid properties.
 
     Returns
@@ -215,7 +233,8 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
+def adaptive_step(model, x0, dt_max, solid_props, fluid_props,
+                  abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
     """
     Integrate the model over `dt` using a smaller time step if needed.
 
@@ -227,7 +246,7 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
     x0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model.
     dt_max : float
-        The time step to increment over.
+        The maximum time step to increment over.
     solid_props : dict
         A dictionary of solid properties.
     fluid_props : dict
@@ -238,25 +257,41 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props, adaptive=True):
     Returns
     -------
     tuple(3 * dfn.Function)
-        A list of intermediate states in integrating over dt.
+        The states at the end of the time step.
     float
-        A list of the corresponding time steps taken for each intermediate state.
+        The time step integrated over.
     fluid_info : dict
         A dictionary containing information on the fluid solution. These include the flow rate,
         surface pressure, etc.
     """
     x1 = None
     dt = dt_max
-    info = None
+    info = {}
 
+    nrefine = -1
     refine = True
     while refine:
-        x1, info = increment_forward(model, x0, dt, solid_props, fluid_props)
-        # coll_verts = model.get_collision_verts()
+        nrefine += 1
+        x1, fluid_info = increment_forward(model, x0, dt, solid_props, fluid_props)
+        info['fluid_info'] = fluid_info
 
-        refine = None
-        if adaptive:
+        err = newmark_error_estimate(x1[2].vector(), x0[2].vector(), dt, beta=model.beta.values()[0])
+        err_norm = err.norm('l2')
+        info['err_norm'] = err_norm
+        info['nrefine'] = nrefine
+
+        # coll_verts = model.get_collision_verts()
+        # print(err_norm)
+        # print(coll_verts)
+
+        if abs_tol is not None:
+            # step control method that prevents crossing the midline in one step near collision
             refine, dt = refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props)
+
+            # Step control method from [1]
+            if err_norm > abs_tol_bounds[1]*abs_tol or err_norm < abs_tol_bounds[0]*abs_tol:
+                dt = (abs_tol/err_norm)**(1/3) * dt
+                refine = True
         else:
             refine = False
 
@@ -346,3 +381,37 @@ def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
             dt_refine = 0.5 * dt
 
     return refine, dt_refine
+
+# def local_refinement(err, dt, tol=1e-5):
+#     """
+#     Return an estimate of the time step needed to achieve a certain error level.
+#     """
+
+def newmark_error_estimate(a1, a0, dt, beta=1/4):
+    """
+    Return an estimate of the truncation error in `u` over the step.
+
+    Error is esimated using eq (18) in [1]. Note that their paper defines $\beta2$ as twice $\beta$
+    in the original newmark notation (used here). Therefore the beta term is multiplied by 2.
+
+    [1] A simple error estimator and adaptive time stepping procedure for dynamic analysis.
+    O. C. Zienkiewicz and Y. M. Xie. Earthquake Engineering and Structural Dynamics, 20:871-887
+    (1991).
+
+    Parameters
+    ----------
+    a1 : dfn.Vector()
+        The newmark prediction of acceleration at :math:`n+1`
+    a0 : dfn.Vector()
+        The newmark prediction of acceleration at :math:`n`
+    dt : float
+        The time step integrated over
+    beta : float
+        The newmark-beta method :math:`beta` parameter
+
+    Returns
+    -------
+    dfn.Vector()
+        An estimate of the error in :math:`u_{n+1}`
+    """
+    return 0.5*dt**2*(2*beta - 1/3)*(a1-a0)
