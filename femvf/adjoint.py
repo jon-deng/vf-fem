@@ -137,6 +137,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     np.array of float
         The sensitivity of the functional wrt parameters.
     """
+    # x_vecs = 3*[None,]
+
     # Initialize the functional instance and run it once to initialize any cached values
     functional = Functional(model, f, **functional_kwargs)
     functional_value = functional()
@@ -159,19 +161,40 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     x2 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
 
     ## Allocate space for the gradient
-    gradient = dfn.Function(model.scalar_function_space).vector() #np.zeros(model.emod.vector().size())
+    gradient = dfn.Function(model.scalar_function_space).vector() # np.zeros(model.emod.vector().size())
+
+
+    ## Initial iteration for adjoint calculation
+    # Load data needed to specify an iteration
 
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
-    num_states = f.get_num_states()
-    model.set_iter_params_fromfile(f, num_states-1)
+    # To initialize, we need to solve for \lambda^{N-1} i.e. `adj_u2`, `adj_v2`, `adj_a2` etc.
+    N = f.size
+    times = f.get_solution_times()
+
+    f.get_state(N-1, out=x2)
+    f.get_state(N-2, out=x1)
+    fluid_props2 = f.get_fluid_props(N-1)
+    fluid_props1 = f.get_fluid_props(N-2)
+    solid_props = f.get_solid_props()
+    dt2 = times[N-1]-times[N-2]
+
+    _x1 = [comp.vector() for comp in x1]
+    _x2 = [comp.vector() for comp in x2]
+
+    # Cache mass and stiffness matrices
+    model.set_solid_props(solid_props)
     model.reset_cache()
     model.reset_adj_cache()
 
-    df2_du2 = model.assem_df1_du1_adj()
+    iter_params2 = (_x1, dt2, fluid_props1, solid_props, _x2[0])
+    iter_params3 = (_x2, 0.0, fluid_props2, solid_props, None)
 
-    ## Initialize the adjoint state
-    dcost_du2 = functional.du(num_states-1)
+    dcost_du2 = functional.du(N-1, iter_params2, iter_params3)
+
+    model.set_iter_params(*iter_params2)
+    df2_du2 = model.assem_df1_du1_adj()
 
     model.bc_base_adj.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
@@ -182,36 +205,35 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     gradient -= df2_dparam*adj_u2.vector()
 
     ## Loop through states for adjoint computation
-    num_states = f.get_num_states()
-    times = f.get_solution_times()
-    solid_props = f.get_solid_props()
-
-    for ii in range(num_states-2, 0, -1):
-        # Note that ii corresponds to the time index of the adjoint state we are solving for.
-        # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
+    # Note that ii corresponds to the time index of the adjoint state we are solving for.
+    # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
+    for ii in range(N-2, 0, -1):
+        # Properties at index 2 through 1 were loaded during initialization, so we only need to
+        # read index 0
         x0 = f.get_state(ii-1, out=x0)
-        x1 = f.get_state(ii, out=x1)
-        x2 = f.get_state(ii+1, out=x2)
-
         fluid_props0 = f.get_fluid_props(ii-1)
-        fluid_props1 = f.get_fluid_props(ii)
 
         dt1 = times[ii] - times[ii-1]
-        dt2 = times[ii+1] - times[ii]
 
-        dcost_du1 = functional.du(ii)
+        _x0 = [comp.vector() for comp in x0]
+        _x1 = [comp.vector() for comp in x1]
+        _x2 = [comp.vector() for comp in x2]
+
+        iter_params1 = (_x0, dt1, fluid_props0, solid_props, _x1[0])
+        iter_params2 = (_x1, dt2, fluid_props1, solid_props, _x2[0])
+
+        dcost_du1 = functional.du(ii, iter_params1, iter_params2)
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
             model, (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
             fluid_props0, fluid_props1, dcost_du1)
 
         # Update gradient using the adjoint state
-        # TODO: Here we assumed that functionals never depend on the velocity or acceleration
-        # states so we only multiply by adj_u1. In the future you might have to use adj_v1 and
-        # adj_a1 too.
+        # TODO: Functionals are assumed to not depend on velocity or acceleration, so we only
+        # multiply by adj_u1. In the future you might have to use adj_v1 and adj_a1 too.
 
         # Assemble needed forms
-        _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
+        _x0 = [comp.vector() for comp in x0]
         model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
@@ -219,6 +241,16 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         if functional.dparam() is not None:
             gradient += functional.dparam()
+
+        # Update properties for the next iteration
+        for comp1, comp2 in zip(x1, x2):
+            comp2.assign(comp1)
+
+        for comp0, comp1 in zip(x0, x1):
+            comp1.assign(comp0)
+
+        dt2 = dt1
+        fluid_props1 = fluid_props0
 
         # Update adjoint recurrence relations for the next iteration
         adj_a2.assign(adj_a1)

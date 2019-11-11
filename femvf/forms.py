@@ -521,9 +521,9 @@ class ForwardModel:
 
         return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
 
-    # TODO: Adding matrices has an overhead due to differen sparsity patterns of the component
+    # TODO: Adding matrices has an overhead due to different sparsity patterns of the component
     # matrices. You may be able to speed up addition by having an output matrix with sparsity that
-    # is a superset of all the component matrix sparsities. I believe, fenics does not directly 
+    # is a superset of all the component matrix sparsities. I believe, fenics does not directly
     # support this type of add, so you need to use petsc directly.
     def assem_df1_du1(self, u1=None):
         """
@@ -551,9 +551,6 @@ class ForwardModel:
             self.set_fin_state(u1)
 
         df1_du1_nonlin = self.df1_du1_nonlin
-        # out.axpy(da1_du1 + rm*dv1_du1, M, True)
-        # out.axpy(1 + rk*dv1_du1, K, True)
-        # out.axpy(1, dfn.assemble(df1_du1_nonlin), True)
         out = (da1_du1 + rm*dv1_du1)*M + (1 + rk*dv1_du1)*K + dfn.assemble(df1_du1_nonlin)
         return out
 
@@ -606,8 +603,8 @@ class ForwardModel:
         dv1_dv0 = newmark_v_dv0(dt, gamma, beta)
         da1_dv0 = newmark_a_dv0(dt, gamma, beta)
 
-        out = (da1_dv0 + rm*dv1_dv0)*M + (rk*dv1_dv0)*K
-        return out #+ dfn.assemble(self.df1_dv0_adj_nonlin)
+        out = (da1_dv0 + rm*dv1_dv0)*M + (rk*dv1_dv0)*K #+ dfn.assemble(self.df1_dv0_adj_nonlin)
+        return out
 
     def assem_df1_da0_adj(self):
         M = self.assem_cache['M.adj']
@@ -622,8 +619,8 @@ class ForwardModel:
         dv1_da0 = newmark_v_da0(dt, gamma, beta)
         da1_da0 = newmark_a_da0(dt, gamma, beta)
 
-        out = (da1_da0 + rm*dv1_da0)*M + (rk*dv1_da0)*K
-        return out #+ dfn.assemble(self.df1_da0_adj_nonlin)
+        out = (da1_da0 + rm*dv1_da0)*M + (rk*dv1_da0)*K #+ dfn.assemble(self.df1_da0_adj_nonlin)
+        return out
 
     # Convenience functions
     def get_glottal_width(self):

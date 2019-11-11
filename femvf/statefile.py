@@ -301,7 +301,7 @@ class StateFile:
         n : int
             Index to set the functions for.
         out : tuple of 3 dfn.Function
-            A set of functions to assign into.
+            A set of functions to set vector values for.
         """
 
         labels = ('u', 'v', 'a')

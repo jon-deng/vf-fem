@@ -23,7 +23,6 @@ compute the sensitivity with respect to.
 import numpy as np
 import dolfin as dfn
 
-
 class AbstractFunctional():
     """
     Represents a functional over the solution history of a forward model run.
@@ -60,9 +59,21 @@ class AbstractFunctional():
         """
         raise NotImplementedError("Method not implemented")
 
-    def du(self, n):
+    def du(self, n, iter_params0, iter_params1):
         """
         Return the sensitivity of the functional with respect to the the `n`th state.
+
+        Parameters
+        ----------
+        n : int
+            Index of state
+        iter_params0, iter_params1 : tuple(tuple(3*dfn.Vector), float, dict, dict, dfn.Vector)
+            Tuple of parameters that specify iteration n. These are parameters fed into
+            `forms.ForwardModel.set_iter_params`, namely
+            `(x0, dt, fluid_props, solid_props, u1=None)`
+
+            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
+            at `n+0`.
         """
         raise NotImplementedError("Method not implemented")
 
@@ -100,7 +111,7 @@ class FluidWork(AbstractFunctional):
 
         return res
 
-    def du(self, n):
+    def du(self, n, iter_params0, iter_params1):
         out = 0
 
         N_START = self.kwargs['m_start']
@@ -111,7 +122,8 @@ class FluidWork(AbstractFunctional):
         else:
             # Add the sensitivity component due to work from n to n+1
             if n < N_STATE-1:
-                self.model.set_iter_params_fromfile(self.f, n+1)
+                # self.model.set_iter_params_fromfile(self.f, n+1)
+                self.model.set_iter_params(*iter_params1)
                 dp_du, _ = self.model.get_flow_sensitivity()
 
                 out += dfn.assemble(self.model.dfluid_work_du0)
@@ -127,7 +139,8 @@ class FluidWork(AbstractFunctional):
 
             # Add the sensitivity component due to work from n-1 to n
             if n > N_START:
-                self.model.set_iter_params_fromfile(self.f, n)
+                # self.model.set_iter_params_fromfile(self.f, n)
+                self.model.set_iter_params(*iter_params0)
 
                 out += dfn.assemble(self.model.dfluid_work_du1)
 
@@ -162,7 +175,7 @@ class VolumeFlow(AbstractFunctional):
 
         return totalflow
 
-    def du(self, n):
+    def du(self, n, iter_params0, iter_params1):
         dtotalflow_dun = None
         N_START = self.kwargs['m_start']
 
@@ -170,7 +183,8 @@ class VolumeFlow(AbstractFunctional):
         if n < N_START or n == num_states-1:
             dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
         else:
-            self.model.set_iter_params_fromfile(self.f, n+1)
+            # self.model.set_iter_params_fromfile(self.f, n+1)
+            self.model.set_iter_params(*iter_params1)
             _, dq_dun = self.model.get_flow_sensitivity()
             dtotalflow_dun = dq_dun * self.model.dt.values()[0]
 
@@ -204,15 +218,15 @@ class SubglottalWork(AbstractFunctional):
 
         return ret
 
-    # @profile
-    def du(self, n):
+    def du(self, n, iter_params0, iter_params1):
         ret = dfn.Function(self.model.vector_function_space).vector()
 
         N_START = self.cache['m_start']
         N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
-            _, fluid_props = self.model.set_iter_params_fromfile(self.f, n+1)
+            fluid_props = iter_params1[2]
+            self.model.set_iter_params(*iter_params1)
             _, dq_du = self.model.get_flow_sensitivity()
 
             ret += self.model.dt.values()[0] * fluid_props['p_sub'] * dq_du
@@ -248,7 +262,7 @@ class TransferEfficiency(AbstractFunctional):
         self.cache.update({'totalfluidwork': totalfluidwork, 'totalinputwork': totalinputwork})
         return res
 
-    def du(self, n):
+    def du(self, n, iter_params0, iter_params1):
         # TODO : Is there something slightly wrong with this one? Seems slightly wrong from
         # comparing with FD. The error is small but it is not propto step size?
         N_START = self.kwargs['m_start']
@@ -256,8 +270,8 @@ class TransferEfficiency(AbstractFunctional):
         tfluidwork = self.cache.get('totalfluidwork', None)
         tinputwork = self.cache.get('totalinputwork', None)
 
-        dtotalfluidwork_dun = self.funcs['FluidWork'].du(n)
-        dtotalinputwork_dun = self.funcs['SubglottalWork'].du(n)
+        dtotalfluidwork_dun = self.funcs['FluidWork'].du(n, iter_params0, iter_params1)
+        dtotalinputwork_dun = self.funcs['SubglottalWork'].du(n, iter_params0, iter_params1)
 
         if n < N_START:
             return dfn.Function(self.model.vector_function_space).vector()
@@ -300,20 +314,21 @@ class MFDR(AbstractFunctional):
 
         return res
 
-    def du(self, n):
+    # TODO: Pretty sure this is wrong so you should fix it if you are going to use it
+    def du(self, n, iter_params0, iter_params1):
         res = None
 
         idx_mfdr = self.cache.get('idx_mfdr', None)
 
         if n == idx_mfdr or n == idx_mfdr+1:
             # First calculate flow rates at n and n+1
-            # fluid_info, _ = model.set_iter_params_fromfile(f, n+2)
+            # fluid_info, _ = self.model.set_iter_params_fromfile(f, n+2)
 
             # q1 = fluid_info['flow_rate']
             dq1_du = self.model.get_flow_sensitivity()[1]
             t1 = self.f.get_time(n+1)
 
-            # fluid_info, _ = model.set_iter_params_fromfile(f, n+1)
+            # fluid_info, _ = self.model.set_iter_params_fromfile(f, n+1)
 
             # q0 = fluid_info['flow_rate']
             dq0_du = self.model.get_flow_sensitivity()[1]
@@ -378,7 +393,7 @@ class WSSGlottalWidth(AbstractFunctional):
 
         return wss
 
-    def du(self, n):
+    def du(self, n, iter_params0, iter_params1):
         dwss_du = dfn.Function(self.model.vector_function_space).vector()
 
         weights = self.kwargs['weights']
@@ -390,8 +405,10 @@ class WSSGlottalWidth(AbstractFunctional):
             weight = weights[n]
             gw_meas = meas_glottal_widths[n]
 
-            u, v, a = self.f.get_state(n, self.model.vector_function_space)
-            self.model.set_initial_state(u, v, a)
+            self.model.set_iter_params(*iter_params1)
+
+            # u, v, a = self.f.get_state(n, self.model.vector_function_space)
+            # self.model.set_initial_state(u, v, a)
 
             # Find the surface vertex corresponding to where the glottal width is measured
             # This is numbered according to the 'local' numbering scheme of the surface vertices
