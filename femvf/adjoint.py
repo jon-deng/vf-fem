@@ -219,7 +219,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         _x1 = [comp.vector() for comp in x1]
         _x2 = [comp.vector() for comp in x2]
 
-        breakpoint()
+        # breakpoint()
         iter_params1 = (_x0, dt1, solid_props, fluid_props0, _x1[0])
         iter_params2 = (_x1, dt2, solid_props, fluid_props1, _x2[0])
 
