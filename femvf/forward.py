@@ -165,8 +165,8 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
         # Write the final functionals
         u1, v1, a1 = x1
-        info = model.set_params((u1.vector(), v1.vector(), a1.vector()), fluid_props_ii,
-                                solid_props)
+        info = model.set_params((u1.vector(), v1.vector(), a1.vector()), solid_props,
+                                fluid_props_ii)
         glottal_width.append(info['a_min'])
         flow_rate.append(info['flow_rate'])
 
@@ -210,7 +210,7 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 
     # Update form coefficients and initial guess
     fluid_info = model.set_iter_params((u0.vector(), v0.vector(), a0.vector()), dt,
-                                       fluid_props, solid_props, u1=u0.vector())
+                                       solid_props, fluid_props, u1=u0.vector())
 
 
     # Solve the thing

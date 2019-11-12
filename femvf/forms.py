@@ -370,7 +370,6 @@ class ForwardModel:
         self.reset_cache()
         self.reset_adj_cache()
 
-
         self.df1_du1_mat = dfn.assemble(self.df1_du1)
         self.df1_du1_adj_mat = dfn.assemble(self.df1_du1_adj)
         self.df1_du0_adj_mat = dfn.assemble(self.df1_du0_adj)
@@ -723,7 +722,7 @@ class ForwardModel:
         """
         self.fluid_props = fluid_props
 
-    def set_params(self, x0, fluid_props, solid_props):
+    def set_params(self, x0, solid_props, fluid_props):
         """
         Set all parameters needed to integrate the model.
 
@@ -763,11 +762,11 @@ class ForwardModel:
         x0 = statefile.get_state(n)
 
         # Assign the values to the model
-        fluid_info = self.set_params(x0, fluid_props, solid_props)
+        fluid_info = self.set_params(x0, solid_props, fluid_props)
 
         return fluid_info
 
-    def set_iter_params(self, x0, dt, fluid_props, solid_props, u1=None):
+    def set_iter_params(self, x0, dt, solid_props, fluid_props, u1=None):
         """
         Set all parameters needed to integrate the model and an initial guess.
 
@@ -818,6 +817,6 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iter_params(x0, dt, fluid_props, solid_props, u1=u1)
+        fluid_info = self.set_iter_params(x0, dt, solid_props, fluid_props, u1=u1)
 
         return fluid_info, fluid_props

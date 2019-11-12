@@ -62,7 +62,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     _x1 = (x1[0].vector(), x1[1].vector(), x1[2].vector())
-    model.set_iter_params(_x1, dt2, fluid_props1, solid_props, u1=x2[0].vector())
+    model.set_iter_params(_x1, dt2, solid_props, fluid_props1, u1=x2[0].vector())
 
     # Assemble needed forms
     df2_du1 = model.assem_df1_du0_adj()
@@ -75,7 +75,7 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
     _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
-    model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
+    model.set_iter_params(_x0, dt1, solid_props, fluid_props0, u1=x1[0].vector())
 
     # Assemble needed forms
     df1_du1 = model.assem_df1_du1_adj()
@@ -219,8 +219,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         _x1 = [comp.vector() for comp in x1]
         _x2 = [comp.vector() for comp in x2]
 
-        iter_params1 = (_x0, dt1, fluid_props0, solid_props, _x1[0])
-        iter_params2 = (_x1, dt2, fluid_props1, solid_props, _x2[0])
+        iter_params1 = (_x0, dt1, solid_props, fluid_props0, _x1[0])
+        iter_params2 = (_x1, dt2, solid_props, fluid_props1, _x2[0])
 
         dcost_du1 = functional.du(ii, iter_params1, iter_params2)
 
@@ -234,7 +234,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         # Assemble needed forms
         _x0 = [comp.vector() for comp in x0]
-        model.set_iter_params(_x0, dt1, fluid_props0, solid_props, u1=x1[0].vector())
+        model.set_iter_params(_x0, dt1, solid_props, fluid_props0, u1=x1[0].vector())
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
         gradient -= df1_dparam*adj_u1.vector()
