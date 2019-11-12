@@ -56,7 +56,7 @@ def test_functional(Functional, model, f, gkwargs):
     alpha = 1e-2 * min(x_0[0].max(), model.get_collision_gap())
     func_1 = functional_wrapper(x_0[0]+alpha*du, n=n)
 
-    # Reset the state to it's original value
+    # Reset the state to it has its original value
     f.set_state(n, x_0)
 
     print(func_1-func_0)

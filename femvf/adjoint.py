@@ -145,7 +145,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
     df1_dparam_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
 
-    ## Allocate adjoint states
+    ## Preallocating vector
+    # Adjoint states
     vfunc_space = model.vector_function_space
     adj_u1 = dfn.Function(vfunc_space)
     adj_v1 = dfn.Function(vfunc_space)
@@ -155,17 +156,16 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     adj_v2 = dfn.Function(vfunc_space)
     adj_a2 = dfn.Function(vfunc_space)
 
-    ## Allocate model states
+    # Model states
     x0 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
     x1 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
     x2 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
 
-    ## Allocate space for the gradient
+    # Allocate space for the gradient
     gradient = dfn.Function(model.scalar_function_space).vector() # np.zeros(model.emod.vector().size())
 
-
-    ## Initial iteration for adjoint calculation
-    # Load data needed to specify an iteration
+    ## Initialize Adjoint calculation
+    #
 
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)

@@ -83,6 +83,49 @@ class AbstractFunctional():
         """
         raise NotImplementedError("Method not implemented")
 
+class DisplacementNorm(AbstractFunctional):
+
+    def __init__(self, model, f, **kwargs):
+        super(DisplacementNorm, self).__init__(model, f, **kwargs)
+
+        self.kwargs.setdefault('use_meas_indices', False)
+
+    def __call__(self):
+        N_STATE = self.f.size
+        u = dfn.Function(self.model.vector_function_space).vector()
+
+        res = 0
+        for ii in range(N_STATE):
+            # Set form coefficients to represent the model form index ii -> ii+1
+            _u, _, _ = self.f.get_state(ii)
+
+            u[:] = _u
+            res += u.norm('l2')
+
+        return res
+
+    def du(self, n, iter_params0, iter_params1):
+        # res = dfn.Function(self.model.vector_function_space)
+
+        _u = iter_params1[0][0]
+        _u, _, _ = self.f.get_state(n)
+
+        u = dfn.Function(self.model.vector_function_space).vector()
+        u[:] = _u
+
+        u_norm = u.norm('l2')
+
+        res = None
+        if u_norm == 0:
+            res = u
+        else:
+            res = 1/u_norm * u
+
+        return res
+
+    def dparam(self):
+        return None
+
 class FluidWork(AbstractFunctional):
     """
     Returns the work done by the fluid on the vocal folds.
