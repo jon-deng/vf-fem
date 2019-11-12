@@ -16,8 +16,7 @@ import ufl
 
 
 # @profile
-def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_props0, fluid_props1,
-                      dcost_du1):
+def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
     """
     Returns the adjoint at the previous time step.
 
@@ -38,14 +37,10 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     model : forms.ForwardModel
     adj_x2 : tuple of dfn.Function
         A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
-    x0, x1, x2 : tuple of dfn.Function
-        Tuples (u, v, a) of states at time indices 0, 1, and 2.
-    dt1, dt2 : float
-        The timesteps associated with the f1 and f2 forward models respectively.
-    solid_props : dict
-        A dictionary of solid properties.
-    fluid_props0, fluid_props1 : dict
-        Dictionaries storing fluid properties at time indices 0 and 1.
+    iter_params1, iter_params2 : tuple
+        iter_params1 is a tuple of:
+        (x^{n}, t^{n+1}-t^{n}, solid_props^{n}, fluid_props^{n}, u^{n+1})
+        where x is itself a tuple of (u, v, a)
     h5path : string
         Path to an hdf5 file containing states from a forward run of the model.
     h5group : string
@@ -61,8 +56,8 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     adj_u2, adj_v2, adj_a2 = adj_x2
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
-    _x1 = (x1[0].vector(), x1[1].vector(), x1[2].vector())
-    model.set_iter_params(_x1, dt2, solid_props, fluid_props1, u1=x2[0].vector())
+    dt1 = iter_params1[1]
+    model.set_iter_params(*iter_params2)
 
     # Assemble needed forms
     df2_du1 = model.assem_df1_du0_adj()
@@ -74,8 +69,9 @@ def decrement_adjoint(model, adj_x2, x0, x1, x2, dt1, dt2, solid_props, fluid_pr
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
-    model.set_iter_params(_x0, dt1, solid_props, fluid_props0, u1=x1[0].vector())
+    # _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
+    dt2 = iter_params2[1]
+    model.set_iter_params(*iter_params1)
 
     # Assemble needed forms
     df1_du1 = model.assem_df1_du1_adj()
@@ -226,8 +222,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         dcost_du1 = functional.du(ii, iter_params1, iter_params2)
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
-            model, (adj_u2, adj_v2, adj_a2), x0, x1, x2, dt1, dt2, solid_props,
-            fluid_props0, fluid_props1, dcost_du1)
+            model, (adj_u2, adj_v2, adj_a2), iter_params1, iter_params2, dcost_du1)
 
         # Update gradient using the adjoint state
         # TODO: Functionals are assumed to not depend on velocity or acceleration, so we only
