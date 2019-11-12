@@ -268,7 +268,7 @@ class SubglottalWork(AbstractFunctional):
         N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
-            fluid_props = iter_params1[2]
+            fluid_props = iter_params1[3]
             self.model.set_iter_params(*iter_params1)
             _, dq_du = self.model.get_flow_sensitivity()
 

@@ -188,8 +188,8 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     model.reset_cache()
     model.reset_adj_cache()
 
-    iter_params2 = (_x1, dt2, fluid_props1, solid_props, _x2[0])
-    iter_params3 = (_x2, 0.0, fluid_props2, solid_props, None)
+    iter_params2 = (_x1, dt2, solid_props, fluid_props1, _x2[0])
+    iter_params3 = (_x2, 0.0, solid_props, fluid_props2, None)
 
     dcost_du2 = functional.du(N-1, iter_params2, iter_params3)
 
@@ -219,6 +219,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         _x1 = [comp.vector() for comp in x1]
         _x2 = [comp.vector() for comp in x2]
 
+        breakpoint()
         iter_params1 = (_x0, dt1, solid_props, fluid_props0, _x1[0])
         iter_params2 = (_x1, dt2, solid_props, fluid_props1, _x2[0])
 
