@@ -17,8 +17,8 @@ from .properties import FluidProperties, SolidProperties
 
 from .operators import LinCombOfMats
 
-dfn.parameters['form_compiler']['optimize'] = True
-dfn.parameters['form_compiler']['cpp_optimize'] = True
+# dfn.parameters['form_compiler']['optimize'] = True
+# dfn.parameters['form_compiler']['cpp_optimize'] = True
 
 def newmark_v(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     """
