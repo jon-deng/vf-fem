@@ -9,6 +9,7 @@ import numpy as np
 
 import dolfin as dfn
 import ufl
+from petsc4py import PETSc as pc
 
 from . import fluids
 from . import constants as const
@@ -554,72 +555,81 @@ class ForwardModel:
         return out
 
     def assem_df1_du1_adj(self):
-        M = self.assem_cache['M.adj']
-        K = self.assem_cache['K.adj']
+        return dfn.assemble(self.df1_du1_adj)
+        # M = self.assem_cache['M.adj']
+        # K = self.assem_cache['K.adj']
+        # # breakpoint()
+        # # M = dfn.as_backend_type(self.assem_cache['M.adj']).mat().duplicate(copy=True)
+        # # K = dfn.as_backend_type(self.assem_cache['K.adj']).mat().duplicate(copy=True)
 
-        dt = self.dt.values()[0]
-        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+        # dt = self.dt.values()[0]
+        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
 
-        rm = self.rayleigh_m.values()[0]
-        rk = self.rayleigh_k.values()[0]
+        # rm = self.rayleigh_m.values()[0]
+        # rk = self.rayleigh_k.values()[0]
 
-        dv1_du1 = newmark_v_du1(dt, gamma, beta)
-        da1_du1 = newmark_a_du1(dt, gamma, beta)
+        # dv1_du1 = newmark_v_du1(dt, gamma, beta)
+        # da1_du1 = newmark_a_du1(dt, gamma, beta)
 
-        df1_du1_adj_nonlin = self.df1_du1_adj_nonlin
+        # df1_du1_adj_nonlin = self.df1_du1_adj_nonlin
 
-        out = (da1_du1 + rm*dv1_du1)*M + (1+rk*dv1_du1)*K + dfn.assemble(df1_du1_adj_nonlin)
-        return out
+        # out = (da1_du1 + rm*dv1_du1)*M + (1+rk*dv1_du1)*K + dfn.assemble(df1_du1_adj_nonlin)
+
+        # # out = (da1_du1 + rm*dv1_du1)*M + (1+rk*dv1_du1)*K + dfn.assemble(df1_du1_adj_nonlin)
+        # return out
 
     def assem_df1_du0_adj(self):
-        M = self.assem_cache['M.adj']
-        K = self.assem_cache['K.adj']
+        return dfn.assemble(self.df1_du0_adj)
+        # M = self.assem_cache['M.adj']
+        # K = self.assem_cache['K.adj']
 
-        dt = self.dt.values()[0]
-        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+        # dt = self.dt.values()[0]
+        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
 
-        rm = self.rayleigh_m.values()[0]
-        rk = self.rayleigh_k.values()[0]
+        # rm = self.rayleigh_m.values()[0]
+        # rk = self.rayleigh_k.values()[0]
 
-        dv1_du0 = newmark_v_du0(dt, gamma, beta)
-        da1_du0 = newmark_a_du0(dt, gamma, beta)
+        # dv1_du0 = newmark_v_du0(dt, gamma, beta)
+        # da1_du0 = newmark_a_du0(dt, gamma, beta)
 
-        df1_du0_adj_nonlin = self.df1_du0_adj_nonlin
+        # df1_du0_adj_nonlin = self.df1_du0_adj_nonlin
 
-        out = (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
-        return out
+        # out = (da1_du0 + rm*dv1_du0)*M + (rk*dv1_du0)*K + dfn.assemble(df1_du0_adj_nonlin)
+        # return out
 
     def assem_df1_dv0_adj(self):
-        M = self.assem_cache['M.adj']
-        K = self.assem_cache['K.adj']
+        return dfn.assemble(self.df1_dv0_adj)
+        # M = self.assem_cache['M.adj']
+        # K = self.assem_cache['K.adj']
 
-        dt = self.dt.values()[0]
-        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+        # dt = self.dt.values()[0]
+        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
 
-        rm = self.rayleigh_m.values()[0]
-        rk = self.rayleigh_k.values()[0]
+        # rm = self.rayleigh_m.values()[0]
+        # rk = self.rayleigh_k.values()[0]
 
-        dv1_dv0 = newmark_v_dv0(dt, gamma, beta)
-        da1_dv0 = newmark_a_dv0(dt, gamma, beta)
+        # dv1_dv0 = newmark_v_dv0(dt, gamma, beta)
+        # da1_dv0 = newmark_a_dv0(dt, gamma, beta)
 
-        out = (da1_dv0 + rm*dv1_dv0)*M + (rk*dv1_dv0)*K #+ dfn.assemble(self.df1_dv0_adj_nonlin)
-        return out
+        # out = (da1_dv0 + rm*dv1_dv0)*M + (rk*dv1_dv0)*K #+ dfn.assemble(self.df1_dv0_adj_nonlin)
+        # return out
 
     def assem_df1_da0_adj(self):
-        M = self.assem_cache['M.adj']
-        K = self.assem_cache['K.adj']
+        return dfn.assemble(self.df1_da0_adj)
+        # M = self.assem_cache['M.adj']
+        # K = self.assem_cache['K.adj']
 
-        dt = self.dt.values()[0]
-        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+        # dt = self.dt.values()[0]
+        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
 
-        rm = self.rayleigh_m.values()[0]
-        rk = self.rayleigh_k.values()[0]
+        # rm = self.rayleigh_m.values()[0]
+        # rk = self.rayleigh_k.values()[0]
 
-        dv1_da0 = newmark_v_da0(dt, gamma, beta)
-        da1_da0 = newmark_a_da0(dt, gamma, beta)
+        # dv1_da0 = newmark_v_da0(dt, gamma, beta)
+        # da1_da0 = newmark_a_da0(dt, gamma, beta)
 
-        out = (da1_da0 + rm*dv1_da0)*M + (rk*dv1_da0)*K #+ dfn.assemble(self.df1_da0_adj_nonlin)
-        return out
+        # out = (da1_da0 + rm*dv1_da0)*M + (rk*dv1_da0)*K #+ dfn.assemble(self.df1_da0_adj_nonlin)
+        # return out
 
     # Convenience functions
     def get_glottal_width(self):
