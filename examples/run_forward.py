@@ -32,15 +32,16 @@ if __name__ == '__main__':
 
     model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
-    dt = 1e-4
-    times_meas = [0, 0.1]
+    dt = 5e-5
+    times_meas = np.linspace(0, 0.1, round(0.1/dt)+1)
 
     h5file = 'forward_example.h5'
     if os.path.exists(h5file):
         os.remove(h5file)
 
     runtime_start = perf_counter()
-    forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=h5file)
+    forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=h5file,
+            abs_tol=None)
     runtime_end = perf_counter()
 
     print("Finished!")
