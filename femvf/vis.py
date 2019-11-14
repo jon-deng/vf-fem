@@ -77,7 +77,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     """
     axs[0, 0].clear()
 
-    delta_xy = x[0].vector()[model.vert_to_vdof.reshape(-1)].reshape(-1, 2)
+    delta_xy = x[0][model.vert_to_vdof.reshape(-1)].reshape(-1, 2)
     xy_current = model.mesh.coordinates() + delta_xy
     triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
                                       triangles=model.mesh.cells())

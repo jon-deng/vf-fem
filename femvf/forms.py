@@ -533,26 +533,27 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
+        return dfn.assemble(self.df1_du1)
         # out = self.df1_du1_mat.copy()
         # out.zero()
-        M = self.assem_cache['M']
-        K = self.assem_cache['K']
+        # M = self.assem_cache['M']
+        # K = self.assem_cache['K']
 
-        dt = self.dt.values()[0]
-        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+        # dt = self.dt.values()[0]
+        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
 
-        rm = self.rayleigh_m.values()[0]
-        rk = self.rayleigh_k.values()[0]
+        # rm = self.rayleigh_m.values()[0]
+        # rk = self.rayleigh_k.values()[0]
 
-        dv1_du1 = newmark_v_du1(dt, gamma, beta)
-        da1_du1 = newmark_a_du1(dt, gamma, beta)
+        # dv1_du1 = newmark_v_du1(dt, gamma, beta)
+        # da1_du1 = newmark_a_du1(dt, gamma, beta)
 
-        if u1 is not None:
-            self.set_fin_state(u1)
+        # if u1 is not None:
+        #     self.set_fin_state(u1)
 
-        df1_du1_nonlin = self.df1_du1_nonlin
-        out = (da1_du1 + rm*dv1_du1)*M + (1 + rk*dv1_du1)*K + dfn.assemble(df1_du1_nonlin)
-        return out
+        # df1_du1_nonlin = self.df1_du1_nonlin
+        # out = (da1_du1 + rm*dv1_du1)*M + (1 + rk*dv1_du1)*K + dfn.assemble(df1_du1_nonlin)
+        # return out
 
     def assem_df1_du1_adj(self):
         return dfn.assemble(self.df1_du1_adj)

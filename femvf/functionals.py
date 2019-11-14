@@ -70,7 +70,7 @@ class AbstractFunctional():
         iter_params0, iter_params1 : tuple(tuple(3*dfn.Vector), float, dict, dict, dfn.Vector)
             Tuple of parameters that specify iteration n. These are parameters fed into
             `forms.ForwardModel.set_iter_params`, namely
-            `(x0, dt, fluid_props, solid_props, u1=None)`
+            `(x0, dt, solid_props, fluid_props, u1=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -84,6 +84,11 @@ class AbstractFunctional():
         raise NotImplementedError("Method not implemented")
 
 class DisplacementNorm(AbstractFunctional):
+    r"""
+    Represents the sum over time of l2 norms of displacements.
+
+    :math:`\sum{||\vec{u}||}_2`
+    """
 
     def __init__(self, model, f, **kwargs):
         super(DisplacementNorm, self).__init__(model, f, **kwargs)
@@ -126,9 +131,11 @@ class DisplacementNorm(AbstractFunctional):
     def dparam(self):
         return None
 
+# class
+
 class FluidWork(AbstractFunctional):
     """
-    Returns the work done by the fluid on the vocal folds.
+    Represents work done by the fluid on the vocal folds.
 
     Parameters
     ----------
