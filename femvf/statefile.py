@@ -52,6 +52,12 @@ class StateFile:
     def __len__(self):
         return self.size
 
+    def close(self):
+        """
+        Close the file.
+        """
+        self.file.close()
+
     @property
     def size(self):
         """
@@ -360,6 +366,24 @@ class StateFile:
                 solid_props[label] = data[()]
 
         return solid_props
+
+    def get_iter_params(self, n):
+        """
+        Return parameter defining iteration `n`
+
+        Parameters
+        ----------
+        n : int
+            Index of the iteration.
+        """
+
+        x0 = self.get_state(n-1)
+        dt = self.get_time(n) - self.get_time(n-1)
+        solid_props = self.get_solid_props()
+        fluid_props = self.get_fluid_props(n-1)
+        u1 = self.get_u(n)
+
+        return (x0, dt, solid_props, fluid_props, u1)
 
 def _property_shape(property_desc, model):
     const_or_field = property_desc[0]

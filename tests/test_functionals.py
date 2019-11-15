@@ -29,7 +29,7 @@ def test_functional(Functional, model, f, gkwargs):
     f : StateFile
         Reference a state file
     """
-    n = 2
+    n = 125
     x_0 = None
     func_0 = None
     dfunc_du_an = None
@@ -37,35 +37,42 @@ def test_functional(Functional, model, f, gkwargs):
     x_0 = f.get_state(n)
     g = Functional(model, f, **gkwargs)
     func_0 = g()
-    dfunc_du_an = g.du(n)
+    dfunc_du_an = g.du(n, f.get_iter_params(n-1), f.get_iter_params(n))
 
     # calculate the functional along a perturbed direction
     def functional_wrapper(u, n=0):
         """
-        Evaluate the functional with state `u` replaced at index `n`.
+        Return the functional with state `u` replaced at index `n`.
         """
-        x = (u, *x_0[1:])
-        f.set_state(n, x)
+        # Get the original state and subsitute the value to compute the modified functional
+        x_orig = f.get_state(n)
+        x_subs = (u, *x_orig[1:])
+        f.set_state(n, x_subs)
 
-        return g()
+        out = g()
+
+        # Reset the state to its original value
+        f.set_state(n, x_0)
+
+        return out
 
     # Use a random search direction
     du = np.random.rand(*x_0[0].shape)
 
-    model.set_initial_state(*x_0)
-    alpha = 1e-2 * min(x_0[0].max(), model.get_collision_gap())
+    model.set_ini_state(*x_0)
+    alpha = 1e-5 * min(x_0[0].max(), model.get_collision_gap())
     func_1 = functional_wrapper(x_0[0]+alpha*du, n=n)
 
-    # Reset the state to it has its original value
-    f.set_state(n, x_0)
-
-    print(func_1-func_0)
-    print(np.sum(alpha*np.multiply(dfunc_du_an, du)))
+    # print(func_1)
+    # print(func_0)
+    print(f"dg/du_n [:10] = {dfunc_du_an[:10]}")
+    print((func_1-func_0)/alpha)
+    print(np.dot(dfunc_du_an, du))
 
 if __name__ == '__main__':
     dfn.set_log_level(30)
     #### Test setup
-    # To setup the test, first generate a set of state by solving the forward model
+    # To setup the test, first generate a set of states by solving the forward model
     mesh_dir = '../meshes'
 
     mesh_base_filename = 'geometry2'
@@ -76,19 +83,24 @@ if __name__ == '__main__':
     ## Set the solution parameters
     dt_max = 1e-4
     t0 = 0.0
-    t_final = 0.1
-    tmeas = np.linspace(0, t_final, 256)
-    dtmax = 1e-4
 
-    fluid_props = FluidProperties()
+    t_start = 0.0
+    t_final = 0.1
+    tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
+
     solid_props = SolidProperties()
+    fluid_props = FluidProperties()
 
     h5file = 'out/test_functionals.h5'
-    if not path.isfile(h5file):
-        forward(model, t0, tmeas, dt_max, solid_props, fluid_props, h5file=h5file)
+    if path.isfile(h5file):
+        print("Forward model states already exist. Using existing file.")
+    else:
+        print("Running forward model to generate data.")
+        forward(model, t0, tmeas, dt_max, solid_props, fluid_props, h5file=h5file,
+                abs_tol=None)
 
     #### Functionals
-    Functional = functionals.AcousticEfficiency
-    gkwargs = {'m_start': 0}
+    Functional = functionals.AcousticSWL
+    gkwargs = {'tukey_alpha': 0.05}
     with sf.StateFile(h5file, mode='a') as f:
         test_functional(Functional, model, f, gkwargs)
