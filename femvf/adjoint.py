@@ -236,8 +236,9 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         gradient -= df1_dparam*adj_u1.vector()
 
-        if functional.dparam() is not None:
-            gradient += functional.dparam()
+        dfunc_dparam = functional.dparam(solid_props, fluid_props0)
+        if dfunc_dparam is not None:
+            gradient += dfunc_dparam
 
         # Update properties for the next iteration
         for comp1, comp2 in zip(x1, x2):
