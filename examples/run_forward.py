@@ -31,6 +31,7 @@ if __name__ == '__main__':
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+    breakpoint()
 
     dt = 5e-5
     times_meas = np.linspace(0, 0.1, round(0.1/dt)+1)

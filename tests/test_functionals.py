@@ -91,6 +91,18 @@ if __name__ == '__main__':
     solid_props = SolidProperties()
     fluid_props = FluidProperties()
 
+    # Use an elasticity that varies linearly with y coordinate.
+    y = model.mesh.coordinates()[..., 1]
+    y_max = y.max()
+    y_min = y.min()
+
+    emod_at_ymin = 2e3*10
+    emod_at_ymax = 5e3*10
+    emod = emod_at_ymax*(y-y_min)/(y_max-y_min) + emod_at_ymin*(y-y_max)/(y_min-y_max)
+
+    sdof_to_vert = np.sort(model.vert_to_sdof)
+    solid_props['elastic_modulus'] = emod[sdof_to_vert]
+
     h5file = 'out/test_functionals.h5'
     if path.isfile(h5file):
         print("Forward model states already exist. Using existing file.")
@@ -100,7 +112,7 @@ if __name__ == '__main__':
                 abs_tol=None)
 
     #### Functionals
-    Functional = functionals.AcousticSWL
+    Functional = functionals.AcousticEfficiencyReg
     gkwargs = {'tukey_alpha': 0.05}
     with sf.StateFile(h5file, mode='a') as f:
         test_functional(Functional, model, f, gkwargs)

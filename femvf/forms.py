@@ -525,7 +525,7 @@ class ForwardModel:
     # matrices. You may be able to speed up addition by having an output matrix with sparsity that
     # is a superset of all the component matrix sparsities. I believe, fenics does not directly
     # support this type of add, so you need to use petsc directly.
-    def assem_df1_du1(self, u1=None):
+    def assem_df1_du1(self):
         """
         Return the residual vector jacobian
 
@@ -533,7 +533,8 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
-        return dfn.assemble(self.df1_du1)
+
+        return dfn.assemble(self.df1_du1, tensor=out)
 
     def assem_df1_du1_adj(self):
         return dfn.assemble(self.df1_du1_adj)
@@ -746,3 +747,7 @@ class ForwardModel:
         fluid_info = self.set_iter_params(x0, dt, solid_props, fluid_props, u1=u1)
 
         return fluid_info, fluid_props
+
+if __name__ == '__main__':
+    mesh_path = '../geometry2.xml'
+    model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
