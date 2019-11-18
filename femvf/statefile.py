@@ -37,8 +37,8 @@ class StateFile:
         Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, name, group='/', **kwargs):
-        self.file = h5py.File(name, **kwargs)
+    def __init__(self, name, group='/', mode='r', **kwargs):
+        self.file = h5py.File(name, mode=mode, **kwargs)
         self.root_group_name = group
 
         # self.data = self.file[self.group]

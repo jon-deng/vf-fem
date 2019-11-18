@@ -142,12 +142,12 @@ def _sort_surface_vertices(surface_coordinates):
 
     return np.array(idx_sort)
 
-def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cell_labels, 
+def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cell_labels,
     solid_props=None, fluid_props=None):
         """
         Return a dictionary of variational forms and other parameters.
 
-        This is specific to the forward model and only exists to separate out this long ass section of 
+        This is specific to the forward model and only exists to separate out this long ass section of
         code.
         """
 
@@ -259,10 +259,10 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0, 0]),
-                                facet_function, facet_labels['fixed'])
+                                  facet_function, facet_labels['fixed'])
 
         bc_base_adj = dfn.DirichletBC(vector_fspace, dfn.Constant([0, 0]),
-                                    facet_function, facet_labels['fixed'])
+                                      facet_function, facet_labels['fixed'])
 
         ## Adjoint forms
         # Note: For an externally calculated pressure, you have to correct the derivative based on
@@ -413,7 +413,7 @@ class ForwardModel:
         self.solid_props = SolidProperties()
 
         ## Variational Forms
-        self._forms = _linear_elastic_forms(self.mesh, 
+        self._forms = _linear_elastic_forms(self.mesh,
             self.facet_function, facet_labels, self.cell_function, cell_labels)
 
         # Add some commonly used things as parameters
@@ -425,6 +425,7 @@ class ForwardModel:
         self.gamma = self.forms['coeff.gamma']
         self.beta = self.forms['coeff.beta']
         self.emod = self.forms['coeff.emod']
+        self.y_collision = self.forms['coeff.y_collision']
         self.dt = self.forms['coeff.dt']
         self.u0 = self.forms['coeff.u0']
         self.v0 = self.forms['coeff.v0']
@@ -704,7 +705,7 @@ class ForwardModel:
         """
         labels = SolidProperties.TYPES.keys()
         forms = self.forms
-        coefficients = [forms['coeff.emod'], forms['coeff.nu'], forms['coeff.rho'], 
+        coefficients = [forms['coeff.emod'], forms['coeff.nu'], forms['coeff.rho'],
                         forms['coeff.rayleigh_m'], forms['coeff.rayleigh_k'],
                         forms['coeff.y_collision']]
 
@@ -831,7 +832,7 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iter_params(x0, dt, solid_props=solid_props, fluid_props=fluid_props, 
+        fluid_info = self.set_iter_params(x0, dt, solid_props=solid_props, fluid_props=fluid_props,
                                           u1=u1)
 
         return fluid_info, fluid_props
