@@ -289,7 +289,7 @@ class StateFile:
         if out is None:
             ret = dset[n]
         else:
-            out.vector()[:] = dset[n]
+            out[:] = dset[n]
             ret = out
 
         return ret
@@ -319,7 +319,7 @@ class StateFile:
         else:
             for function, label in zip(out, labels):
                 dset = self.root_group[label]
-                function.vector()[:] = dset[n]
+                function[:] = dset[n]
 
             ret = out
 

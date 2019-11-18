@@ -70,7 +70,7 @@ class AbstractFunctional():
         iter_params0, iter_params1 : tuple(tuple(3*dfn.Vector), float, dict, dict, dfn.Vector)
             Tuple of parameters that specify iteration n. These are parameters fed into
             `forms.ForwardModel.set_iter_params`, namely
-            `(x0, dt, solid_props, fluid_props, u1=None)`
+            `(x0, dt, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.

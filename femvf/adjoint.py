@@ -35,11 +35,11 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
     Parameters
     ----------
     model : forms.ForwardModel
-    adj_x2 : tuple of dfn.Function
+    adj_x2 : tuple of dfn.cpp.la.Vector
         A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
     iter_params1, iter_params2 : tuple
         iter_params1 is a tuple of:
-        (x^{n}, t^{n+1}-t^{n}, solid_props^{n}, fluid_props^{n}, u^{n+1})
+        (x^{n}, t^{n+1}-t^{n}, u^{n+1})
         where x is itself a tuple of (u, v, a)
     h5path : string
         Path to an hdf5 file containing states from a forward run of the model.
@@ -66,7 +66,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
     df2_da1 = model.assem_df1_da0_adj()
 
     # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
-    df2_dpressure = dfn.assemble(model.df1_dp_adj)
+    df2_dpressure = dfn.assemble(model.forms['bilin.df1_dpressure_adj'])
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
@@ -79,9 +79,9 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
 
     ## Adjoint recurrence relations
     # Allocate adjoint states
-    adj_u1 = dfn.Function(model.vector_function_space)
-    adj_v1 = dfn.Function(model.vector_function_space)
-    adj_a1 = dfn.Function(model.vector_function_space)
+    adj_u1 = dfn.Function(model.vector_function_space).vector()
+    adj_v1 = dfn.Function(model.vector_function_space).vector()
+    adj_a1 = dfn.Function(model.vector_function_space).vector()
 
     # You probably don't need to set Dirichlet BCs on adj_a or adj_v because they are always zeroed
     # out when solving for adj_u (but I'm gonna do it anyway)
@@ -91,26 +91,26 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
     # relations
     # TODO: you can probably take advantage of autodiff capabilities of fenics of the newmark
     # schemes so you don't have to do the differentiation manually like you did here.
-    adj_a1.vector()[:] = -1 * (df2_da1 * adj_u2.vector()
-                               + dt2 * (gamma/2/beta-1) * adj_v2.vector()
-                               + (1/2/beta-1) * adj_a2.vector())
-    model.bc_base_adj.apply(adj_a1.vector())
+    adj_a1[:] = -1 * (df2_da1 * adj_u2
+                               + dt2 * (gamma/2/beta-1) * adj_v2
+                               + (1/2/beta-1) * adj_a2)
+    model.bc_base_adj.apply(adj_a1)
 
-    adj_v1.vector()[:] = -1 * (df2_dv1 * adj_u2.vector()
-                               + (gamma/beta-1) * adj_v2.vector()
-                               + 1/beta/dt2 * adj_a2.vector())
-    model.bc_base_adj.apply(adj_v1.vector())
+    adj_v1[:] = -1 * (df2_dv1 * adj_u2
+                               + (gamma/beta-1) * adj_v2
+                               + 1/beta/dt2 * adj_a2)
+    model.bc_base_adj.apply(adj_v1)
 
     # import ipdb; ipdb.set_trace()
-    df2_du1_correction = dfn.Function(model.vector_function_space)
-    dpressure_du1.transpmult(df2_dpressure * adj_u2.vector(), df2_du1_correction.vector())
+    df2_du1_correction = dfn.Function(model.vector_function_space).vector()
+    dpressure_du1.transpmult(df2_dpressure * adj_u2, df2_du1_correction)
     adj_u1_lhs = dcost_du1 \
-                 + gamma/beta/dt1 * adj_v1.vector() + 1/beta/dt1**2 * adj_a1.vector() \
-                 - (df2_du1 * adj_u2.vector() + df2_du1_correction.vector()
-                    + gamma/beta/dt2 * adj_v2.vector()
-                    + 1/beta/dt2**2 * adj_a2.vector())
+                 + gamma/beta/dt1 * adj_v1 + 1/beta/dt1**2 * adj_a1 \
+                 - (df2_du1 * adj_u2 + df2_du1_correction
+                    + gamma/beta/dt2 * adj_v2
+                    + 1/beta/dt2**2 * adj_a2)
     model.bc_base_adj.apply(df1_du1, adj_u1_lhs)
-    dfn.solve(df1_du1, adj_u1.vector(), adj_u1_lhs, 'petsc')
+    dfn.solve(df1_du1, adj_u1, adj_u1_lhs, 'petsc')
 
     return (adj_u1, adj_v1, adj_a1)
 
@@ -134,7 +134,14 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     np.array of float
         The sensitivity of the functional wrt parameters.
     """
-    # x_vecs = 3*[None,]
+    # Assuming that fluid and solid properties are constant in time so set them once
+    # and leave them
+    # TODO: May want to use time varying fluid/solid props in future
+    fluid_props = f.get_fluid_props(0)
+    solid_props = f.get_solid_props()
+
+    model.set_fluid_props(fluid_props)
+    model.set_solid_props(solid_props)
 
     # Initialize the functional instance and run it once to initialize any cached values
     functional = Functional(model, f, **functional_kwargs)
@@ -143,27 +150,26 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     df1_dparam_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
 
     ## Preallocating vector
-    # Adjoint states
-    vfunc_space = model.vector_function_space
-    adj_u1 = dfn.Function(vfunc_space)
-    adj_v1 = dfn.Function(vfunc_space)
-    adj_a1 = dfn.Function(vfunc_space)
+    # Temporary variables to shorten code
+    def get_block_vec():
+        vspace = model.vector_function_space
+        return (dfn.Function(vspace).vector(), 
+                dfn.Function(vspace).vector(),
+                dfn.Function(vspace).vector())
 
-    adj_u2 = dfn.Function(vfunc_space)
-    adj_v2 = dfn.Function(vfunc_space)
-    adj_a2 = dfn.Function(vfunc_space)
+    # Adjoint states
+    adj_x1 = get_block_vec()
+    adj_x2 = get_block_vec()
 
     # Model states
-    x0 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
-    x1 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
-    x2 = (dfn.Function(vfunc_space), dfn.Function(vfunc_space), dfn.Function(vfunc_space))
+    x0 = get_block_vec()
+    x1 = get_block_vec()
+    x2 = get_block_vec()
 
     # Allocate space for the gradient
-    gradient = dfn.Function(model.scalar_function_space).vector() # np.zeros(model.emod.vector().size())
+    gradient = dfn.Function(model.scalar_function_space).vector()
 
     ## Initialize Adjoint calculation
-    #
-
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
     # To initialize, we need to solve for \lambda^{N-1} i.e. `adj_u2`, `adj_v2`, `adj_a2` etc.
@@ -172,21 +178,10 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
     f.get_state(N-1, out=x2)
     f.get_state(N-2, out=x1)
-    fluid_props2 = f.get_fluid_props(N-1)
-    fluid_props1 = f.get_fluid_props(N-2)
-    solid_props = f.get_solid_props()
     dt2 = times[N-1]-times[N-2]
 
-    _x1 = [comp.vector() for comp in x1]
-    _x2 = [comp.vector() for comp in x2]
-
-    # Cache mass and stiffness matrices
-    model.set_solid_props(solid_props)
-    model.reset_cache()
-    model.reset_adj_cache()
-
-    iter_params2 = (_x1, dt2, solid_props, fluid_props1, _x2[0])
-    iter_params3 = (_x2, 0.0, solid_props, fluid_props2, None)
+    iter_params2 = (x1, dt2, x2[0])
+    iter_params3 = (x2, 0.0, None)
 
     dcost_du2 = functional.du(N-1, iter_params2, iter_params3)
 
@@ -194,12 +189,12 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     df2_du2 = model.assem_df1_du1_adj()
 
     model.bc_base_adj.apply(df2_du2, dcost_du2)
-    dfn.solve(df2_du2, adj_u2.vector(), dcost_du2)
-    adj_v2.vector()[:] = 0
-    adj_a2.vector()[:] = 0
+    dfn.solve(df2_du2, adj_x2[0], dcost_du2)
+    adj_x2[1][:] = 0
+    adj_x2[2][:] = 0
 
     df2_dparam = dfn.assemble(df1_dparam_form_adj)
-    gradient -= df2_dparam*adj_u2.vector()
+    gradient -= df2_dparam*adj_x2[0]
 
     ## Loop through states for adjoint computation
     # Note that ii corresponds to the time index of the adjoint state we are solving for.
@@ -208,51 +203,44 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to
         # read index 0
         x0 = f.get_state(ii-1, out=x0)
-        fluid_props0 = f.get_fluid_props(ii-1)
 
         dt1 = times[ii] - times[ii-1]
 
-        _x0 = [comp.vector() for comp in x0]
-        _x1 = [comp.vector() for comp in x1]
-        _x2 = [comp.vector() for comp in x2]
-
         # breakpoint()
-        iter_params1 = (_x0, dt1, solid_props, fluid_props0, _x1[0])
-        iter_params2 = (_x1, dt2, solid_props, fluid_props1, _x2[0])
+        iter_params1 = (x0, dt1, x1[0])
+        iter_params2 = (x1, dt2, x2[0])
 
         dcost_du1 = functional.du(ii, iter_params1, iter_params2)
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
-            model, (adj_u2, adj_v2, adj_a2), iter_params1, iter_params2, dcost_du1)
+            model, adj_x2, iter_params1, iter_params2, dcost_du1)
+
+        for comp, val in zip(adj_x1, [adj_u1, adj_v1, adj_a1]):
+            comp[:] = val
 
         # Update gradient using the adjoint state
         # TODO: Functionals are assumed to not depend on velocity or acceleration, so we only
         # multiply by adj_u1. In the future you might have to use adj_v1 and adj_a1 too.
 
         # Assemble needed forms
-        _x0 = [comp.vector() for comp in x0]
-        model.set_iter_params(_x0, dt1, solid_props, fluid_props0, u1=x1[0].vector())
+        model.set_iter_params(*iter_params1)
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
-        gradient -= df1_dparam*adj_u1.vector()
+        gradient -= df1_dparam*adj_x1[0]
 
-        dfunc_dparam = functional.dparam(solid_props, fluid_props0)
+        dfunc_dparam = functional.dparam()
         if dfunc_dparam is not None:
             gradient += dfunc_dparam
 
         # Update properties for the next iteration
         for comp1, comp2 in zip(x1, x2):
-            comp2.assign(comp1)
+            comp2[:] = comp1
 
         for comp0, comp1 in zip(x0, x1):
-            comp1.assign(comp0)
+            comp1[:] = comp0
+
+        for comp1, comp2 in zip(adj_x1, adj_x2):
+            comp2[:] = comp1
 
         dt2 = dt1
-        fluid_props1 = fluid_props0
-
-        # Update adjoint recurrence relations for the next iteration
-        adj_a2.assign(adj_a1)
-        adj_v2.assign(adj_v1)
-        adj_u2.assign(adj_u1)
-
     return functional_value, gradient

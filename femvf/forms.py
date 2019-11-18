@@ -142,21 +142,193 @@ def _sort_surface_vertices(surface_coordinates):
 
     return np.array(idx_sort)
 
-def biform_m(a, b, rho):
-    """
-    Return the mass bilinear form
+def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cell_labels, 
+    solid_props=None, fluid_props=None):
+        """
+        Return a dictionary of variational forms and other parameters.
 
-    Integrates a with b
-    """
-    return rho*ufl.dot(a, b) * ufl.dx
+        This is specific to the forward model and only exists to separate out this long ass section of 
+        code.
+        """
 
-def biform_k(a, b, emod, nu):
-    """
-    Return stiffness bilinear form
+        def biform_k(a, b, emod, nu):
+            """
+            Return stiffness bilinear form
 
-    Integrates linear_elasticity(a) with the strain(b)
-    """
-    return ufl.inner(linear_elasticity(a, emod, nu), strain(b))*ufl.dx
+            Integrates linear_elasticity(a) with the strain(b)
+            """
+            return ufl.inner(linear_elasticity(a, emod, nu), strain(b))*ufl.dx
+
+        def biform_m(a, b, rho):
+            """
+            Return the mass bilinear form
+
+            Integrates a with b
+            """
+            return rho*ufl.dot(a, b) * ufl.dx
+
+        if solid_props is None:
+            solid_props = SolidProperties()
+        if fluid_props is None:
+            fluid_props = FluidProperties()
+
+        scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
+        vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
+
+        vector_trial = dfn.TrialFunction(vector_fspace)
+        vector_test = dfn.TestFunction(vector_fspace)
+
+        scalar_trial = dfn.TrialFunction(scalar_fspace)
+        scalar_test = dfn.TestFunction(scalar_fspace)
+
+        # Newmark update parameters
+        gamma = dfn.Constant(1/2)
+        beta = dfn.Constant(1/4)
+
+        # Solid material properties
+        y_collision = dfn.Constant(solid_props['y_collision'])
+        k_collision = dfn.Constant(solid_props['k_collision'])
+        rho = dfn.Constant(solid_props['density'])
+        nu = dfn.Constant(solid_props['poissons_ratio'])
+        rayleigh_m = dfn.Constant(solid_props['rayleigh_m'])
+        rayleigh_k = dfn.Constant(solid_props['rayleigh_k'])
+        emod = dfn.Function(scalar_fspace)
+
+        emod.vector()[:] = solid_props['elastic_modulus']
+
+        # Initial and final states
+        # u: displacement, v: velocity, a: acceleration
+        u0 = dfn.Function(vector_fspace)
+        v0 = dfn.Function(vector_fspace)
+        a0 = dfn.Function(vector_fspace)
+
+        u1 = dfn.Function(vector_fspace)
+
+        # Time step
+        dt = dfn.Constant(1e-4)
+
+        # Surface pressures
+        pressure = dfn.Function(scalar_fspace)
+
+        # Symbolic calculations to get the variational form for a linear-elastic solid
+        trial_v = newmark_v(vector_trial, u0, v0, a0, dt,
+                            gamma, beta)
+        trial_a = newmark_a(vector_trial, u0, v0, a0, dt,
+                            gamma, beta)
+
+        inertia = biform_m(trial_a, vector_test, rho)
+
+        # stress = linear_elasticity(vector_trial, emod, nu)
+
+        stiffness = biform_k(vector_trial, vector_test, emod, nu)
+
+        damping = rayleigh_m * biform_m(trial_v, vector_test, rho) \
+                        + rayleigh_k * biform_k(trial_v, vector_test, emod, nu)
+
+        # Compute the pressure loading Neumann boundary condition on the reference configuration
+        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
+        deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
+        deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+        fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
+
+        traction = ufl.dot(fluid_force, vector_test)*ds(facet_labels['pressure'])
+
+        # Use the penalty method to account for collision
+        collision_normal = dfn.Constant([0, 1])
+        x_reference = dfn.Function(vector_fspace)
+
+        vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
+        x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
+
+        gap = ufl.dot(x_reference+u1, collision_normal) - y_collision
+        positive_gap = (gap + abs(gap)) / 2
+
+
+        penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) \
+                * ds(facet_labels['pressure'])
+        f1_linear = ufl.action(inertia + stiffness + damping, u1)
+        f1_nonlin = -traction - penalty
+        f1 = f1_linear + f1_nonlin
+
+        df1_du1_linear = ufl.derivative(f1_linear, u1, vector_trial)
+        df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)
+        df1_du1 = df1_du1_linear + df1_du1_nonlin
+
+        ## Boundary conditions
+        # Specify DirichletBC at the VF base
+        bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0, 0]),
+                                facet_function, facet_labels['fixed'])
+
+        bc_base_adj = dfn.DirichletBC(vector_fspace, dfn.Constant([0, 0]),
+                                    facet_function, facet_labels['fixed'])
+
+        ## Adjoint forms
+        # Note: For an externally calculated pressure, you have to correct the derivative based on
+        # the sensitivity of pressure loading in `f1` to either `u0` and/or `u1` depending on if
+        # it's strongly coupled.
+        df1_du0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, u0, vector_trial))
+        df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(f1_nonlin, u0, vector_trial))
+        df1_du0_adj = df1_du0_adj_linear + df1_du0_adj_nonlin
+
+        df1_dv0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, v0, vector_trial))
+        df1_dv0_adj_nonlin = 0
+        df1_dv0_adj = df1_dv0_adj_linear + df1_dv0_adj_nonlin
+
+        df1_da0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, a0, vector_trial))
+        df1_da0_adj_nonlin = 0
+        df1_da0_adj = df1_da0_adj_linear + df1_da0_adj_nonlin
+
+        df1_dp_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
+
+        df1_du1_adj_linear = dfn.adjoint(df1_du1_linear)
+        df1_du1_adj_nonlin = dfn.adjoint(df1_du1_nonlin)
+        df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
+
+        df1_demod = ufl.derivative(f1, emod, scalar_trial)
+        df1_dpressure_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
+
+        # Work done by pressure from u0 to u1
+        # fluid_work = ufl.dot(fluid_force, u1-u0) * ds(facet_labels['pressure'])
+        # dfluid_work_du0 = ufl.derivative(fluid_work, u0, vector_test)
+        # dfluid_work_du1 = ufl.derivative(fluid_work, u1, vector_test)
+        # dfluid_work_dp = ufl.derivative(fluid_work, pressure, scalar_test)
+
+        forms = {
+            'bcs.base': bc_base,
+            # 'bcs.base'
+            'fspace.vector': vector_fspace,
+            'fspace.scalar': scalar_fspace,
+            'test.vector': vector_test,
+            'test.scalar': scalar_test,
+            'trial.vector': vector_trial,
+            'trial.scalar': scalar_trial,
+            'arg.u1': u1,
+            'coeff.dt': dt,
+            'coeff.gamma': gamma,
+            'coeff.beta': beta,
+            'coeff.u0': u0,
+            'coeff.v0': v0,
+            'coeff.a0': a0,
+            'coeff.pressure': pressure,
+            'coeff.rho': rho,
+            'coeff.rayleigh_m': rayleigh_m,
+            'coeff.rayleigh_k': rayleigh_k,
+            'coeff.y_collision': y_collision,
+            'coeff.emod': emod,
+            'coeff.nu': nu,
+            'coeff.k_collision': k_collision,
+            'lin.f1': f1,
+            'bilin.df1_du1': df1_du1,
+            'bilin.df1_du1_adj': df1_du1_adj,
+            'bilin.df1_du0_adj': df1_du0_adj,
+            'bilin.df1_dv0_adj': df1_dv0_adj,
+            'bilin.df1_da0_adj': df1_da0_adj,
+            'bilin.df1_dpressure_adj': df1_dpressure_adj,
+            'bilin.df1_demod': df1_demod}
+
+        return forms
 
 class ForwardModel:
     """
@@ -190,7 +362,6 @@ class ForwardModel:
         A list of vertex numbers on the pressure surface. They are ordered in increasing streamwise
         direction.
 
-
     vector_function_space : dfn.VectorFunctionSpace
     scalar_function_space : dfn.FunctionSpace
     vertex_to_vdof : array_like
@@ -200,6 +371,7 @@ class ForwardModel:
 
     main forms for solving
     """
+
     def __init__(self, mesh_path, facet_labels, cell_labels):
         ## Setting the mesh
         base_path, ext = path.splitext(mesh_path)
@@ -241,161 +413,66 @@ class ForwardModel:
         self.solid_props = SolidProperties()
 
         ## Variational Forms
-        # Function space definitions and dofmaps
-        self.scalar_function_space = dfn.FunctionSpace(self.mesh, 'CG', 1)
-        self.vector_function_space = dfn.VectorFunctionSpace(self.mesh, 'CG', 1)
+        self._forms = _linear_elastic_forms(self.mesh, 
+            self.facet_function, facet_labels, self.cell_function, cell_labels)
 
-        self.vert_to_vdof = dfn.vertex_to_dof_map(self.vector_function_space).reshape(-1, 2)
-        self.vert_to_sdof = dfn.vertex_to_dof_map(self.scalar_function_space)
+        # Add some commonly used things as parameters
+        self.vector_function_space = self.forms['fspace.vector']
+        self.scalar_function_space = self.forms['fspace.scalar']
+        self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector']).reshape(-1, 2)
+        self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
 
-        self.vector_trial = dfn.TrialFunction(self.vector_function_space)
-        self.vector_test = dfn.TestFunction(self.vector_function_space)
+        self.gamma = self.forms['coeff.gamma']
+        self.beta = self.forms['coeff.beta']
+        self.emod = self.forms['coeff.emod']
+        self.dt = self.forms['coeff.dt']
+        self.u0 = self.forms['coeff.u0']
+        self.v0 = self.forms['coeff.v0']
+        self.a0 = self.forms['coeff.a0']
+        self.u1 = self.forms['arg.u1']
 
-        self.scalar_trial = dfn.TrialFunction(self.scalar_function_space)
-        self.scalar_test = dfn.TestFunction(self.scalar_function_space)
+        self.f1 = self.forms['lin.f1']
+        self.df1_du1 = self.forms['bilin.df1_du1']
 
-        # Newmark update parameters
-        self.gamma = dfn.Constant(1/2)
-        self.beta = dfn.Constant(1/4)
+        self.bc_base_adj = self.forms['bcs.base']
+        self.bc_base = self.forms['bcs.base']
 
-        # Solid material properties
-        self.y_collision = dfn.Constant(self.solid_props['y_collision'])
-        self.k_collision = dfn.Constant(self.solid_props['k_collision'])
-        self.rho = dfn.Constant(self.solid_props['density'])
-        self.nu = dfn.Constant(self.solid_props['poissons_ratio'])
-        self.rayleigh_m = dfn.Constant(self.solid_props['rayleigh_m'])
-        self.rayleigh_k = dfn.Constant(self.solid_props['rayleigh_k'])
-        self.emod = dfn.Function(self.scalar_function_space)
+        self.scalar_trial = self.forms['trial.scalar']
+        self.vector_trial = self.forms['trial.vector']
 
-        self.emod.vector()[:] = self.solid_props['elastic_modulus']
+        # self.assem_cache = {}
+        # self.reset_cache()
+        # self.reset_adj_cache()
 
-        # Initial and final states
-        # u: displacement, v: velocity, a: acceleration
-        self.u0 = dfn.Function(self.vector_function_space)
-        self.v0 = dfn.Function(self.vector_function_space)
-        self.a0 = dfn.Function(self.vector_function_space)
+        self.df1_du1_mat = dfn.assemble(self.forms['bilin.df1_du1'])
+        self.df1_du1_adj_mat = dfn.assemble(self.forms['bilin.df1_du1_adj'])
+        self.df1_du0_adj_mat = dfn.assemble(self.forms['bilin.df1_du0_adj'])
+        self.df1_dv0_adj_mat = dfn.assemble(self.forms['bilin.df1_dv0_adj'])
+        self.df1_da0_adj_mat = dfn.assemble(self.forms['bilin.df1_da0_adj'])
 
-        self.u1 = dfn.Function(self.vector_function_space)
+    @property
+    def forms(self):
+        return self._forms
 
-        # Time step
-        self.dt = dfn.Constant(1e-4)
+    # def reset_cache(self):
+    #     """
+    #     Sets cached stiffness and mass matrices.
+    #     """
+    #     out = {
+    #         'M': dfn.assemble(biform_m(self.vector_trial, self.vector_test, self.rho)),
+    #         'K': dfn.assemble(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu))}
+    #     self.assem_cache.update(out)
 
-        # Surface pressures
-        self.pressure = dfn.Function(self.scalar_function_space)
-
-        # Symbolic calculations to get the variational form for a linear-elastic solid
-        trial_v = newmark_v(self.vector_trial, self.u0, self.v0, self.a0, self.dt,
-                            self.gamma, self.beta)
-        trial_a = newmark_a(self.vector_trial, self.u0, self.v0, self.a0, self.dt,
-                            self.gamma, self.beta)
-
-        self.inertia = biform_m(trial_a, self.vector_test, self.rho)
-
-        # self.stress = linear_elasticity(self.vector_trial, self.emod, self.nu)
-
-        self.stiffness = biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)
-
-        self.damping = self.rayleigh_m * biform_m(trial_v, self.vector_test, self.rho) \
-                  + self.rayleigh_k * biform_k(trial_v, self.vector_test, self.emod, self.nu)
-
-        # Compute the pressure loading Neumann boundary condition on the reference configuration
-        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        deformation_gradient = ufl.grad(self.u0) + ufl.Identity(2)
-        deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-
-        ds = dfn.Measure('ds', domain=self.mesh, subdomain_data=self.facet_function)
-        fluid_force = -self.pressure*deformation_cofactor*dfn.FacetNormal(self.mesh)
-
-        self.traction = ufl.dot(fluid_force, self.vector_test)*ds(facet_labels['pressure'])
-
-        # Use the penalty method to account for collision
-        collision_normal = dfn.Constant([0, 1])
-        x_reference = dfn.Function(self.vector_function_space)
-        x_reference.vector()[self.vert_to_vdof.reshape(-1)] = self.mesh.coordinates().reshape(-1)
-
-        gap = ufl.dot(x_reference+self.u1, collision_normal) - self.y_collision
-        positive_gap = (gap + abs(gap)) / 2
-
-
-        self.penalty = ufl.dot(self.k_collision*positive_gap**2*-1*collision_normal, self.vector_test) \
-                       * ds(facet_labels['pressure'])
-        self.f1_linear = ufl.action(self.inertia + self.stiffness + self.damping, self.u1)
-        self.f1_nonlin = -self.traction - self.penalty
-        self.f1 = self.f1_linear + self.f1_nonlin
-
-        self.df1_du1_linear = ufl.derivative(self.f1_linear, self.u1, self.vector_trial)
-        self.df1_du1_nonlin = ufl.derivative(self.f1_nonlin, self.u1, self.vector_trial)
-        self.df1_du1 = self.df1_du1_linear + self.df1_du1_nonlin
-
-        ## Boundary conditions
-        # Specify DirichletBC at the VF base
-        self.bc_base = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]),
-                                       self.facet_function, facet_labels['fixed'])
-
-        self.bc_base_adj = dfn.DirichletBC(self.vector_function_space, dfn.Constant([0, 0]),
-                                               self.facet_function, facet_labels['fixed'])
-
-        # Define some additional forms for diagnostics
-        # force_form = ufl.inner(linear_elasticity(self.u0, self.emod, self.nu),
-        # strain(test))*ufl.dx - traction
-
-        ## Adjoint forms
-        # Note: For an externally calculated pressure, you have to correct the derivative based on
-        # the sensitivity of pressure loading in `f1` to either `u0` and/or `u1` depending on if
-        # it's strongly coupled.
-        self.df1_du0_adj_linear = dfn.adjoint(ufl.derivative(self.f1_linear, self.u0, self.vector_trial))
-        self.df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(self.f1_nonlin, self.u0, self.vector_trial))
-        self.df1_du0_adj = self.df1_du0_adj_linear + self.df1_du0_adj_nonlin
-
-        self.df1_dv0_adj_linear = dfn.adjoint(ufl.derivative(self.f1_linear, self.v0, self.vector_trial))
-        self.df1_dv0_adj_nonlin = 0
-        self.df1_dv0_adj = self.df1_dv0_adj_linear + self.df1_dv0_adj_nonlin
-
-        self.df1_da0_adj_linear = dfn.adjoint(ufl.derivative(self.f1_linear, self.a0, self.vector_trial))
-        self.df1_da0_adj_nonlin = 0
-        self.df1_da0_adj = self.df1_da0_adj_linear + self.df1_da0_adj_nonlin
-
-        self.df1_dp_adj = dfn.adjoint(ufl.derivative(self.f1, self.pressure, self.scalar_trial))
-
-        self.df1_du1_adj_linear = dfn.adjoint(self.df1_du1_linear)
-        self.df1_du1_adj_nonlin = dfn.adjoint(self.df1_du1_nonlin)
-        self.df1_du1_adj = self.df1_du1_adj_linear + self.df1_du1_adj_nonlin
-
-        # Work done by pressure from u0 to u1
-        self.fluid_work = ufl.dot(fluid_force, self.u1-self.u0) * ds(facet_labels['pressure'])
-        self.dfluid_work_du0 = ufl.derivative(self.fluid_work, self.u0, self.vector_test)
-        self.dfluid_work_du1 = ufl.derivative(self.fluid_work, self.u1, self.vector_test)
-        self.dfluid_work_dp = ufl.derivative(self.fluid_work, self.pressure, self.scalar_test)
-
-        self.assem_cache = {}
-        self.reset_cache()
-        self.reset_adj_cache()
-
-        self.df1_du1_mat = dfn.assemble(self.df1_du1)
-        self.df1_du1_adj_mat = dfn.assemble(self.df1_du1_adj)
-        self.df1_du0_adj_mat = dfn.assemble(self.df1_du0_adj)
-        self.df1_dv0_adj_mat = dfn.assemble(self.df1_dv0_adj)
-        self.df1_da0_adj_mat = dfn.assemble(self.df1_da0_adj)
-
-    def reset_cache(self):
-        """
-        Sets cached stiffness and mass matrices.
-        """
-        out = {
-            'M': dfn.assemble(biform_m(self.vector_trial, self.vector_test, self.rho)),
-            'K': dfn.assemble(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu))}
-        self.assem_cache.update(out)
-
-    def reset_adj_cache(self):
-        """
-        Sets cached adjoint stiffness and mass matrices.
-        """
-        out = {
-            'M.adj': dfn.assemble(
-                dfn.adjoint(biform_m(self.vector_trial, self.vector_test, self.rho))),
-            'K.adj': dfn.assemble(
-                dfn.adjoint(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)))}
-        self.assem_cache.update(out)
+    # def reset_adj_cache(self):
+    #     """
+    #     Sets cached adjoint stiffness and mass matrices.
+    #     """
+    #     out = {
+    #         'M.adj': dfn.assemble(
+    #             dfn.adjoint(biform_m(self.vector_trial, self.vector_test, self.rho))),
+    #         'K.adj': dfn.assemble(
+    #             dfn.adjoint(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)))}
+    #     self.assem_cache.update(out)
 
     # Core solver functions
     def get_ref_config(self):
@@ -465,7 +542,7 @@ class ForwardModel:
 
         pressure, fluid_info = fluids.get_pressure_form(self, x_surface, self.fluid_props)
 
-        self.pressure.assign(pressure)
+        self.forms['coeff.pressure'].assign(pressure)
 
         return fluid_info
 
@@ -500,26 +577,27 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
-        M = self.assem_cache['M']
-        K = self.assem_cache['K']
+        return dfn.assemble(self.forms['lin.f1'])
+        # M = self.assem_cache['M']
+        # K = self.assem_cache['K']
 
-        dt = self.dt.values()[0]
-        gamma, beta = self.gamma.values()[0], self.beta.values()[0]
+        # dt = self.dt.values()[0]
+        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
 
-        rm = self.rayleigh_m.values()[0]
-        rk = self.rayleigh_k.values()[0]
+        # rm = self.rayleigh_m.values()[0]
+        # rk = self.rayleigh_k.values()[0]
 
-        u0 = self.u0.vector()
-        v0 = self.v0.vector()
-        a0 = self.a0.vector()
+        # u0 = self.u0.vector()
+        # v0 = self.v0.vector()
+        # a0 = self.a0.vector()
 
-        if u1 is None:
-            u1 = self.u1.vector()
+        # if u1 is None:
+        #     u1 = self.u1.vector()
 
-        v1 = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1 = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+        # v1 = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+        # a1 = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
-        return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
+        # return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
 
     # TODO: Adding matrices has an overhead due to different sparsity patterns of the component
     # matrices. You may be able to speed up addition by having an output matrix with sparsity that
@@ -533,20 +611,19 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
-
-        return dfn.assemble(self.df1_du1, tensor=out)
+        return dfn.assemble(self.forms['df1_du1'])
 
     def assem_df1_du1_adj(self):
-        return dfn.assemble(self.df1_du1_adj)
+        return dfn.assemble(self.forms['bilin.df1_du1_adj'])
 
     def assem_df1_du0_adj(self):
-        return dfn.assemble(self.df1_du0_adj)
+        return dfn.assemble(self.forms['bilin.df1_du0_adj'])
 
     def assem_df1_dv0_adj(self):
-        return dfn.assemble(self.df1_dv0_adj)
+        return dfn.assemble(self.forms['bilin.df1_dv0_adj'])
 
     def assem_df1_da0_adj(self):
-        return dfn.assemble(self.df1_da0_adj)
+        return dfn.assemble(self.forms['bilin.df1_da0_adj'])
 
     # Convenience functions
     def get_glottal_width(self):
@@ -582,7 +659,6 @@ class ForwardModel:
         verts = self.surface_vertices[u_surface[..., 1] > self.y_collision.values()[0]]
         return verts
 
-
     # Parameter value setting functions
     def set_ini_state(self, u0, v0, a0):
         """
@@ -592,9 +668,9 @@ class ForwardModel:
         ----------
         u0, v0, a0 : array_like
         """
-        self.u0.vector()[:] = u0
-        self.v0.vector()[:] = v0
-        self.a0.vector()[:] = a0
+        self.forms['coeff.u0'].vector()[:] = u0
+        self.forms['coeff.v0'].vector()[:] = v0
+        self.forms['coeff.a0'].vector()[:] = a0
 
     def set_fin_state(self, u1):
         """
@@ -610,13 +686,13 @@ class ForwardModel:
         ----------
         u1 : array_like
         """
-        self.u1.vector()[:] = u1
+        self.forms['arg.u1'].vector()[:] = u1
 
     def set_time_step(self, dt):
         """
         Sets the time step.
         """
-        self.dt.assign(dt)
+        self.forms['coeff.dt'].assign(dt)
 
     def set_solid_props(self, solid_props):
         """
@@ -627,8 +703,10 @@ class ForwardModel:
         solid_props : properties.SolidProperties
         """
         labels = SolidProperties.TYPES.keys()
-        coefficients = [self.emod, self.nu, self.rho, self.rayleigh_m, self.rayleigh_k,
-                        self.y_collision]
+        forms = self.forms
+        coefficients = [forms['coeff.emod'], forms['coeff.nu'], forms['coeff.rho'], 
+                        forms['coeff.rayleigh_m'], forms['coeff.rayleigh_k'],
+                        forms['coeff.y_collision']]
 
         for coefficient, label in zip(coefficients, labels):
             if label in solid_props:
@@ -649,7 +727,7 @@ class ForwardModel:
         """
         self.fluid_props = fluid_props
 
-    def set_params(self, x0, solid_props, fluid_props):
+    def set_params(self, x0, solid_props=None, fluid_props=None):
         """
         Set all parameters needed to integrate the model.
 
@@ -661,14 +739,18 @@ class ForwardModel:
         solid_props : dict
         """
         self.set_ini_state(*x0)
-        self.set_fluid_props(fluid_props)
-        self.set_solid_props(solid_props)
+
+        if fluid_props is not None:
+            self.set_fluid_props(fluid_props)
+
+        if solid_props is not None:
+            self.set_solid_props(solid_props)
 
         fluid_info = self.get_pressure()
 
         return fluid_info
 
-    def set_params_fromfile(self, statefile, n):
+    def set_params_fromfile(self, statefile, n, update_props=False):
         """
         Set all parameters needed to integrate the model from a recorded value.
 
@@ -684,16 +766,19 @@ class ForwardModel:
             Index of iteration to set
         """
         # Get data from the state file
-        fluid_props = statefile.get_fluid_props(n)
-        solid_props = statefile.get_solid_props()
+        solid_props, fluid_props = None, None
+        if update_props:
+            fluid_props = statefile.get_fluid_props(n)
+            solid_props = statefile.get_solid_props()
+
         x0 = statefile.get_state(n)
 
         # Assign the values to the model
-        fluid_info = self.set_params(x0, solid_props, fluid_props)
+        fluid_info = self.set_params(x0, solid_props=solid_props, fluid_props=fluid_props)
 
         return fluid_info
 
-    def set_iter_params(self, x0, dt, solid_props, fluid_props, u1=None):
+    def set_iter_params(self, x0, dt, u1=None, solid_props=None, fluid_props=None):
         """
         Set all parameters needed to integrate the model and an initial guess.
 
@@ -705,10 +790,9 @@ class ForwardModel:
         solid_props : dict
         u1 : array_like, optional
         """
+        self.set_params(x0, solid_props=solid_props, fluid_props=fluid_props)
+
         self.set_time_step(dt)
-        self.set_ini_state(*x0)
-        self.set_fluid_props(fluid_props)
-        self.set_solid_props(solid_props)
 
         if u1 is not None:
             self.set_fin_state(u1)
@@ -717,7 +801,7 @@ class ForwardModel:
 
         return fluid_info
 
-    def set_iter_params_fromfile(self, statefile, n, set_final_state=True):
+    def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=False):
         """
         Set all parameters needed to integrate the model and an initial guess, based on a recorded
         iteration.
@@ -734,8 +818,11 @@ class ForwardModel:
             Index of iteration to set
         """
         # Get data from the state file
-        fluid_props = statefile.get_fluid_props(n-1)
-        solid_props = statefile.get_solid_props()
+        solid_props, fluid_props = None, None
+        if update_props:
+            fluid_props = statefile.get_fluid_props(0)
+            solid_props = statefile.get_solid_props()
+
         x0 = statefile.get_state(n-1)
         u1 = None
         if set_final_state:
@@ -744,7 +831,8 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iter_params(x0, dt, solid_props, fluid_props, u1=u1)
+        fluid_info = self.set_iter_params(x0, dt, solid_props=solid_props, fluid_props=fluid_props, 
+                                          u1=u1)
 
         return fluid_info, fluid_props
 

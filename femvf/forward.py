@@ -38,9 +38,9 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         would be to set [0, tfinal] to record the first/final times and all steps in between.
     dt : float
         The time step in seconds.
-    solid_props : dict
+    solid_props : properties.SolidProperties
         A dictionary of solid properties.
-    fluid_props : dict
+    fluid_props : properties.FluidProperties
         A dictionary of fluid properties.
     h5file : string
         Path to an hdf5 file where solution information will be appended.
@@ -62,6 +62,9 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     info : dict
         A dictionary of info about the run.
     """
+    model.set_fluid_props(fluid_props)
+    model.set_solid_props(solid_props)
+    
     forward_info = {}
 
     # Allocate functions for states
@@ -88,9 +91,6 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 
-    # you don't have to recompute M or K matrices unless rho, e, or nu change
-    model.set_solid_props(solid_props)
-    model.reset_cache()
 
     ## Loop through solution times and write solution variables to the h5file.
 
@@ -111,26 +111,15 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
                 assert t_current < t_target
                 x0 = (u0, v0, a0)
 
-                # Update properties
-                fluid_props_ii = get_dynamic_fluid_props(fluid_props, t_current)
-
                 # Increment the state using a target time step. If the previous time step was
                 # refined to be smaller than the max time step, then try using that time step again.
                 # If the local error is super low, the refinement time step will be predicted to be
                 # high and so it will go back to the max time step.
                 dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                # print("\nIteration start")
-                # print(dt_proposal, dt_max, t_target - t_current)
-                x1, dt_actual, info = adaptive_step(model, x0, dt_target, solid_props, fluid_props,
-                                                    abs_tol=abs_tol, abs_tol_bounds=abs_tol_bounds)
+                x1, dt_actual, info = adaptive_step(model, x0, dt_target, abs_tol=abs_tol, 
+                                                    abs_tol_bounds=abs_tol_bounds)
                 n_state += 1
                 t_current += dt_actual
-
-                # print("dt_proposal", dt_proposal)
-                # print("dt_target", dt_target)
-                # print("dt_actual", dt_actual)
-                # print("# refinements", info['nrefine'])
-                # print("error norm", info['err_norm'])
 
                 dt_proposal = dt_actual
 
@@ -140,7 +129,6 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
                 ## Write the solution outputs to a file
                 f.append_time(t_current)
                 f.append_state(x1)
-                f.append_fluid_props(fluid_props_ii)
 
                 ## Update initial conditions for the next time step
                 u0.assign(x1[0])
@@ -150,7 +138,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
                 ## Plot the solution
                 if show_figure:
                     fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), info['fluid_info'],
-                                                 solid_props, fluid_props_ii)
+                                                 solid_props, fluid_props)
                     plt.pause(0.001)
 
                     if figure_path is not None:
@@ -159,14 +147,9 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
             f.append_meas_index(n_state)
 
-        # Write the final fluid properties
-        fluid_props_ii = get_dynamic_fluid_props(fluid_props, tmeas[-1])
-        f.append_fluid_props(fluid_props_ii)
-
         # Write the final functionals
-        u1, v1, a1 = x1
-        info = model.set_params((u1.vector(), v1.vector(), a1.vector()), solid_props,
-                                fluid_props_ii)
+        _x1 = [comp.vector() for comp in x1]
+        info = model.set_params(_x1)
         glottal_width.append(info['a_min'])
         flow_rate.append(info['flow_rate'])
 
@@ -178,7 +161,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         return forward_info
 
 # @profile
-def increment_forward(model, x0, dt, solid_props, fluid_props):
+def increment_forward(model, x0, dt):
     """
     Return the state at the end of `dt` `x1 = (u1, v1, a1)`.
 
@@ -189,9 +172,9 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
-    solid_props : properties.SolidProperties
+    solid_props : properties.SolidProperties, optional
         A dictionary of solid properties
-    fluid_props : properties.FluidProperties
+    fluid_props : properties.FluidProperties, optional
         A dictionary of fluid properties.
 
     Returns
@@ -209,9 +192,8 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
     a1 = dfn.Function(model.vector_function_space)
 
     # Update form coefficients and initial guess
-    fluid_info = model.set_iter_params((u0.vector(), v0.vector(), a0.vector()), dt,
-                                       solid_props, fluid_props, u1=u0.vector())
-
+    _x0 = [comp.vector() for comp in x0]
+    fluid_info = model.set_iter_params(_x0, dt, u1=u0.vector())
 
     # Solve the thing
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
@@ -233,8 +215,7 @@ def increment_forward(model, x0, dt, solid_props, fluid_props):
 
     return (u1, v1, a1), fluid_info
 
-def adaptive_step(model, x0, dt_max, solid_props, fluid_props,
-                  abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
+def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
     """
     Integrate the model over `dt` using a smaller time step if needed.
 
@@ -272,10 +253,10 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props,
     refine = True
     while refine:
         nrefine += 1
-        x1, fluid_info = increment_forward(model, x0, dt, solid_props, fluid_props)
+        x1, fluid_info = increment_forward(model, x0, dt)
         info['fluid_info'] = fluid_info
 
-        err = newmark_error_estimate(x1[2].vector(), x0[2].vector(), dt, beta=model.beta.values()[0])
+        err = newmark_error_estimate(x1[2].vector(), x0[2].vector(), dt, beta=model.forms['coeff.beta'].values()[0])
         err_norm = err.norm('l2')
         info['err_norm'] = err_norm
         info['nrefine'] = nrefine
@@ -286,7 +267,7 @@ def adaptive_step(model, x0, dt_max, solid_props, fluid_props,
 
         if abs_tol is not None:
             # step control method that prevents crossing the midline in one step near collision
-            refine, dt = refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props)
+            refine, dt = refine_initial_collision(model, x0, x1, dt)
 
             # Step control method from [1]
             if err_norm > abs_tol_bounds[1]*abs_tol or err_norm < abs_tol_bounds[0]*abs_tol:
@@ -354,7 +335,7 @@ def newton_solve(u, du, jac, res, bcs, **kwargs):
     info = {'niter': ii, 'abs_err': abs_err, 'rel_err': rel_err}
     return u, info
 
-def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
+def refine_initial_collision(model, x0, x1, dt):
     """
     Return whether to refine the time step, and a proposed time step to use.
     """
@@ -367,14 +348,17 @@ def refine_initial_collision(model, x0, x1, dt, solid_props, fluid_props):
     # Refine the time step if there is a transition from no-collision to collision
     model.set_ini_state(u0.vector(), v0.vector(), a0.vector())
     ymax0 = model.get_ymax()
-    gap0 = solid_props['y_collision'] - ymax0
+
+    y_collision = model.y_collision.values()[0]
+    y_midline = model.fluid_props['y_midline']
+    gap0 = y_collision - ymax0
 
     model.set_ini_state(u1.vector(), v1.vector(), a1.vector())
     ymax1 = model.get_ymax()
-    gap1 = solid_props['y_collision'] - ymax1
+    gap1 = y_collision - ymax1
 
     # Refinement condition is based on initial collision penetration tolerance
-    tol = 1/50 * (fluid_props['y_midline'] - solid_props['y_collision'])
+    tol = 1/50 * (y_midline - y_collision)
     if gap0 >= 0 and gap1 < 0:
         if -gap1 > tol:
             refine = True
