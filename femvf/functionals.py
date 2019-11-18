@@ -260,9 +260,9 @@ class SubglottalWork(AbstractFunctional):
         ret = 0
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            fluid_info, fluid_props = self.model.set_iter_params_fromfile(self.f, ii+1)
+            fluid_info, _ = self.model.set_iter_params_fromfile(self.f, ii+1)
 
-            ret += self.model.dt.values()[0]*fluid_info['flow_rate']*fluid_props['p_sub']
+            ret += self.model.dt.values()[0]*fluid_info['flow_rate']*self.model.fluid_props['p_sub']
 
         self.cache.update({'m_start': N_START, 'N_STATE': N_STATE})
 
@@ -275,7 +275,8 @@ class SubglottalWork(AbstractFunctional):
         N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
-            fluid_props = iter_params1[3]
+            # fluid_props = iter_params1[3]
+            fluid_props = self.model.fluid_props
             self.model.set_iter_params(*iter_params1)
             _, dq_du = self.model.get_flow_sensitivity()
 

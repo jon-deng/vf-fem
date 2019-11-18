@@ -153,7 +153,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     # Temporary variables to shorten code
     def get_block_vec():
         vspace = model.vector_function_space
-        return (dfn.Function(vspace).vector(), 
+        return (dfn.Function(vspace).vector(),
                 dfn.Function(vspace).vector(),
                 dfn.Function(vspace).vector())
 
