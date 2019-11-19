@@ -118,6 +118,22 @@ def strain(u):
     """
     return 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
 
+def biform_k(a, b, emod, nu):
+    """
+    Return stiffness bilinear form
+
+    Integrates linear_elasticity(a) with the strain(b)
+    """
+    return ufl.inner(linear_elasticity(a, emod, nu), strain(b))*ufl.dx
+
+def biform_m(a, b, rho):
+    """
+    Return the mass bilinear form
+
+    Integrates a with b
+    """
+    return rho*ufl.dot(a, b) * ufl.dx
+
 def _sort_surface_vertices(surface_coordinates):
     """
     Returns a list sorting the vertices in increasing streamwise direction.
@@ -150,22 +166,6 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
         This is specific to the forward model and only exists to separate out this long ass section of
         code.
         """
-
-        def biform_k(a, b, emod, nu):
-            """
-            Return stiffness bilinear form
-
-            Integrates linear_elasticity(a) with the strain(b)
-            """
-            return ufl.inner(linear_elasticity(a, emod, nu), strain(b))*ufl.dx
-
-        def biform_m(a, b, rho):
-            """
-            Return the mass bilinear form
-
-            Integrates a with b
-            """
-            return rho*ufl.dot(a, b) * ufl.dx
 
         if solid_props is None:
             solid_props = SolidProperties()
@@ -223,7 +223,7 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
         stiffness = biform_k(vector_trial, vector_test, emod, nu)
 
         damping = rayleigh_m * biform_m(trial_v, vector_test, rho) \
-                        + rayleigh_k * biform_k(trial_v, vector_test, emod, nu)
+                  + rayleigh_k * biform_k(trial_v, vector_test, emod, nu)
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
@@ -320,6 +320,8 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
             'coeff.nu': nu,
             'coeff.k_collision': k_collision,
             'lin.f1': f1,
+            'bilin.damping_energy': rayleigh_m * biform_m(trial_v, vector_test, rho) \
+                  + rayleigh_k * biform_k(trial_v, vector_test, emod, nu),
             'bilin.df1_du1': df1_du1,
             'bilin.df1_du1_adj': df1_du1_adj,
             'bilin.df1_du0_adj': df1_du0_adj,

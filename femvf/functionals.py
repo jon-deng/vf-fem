@@ -22,6 +22,7 @@ compute the sensitivity with respect to.
 
 import numpy as np
 import dolfin as dfn
+import ufl
 
 class AbstractFunctional():
     """
@@ -131,7 +132,48 @@ class DisplacementNorm(AbstractFunctional):
     def dparam(self):
         return None
 
-# class
+class StrainEnergy(AbstractFunctional):
+    def __init__(self, model, f, **kwargs):
+        from .forms import biform_m, biform_k
+
+        vector_trial = model.forms['trial.vector']
+        ray_m = model.forms['coeff.rayleigh_m']
+        ray_k = model.forms['coeff.rayleigh_k']
+        rho = model.forms['coeff.rho']
+        emod = model.forms['coeff.emod']
+        nu = model.forms['coeff.nu']
+
+        v0 = model.forms['coeff.v0']
+
+        self.damping_power = ray_m*biform_m(v0, v0, rho) + ray_k*biform_k(v0, v0, emod, nu)
+
+        self.ddamping_power_dv0 = ufl.derivative(self.damping_power, v0, vector_trial)
+
+        super(StrainEnergy, self).__init__(model, f, **kwargs)
+
+    def __call__(self):
+        N_START = self.kwargs['m_start']
+        N_STATE = self.f.get_num_states()
+
+        res = 0
+        for ii in range(N_START, N_STATE-1):
+            # Set form coefficients to represent the equation from state ii to ii+1
+            self.model.set_iter_params_fromfile(self.f, ii+1)
+
+            res += dfn.assemble(self.damping_power)*self.model.dt.values()[0]
+
+        return res
+
+    def du(self, n, iter_params0, iter_params1):
+        return None
+
+    def dv(self, n, iter_params0, iter_params1):
+        self.model.set_iter_params(*iter_params1)
+
+        return dfn.assemble(self.damping_power_dv) * self.model.dt.values()[0]
+
+    def dparam(self):
+        return None
 
 class FluidWork(AbstractFunctional):
     """
