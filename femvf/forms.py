@@ -320,8 +320,6 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
             'coeff.nu': nu,
             'coeff.k_collision': k_collision,
             'lin.f1': f1,
-            'bilin.damping_energy': rayleigh_m * biform_m(trial_v, vector_test, rho) \
-                  + rayleigh_k * biform_k(trial_v, vector_test, emod, nu),
             'bilin.df1_du1': df1_du1,
             'bilin.df1_du1_adj': df1_du1_adj,
             'bilin.df1_du0_adj': df1_du0_adj,
