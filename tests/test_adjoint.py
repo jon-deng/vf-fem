@@ -60,7 +60,7 @@ emod[:] = 5e3 * PASCAL_TO_CGS
 
 ## Set the stepping direction
 hs = np.concatenate(([0], 2**np.arange(5)), axis=0)
-step_size = 1e-1 * PASCAL_TO_CGS
+step_size = 1e0 * PASCAL_TO_CGS
 step_dir = np.random.rand(emod.size) * step_size
 
 # Time varying fluid properties
@@ -80,8 +80,9 @@ fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
 fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
 
 fkwargs = {}
-Functional = functionals.DisplacementNorm
-# Functional = extra_functionals.AcousticEfficiency
+# Functional = functionals.DisplacementNorm
+# Functional = functionals.StrainEnergy
+Functional = extra_functionals.AcousticEfficiency
 
 ## Compute functionals along step direction
 print("Computing Gradient via Finite Differences")

@@ -16,7 +16,7 @@ import ufl
 
 
 # @profile
-def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
+def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     """
     Returns the adjoint at the previous time step.
 
@@ -54,6 +54,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
         Additional info computed during the solve that might be useful.
     """
     adj_u2, adj_v2, adj_a2 = adj_x2
+    dcost_du1, dcost_dv1, dcost_da1 = dcost_dx1
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     dt1 = iter_params1[1]
@@ -70,7 +71,6 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    # _x0 = (x0[0].vector(), x0[1].vector(), x0[2].vector())
     dt2 = iter_params2[1]
     model.set_iter_params(*iter_params1)
 
@@ -89,26 +89,18 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_du1):
 
     # These are manually implemented matrix multiplications representing adjoint recurrence
     # relations
-    # TODO: you can probably take advantage of autodiff capabilities of fenics of the newmark
-    # schemes so you don't have to do the differentiation manually like you did here.
-    adj_a1[:] = -1 * (df2_da1 * adj_u2
-                               + dt2 * (gamma/2/beta-1) * adj_v2
-                               + (1/2/beta-1) * adj_a2)
+    adj_a1[:] = dcost_da1 - (df2_da1*adj_u2 + dt2*(gamma/2/beta-1)*adj_v2 + (1/2/beta-1)*adj_a2)
     model.bc_base_adj.apply(adj_a1)
 
-    adj_v1[:] = -1 * (df2_dv1 * adj_u2
-                               + (gamma/beta-1) * adj_v2
-                               + 1/beta/dt2 * adj_a2)
+    adj_v1[:] = dcost_dv1 - (df2_dv1*adj_u2 + (gamma/beta-1)*adj_v2 + 1/beta/dt2*adj_a2)
     model.bc_base_adj.apply(adj_v1)
 
-    # import ipdb; ipdb.set_trace()
     df2_du1_correction = dfn.Function(model.vector_function_space).vector()
     dpressure_du1.transpmult(df2_dpressure * adj_u2, df2_du1_correction)
-    adj_u1_lhs = dcost_du1 \
-                 + gamma/beta/dt1 * adj_v1 + 1/beta/dt1**2 * adj_a1 \
-                 - (df2_du1 * adj_u2 + df2_du1_correction
-                    + gamma/beta/dt2 * adj_v2
-                    + 1/beta/dt2**2 * adj_a2)
+    adj_u1_lhs = \
+        dcost_du1 + gamma/beta/dt1*adj_v1 + 1/beta/dt1**2*adj_a1 \
+        - (df2_du1*adj_u2 + df2_du1_correction + gamma/beta/dt2*adj_v2 + 1/beta/dt2**2*adj_a2)
+
     model.bc_base_adj.apply(df1_du1, adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1, adj_u1_lhs, 'petsc')
 
@@ -169,7 +161,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     # Allocate space for the gradient
     gradient = dfn.Function(model.scalar_function_space).vector()
 
-    ## Initialize Adjoint calculation
+    ## Initialize Adjoint states
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
     # for the final state)
     # To initialize, we need to solve for \lambda^{N-1} i.e. `adj_u2`, `adj_v2`, `adj_a2` etc.
@@ -184,14 +176,24 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     iter_params3 = (x2, 0.0, None)
 
     dcost_du2 = functional.du(N-1, iter_params2, iter_params3)
+    dcost_dv2 = functional.dv(N-1, iter_params2, iter_params3)
+    dcost_da2 = functional.da(N-1, iter_params2, iter_params3)
 
     model.set_iter_params(*iter_params2)
     df2_du2 = model.assem_df1_du1_adj()
 
     model.bc_base_adj.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_x2[0], dcost_du2)
-    adj_x2[1][:] = 0
-    adj_x2[2][:] = 0
+
+    if dcost_dv2 is None:
+        adj_x2[1][:] = 0
+    else:
+        adj_x2[1][:] = dcost_dv2
+
+    if dcost_da2 is None:
+        adj_x2[2][:] = 0
+    else:
+        adj_x2[2][:] = dcost_da2
 
     df2_dparam = dfn.assemble(df1_dparam_form_adj)
     gradient -= df2_dparam*adj_x2[0]
@@ -210,10 +212,13 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         iter_params1 = (x0, dt1, x1[0])
         iter_params2 = (x1, dt2, x2[0])
 
-        dcost_du1 = functional.du(ii, iter_params1, iter_params2)
+        dcost_dx1 = []
+        dcost_dx1.append(functional.du(ii, iter_params1, iter_params2))
+        dcost_dx1.append(functional.dv(ii, iter_params1, iter_params2))
+        dcost_dx1.append(functional.da(ii, iter_params1, iter_params2))
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
-            model, adj_x2, iter_params1, iter_params2, dcost_du1)
+            model, adj_x2, iter_params1, iter_params2, dcost_dx1)
 
         for comp, val in zip(adj_x1, [adj_u1, adj_v1, adj_a1]):
             comp[:] = val
@@ -226,7 +231,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         model.set_iter_params(*iter_params1)
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
-        gradient -= df1_dparam*adj_x1[0]
+        gradient -= df1_dparam*adj_x1[0] #+ BLAH*adj_x1[1] + BLAH*adj_x1[2]
 
         dfunc_dparam = functional.dparam()
         if dfunc_dparam is not None:

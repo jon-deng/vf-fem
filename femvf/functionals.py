@@ -76,7 +76,13 @@ class AbstractFunctional():
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
         """
-        raise NotImplementedError("Method not implemented")
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def dv(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def da(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
 
     def dparam(self):
         """
@@ -129,11 +135,22 @@ class DisplacementNorm(AbstractFunctional):
 
         return res
 
+    def dv(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def da(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
     def dparam(self):
         return None
 
 class StrainEnergy(AbstractFunctional):
+    """
+    Represent the total sum of
+    """
     def __init__(self, model, f, **kwargs):
+        super(StrainEnergy, self).__init__(model, f, **kwargs)
+
         from .forms import biform_m, biform_k
 
         vector_trial = model.forms['trial.vector']
@@ -147,9 +164,9 @@ class StrainEnergy(AbstractFunctional):
 
         self.damping_power = ray_m*biform_m(v0, v0, rho) + ray_k*biform_k(v0, v0, emod, nu)
 
-        self.ddamping_power_dv0 = ufl.derivative(self.damping_power, v0, vector_trial)
+        self.ddamping_power_dv = ufl.derivative(self.damping_power, v0, vector_trial)
 
-        super(StrainEnergy, self).__init__(model, f, **kwargs)
+        kwargs.setdefault('m_start', 0)
 
     def __call__(self):
         N_START = self.kwargs['m_start']
@@ -164,13 +181,10 @@ class StrainEnergy(AbstractFunctional):
 
         return res
 
-    def du(self, n, iter_params0, iter_params1):
-        return None
-
     def dv(self, n, iter_params0, iter_params1):
         self.model.set_iter_params(*iter_params1)
 
-        return dfn.assemble(self.damping_power_dv) * self.model.dt.values()[0]
+        return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
 
     def dparam(self):
         return None
@@ -237,6 +251,12 @@ class FluidWork(AbstractFunctional):
                 out += dfn.assemble(self.model.dfluid_work_du1)
 
         return out
+
+    def dv(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def da(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
 
     def dparam(self):
         return None
