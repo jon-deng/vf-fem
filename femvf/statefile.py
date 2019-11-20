@@ -345,8 +345,15 @@ class StateFile:
         """
         fluid_props = {}
         fluid_group = self.root_group['fluid_properties']
+
+        # Correct for constant fluid properties in time
+        # TODO: Refactor how constant fluid/solid properties are defined.
+        m = n
+        if self.root_group['fluid_properties/p_sub'].size == 1:
+            m = 0
+
         for label in FluidProperties.TYPES:
-            fluid_props[label] = fluid_group[label][n]
+            fluid_props[label] = fluid_group[label][m]
 
         return fluid_props
 
@@ -383,7 +390,7 @@ class StateFile:
         fluid_props = self.get_fluid_props(n-1)
         u1 = self.get_u(n)
 
-        return (x0, dt, solid_props, fluid_props, u1)
+        return (x0, dt, u1, solid_props, fluid_props)
 
 def _property_shape(property_desc, model):
     const_or_field = property_desc[0]
