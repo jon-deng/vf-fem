@@ -75,15 +75,15 @@ def newmark_a(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
 
 def newmark_a_du1(dt, gamma=1/2, beta=1/4):
     """See `newmark_a`"""
-    return 1/beta/dt**2
+    return 1.0/beta/dt**2
 
 def newmark_a_du0(dt, gamma=1/2, beta=1/4):
     """See `newmark_a`"""
-    return -1/beta/dt**2
+    return -1.0/beta/dt**2
 
 def newmark_a_dv0(dt, gamma=1/2, beta=1/4):
     """See `newmark_a`"""
-    return -dt*1/beta/dt**2
+    return -1.0/beta/dt
 
 def newmark_a_da0(dt, gamma=1/2, beta=1/4):
     """See `newmark_a`"""
@@ -211,10 +211,8 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
         pressure = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
-        trial_v = newmark_v(vector_trial, u0, v0, a0, dt,
-                            gamma, beta)
-        trial_a = newmark_a(vector_trial, u0, v0, a0, dt,
-                            gamma, beta)
+        trial_v = newmark_v(vector_trial, u0, v0, a0, dt, gamma, beta)
+        trial_a = newmark_a(vector_trial, u0, v0, a0, dt, gamma, beta)
 
         inertia = biform_m(trial_a, vector_test, rho)
 

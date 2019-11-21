@@ -61,6 +61,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
     dt1 = iter_params1[1]
+    dt2 = iter_params2[1]
     model.set_iter_params(*iter_params2)
 
     # Assemble needed forms
@@ -86,25 +87,25 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     adj_v1 = dfn.Function(model.vector_function_space).vector()
     adj_a1 = dfn.Function(model.vector_function_space).vector()
 
-    # You probably don't need to set Dirichlet BCs on adj_a or adj_v because they are always zeroed
-    # out when solving for adj_u (but I'm gonna do it anyway)
     gamma, beta = model.gamma.values()[0], model.beta.values()[0]
 
-    # These are manually implemented matrix multiplications representing adjoint recurrence
-    # relations
-    adj_a1[:] = dcost_da1 - (df2_da1*adj_u2 + dt2*(gamma/2/beta-1)*adj_v2 + (1/2/beta-1)*adj_a2)
-    model.bc_base_adj.apply(adj_a1)
-
-    adj_v1[:] = dcost_dv1 - (df2_dv1*adj_u2 + (gamma/beta-1)*adj_v2 + 1/beta/dt2*adj_a2)
-    model.bc_base_adj.apply(adj_v1)
-
+    # Calculate 'source' terms for the adjoint calculation
     df2_du1_correction = dfn.Function(model.vector_function_space).vector()
     dpressure_du1.transpmult(df2_dpressure * adj_u2, df2_du1_correction)
-    adj_u1_lhs = \
-        dcost_du1 + gamma/beta/dt1*adj_v1 + 1/beta/dt1**2*adj_a1 \
-        - (df2_du1*adj_u2 + df2_du1_correction + gamma/beta/dt2*adj_v2 + 1/beta/dt2**2*adj_a2)
 
-    model.bc_base_adj.apply(df1_du1, adj_u1_lhs)
+    adj_v1_lhs = dcost_dv1
+    adj_v1_lhs -= df2_dv1*adj_u2 - forms.newmark_v_dv0(dt2)*adj_v2 - forms.newmark_a_dv0(dt2)*adj_a2
+    adj_v1 = adj_v1_lhs
+
+    adj_a1_lhs = dcost_da1
+    adj_a1_lhs -= df2_da1*adj_u2 - forms.newmark_v_da0(dt2)*adj_v2 - forms.newmark_a_da0(dt2)*adj_a2
+    adj_a1 = adj_a1_lhs
+
+    adj_u1_lhs = dcost_du1 + forms.newmark_v_du1(dt1)*adj_v1 + forms.newmark_a_du1(dt1)*adj_a1
+    adj_u1_lhs -= df2_du1*adj_u2 + df2_du1_correction \
+                  - forms.newmark_v_du0(dt2)*adj_v2 - forms.newmark_a_du0(dt2)*adj_a2
+    model.bc_base.apply(df1_du1)
+    model.bc_base.apply(adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1, adj_u1_lhs, 'petsc')
 
     return (adj_u1, adj_v1, adj_a1)
@@ -186,16 +187,15 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     df2_du2 = model.assem_df1_du1_adj()
 
     # Initializing adjoint states:
-    model.bc_base_adj.apply(df2_du2, dcost_du2)
-    dfn.solve(df2_du2, adj_x2[0], dcost_du2)
+    adj_a2_lhs = dcost_da2
+    adj_x2[2][:] = adj_a2_lhs
 
-    # adj_x2[1][:] = dcost_dv2 + forms.newmark_v_du1(dt2)*adj_x2[0]
-    # adj_x2[2][:] = dcost_da2 + forms.newmark_a_du1(dt2)*adj_x2[0]
+    adj_v2_lhs = dcost_dv2
+    adj_x2[1][:] = adj_v2_lhs
 
-    # breakpoint()
-    # adj_x2[0][:] = 0
-    adj_x2[1][:] = 0
-    adj_x2[2][:] = 0
+    adj_u2_lhs = dcost_du2 + forms.newmark_v_du1(dt2)*adj_x2[1] + forms.newmark_a_du1(dt2)*adj_x2[2]
+    model.bc_base_adj.apply(df2_du2, adj_u2_lhs)
+    dfn.solve(df2_du2, adj_x2[0], adj_u2_lhs)
 
     df2_dparam = dfn.assemble(df1_dparam_form_adj)
     gradient -= df2_dparam*adj_x2[0]
@@ -246,4 +246,5 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
             comp2[:] = comp1
 
         dt2 = dt1
+
     return functional_value, gradient

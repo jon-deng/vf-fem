@@ -50,9 +50,10 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 ## Set the solution parameters
 dt_sample = 5e-5
 dt_max = 5e-5
-t_final = (256-1)*5e-5
+# t_final = (20)*dt_sample
+t_final = 20*dt_sample
 # times_meas = np.linspace(0, t_final, round(t_final/dt)+1)
-times_meas = np.linspace(0, t_final)
+times_meas = np.linspace(0, t_final, 2)
 
 ## Set the fluid/solid parameters
 emod = model.emod.vector()[:].copy()
@@ -60,7 +61,7 @@ emod[:] = 5e3 * PASCAL_TO_CGS
 
 ## Set the stepping direction
 hs = np.concatenate(([0], 2**np.arange(5)), axis=0)
-step_size = 1e-2 * PASCAL_TO_CGS
+step_size = 20 * PASCAL_TO_CGS
 step_dir = np.random.rand(emod.size) * step_size
 
 
@@ -77,8 +78,8 @@ fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
 fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
 
 fkwargs = {}
-# Functional = functionals.VelocityNorm
-Functional = functionals.DisplacementNorm
+Functional = functionals.VelocityNorm
+# Functional = functionals.DisplacementNorm
 # Functional = functionals.StrainEnergy
 # Functional = extra_functionals.AcousticEfficiency
 
@@ -125,7 +126,9 @@ taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*np.dot(gra
 
 order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
 order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
-print(hs[1:])
+
+print("\nSteps:", hs[1:])
+
 print("\n1st order taylor remainders: ", taylor_remainder_1)
 print("Numerical order: ", order_1)
 
