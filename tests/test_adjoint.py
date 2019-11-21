@@ -60,13 +60,10 @@ emod[:] = 5e3 * PASCAL_TO_CGS
 
 ## Set the stepping direction
 hs = np.concatenate(([0], 2**np.arange(5)), axis=0)
-step_size = 1e0 * PASCAL_TO_CGS
+step_size = 1e-2 * PASCAL_TO_CGS
 step_dir = np.random.rand(emod.size) * step_size
 
-# Time varying fluid properties
-# fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-# fluid_props['p_sub'] = [1500 * constants.PASCAL_TO_CGS, 1500 * constants.PASCAL_TO_CGS, 1, 1]
-# fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
+
 y_gap = 0.005
 solid_props = SolidProperties()
 solid_props['rayleigh_m'] = 0
@@ -80,9 +77,10 @@ fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
 fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
 
 fkwargs = {}
-# Functional = functionals.DisplacementNorm
+# Functional = functionals.VelocityNorm
+Functional = functionals.DisplacementNorm
 # Functional = functionals.StrainEnergy
-Functional = extra_functionals.AcousticEfficiency
+# Functional = extra_functionals.AcousticEfficiency
 
 ## Compute functionals along step direction
 print("Computing Gradient via Finite Differences")
@@ -128,10 +126,20 @@ taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*np.dot(gra
 order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
 order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
 print(hs[1:])
-print(taylor_remainder_1)
-print(order_1)
-print(taylor_remainder_2)
-print(order_2)
+print("\n1st order taylor remainders: ", taylor_remainder_1)
+print("Numerical order: ", order_1)
+
+print("\n2nd order taylor remainders: ", taylor_remainder_2)
+print("Numerical order: ", order_2)
+
+print("\n||dg/dp|| = ", gradient_ad.norm('l2'))
+print("dg/dp * step_dir = ", np.dot(gradient_ad, step_dir))
+print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
+
+fig, ax = plt.subplots(1, 1)
+plt.plot(hs[1:], (functionals[1:] - functionals[0])/hs[1:], marker='o')
+ax.axhline(np.dot(gradient_ad, step_dir))
+plt.show()
 
 # breakpoint()
 

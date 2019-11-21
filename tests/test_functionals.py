@@ -130,8 +130,8 @@ if __name__ == '__main__':
 
     #### Functionals
     np.random.seed(123)
-    Functional = functionals.AcousticEfficiency
-    gkwargs = {'tukey_alpha': 0.1}
+    # Functional = functionals.AcousticEfficiency
+    # gkwargs = {'tukey_alpha': 0.1}
 
     # Functional = functionals.AcousticPower
     # gkwargs = {'tukey_alpha': 0.1}
@@ -142,8 +142,8 @@ if __name__ == '__main__':
     # Functional = functionals.AcousticEfficiencyReg
     # gkwargs = {'tukey_alpha': 0.2, 'lambda': 0}
 
-    # Functional = basic_functionals.DisplacementNorm
-    # gkwargs = {}
+    Functional = basic_functionals.DisplacementNorm
+    gkwargs = {}
 
     with sf.StateFile(h5file, mode='a') as f:
         test_functional(Functional, model, f, gkwargs)

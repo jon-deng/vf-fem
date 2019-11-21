@@ -14,6 +14,9 @@ from matplotlib import pyplot as plt
 import dolfin as dfn
 import ufl
 
+from . import forms
+# import .forms as forms
+
 
 # @profile
 def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
@@ -182,18 +185,17 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     model.set_iter_params(*iter_params2)
     df2_du2 = model.assem_df1_du1_adj()
 
+    # Initializing adjoint states:
     model.bc_base_adj.apply(df2_du2, dcost_du2)
     dfn.solve(df2_du2, adj_x2[0], dcost_du2)
 
-    if dcost_dv2 is None:
-        adj_x2[1][:] = 0
-    else:
-        adj_x2[1][:] = dcost_dv2
+    # adj_x2[1][:] = dcost_dv2 + forms.newmark_v_du1(dt2)*adj_x2[0]
+    # adj_x2[2][:] = dcost_da2 + forms.newmark_a_du1(dt2)*adj_x2[0]
 
-    if dcost_da2 is None:
-        adj_x2[2][:] = 0
-    else:
-        adj_x2[2][:] = dcost_da2
+    # breakpoint()
+    # adj_x2[0][:] = 0
+    adj_x2[1][:] = 0
+    adj_x2[2][:] = 0
 
     df2_dparam = dfn.assemble(df1_dparam_form_adj)
     gradient -= df2_dparam*adj_x2[0]
@@ -223,21 +225,17 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         for comp, val in zip(adj_x1, [adj_u1, adj_v1, adj_a1]):
             comp[:] = val
 
-        # Update gradient using the adjoint state
-        # TODO: Functionals are assumed to not depend on velocity or acceleration, so we only
-        # multiply by adj_u1. In the future you might have to use adj_v1 and adj_a1 too.
-
-        # Assemble needed forms
+        # Update gradient using adjoint states
         model.set_iter_params(*iter_params1)
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
-        gradient -= df1_dparam*adj_x1[0] #+ BLAH*adj_x1[1] + BLAH*adj_x1[2]
+        gradient += -(df1_dparam*adj_x1[0]) #+ BLAH*adj_x1[1] + BLAH*adj_x1[2]
 
         dfunc_dparam = functional.dparam()
         if dfunc_dparam is not None:
             gradient += dfunc_dparam
 
-        # Update properties for the next iteration
+        # Set initial states to the previous states for the start of the next iteration
         for comp1, comp2 in zip(x1, x2):
             comp2[:] = comp1
 

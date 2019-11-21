@@ -88,7 +88,7 @@ class AbstractFunctional():
         """
         Return the sensitivity of the functional with respect to the parameters.
         """
-        raise NotImplementedError("Method not implemented")
+        return None
 
 class DisplacementNorm(AbstractFunctional):
     r"""
@@ -120,7 +120,6 @@ class DisplacementNorm(AbstractFunctional):
         # res = dfn.Function(self.model.vector_function_space)
 
         _u = iter_params1[0][0]
-        _u, _, _ = self.f.get_state(n)
 
         u = dfn.Function(self.model.vector_function_space).vector()
         u[:] = _u
@@ -135,14 +134,50 @@ class DisplacementNorm(AbstractFunctional):
 
         return res
 
+class VelocityNorm(AbstractFunctional):
+    r"""
+    Represents the sum over time of l2 norms of velocities.
+
+    :math:`\sum{||\vec{v}||}_2`
+    """
+
+    def __init__(self, model, f, **kwargs):
+        super(VelocityNorm, self).__init__(model, f, **kwargs)
+
+        self.kwargs.setdefault('use_meas_indices', False)
+
+    def __call__(self):
+        N_STATE = self.f.size
+        v = dfn.Function(self.model.vector_function_space).vector()
+
+        res = 0
+        for ii in range(N_STATE):
+            # Set form coefficients to represent the model form index ii -> ii+1
+            _, _v, _ = self.f.get_state(ii)
+
+            v[:] = _v
+            res += v.norm('l2')
+
+        return res
+
     def dv(self, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        # res = dfn.Function(self.model.vector_function_space)
 
-    def da(self, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        _v = iter_params1[0][1]
+        # _u, _v, _ = self.f.get_state(n)
 
-    def dparam(self):
-        return None
+        v = dfn.Function(self.model.vector_function_space).vector()
+        v[:] = _v
+
+        v_norm = v.norm('l2')
+
+        res = None
+        if v_norm == 0:
+            res = v
+        else:
+            res = 1/v_norm * v
+
+        return res
 
 class StrainEnergy(AbstractFunctional):
     """
