@@ -34,10 +34,10 @@ sys.path.append(os.path.expanduser('~/lib/vf-optimization'))
 from vfopt import functionals as extra_functionals
 
 dfn.set_log_level(30)
-# np.random.seed(123)
+np.random.seed(123)
 
+rewrite_states = True
 save_path = 'out/FiniteDifferenceStates.h5'
-
 
 ## Set the mesh to be used and initialize the forward model
 mesh_dir = '../meshes'
@@ -48,17 +48,17 @@ mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
-dt_sample = 5e-5
-dt_max = 1e-5
+dt_sample = 1e-4
+dt_max = 2.5e-6
+t_start = 0
 # t_final = 20*dt_sample
-t_final = (256-1)*5e-5
-t_final = 0.1
-# times_meas = np.linspace(0, t_final, round(t_final/dt)+1)
-times_meas = np.linspace(0, t_final, 2)
+# t_final = (256-1)*5e-5
+t_final = 0.02
+times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_sample) + 1)
 
 ## Set the fluid/solid parameters
 emod = model.emod.vector()[:].copy()
-emod[:] = 5e3 * PASCAL_TO_CGS
+emod[:] = 2e3 * PASCAL_TO_CGS
 
 ## Set the stepping direction
 hs = np.concatenate(([0], 2**np.arange(5)), axis=0)
@@ -80,36 +80,48 @@ fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
 
 fkwargs = {}
 # Functional = functionals.VelocityNorm
-Functional = functionals.DisplacementNorm
+# Functional = functionals.DisplacementNorm
 # Functional = functionals.StrainEnergy
-# Functional = extra_functionals.AcousticEfficiency
+Functional = extra_functionals.AcousticEfficiency
 
 ## Compute functionals along step direction
-print("Computing Gradient via Finite Differences")
+print(f"Computing {len(hs)} finite difference points")
 
-if os.path.exists(save_path):
-    os.remove(save_path)
+if not rewrite_states and os.path.exists(save_path):
+    print("Using existing files")
+    pass
+else:
+    if os.path.exists(save_path):
+        os.remove(save_path)
 
-for n, h in enumerate(hs):
-    runtime_start = perf_counter()
-    solid_props['elastic_modulus'] = emod + h*step_dir
-    forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
-            h5file=save_path, h5group=f'{n}')
-    runtime_end = perf_counter()
+    for n, h in enumerate(hs):
+        runtime_start = perf_counter()
+        solid_props['elastic_modulus'] = emod + h*step_dir
+        forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
+                h5file=save_path, h5group=f'{n}')
 
-    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        # breakpoint()
+        runtime_end = perf_counter()
+
+        print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
 # Calculate functional values at each step
+print(f"\nComputing functional for each point")
+runtime_start = perf_counter()
+
 functionals = list()
 with sf.StateFile('out/FiniteDifferenceStates.h5', group='0', mode='r') as f:
     for n, h in enumerate(hs):
         f.root_group_name = f'{n}'
         functionals.append(Functional(model, f, **fkwargs)())
 
+runtime_end = perf_counter()
+print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
 functionals = np.array(functionals)
 
 ## Adjoint
-print("Computing Gradient via Adjoint Method")
+print("\nComputing Gradient via adjoint calculation")
 
 runtime_start = perf_counter()
 info = None
@@ -144,44 +156,3 @@ fig, ax = plt.subplots(1, 1)
 plt.plot(hs[1:], (functionals[1:] - functionals[0])/hs[1:], marker='o')
 ax.axhline(np.dot(gradient_ad, step_dir))
 plt.show()
-
-# breakpoint()
-
-# df = pd.DataFrame(columns=['2nd Order Taylor Remainder'])
-# Project the gradient in the direction of elastic modulus increase
-# grad_ad_projected = np.sum(np.array(gradient_ad) * step_dir)
-# functional_ad = functionals[0] + grad_ad_projected * hs
-
-# grad_fd_projected = (functionals[1:]-functionals[0])/hs[1:]
-# error = np.abs((grad_ad_projected-grad_fd_projected)/grad_ad_projected)*100
-
-# fig, axs = plt.subplots(1, 2, figsize=(7, 3))
-
-# axs[0].plot(hs, functional_ad, color='C1', marker='o',
-#             label="Linear prediction from gradient")
-# axs[0].plot(hs, functionals, color='C0', marker='o',
-#             label="Directly computed functionals")
-# axs[1].plot(1 + np.arange(error.size), error)
-
-# # Formatting
-# axs[0].set_xlim(hs[[0, -1]])
-# axs[0].set_xlabel("Elastic modulus [Pa]")
-# axs[0].set_ylabel("Objective function")
-# axs[0].legend()
-
-# for ax in axs:
-#     ax.grid()
-
-# axs[1].set_xlim([0, error.size])
-# axs[1].set_ylim([0, error.max()])
-
-# axs[1].set_xlabel(r"$N_{\Delta h}$")
-# axs[1].set_ylabel(r"% Error")
-
-# plt.tight_layout()
-# plt.show()
-
-# print(f"Gradient norm {np.linalg.norm(gradient_ad):.16e}")
-# print(f"Linear gradient prediction {grad_ad_projected:.16e}")
-# print(f"Actual FD values {grad_fd_projected[0]:.16e}")
-# print(f"% Error {error}")
