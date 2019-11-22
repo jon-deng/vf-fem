@@ -49,9 +49,10 @@ model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
 ## Set the solution parameters
 dt_sample = 5e-5
-dt_max = 5e-5
+dt_max = 1e-5
 # t_final = 20*dt_sample
-t_final = (256-1)*dt_sample
+t_final = (256-1)*5e-5
+t_final = 0.1
 # times_meas = np.linspace(0, t_final, round(t_final/dt)+1)
 times_meas = np.linspace(0, t_final, 2)
 
