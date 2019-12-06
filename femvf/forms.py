@@ -245,7 +245,7 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
 
 
         penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) \
-                * ds(facet_labels['pressure'])
+                  * ds(facet_labels['pressure'])
         f1_linear = ufl.action(inertia + stiffness + damping, u1)
         f1_nonlin = -traction - penalty
         f1 = f1_linear + f1_nonlin
@@ -333,9 +333,15 @@ class ForwardModel:
     Stores all the things related to the vocal fold forward model solved thru fenics.
 
     TODO: Instantiation is kind of messy and ugly. Prettify/clean it up.
-    TODO: Class contains alot of extra, non-essential stuff. Think about what are the essential
+        Class contains alot of extra, non-essential stuff. Think about what are the essential
         things that are included, how to compartmentalize the things etc.
-    TODO: think about how to include extraneous forms for computing some functional etc...
+
+    TODO: Improve assembly speed
+        There are a number of ways to speed up assembly. Firstly the bilinear forms have
+        components that remain constant under certain conditions. These could be cached to improved
+        performance. There are some issues here however:
+            adding the constant components incurs overhead due to different sparsity patterns
+            multiplying a matrix by a scalar seems to be multi-threaded (3) for some reason
 
     Parameters
     ----------
@@ -439,39 +445,17 @@ class ForwardModel:
         self.scalar_trial = self.forms['trial.scalar']
         self.vector_trial = self.forms['trial.vector']
 
-        # self.assem_cache = {}
-        # self.reset_cache()
-        # self.reset_adj_cache()
-
         self.df1_du1_mat = dfn.assemble(self.forms['bilin.df1_du1'])
-        self.df1_du1_adj_mat = dfn.assemble(self.forms['bilin.df1_du1_adj'])
-        self.df1_du0_adj_mat = dfn.assemble(self.forms['bilin.df1_du0_adj'])
-        self.df1_dv0_adj_mat = dfn.assemble(self.forms['bilin.df1_dv0_adj'])
-        self.df1_da0_adj_mat = dfn.assemble(self.forms['bilin.df1_da0_adj'])
+        self.cached_form_assemblers = {
+            'bilin.df1_du1_adj': CachedBiFormAssembler(self.forms['bilin.df1_du1_adj']),
+            'bilin.df1_du0_adj': CachedBiFormAssembler(self.forms['bilin.df1_du0_adj']),
+            'bilin.df1_dv0_adj': CachedBiFormAssembler(self.forms['bilin.df1_dv0_adj']),
+            'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['bilin.df1_da0_adj'])
+        }
 
     @property
     def forms(self):
         return self._forms
-
-    # def reset_cache(self):
-    #     """
-    #     Sets cached stiffness and mass matrices.
-    #     """
-    #     out = {
-    #         'M': dfn.assemble(biform_m(self.vector_trial, self.vector_test, self.rho)),
-    #         'K': dfn.assemble(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu))}
-    #     self.assem_cache.update(out)
-
-    # def reset_adj_cache(self):
-    #     """
-    #     Sets cached adjoint stiffness and mass matrices.
-    #     """
-    #     out = {
-    #         'M.adj': dfn.assemble(
-    #             dfn.adjoint(biform_m(self.vector_trial, self.vector_test, self.rho))),
-    #         'K.adj': dfn.assemble(
-    #             dfn.adjoint(biform_k(self.vector_trial, self.vector_test, self.emod, self.nu)))}
-    #     self.assem_cache.update(out)
 
     # Core solver functions
     def get_ref_config(self):
@@ -598,10 +582,6 @@ class ForwardModel:
 
         # return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
 
-    # TODO: Adding matrices has an overhead due to different sparsity patterns of the component
-    # matrices. You may be able to speed up addition by having an output matrix with sparsity that
-    # is a superset of all the component matrix sparsities. I believe, fenics does not directly
-    # support this type of add, so you need to use petsc directly.
     def assem_df1_du1(self):
         """
         Return the residual vector jacobian
@@ -613,16 +593,16 @@ class ForwardModel:
         return dfn.assemble(self.forms['df1_du1'])
 
     def assem_df1_du1_adj(self):
-        return dfn.assemble(self.forms['bilin.df1_du1_adj'])
+        return self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
 
     def assem_df1_du0_adj(self):
-        return dfn.assemble(self.forms['bilin.df1_du0_adj'])
+        return self.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
 
     def assem_df1_dv0_adj(self):
-        return dfn.assemble(self.forms['bilin.df1_dv0_adj'])
+        return self.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
 
     def assem_df1_da0_adj(self):
-        return dfn.assemble(self.forms['bilin.df1_da0_adj'])
+        return self.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
 
     # Convenience functions
     def get_glottal_width(self):
@@ -834,6 +814,36 @@ class ForwardModel:
                                           u1=u1)
 
         return fluid_info, fluid_props
+
+class CachedBiFormAssembler:
+    """
+    Assembles a bilinear form using a cached sparsity pattern
+
+    Parameters
+    ----------
+    form : ufl.Form
+    keep_diagonal : bool, optional
+        Whether to preserve diagonals in the form
+    """
+
+    def __init__(self, form, keep_diagonal=True):
+        self._form = form
+
+        self._tensor = dfn.assemble(form, keep_diagonal=keep_diagonal)
+        self._tensor.zero()
+
+    @property
+    def tensor(self):
+        return self._tensor
+
+    @property
+    def form(self):
+        return self._form
+
+    def assemble(self):
+        out = self.tensor.copy()
+        return dfn.assemble(self.form, tensor=out)
+
 
 if __name__ == '__main__':
     mesh_path = '../geometry2.xml'
