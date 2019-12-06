@@ -68,10 +68,10 @@ class AbstractFunctional():
         ----------
         n : int
             Index of state
-        iter_params0, iter_params1 : tuple(tuple(3*dfn.Vector), float, dict, dict, dfn.Vector)
-            Tuple of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params`, namely
-            `(x0, dt, u1=None, solid_props=None, fluid_props=None)`
+        iter_params0, iter_params1 : dict
+            Dictionary of parameters that specify iteration n. These are parameters fed into
+            `forms.ForwardModel.set_iter_params` with signature:
+            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -90,6 +90,47 @@ class AbstractFunctional():
         """
         return None
 
+class FinalDisplacementNorm(AbstractFunctional):
+    r"""
+    Represents the sum over time of l2 norms of displacements.
+
+    :math:`\sum{||\vec{u}||}_2`
+    """
+
+    # def __init__(self, model, f, **kwargs):
+    #     super(FinalDisplacementNorm, self).__init__(model, f, **kwargs)
+
+    def __call__(self):
+        u = dfn.Function(self.model.vector_function_space).vector()
+
+        _u, _, _ = self.f.get_state(self.f.size-1)
+
+        u[:] = _u
+        res = u.norm('l2')
+
+        return res
+
+    def du(self, n, iter_params0, iter_params1):
+        res = None
+
+        if n == self.f.size-1:
+            _u = iter_params1['x0'][0]
+
+            u = dfn.Function(self.model.vector_function_space).vector()
+            u[:] = _u
+
+            u_norm = u.norm('l2')
+
+            res = None
+            if u_norm == 0:
+                res = dfn.Function(self.model.vector_function_space).vector()
+            else:
+                res = 1/u_norm * u
+        else:
+            res = dfn.Function(self.model.vector_function_space).vector()
+
+        return res
+
 class DisplacementNorm(AbstractFunctional):
     r"""
     Represents the sum over time of l2 norms of displacements.
@@ -101,13 +142,15 @@ class DisplacementNorm(AbstractFunctional):
         super(DisplacementNorm, self).__init__(model, f, **kwargs)
 
         self.kwargs.setdefault('use_meas_indices', False)
+        self.kwargs.setdefault('m_start', 0)
+        self.kwargs.setdefault('m_final', self.f.size)
 
     def __call__(self):
-        N_STATE = self.f.size
-        u = dfn.Function(self.model.vector_function_space).vector()
+        # N_STATE = self.f.size
 
         res = 0
-        for ii in range(N_STATE):
+        u = dfn.Function(self.model.vector_function_space).vector()
+        for ii in range(self.kwargs['m_start'], self.kwargs['m_final']):
             # Set form coefficients to represent the model form index ii -> ii+1
             _u, _, _ = self.f.get_state(ii)
 
@@ -119,18 +162,21 @@ class DisplacementNorm(AbstractFunctional):
     def du(self, n, iter_params0, iter_params1):
         # res = dfn.Function(self.model.vector_function_space)
 
-        _u = iter_params1[0][0]
+        N_START = self.kwargs['m_start']
+        N_FINAL = self.kwargs['m_final']
+        if n >= N_START and n < N_FINAL:
+            _u = iter_params1['x0'][0]
 
-        u = dfn.Function(self.model.vector_function_space).vector()
-        u[:] = _u
+            u = dfn.Function(self.model.vector_function_space).vector()
+            u[:] = _u
 
-        u_norm = u.norm('l2')
+            u_norm = u.norm('l2')
 
-        res = None
-        if u_norm == 0:
-            res = u
-        else:
-            res = 1/u_norm * u
+            res = None
+            if u_norm == 0:
+                res = u
+            else:
+                res = 1/u_norm * u
 
         return res
 
@@ -163,7 +209,7 @@ class VelocityNorm(AbstractFunctional):
     def dv(self, n, iter_params0, iter_params1):
         # res = dfn.Function(self.model.vector_function_space)
 
-        _v = iter_params1[0][1]
+        _v = iter_params1['x0'][1]
         # _u, _v, _ = self.f.get_state(n)
 
         v = dfn.Function(self.model.vector_function_space).vector()
@@ -217,7 +263,7 @@ class StrainEnergy(AbstractFunctional):
         return res
 
     def dv(self, n, iter_params0, iter_params1):
-        self.model.set_iter_params(*iter_params1)
+        self.model.set_iter_params(**iter_params1)
 
         return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
 
@@ -264,7 +310,7 @@ class FluidWork(AbstractFunctional):
             # Add the sensitivity component due to work from n to n+1
             if n < N_STATE-1:
                 # self.model.set_iter_params_fromfile(self.f, n+1)
-                self.model.set_iter_params(*iter_params1)
+                self.model.set_iter_params(**iter_params1)
                 dp_du, _ = self.model.get_flow_sensitivity()
 
                 out += dfn.assemble(self.model.dfluid_work_du0)
@@ -281,7 +327,7 @@ class FluidWork(AbstractFunctional):
             # Add the sensitivity component due to work from n-1 to n
             if n > N_START:
                 # self.model.set_iter_params_fromfile(self.f, n)
-                self.model.set_iter_params(*iter_params0)
+                self.model.set_iter_params(**iter_params0)
 
                 out += dfn.assemble(self.model.dfluid_work_du1)
 
@@ -331,7 +377,7 @@ class VolumeFlow(AbstractFunctional):
             dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
         else:
             # self.model.set_iter_params_fromfile(self.f, n+1)
-            self.model.set_iter_params(*iter_params1)
+            self.model.set_iter_params(**iter_params1)
             _, dq_dun = self.model.get_flow_sensitivity()
             dtotalflow_dun = dq_dun * self.model.dt.values()[0]
 
@@ -372,9 +418,9 @@ class SubglottalWork(AbstractFunctional):
         N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
-            # fluid_props = iter_params1[3]
+            # fluid_props = iter_params1['fluid_props']
             fluid_props = self.model.fluid_props
-            self.model.set_iter_params(*iter_params1)
+            self.model.set_iter_params(**iter_params1)
             _, dq_du = self.model.get_flow_sensitivity()
 
             ret += self.model.dt.values()[0] * fluid_props['p_sub'] * dq_du
@@ -553,7 +599,7 @@ class WSSGlottalWidth(AbstractFunctional):
             weight = weights[n]
             gw_meas = meas_glottal_widths[n]
 
-            self.model.set_iter_params(*iter_params1)
+            self.model.set_iter_params(**iter_params1)
 
             # u, v, a = self.f.get_state(n, self.model.vector_function_space)
             # self.model.set_initial_state(u, v, a)

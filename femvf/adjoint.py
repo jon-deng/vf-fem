@@ -40,10 +40,8 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     model : forms.ForwardModel
     adj_x2 : tuple of dfn.cpp.la.Vector
         A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
-    iter_params1, iter_params2 : tuple
-        iter_params1 is a tuple of:
-        (x^{n}, t^{n+1}-t^{n}, u^{n+1})
-        where x is itself a tuple of (u, v, a)
+    iter_params1, iter_params2 : dict
+        Dictionaries representing the parameters of ForwardModel.set_iter_params
     h5path : string
         Path to an hdf5 file containing states from a forward run of the model.
     h5group : string
@@ -60,9 +58,9 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     dcost_du1, dcost_dv1, dcost_da1 = dcost_dx1
 
     ## Set form coefficients to represent f^{n+2} aka f2(x1, x2) -> x2
-    dt1 = iter_params1[1]
-    dt2 = iter_params2[1]
-    model.set_iter_params(*iter_params2)
+    dt1 = iter_params1['dt']
+    dt2 = iter_params2['dt']
+    model.set_iter_params(**iter_params2)
 
     # Assemble needed forms
     # breakpoint()
@@ -75,8 +73,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
-    dt2 = iter_params2[1]
-    model.set_iter_params(*iter_params1)
+    model.set_iter_params(**iter_params1)
 
     # Assemble needed forms
     df1_du1 = model.assem_df1_du1_adj()
@@ -87,7 +84,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     adj_v1 = dfn.Function(model.vector_function_space).vector()
     adj_a1 = dfn.Function(model.vector_function_space).vector()
 
-    gamma, beta = model.gamma.values()[0], model.beta.values()[0]
+    # gamma, beta = model.gamma.values()[0], model.beta.values()[0]
 
     # Calculate 'source' terms for the adjoint calculation
     df2_du1_correction = dfn.Function(model.vector_function_space).vector()
@@ -176,14 +173,14 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     f.get_state(N-2, out=x1)
     dt2 = times[N-1]-times[N-2]
 
-    iter_params2 = (x1, dt2, x2[0])
-    iter_params3 = (x2, 0.0, None)
+    iter_params2 = {'x0': x1, 'dt': dt2, 'u1': x2[0]}
+    iter_params3 = {'x0': x2, 'dt': 0.0, 'u1': None}
 
     dcost_du2 = functional.du(N-1, iter_params2, iter_params3)
     dcost_dv2 = functional.dv(N-1, iter_params2, iter_params3)
     dcost_da2 = functional.da(N-1, iter_params2, iter_params3)
 
-    model.set_iter_params(*iter_params2)
+    model.set_iter_params(**iter_params2)
     df2_du2 = model.assem_df1_du1_adj()
 
     # Initializing adjoint states:
@@ -207,17 +204,14 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to
         # read index 0
         x0 = f.get_state(ii-1, out=x0)
-
         dt1 = times[ii] - times[ii-1]
 
-        # breakpoint()
-        iter_params1 = (x0, dt1, x1[0])
-        iter_params2 = (x1, dt2, x2[0])
+        iter_params1 = {'x0': x0, 'dt': dt1, 'u1': x1[0]}
+        iter_params2 = {'x0': x1, 'dt': dt2, 'u1': x2[0]}
 
-        dcost_dx1 = []
-        dcost_dx1.append(functional.du(ii, iter_params1, iter_params2))
-        dcost_dx1.append(functional.dv(ii, iter_params1, iter_params2))
-        dcost_dx1.append(functional.da(ii, iter_params1, iter_params2))
+        dcost_dx1 = [functional.du(ii, iter_params1, iter_params2),
+                     functional.dv(ii, iter_params1, iter_params2),
+                     functional.da(ii, iter_params1, iter_params2)]
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
             model, adj_x2, iter_params1, iter_params2, dcost_dx1)
@@ -226,7 +220,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
             comp[:] = val
 
         # Update gradient using adjoint states
-        model.set_iter_params(*iter_params1)
+        model.set_iter_params(**iter_params1)
         df1_dparam = dfn.assemble(df1_dparam_form_adj)
 
         gradient += -(df1_dparam*adj_x1[0]) #+ BLAH*adj_x1[1] + BLAH*adj_x1[2]

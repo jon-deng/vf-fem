@@ -390,7 +390,8 @@ class StateFile:
         fluid_props = self.get_fluid_props(n-1)
         u1 = self.get_u(n)
 
-        return (x0, dt, u1, solid_props, fluid_props)
+        return {'x0': x0, 'dt': dt, 'u1': u1,
+                'solid_props': solid_props, 'fluid_props': fluid_props}
 
 def _property_shape(property_desc, model):
     const_or_field = property_desc[0]

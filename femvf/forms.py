@@ -638,7 +638,7 @@ class ForwardModel:
         verts = self.surface_vertices[u_surface[..., 1] > self.y_collision.values()[0]]
         return verts
 
-    # Parameter value setting functions
+    # Methods for setting model parameters
     def set_ini_state(self, u0, v0, a0):
         """
         Sets the state variables u, v, and a at the start of the step.
@@ -706,7 +706,7 @@ class ForwardModel:
         """
         self.fluid_props = fluid_props
 
-    def set_params(self, x0, solid_props=None, fluid_props=None):
+    def set_params(self, x0=None, solid_props=None, fluid_props=None):
         """
         Set all parameters needed to integrate the model.
 
@@ -717,13 +717,42 @@ class ForwardModel:
         fluid_props : dict
         solid_props : dict
         """
-        self.set_ini_state(*x0)
+        if x0 is not None:
+            self.set_ini_state(*x0)
 
         if fluid_props is not None:
             self.set_fluid_props(fluid_props)
 
         if solid_props is not None:
             self.set_solid_props(solid_props)
+
+        fluid_info = self.get_pressure()
+
+        return fluid_info
+
+    def set_iter_params(self, x0=None, dt=None, u1=None, solid_props=None, fluid_props=None):
+        """
+        Set parameter values needed to integrate the model over a time step.
+
+        All parameter values are optional as some may remain constant. In this case, the current
+        state of the parameter is simply unchanged.
+
+        Parameters
+        ----------
+        x0 : tuple of dfn.GenericVector
+        dt : float
+        u1 : dfn.GenericVector
+        fluid_props : FluidProperties
+        solid_props : SolidProperties
+        u1 : dfn.GenericVector
+        """
+        self.set_params(x0=x0, solid_props=solid_props, fluid_props=fluid_props)
+
+        if dt is not None:
+            self.set_time_step(dt)
+
+        if u1 is not None:
+            self.set_fin_state(u1)
 
         fluid_info = self.get_pressure()
 
@@ -753,30 +782,7 @@ class ForwardModel:
         x0 = statefile.get_state(n)
 
         # Assign the values to the model
-        fluid_info = self.set_params(x0, solid_props=solid_props, fluid_props=fluid_props)
-
-        return fluid_info
-
-    def set_iter_params(self, x0, dt, u1=None, solid_props=None, fluid_props=None):
-        """
-        Set all parameters needed to integrate the model and an initial guess.
-
-        Parameters
-        ----------
-        x0 : array_like
-        dt : float
-        fluid_props : dict
-        solid_props : dict
-        u1 : array_like, optional
-        """
-        self.set_params(x0, solid_props=solid_props, fluid_props=fluid_props)
-
-        self.set_time_step(dt)
-
-        if u1 is not None:
-            self.set_fin_state(u1)
-
-        fluid_info = self.get_pressure()
+        fluid_info = self.set_params(x0=x0, solid_props=solid_props, fluid_props=fluid_props)
 
         return fluid_info
 
@@ -810,8 +816,8 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iter_params(x0, dt, solid_props=solid_props, fluid_props=fluid_props,
-                                          u1=u1)
+        fluid_info = self.set_iter_params(x0=x0, dt=dt,
+                                          solid_props=solid_props, fluid_props=fluid_props, u1=u1)
 
         return fluid_info, fluid_props
 

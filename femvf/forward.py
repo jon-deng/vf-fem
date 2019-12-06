@@ -64,7 +64,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     """
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
-    
+
     forward_info = {}
 
     # Allocate functions for states
@@ -116,12 +116,15 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
                 # If the local error is super low, the refinement time step will be predicted to be
                 # high and so it will go back to the max time step.
                 dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                x1, dt_actual, info = adaptive_step(model, x0, dt_target, abs_tol=abs_tol, 
+                x1, dt_actual, info = adaptive_step(model, x0, dt_target, abs_tol=abs_tol,
                                                     abs_tol_bounds=abs_tol_bounds)
                 n_state += 1
                 t_current += dt_actual
 
                 dt_proposal = dt_actual
+
+                # print("index min:", info['fluid_info']['idx_min'])
+                # print("index sep:", info['fluid_info']['idx_sep'])
 
                 glottal_width.append(info['fluid_info']['a_min'])
                 flow_rate.append(info['fluid_info']['flow_rate'])
@@ -193,7 +196,7 @@ def increment_forward(model, x0, dt):
 
     # Update form coefficients and initial guess
     _x0 = [comp.vector() for comp in x0]
-    fluid_info = model.set_iter_params(_x0, dt, u1=u0.vector())
+    fluid_info = model.set_iter_params(x0=_x0, dt=dt, u1=u0.vector())
 
     # Solve the thing
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
