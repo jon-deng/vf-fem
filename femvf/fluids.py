@@ -83,33 +83,6 @@ def fluid_pressure(x, fluid_props):
             'a_sep': a_sep}
     return p, info
 
-def get_pressure_form(model, x, fluid_props):
-    """
-    Returns the ufl.Coefficient pressure.
-
-    Parameters
-    ----------
-    model : ufl.Coefficient
-        The coefficient representing the pressure
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
-        A dictionary of fluid property keyword arguments.
-
-    Returns
-    -------
-    xy_min, xy_sep :
-        Locations of the minimum and separation areas, as well as surface pressures.
-    """
-    pressure = dfn.Function(model.scalar_function_space)
-
-    pressure_vector, info = fluid_pressure(x, fluid_props)
-    surface_verts = model.surface_vertices
-    pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
-
-    info['pressure'] = pressure_vector
-    return pressure, info
-
 def flow_sensitivity(x, fluid_props):
     """
     Returns the sensitivities of flow properties at a surface state.
@@ -195,6 +168,33 @@ def flow_sensitivity(x, fluid_props):
     #dp_du = pressure_sensitivity_ad(coordinates, fluid_props)
 
     return dp_du, dflow_rate_du
+
+def get_pressure_form(model, x, fluid_props):
+    """
+    Returns the ufl.Coefficient pressure.
+
+    Parameters
+    ----------
+    model : ufl.Coefficient
+        The coefficient representing the pressure
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : dict
+        A dictionary of fluid property keyword arguments.
+
+    Returns
+    -------
+    xy_min, xy_sep :
+        Locations of the minimum and separation areas, as well as surface pressures.
+    """
+    pressure = dfn.Function(model.scalar_function_space)
+
+    pressure_vector, info = fluid_pressure(x, fluid_props)
+    surface_verts = model.surface_vertices
+    pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
+
+    info['pressure'] = pressure_vector
+    return pressure, info
 
 def get_flow_sensitivity(model, x, fluid_props):
     """

@@ -97,6 +97,8 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     # TODO: Hardcoded the calculation of glottal width here, but it should be an option you
     # can pass in along with other functionals of interest you may want to calculate a time-history
     # of
+    idx_separation = []
+    idx_min_area = []
     glottal_width = []
     flow_rate = []
     with sf.StateFile(h5file, group=h5group, mode='a') as f:
@@ -123,8 +125,8 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
                 dt_proposal = dt_actual
 
-                # print("index min:", info['fluid_info']['idx_min'])
-                # print("index sep:", info['fluid_info']['idx_sep'])
+                idx_separation.append(info['fluid_info']['idx_sep'])
+                idx_min_area.append(info['fluid_info']['idx_min'])
 
                 glottal_width.append(info['fluid_info']['a_min'])
                 flow_rate.append(info['fluid_info']['flow_rate'])
@@ -160,6 +162,8 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
         forward_info['time'] = f.get_solution_times()
         forward_info['glottal_width'] = np.array(glottal_width)
         forward_info['flow_rate'] = np.array(flow_rate)
+        forward_info['idx_separation'] = np.array(idx_separation)
+        forward_info['idx_min_area'] = np.array(idx_min_area)
 
         return forward_info
 
