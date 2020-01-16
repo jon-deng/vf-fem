@@ -89,6 +89,8 @@ class SolidProperties(Properties):
 class FluidProperties(Properties):
     """
     Represents a collection of 1D potential flow fluid properties
+
+    TODO: Remove subglottal pressure as a property. It's more like a boundary condition
     """
 
     TYPES = {'p_sub': ('const', ()),

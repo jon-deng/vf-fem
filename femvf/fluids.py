@@ -3,11 +3,256 @@ Functionality related to fluids
 """
 
 import numpy as np
+import math
 
 import dolfin as dfn
 from petsc4py import PETSc
 
-SEPARATION_FACTOR = 1.1
+
+# 1D viscous euler approximation
+def fluid_pressure_vasu(x, x0, xr, fluid_props):
+    """
+    Return fluid surface pressures according to a 1D flow model.
+
+    The flow model is given by "" vasudevan etc.
+
+    Parameters
+    ----------
+    x : tuple of (u, v, a) each of (#surface vertices, geometric dimension) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : dict
+        A dictionary of fluid properties.
+    xr : np.ndarray
+        The nodal locations of the fixed reference grid over which the problem is solved.
+
+    Returns
+    -------
+    q, p : np.ndarray
+        An array of flow rate and pressure vectors for each each vertex
+    dqdx, dpdx : np.ndarray
+        Arrays of sensititivies of nodal flow rates and pressures to the surface displacements and
+        velocities
+    xy_min, xy_sep: (2,) np.ndarray
+        The coordinates of the vertices at minimum and separation areas
+    """
+    u, v, a = x
+
+    area = 2*u[..., 1]
+    darea_dt = 2*v[..., 1]
+
+def res_fluid(n, p_bcs, qp0, qp1, xy_ref, uva0, uva1, fluid_props, dt):
+    """
+    Return the momentum and continuity equation residuals applied at node `n`.
+
+    Momentum and continuity residuals are returned based on the equation between state 0 and 1
+    over a given time step and a guess of the final fluid and solid states.
+
+    Parameters
+    ----------
+    qp0, qp1 : tuple(array_like, array_like)
+        The fluid flow rate and pressure states in a tuple
+    uva : tuple(array_like, array_like, array_like)
+        The fluid-structure interace displacement, velocity, and acceleration states in a tuple
+    xy_ref, uva0, uva1 : tuple(array_like, array_like)
+        xy coordinates/displacements of the fluid-structure interace at the reference configuration,
+        and current and future timesteps
+    fluid_props : femvf.properties.FluidProperties
+        The fluid properties
+    dt : float
+        The timestep between the initial and final states of the iteration.
+
+    Returns
+    -------
+    tuple(float, float)
+        The continuity and momentum equation residuals respectively.
+    """
+    ## Set the finite differencing stencil according to the node
+    fdiff = None
+    NUM_NODE = xy_ref.size
+
+    if n == NUM_NODE-1:
+        fdiff = bd
+    elif n == 0:
+        fdiff = fd
+    else:
+        fdiff = cd
+
+    ## Precompute some variables needed in computing residuals for continuity and momentum
+    # The reference grid for ALE is evenly spaced between the first and last FSI interface
+    # x-coordinates
+    dx = (xy_ref[-1, 0] - xy_ref[0, 0]) / NUM_NODE
+    u1, v1, _ = uva1
+
+    rho = fluid_props['rho']
+
+    # Flow rate and pressure
+    q0, _ = qp0
+    q1, p1 = qp1
+
+    area = 2*u1[..., 1]
+    darea_dt = 2*v1[..., 1]
+
+    # The x-coordinates of the moving mesh are the initial surface node values plus the
+    # x-displacement
+    # This is needed to calculate deformation gradient for use in ALE
+    # x0 = xr + u0[..., 0]
+    x1 = xy_ref[..., 0] + u1[..., 0]
+
+    def_grad = 1/fdiff(x1, n, dx)
+    darea_dx = fdiff(area, n, dx)
+    dq_dx = fdiff(q1, n, dx)
+    dp_dx = fdiff(p1, n, dx)
+    dqarea_dx = fdiff(area*q1, n, dx)
+
+    ## Calculate the momentum and continuity residuals
+    res_continuity = darea_dt[n] - darea_dx*def_grad*v1[n, 0] + dqarea_dx*def_grad
+
+    dq_dt = (q1[n]-q0[n])/dt
+    sep_criteria = q0[n]*fluid_props['rho']*(-q0[n]*dq_dx - dq_dt)
+    xx = separation_factor(0.25, 0.1, sep_criteria)
+    tau = (1-xx)*rho*q1[n]*dq_dx*def_grad
+    res_momentum = rho*q1[n]*dq_dx*def_grad + rho*(dq_dt-dq_dx*def_grad*v1[n, 0]) \
+                   + dp_dx*def_grad - tau
+
+    return res_continuity, res_momentum
+
+def res_fluid_quasistatic(n, p_bcs, qp0, xy_ref, uva0, fluid_props):
+    """
+    Return the momentum and continuity equation residuals applied at node `n`.
+
+    Momentum and continuity residuals are returned based on the equation between state 0 and 1
+    over a given time step and a guess of the final fluid and solid states.
+
+    Parameters
+    ----------
+    n : int
+        The node number to compute the residual at
+    p_bcs : tuple(float, float)
+        The pressure boundary conditions at the inlet and outlet
+    qp0 : tuple(array_like[:], array_like[:])
+        The fluid flow rate and pressure states in a tuple
+    uva0 : tuple(array_like[:, 2], array_like[:, 2], array_like[:, 2])
+        The fluid-structure interace displacement, velocity, and acceleration states in a tuple
+    xy_ref : array_like[:, 2]
+        The fluid-structure interace coordinates in the reference configuration
+    fluid_props : femvf.properties.FluidProperties
+        The fluid properties
+
+    Returns
+    -------
+    tuple(float, float)
+        The continuity and momentum equation residuals respectively.
+    """
+    ## Set the finite differencing stencil according to the node
+    fdiff = None
+    NUM_NODE = xy_ref.shape[0]
+
+    # breakpoint()
+    if n == NUM_NODE-1:
+        fdiff = bd
+    elif n == 0:
+        fdiff = fd
+    else:
+        fdiff = cd
+
+    ## Precompute some variables needed in computing residuals for continuity and momentum
+    # The reference grid for ALE is evenly spaced between the first and last FSI interface
+    # x-coordinates
+    dx = (xy_ref[-1, 0] - xy_ref[0, 0]) / NUM_NODE
+    u0, v0, _ = uva0
+
+    rho = fluid_props['rho']
+
+    # Flow rate and pressure
+    q0, p0 = qp0
+    p0[0], p0[-1] = p_bcs[0], p_bcs[1]
+
+    # The x-coordinates of the moving mesh are the initial surface node values plus the
+    # x-displacement
+    xy0 = xy_ref[..., :] + u0[..., :]
+    area = 2*(fluid_props['y_midline'] - xy0[..., 1])
+
+    def_grad = 1/fdiff(xy0[..., 0], n, dx)
+    # darea_dx = fdiff(area, n, dx)
+    dq_dx = fdiff(q0, n, dx)
+    dp_dx = fdiff(p0, n, dx)
+    dqarea_dx = fdiff(area*q0, n, dx)
+
+    ## Calculate the momentum and continuity residuals
+    res_continuity = dqarea_dx*def_grad
+
+    # The separation criteria is based on q dp/dx but most suggest using the inviscid approximation,
+    # which is dp/dx = -rho*q*dq/dx
+    sep_criteria = q0[n]*fluid_props['rho'] * (-q0[n]*dq_dx)
+    xx = separation_factor(0.0, 0.1, sep_criteria)
+    tau = (1-xx)*rho*q0[n]*dq_dx*def_grad
+    res_momentum = rho*q0[n]*dq_dx*def_grad + dp_dx*def_grad - tau
+
+    info = {'tau': tau, 'separation_factor': xx}
+
+    return res_continuity, res_momentum, info
+
+def separation_factor(sep_factor_min, alpha_max, alpha):
+    """
+    Return the separation factor (a fancy x)
+
+    parameters
+    ----------
+    alpha : float
+        A separation criteria given by :math:`\alpha=q\frac{dp}{dx}` or approximated by the inviscid
+        approximation using :math:`\alpha \approx q*(-\rho q \frac{dq}{dx}-rho\frac{dq}{dt})`
+    """
+    sep_factor = None
+    if alpha < 0:
+        sep_factor = 1
+    elif alpha < alpha_max:
+        sep_factor = sep_factor_min/2*(1-math.cos(math.pi*alpha/alpha_max))
+    else:
+        sep_factor = sep_factor_min
+
+    return sep_factor
+
+def cd(f, n, dx):
+    """
+    Return the central difference approximation of f at n.
+    """
+    return (f[n+1]-f[n-1]) / (2*dx)
+
+def cd_df(f, n, dx):
+    """
+    Return the derivative of the central difference approximation of f at n, to the vector of f.
+    """
+    idxs = [n-1, n+1]
+    vals = [-1/(2*dx), 1/(2*dx)]
+
+def fd(f, n, dx):
+    """
+    Return the central difference approximation of f at n.
+    """
+    return (f[n+1]-f[n]) / dx
+
+def fd_df(f, n, dx):
+    """
+    Return the derivative of the central difference approximation of f at n, to the vector of f.
+    """
+    idxs = [n, n+1]
+    vals = [-1/dx, 1/dx]
+
+def bd(f, n, dx):
+    """
+    Return the central difference approximation of f at n.
+    """
+    return (f[n]-f[n-1]) / dx
+
+def bd_df(f, n, dx):
+    """
+    Return the derivative of the central difference approximation of f at n, to the vector of f.
+    """
+    idxs = [n-1, n]
+    vals = [-1/dx, 1/dx]
+
+# 1D Bernoulli approximation codes
+SEPARATION_FACTOR = 1.0000000000000000001
 
 def fluid_pressure(x, fluid_props):
     """
@@ -54,7 +299,7 @@ def fluid_pressure(x, fluid_props):
     p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
 
     # Calculate the pressure along the separation edge
-    # Separation happens between vertex i and i+1, so adjust the bernoulli pressure at vertex i
+    # Separation happens inbetween vertex i and i+1, so adjust the bernoulli pressure at vertex i
     # based on where separation occurs
     num = (a_sep - area[idx_sep])
     den = (area[idx_sep+1] - area[idx_sep])
@@ -80,8 +325,36 @@ def fluid_pressure(x, fluid_props):
             'xy_min': xy_min,
             'xy_sep': xy_sep,
             'a_min': a_min,
-            'a_sep': a_sep}
+            'a_sep': a_sep,
+            'area': area}
     return p, info
+
+def get_pressure_form(model, x, fluid_props):
+    """
+    Returns the ufl.Coefficient pressure.
+
+    Parameters
+    ----------
+    model : ufl.Coefficient
+        The coefficient representing the pressure
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : dict
+        A dictionary of fluid property keyword arguments.
+
+    Returns
+    -------
+    xy_min, xy_sep :
+        Locations of the minimum and separation areas, as well as surface pressures.
+    """
+    pressure = dfn.Function(model.scalar_function_space)
+
+    pressure_vector, info = fluid_pressure(x, fluid_props)
+    surface_verts = model.surface_vertices
+    pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
+
+    info['pressure'] = pressure_vector
+    return pressure, info
 
 def flow_sensitivity(x, fluid_props):
     """
@@ -168,33 +441,6 @@ def flow_sensitivity(x, fluid_props):
     #dp_du = pressure_sensitivity_ad(coordinates, fluid_props)
 
     return dp_du, dflow_rate_du
-
-def get_pressure_form(model, x, fluid_props):
-    """
-    Returns the ufl.Coefficient pressure.
-
-    Parameters
-    ----------
-    model : ufl.Coefficient
-        The coefficient representing the pressure
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
-        A dictionary of fluid property keyword arguments.
-
-    Returns
-    -------
-    xy_min, xy_sep :
-        Locations of the minimum and separation areas, as well as surface pressures.
-    """
-    pressure = dfn.Function(model.scalar_function_space)
-
-    pressure_vector, info = fluid_pressure(x, fluid_props)
-    surface_verts = model.surface_vertices
-    pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
-
-    info['pressure'] = pressure_vector
-    return pressure, info
 
 def get_flow_sensitivity(model, x, fluid_props):
     """

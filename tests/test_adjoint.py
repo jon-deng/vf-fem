@@ -13,7 +13,11 @@ References
 
 import sys
 import os
+from os import path
 from time import perf_counter
+import pickle
+
+import unittest
 
 # from math import round
 import numpy as np
@@ -27,162 +31,197 @@ from femvf.adjoint import adjoint
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
 from femvf.properties import FluidProperties, SolidProperties
-from femvf import functionals
+from femvf import functionals as funcs
 from femvf import statefile as sf
 
-sys.path.append(os.path.expanduser('~/lib/vf-optimization'))
-from vfopt import functionals as extra_functionals
+sys.path.append(path.expanduser('~/lib/vf-optimization'))
+from vfopt import functionals as extra_funcs
 
-dfn.set_log_level(30)
-np.random.seed(123)
+class TestAdjointGradientCalculation(unittest.TestCase):
 
-rewrite_states = True
-save_path = 'out/FiniteDifferenceStates.h5'
+    def setUp(self):
+        """
+        Stores forward model states along parameter steps
+        """
+        dfn.set_log_level(30)
+        np.random.seed(123)
 
-## Set the mesh to be used and initialize the forward model
-mesh_dir = '../meshes'
+        ##### Set up parameters as you see fit
 
-mesh_base_filename = 'geometry2'
-mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+        ## Set the mesh to be used and initialize the forward model
+        mesh_dir = '../meshes'
 
-model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        mesh_base_filename = 'geometry2'
+        mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-## Set the solution parameters
-dt_sample = 1e-4
-dt_max = 1e-5
-# dt_max = 5e-5
-t_start = 0
-t_final = (150)*dt_sample
-times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_sample) + 1)
+        model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
-## Set the fluid/solid parameters
-emod = model.emod.vector()[:].copy()
-emod[:] = 5e3 * PASCAL_TO_CGS
+        ## Set the solution parameters
+        dt_sample = 1e-4
+        dt_max = 1e-5
+        # dt_max = 5e-5
+        t_start = 0
+        t_final = (150)*dt_sample
+        # t_final = 0.2
+        times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_sample) + 1)
 
-## Set the stepping direction
-hs = np.concatenate(([0], 2.0**np.arange(-5, 4)), axis=0)
-step_size = 1e-2 * PASCAL_TO_CGS
-step_dir = np.random.rand(emod.size) * step_size
+        ## Set the fluid/solid parameters
+        emod = model.emod.vector()[:].copy()
+        emod[:] = 5e3 * PASCAL_TO_CGS
 
-y_gap = 0.005
-solid_props = SolidProperties()
-solid_props['rayleigh_m'] = 0
-solid_props['rayleigh_k'] = 3e-4
-solid_props['k_collision'] = 1e12
-solid_props['y_collision'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap - 0.002
+        ## Set the stepping direction
+        hs = np.concatenate(([0], 2.0**np.arange(-5, 4)), axis=0)
+        step_size = 1e0 * PASCAL_TO_CGS
+        step_dir = np.random.rand(emod.size) * step_size
+        step_dir = np.ones(emod.size) * step_size
 
-fluid_props = FluidProperties()
-fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
+        rewrite_states = False
+        save_path = f'out/FiniteDifferenceStates-uniformstep.h5'
 
-fkwargs = {}
-Functional = functionals.FinalDisplacementNorm
-# Functional = functionals.DisplacementNorm
-# Functional = functionals.VelocityNorm
-# Functional = functionals.StrainEnergy
-# Functional = extra_functionals.AcousticEfficiency
+        # Run the simulations
+        y_gap = 0.005
+        solid_props = SolidProperties()
+        solid_props['rayleigh_m'] = 0
+        solid_props['rayleigh_k'] = 3e-4
+        solid_props['k_collision'] = 1e12
+        solid_props['y_collision'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap - 0.002
 
-## Compute functionals along step direction
-print(f"Computing {len(hs)} finite difference points")
-run_info = None
-if not rewrite_states and os.path.exists(save_path):
-    print("Using existing files")
-else:
-    if os.path.exists(save_path):
-        os.remove(save_path)
+        fluid_props = FluidProperties()
+        fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
 
-    for n, h in enumerate(hs):
+        # Compute functionals along step direction
+        print(f"Computing {len(hs)} finite difference points")
+        if not rewrite_states and os.path.exists(save_path):
+            print("Using existing files")
+        else:
+            if os.path.exists(save_path):
+                os.remove(save_path)
+
+            for n, h in enumerate(hs):
+                runtime_start = perf_counter()
+                solid_props['elastic_modulus'] = emod + h*step_dir
+                info = forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
+                            h5file=save_path, h5group=f'{n}')
+                runtime_end = perf_counter()
+
+                if h == 0:
+                    # Save the run info to a pickled file
+                    with open(save_path+".pickle", 'wb') as f:
+                        pickle.dump(info, f)
+
+                print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+        self.hs = hs
+        self.step_dir = step_dir
+        self.model = model
+        self.save_path = save_path
+
+    def test_adjoint(self):
+        hs = self.hs
+        step_dir = self.step_dir
+        model = self.model
+        save_path = self.save_path
+
+        run_info = None
+        with open(save_path+".pickle", 'rb') as f:
+            run_info = pickle.load(f)
+
+        fkwargs = {}
+        Functional = funcs.FinalDisplacementNorm
+        # Functional = funcs.DisplacementNorm
+        # Functional = funcs.VelocityNorm
+        # Functional = funcs.StrainEnergy
+        # Functional = extra_funcs.AcousticEfficiency
+
+        # Calculate functional values at each step
+        print(f"\nComputing functional for each point")
         runtime_start = perf_counter()
-        solid_props['elastic_modulus'] = emod + h*step_dir
-        info = forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
-                       h5file=save_path, h5group=f'{n}')
 
-        if n == 0:
-            run_info = info
+        functionals = list()
+        with sf.StateFile(save_path, group='0', mode='r') as f:
+            for n, h in enumerate(hs):
+                f.root_group_name = f'{n}'
+                functionals.append(Functional(model, f, **fkwargs)())
 
+        runtime_end = perf_counter()
+        print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+        functionals = np.array(functionals)
+
+        ## Adjoint
+        print("\nComputing Gradient via adjoint calculation")
+
+        runtime_start = perf_counter()
+        info = None
+        gradient_ad = None
+        with sf.StateFile(save_path, group='0', mode='r') as f:
+            _, gradient_ad = adjoint(model, f, Functional, fkwargs)
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-# Calculate functional values at each step
-print(f"\nComputing functional for each point")
-runtime_start = perf_counter()
+        ## Comparing adjoint and finite difference projected gradients
+        taylor_remainder_1 = np.abs(functionals[1:] - functionals[0])
+        taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*np.dot(gradient_ad, step_dir))
 
-functionals = list()
-with sf.StateFile('out/FiniteDifferenceStates.h5', group='0', mode='r') as f:
-    for n, h in enumerate(hs):
-        f.root_group_name = f'{n}'
-        functionals.append(Functional(model, f, **fkwargs)())
+        order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
+        order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
 
-runtime_end = perf_counter()
-print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        # taylor_remainder_2_fd = (functionals[1:] - functionals[0]) / hs[1:]
+        # order_2_fd = np.log(taylor_remainder_2_fd[1:]/taylor_remainder_2_fd[:-1]) / np.log(2)
+        # print("Numerical order of FD: ", order_2_fd)
+        # breakpoint()
 
-functionals = np.array(functionals)
+        print("\nSteps:", hs[1:])
 
-## Adjoint
-print("\nComputing Gradient via adjoint calculation")
+        print("\n1st order taylor remainders: \n", taylor_remainder_1)
+        print("Numerical order: \n", order_1)
 
-runtime_start = perf_counter()
-info = None
-gradient_ad = None
-with sf.StateFile(save_path, group='0', mode='r') as f:
-    _, gradient_ad = adjoint(model, f, Functional, fkwargs)
-runtime_end = perf_counter()
+        print("\n2nd order taylor remainders: \n", taylor_remainder_2)
+        print("Numerical order: \n", order_2)
 
-print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        print("\n||dg/dp|| = ", gradient_ad.norm('l2'))
+        print("dg/dp * step_dir = ", np.dot(gradient_ad, step_dir))
+        print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
 
-## Comparing adjoint and finite difference projected gradients
-# breakpoint()
-taylor_remainder_1 = np.abs(functionals[1:] - functionals[0])
-taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*np.dot(gradient_ad, step_dir))
+        # Plot the adjoint gradient and finite difference approximations of the gradient
+        fig, ax = plt.subplots(1, 1, constrained_layout=True)
+        ax.plot(hs[1:], (functionals[1:] - functionals[0])/hs[1:],
+                color='C0', marker='o', label='FD Approximations')
+        ax.axhline(np.dot(gradient_ad, step_dir), color='C1', label="Adjoint gradient")
+        # ax.set_xlim(0, None)
+        ax.ticklabel_format(axis='y', style='sci')
+        ax.set_xlabel("Step size")
+        ax.set_ylabel("Gradient of functional")
+        ax.legend()
 
-order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
-order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
+        # Plot the glottal width vs time of the simulation at zero step size
+        fig, axs = plt.subplots(2, 1, constrained_layout=True)
 
-taylor_remainder_2_fd = (functionals[1:] - functionals[0]) / hs[1:]
-order_2_fd = np.log(taylor_remainder_2_fd[1:]/taylor_remainder_2_fd[:-1]) / np.log(2)
-print("Numerical order of FD: ", order_2_fd)
-# breakpoint()
+        ax = axs[0]
+        ax.plot(run_info['time'], run_info['glottal_width'])
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Glottal width [cm]")
 
-print("\nSteps:", hs[1:])
+        ax = axs[1]
+        ax.plot(run_info['time'][1:], run_info['idx_min_area'], label="Minimum area location")
+        ax.plot(run_info['time'][1:], run_info['idx_separation'], label="Separation location")
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Vertex index")
 
-print("\n1st order taylor remainders: ", taylor_remainder_1)
-print("Numerical order: ", order_1)
+        ax = axs[1].twinx()
+        for n in np.sort(np.unique(run_info['idx_separation'])):
+            ax.plot(run_info['time'][1:], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}")
+        ax.legend()
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Pressure [Pa]")
 
-print("\n2nd order taylor remainders: ", taylor_remainder_2)
-print("Numerical order: ", order_2)
+        plt.show()
 
-print("\n||dg/dp|| = ", gradient_ad.norm('l2'))
-print("dg/dp * step_dir = ", np.dot(gradient_ad, step_dir))
-print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
+        print(run_info['idx_min_area'])
+        print(run_info['idx_separation'])
+        breakpoint()
 
-
-# Plot the adjoint gradient and finite difference approximations of the gradient
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-
-ax.plot(hs[1:], (functionals[1:] - functionals[0])/hs[1:],
-        color='C0', marker='o', label='FD Approximations')
-ax.axhline(np.dot(gradient_ad, step_dir), color='C1', label="Adjoint gradient")
-
-# ax.set_xlim(0, None)
-ax.ticklabel_format(axis='y', style='sci')
-
-ax.set_xlabel("Step size")
-ax.set_ylabel("Gradient of functional")
-ax.legend()
-
-# Plot the glottal width vs time of the simulation at zero step size
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-
-ax.plot(run_info['time'], run_info['glottal_width'])
-
-ax.set_xlabel("Time [s]")
-ax.set_ylabel("Glottal width [cm]")
-
-plt.show()
-
-print(run_info['idx_min_area'])
-print(run_info['idx_separation'])
-breakpoint()
-
-
+if __name__ == '__main__':
+    unittest.main()

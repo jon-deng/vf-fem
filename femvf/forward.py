@@ -65,7 +65,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
 
-    forward_info = {}
+    info = {}
 
     # Allocate functions for states
     u0 = dfn.Function(model.vector_function_space)
@@ -101,6 +101,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     idx_min_area = []
     glottal_width = []
     flow_rate = []
+    pressure = []
     with sf.StateFile(h5file, group=h5group, mode='a') as f:
         t_current = t0
         n_state = 0
@@ -118,18 +119,18 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
                 # If the local error is super low, the refinement time step will be predicted to be
                 # high and so it will go back to the max time step.
                 dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                x1, dt_actual, info = adaptive_step(model, x0, dt_target, abs_tol=abs_tol,
-                                                    abs_tol_bounds=abs_tol_bounds)
+                x1, dt_actual, step_info = adaptive_step(model, x0, dt_target, abs_tol=abs_tol,
+                                                         abs_tol_bounds=abs_tol_bounds)
                 n_state += 1
                 t_current += dt_actual
 
                 dt_proposal = dt_actual
 
-                idx_separation.append(info['fluid_info']['idx_sep'])
-                idx_min_area.append(info['fluid_info']['idx_min'])
-
-                glottal_width.append(info['fluid_info']['a_min'])
-                flow_rate.append(info['fluid_info']['flow_rate'])
+                idx_separation.append(step_info['fluid_info']['idx_sep'])
+                idx_min_area.append(step_info['fluid_info']['idx_min'])
+                glottal_width.append(step_info['fluid_info']['a_min'])
+                flow_rate.append(step_info['fluid_info']['flow_rate'])
+                pressure.append(step_info['fluid_info']['pressure'])
 
                 ## Write the solution outputs to a file
                 f.append_time(t_current)
@@ -142,7 +143,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
                 ## Plot the solution
                 if show_figure:
-                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), info['fluid_info'],
+                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), step_info['fluid_info'],
                                                  solid_props, fluid_props)
                     plt.pause(0.001)
 
@@ -154,18 +155,19 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
 
         # Write the final functionals
         _x1 = [comp.vector() for comp in x1]
-        info = model.set_params(_x1)
-        glottal_width.append(info['a_min'])
-        flow_rate.append(info['flow_rate'])
+        step_info = model.set_params(_x1)
+        glottal_width.append(step_info['a_min'])
+        flow_rate.append(step_info['flow_rate'])
 
-        forward_info['meas_ind'] = f.get_meas_indices()
-        forward_info['time'] = f.get_solution_times()
-        forward_info['glottal_width'] = np.array(glottal_width)
-        forward_info['flow_rate'] = np.array(flow_rate)
-        forward_info['idx_separation'] = np.array(idx_separation)
-        forward_info['idx_min_area'] = np.array(idx_min_area)
+        info['meas_ind'] = f.get_meas_indices()
+        info['time'] = f.get_solution_times()
+        info['glottal_width'] = np.array(glottal_width)
+        info['flow_rate'] = np.array(flow_rate)
+        info['idx_separation'] = np.array(idx_separation)
+        info['idx_min_area'] = np.array(idx_min_area)
+        info['pressure'] = np.array(pressure)
 
-        return forward_info
+        return info
 
 # @profile
 def increment_forward(model, x0, dt):

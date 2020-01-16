@@ -11,8 +11,8 @@ def grad_fem_p1(scalar_trial, scalar_test):
     """
     Return the gradient norm operator
 
-    This return the product :math: A = L^T L :math:, such that a smoothness penalty term can be
-    constructed with :math: f^T L^T L f = f^T A f :math:
+    This return the product :math:`A = L^T L`, such that a smoothness penalty term can be
+    constructed with :math:`f^T L^T L f = f^T A f`
 
     Parameters
     ----------

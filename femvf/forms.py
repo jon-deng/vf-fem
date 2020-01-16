@@ -134,30 +134,6 @@ def biform_m(a, b, rho):
     """
     return rho*ufl.dot(a, b) * ufl.dx
 
-def _sort_surface_vertices(surface_coordinates):
-    """
-    Returns a list sorting the vertices in increasing streamwise direction.
-
-    Assumes the inferior-superior direction is oriented along the positive x axis.
-
-    Parameters
-    ----------
-    surface_coordinates : (..., 2) array_like
-        An array of surface coordinates, with x and y locations stored in the last dimension.
-    """
-    # Determine the very first coordinate
-    idx_sort = [np.argmin(surface_coordinates[..., 0])]
-
-    while len(idx_sort) < surface_coordinates.shape[0]:
-        # Calculate array of distances to every other coordinate
-        vector_distances = surface_coordinates - surface_coordinates[idx_sort[-1]]
-        distances = np.sum(vector_distances**2, axis=-1)**0.5
-        distances[idx_sort] = np.nan
-
-        idx_sort.append(np.nanargmin(distances))
-
-    return np.array(idx_sort)
-
 def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cell_labels,
     solid_props=None, fluid_props=None):
     """
@@ -321,6 +297,76 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
 
     return forms
 
+
+def load_mesh(mesh_path, facet_labels, cell_labels):
+    """
+    Return mesh and facet/cell info
+
+    Parameters
+    ----------
+    mesh_path : str
+        Path to the mesh .xml file
+    facet_labels, cell_labels : dict(str: int)
+        Dictionaries providing integer identifiers for given labels
+
+    Returns
+    -------
+    mesh : dfn.Mesh
+        The mesh object
+    facet_function, cell_function : dfn.MeshFunction
+        A mesh function marking facets with integers. Marked elements correspond to the label->int
+        mapping given in facet_labels/cell_labels.
+    """
+    base_path, ext = path.splitext(mesh_path)
+    facet_function_path = base_path +  '_facet_region.xml'
+    cell_function_path = base_path + '_physical_region.xml'
+
+    if ext == '':
+        mesh_path = mesh_path + '.xml'
+
+    mesh = dfn.Mesh(mesh_path)
+    facet_function = dfn.MeshFunction('size_t', mesh, facet_function_path)
+    cell_function = dfn.MeshFunction('size_t', mesh, cell_function_path)
+
+    return mesh, facet_function, cell_function
+
+def vertices_from_edges(edge_indices, mesh):
+    """
+    Return vertices associates with a set of edges
+    """
+    edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
+                                for edge in dfn.edges(mesh)])
+
+    vertices = np.unique(edge_to_vertex[edge_indices].reshape(-1))
+    return vertices
+
+def sort_vertices_by_nearest_neighbours(vertex_coordinates):
+    """
+    Return an index list sorting the vertices based on its nearest neighbours
+
+    For the case of a collection of vertices along the surface of a mesh, this should sort them
+    along an increasing or decreasing surface coordinate.
+
+    This is mainly used to sort the inferior-superior direction is oriented along the positive x axis.
+
+    Parameters
+    ----------
+    vertex_coordinates : (..., 2) array_like
+        An array of surface coordinates, with x and y locations stored in the last dimension.
+    """
+    # Determine the very first coordinate
+    idx_sort = [np.argmin(vertex_coordinates[..., 0])]
+
+    while len(idx_sort) < vertex_coordinates.shape[0]:
+        # Calculate array of distances to every other coordinate
+        vector_distances = vertex_coordinates - vertex_coordinates[idx_sort[-1]]
+        distances = np.sum(vector_distances**2, axis=-1)**0.5
+        distances[idx_sort] = np.nan
+
+        idx_sort.append(np.nanargmin(distances))
+
+    return np.array(idx_sort)
+
 class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.
@@ -370,37 +416,30 @@ class ForwardModel:
     """
 
     def __init__(self, mesh_path, facet_labels, cell_labels):
-        ## Setting the mesh
-        base_path, ext = path.splitext(mesh_path)
-        facet_function_path = base_path +  '_facet_region.xml'
-        cell_function_path = base_path + '_physical_region.xml'
-
-        if ext == '':
-            mesh_path = mesh_path + '.xml'
-
-        self.mesh = dfn.Mesh(mesh_path)
-        self.facet_function = dfn.MeshFunction('size_t', self.mesh, facet_function_path)
-        self.cell_function = dfn.MeshFunction('size_t', self.mesh, cell_function_path)
+        self.mesh, self.facet_function, self.cell_function = load_mesh(mesh_path, facet_labels, cell_labels)
 
         # Create a vertex marker from the boundary marker
-        edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
-                                   for edge in dfn.edges(self.mesh)])
         pressure_edges = self.facet_function.where_equal(facet_labels['pressure'])
         fixed_edges = self.facet_function.where_equal(facet_labels['fixed'])
 
-        pressure_vertices = np.unique(edge_to_vertex[pressure_edges].reshape(-1))
-        fixed_vertices = np.unique(edge_to_vertex[fixed_edges].reshape(-1))
+        pressure_vertices = vertices_from_edges(pressure_edges, self.mesh)
+        fixed_vertices = vertices_from_edges(fixed_edges, self.mesh)
 
-        vertex_marker = dfn.MeshFunction('size_t', self.mesh, 0)
-        vertex_marker.set_all(0)
-        vertex_marker.array()[pressure_vertices] = facet_labels['pressure']
-        vertex_marker.array()[fixed_vertices] = facet_labels['fixed']
+        # TODO: Remove. This portion of code esssentially removes the very first and last vertices
+        # that are shared between fsi and fixed surfaces form pressure vertices. I'm keeping this
+        # here in case not using this breaks later code.
+        # vertex_marker = dfn.MeshFunction('size_t', self.mesh, 0)
+        # vertex_marker.set_all(0)
+        # vertex_marker.array()[pressure_vertices] = facet_labels['pressure']
+        # vertex_marker.array()[fixed_vertices] = facet_labels['fixed']
 
-        surface_vertices = np.array(vertex_marker.where_equal(facet_labels['pressure']))
+        # surface_vertices = np.array(vertex_marker.where_equal(facet_labels['pressure']))
+
+        surface_vertices = pressure_vertices
         surface_coordinates = self.mesh.coordinates()[surface_vertices]
 
         # Sort the pressure surface vertices from inferior to superior
-        idx_sort = _sort_surface_vertices(surface_coordinates)
+        idx_sort = sort_vertices_by_nearest_neighbours(surface_coordinates)
         self.surface_vertices = surface_vertices[idx_sort]
         self.surface_coordinates = surface_coordinates[idx_sort]
 
@@ -756,7 +795,7 @@ class ForwardModel:
         Set all parameters needed to integrate the model from a recorded value.
 
         Iteration `n` is the implicit relation
-        :math: f^{n}(u_n, u_{n-1}, p)
+        :math:`f^{n}(u_n, u_{n-1}, p)`
         that gives the displacement at index `n`, given the state at `n-1` and all additional
         parameters.
 
@@ -785,7 +824,7 @@ class ForwardModel:
         iteration.
 
         Iteration `n` is the implicit relation
-        :math: f^{n}(u_n, u_{n-1}, p)
+        :math:`f^{n}(u_n, u_{n-1}, p)`
         that gives the displacement at index `n`, given the state at `n-1` and all additional
         parameters.
 
