@@ -247,8 +247,9 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         # run_info = None
         # with open(save_path+".pickle", 'rb') as f:
         #     run_info = pickle.load(f)
-
-        run_info = forward(model, 0, self.times_meas, self.dt_max, self.solid_props, fluid_props, abs_tol=None)
+        solution_file = 'tmp.h5'
+        run_info = forward(model, 0, self.times_meas, self.dt_max, self.solid_props, fluid_props, 
+                           h5file=solution_file, abs_tol=None)
 
         surface_area = []
         with sf.StateFile(self.save_path, group='/0', mode='r') as f:
