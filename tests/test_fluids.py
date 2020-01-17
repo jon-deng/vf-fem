@@ -144,6 +144,26 @@ class Test1DEuler(CommonSetup):
         print(np.array(sep))
 
 class TestBernoulli(CommonSetup):
+    def test_fluid_pressure(self):
+        """
+        Tests if bernoulli fluid pressures are calculated correctly
+        """
+        xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
+        
+        p_test, info = fluids.fluid_pressure(xy_surf, fluid_props)
+
+        area = 2*(fluid_props['y_midline'] - xy_surf[..., 1])
+        p_verify = p_sub + 1/2*fluid_props['rho']*info['flow_rate']**2*(1/fluid_props['a_sub']**2 - 1/area**2)
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(xy_surf[:, 0], p_test/10)
+        ax.plot(xy_surf[:, 0], p_verify/10)
+        ax.set_xlabel("x [cm]")
+        ax.set_ylabel("Pressure [Pa]")
+
+        ax_surf = ax.twinx()
+        ax_surf.plot(xy_surf[:, 0], xy_surf[:, 1])
+        ax_surf.set_ylabel("y [cm]")
 
     def test_pressure_sensitivity(self):
         surface_coordinates = self.surface_coordinates
