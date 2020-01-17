@@ -7,6 +7,7 @@ import unittest
 
 import dolfin as dfn
 
+import matplotlib.pyplot as plt
 import autograd
 import autograd.numpy as np
 # import numpy as np
@@ -120,7 +121,7 @@ class Test1DEuler(CommonSetup):
         fluid_props['a_sub'] = self.area[0] # This is because I didn't set the subglottal area conditions for 1d euler version
         p_guess, info = fluids.fluid_pressure(x, fluid_props)
         q_guess = info['flow_rate']/self.area
-        breakpoint()
+        # breakpoint()
 
         # You can approximate the momentum residual using
         # p_guess[2:]-p_guess[:-2] + rho*q_guess[1:-1]*(q_guess[2:]-q_guess[:-2])
@@ -149,11 +150,11 @@ class TestBernoulli(CommonSetup):
         Tests if bernoulli fluid pressures are calculated correctly
         """
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
-        
-        p_test, info = fluids.fluid_pressure(xy_surf, fluid_props)
+        surf_state = (xy_surf, np.zeros(xy_surf.shape), np.zeros(xy_surf.shape))
+        p_test, info = fluids.fluid_pressure(surf_state, fluid_props)
 
         area = 2*(fluid_props['y_midline'] - xy_surf[..., 1])
-        p_verify = p_sub + 1/2*fluid_props['rho']*info['flow_rate']**2*(1/fluid_props['a_sub']**2 - 1/area**2)
+        p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*info['flow_rate']**2*(1/fluid_props['a_sub']**2 - 1/area**2)
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(xy_surf[:, 0], p_test/10)
@@ -162,8 +163,10 @@ class TestBernoulli(CommonSetup):
         ax.set_ylabel("Pressure [Pa]")
 
         ax_surf = ax.twinx()
-        ax_surf.plot(xy_surf[:, 0], xy_surf[:, 1])
+        ax_surf.plot(xy_surf[:, 0], xy_surf[:, 1], ls='-.', c='k')
         ax_surf.set_ylabel("y [cm]")
+
+        plt.show()
 
     def test_pressure_sensitivity(self):
         surface_coordinates = self.surface_coordinates
