@@ -63,27 +63,27 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.25
-        times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_sample) + 1)
+        t_final = 0.02275
+        times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
         emod = model.emod.vector()[:].copy()
         emod[:] = 2.5e3 * PASCAL_TO_CGS
 
         ## Set the stepping direction
-        hs = np.concatenate(([0], 2.0**np.arange(-5, 4)), axis=0)
-        step_size = 1e0 * PASCAL_TO_CGS
+        hs = np.concatenate(([0], 2.0**(np.arange(-7, 3))), axis=0)
+        step_size = 0.5e0 * PASCAL_TO_CGS
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
         rewrite_states = True
-        save_path = f'out/FiniteDifferenceStates-uniformstep-notstiff-medduration-modifiedcollarea.h5'
+        save_path = f'out/FiniteDifferenceStates-uniformstep-notstiff-shortduration-modifiedcollarea-pos-{t_final:.5f}.h5'
 
         # Run the simulations
         y_gap = 0.005
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
+        fluid_props['p_sub'] = 700 * PASCAL_TO_CGS
 
         solid_props = SolidProperties()
         solid_props['elastic_modulus'] = emod
@@ -212,7 +212,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         ax.set_ylabel("Glottal width [cm]")
 
         ax = axs[0].twinx()
-        ax.plot(run_info['time'], run_info['glottal_width'] == 2*0.002)
+        ax.plot(run_info['time'], run_info['glottal_width'] <= 0.002, ls='-.')
         ax.set_ylabel("Collision")
 
         ax = axs[1]
@@ -221,22 +221,22 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         ax.set_ylabel("Flow rate [cm^2/s]")
 
         ax = axs[2]
-        ax.plot(run_info['time'][1:], run_info['idx_min_area'], label="Minimum area location")
+        # ax.plot(run_info['time'][1:], run_info['idx_min_area'], label="Minimum area location")
         ax.plot(run_info['time'][1:], run_info['idx_separation'], label="Separation location")
         ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Vertex index")
+        ax.set_ylabel("Separation location")
 
         ax = ax.twinx()
         for n in np.sort(np.unique(run_info['idx_separation'])):
-            ax.plot(run_info['time'][1:], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}")
+            ax.plot(run_info['time'][1:], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}", ls='-.')
         ax.legend()
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Pressure [Pa]")
 
         plt.show()
 
-        print(run_info['idx_min_area'])
-        print(run_info['idx_separation'])
+        # print(run_info['idx_min_area'])
+        # print(run_info['idx_separation'])
         breakpoint()
 
     def show_solution_info(self):
@@ -244,23 +244,27 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         model = self.model
         fluid_props = self.fluid_props
 
-        # run_info = None
-        # with open(save_path+".pickle", 'rb') as f:
-        #     run_info = pickle.load(f)
         solution_file = 'tmp.h5'
-        run_info = forward(model, 0, self.times_meas, self.dt_max, self.solid_props, fluid_props, 
+        if path.isfile(solution_file):
+            os.remove(solution_file)
+        run_info = forward(model, 0, self.times_meas, self.dt_max, self.solid_props, fluid_props,
                            h5file=solution_file, abs_tol=None)
 
         surface_area = []
-        with sf.StateFile(self.save_path, group='/0', mode='r') as f:
+        with sf.StateFile(solution_file, group='/', mode='r') as f:
             for n in range(f.get_num_states()):
                 surface_dofs = model.vert_to_vdof[model.surface_vertices].reshape(-1)
                 u = f.get_state(n)[0]
                 xy_deformed_surface = model.surface_coordinates + u[surface_dofs].reshape(-1, 2)
 
-                area = self.fluid_props['y_midline'] - xy_deformed_surface[:, 1]
-                area[area < 2*0.002] = 2*0.002
+                area = 2*(self.fluid_props['y_midline'] - xy_deformed_surface[:, 1])
+                # breakpoint()
+                # area[area < 2*0.002] = 2*0.002
                 surface_area.append(area)
+
+                ## Test of pressure
+                # pressure_verify = fluid_props['p_sub'] + 0.5*fluid_props['rho']*run_info['flow_rate'][n]**2 *
+                #         (1/fluid_props['a_sub']**2-1/surface_area[:, n]**2))
         surface_area = np.array(surface_area)
 
         # Plot the glottal width vs time of the simulation at zero step size
@@ -288,13 +292,13 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         ax = ax.twinx()
         # for n in np.sort(np.unique(run_info['idx_separation'])):
-        for n in [30]:
-            ax.plot(run_info['time'][1:], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}")
+        for n in [30, 31, 32]:
+            ax.plot(run_info['time'][:-1], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}")
 
-            ax.plot(run_info['time'],
-                    (fluid_props['p_sub'] + 0.5*fluid_props['rho']*run_info['flow_rate']**2 *
-                        (1/fluid_props['a_sub']**2-1/surface_area[:, n]**2)) / PASCAL_TO_CGS,
-                    label=f"Manual calc")
+            # ax.plot(run_info['time'],
+            #         (fluid_props['p_sub'] + 0.5*fluid_props['rho']*run_info['flow_rate']**2 *
+            #             (1/fluid_props['a_sub']**2-1/surface_area[:, n]**2)) / PASCAL_TO_CGS,
+            #         label=f"Manual calc")
         ax.legend()
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Pressure [Pa]")
@@ -307,11 +311,19 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Area [cm^2]")
 
+        ax = ax.twinx()
+        for n in [30]:
+            ax.plot(run_info['time'], -(run_info['flow_rate']/surface_area[:, n])**2, label=f"Vertex {n:d}")
+        ax.legend()
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Q/Area [cm^2/s / cm]")
+
         plt.show()
 
 if __name__ == '__main__':
     # unittest.main()
     test = TestAdjointGradientCalculation()
     test.setUp()
-    test.show_solution_info()
+    test.test_adjoint()
+    # test.show_solution_info()
     # test.test_adjoint()

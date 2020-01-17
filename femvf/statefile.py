@@ -15,6 +15,8 @@ class StateFile:
     """
     Represents a state file.
 
+    # TODO: Add mesh information and vertex/cell/face region information etc...
+
     State information is stored in the hdf5 file under a containing group:
     /.../group
 

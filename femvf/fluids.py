@@ -284,13 +284,23 @@ def fluid_pressure(x, fluid_props):
 
     ## Modify areas by limiting to a minimum value based on the buffer area; this prevents negative
     # areas due to collision
-    a_coll = 2*0.002
-    idx_coll = area < a_coll
-    area[idx_coll] = a_coll
-    dt_area[idx_coll] = 0
+    # a_coll = 2*0.002
+
+    # a_coll_buffer = 2.5 * a_coll
+    # idx_coll = area < a_coll_buffer
+    # blend_coll = (a_coll_buffer - area[idx_coll])/(a_coll_buffer-a_coll)
+    # blend_area = (area[idx_coll]-a_coll)/(a_coll_buffer-a_coll)
+    # dt_area_blend_factor = dt_area[idx_coll]/(a_coll_buffer-a_coll)
+    # area[idx_coll] = blend_area*area[idx_coll] + blend_coll*a_coll
+    # dt_area[idx_coll] = dt_area_blend_factor*a_coll
+
+    # idx_coll = area < a_coll
+    # area[idx_coll] = a_coll
+    # dt_area[idx_coll] = 0
 
     # Calculate minimum and separation area locations
     idx_min = area.size-1-np.argmin(area[::-1])
+    # idx_min = np.argmin(area)
     a_min = area[idx_min]
     dt_a_min = dt_area[idx_min]
     # The separation pressure is computed at the node before 'total' separation
@@ -304,7 +314,6 @@ def fluid_pressure(x, fluid_props):
     dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
 
     p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
-    p_prev = p[idx_sep-1]
 
     # Calculate the pressure along the separation edge
     # Separation happens inbetween vertex i and i+1, so adjust the bernoulli pressure at vertex i
@@ -313,6 +322,7 @@ def fluid_pressure(x, fluid_props):
     num = (a_sep - area[idx_sep])
     den = (area[idx_sep+1] - area[idx_sep])
     factor = num/den
+    factor = 0
 
     separation = np.zeros(x[0].shape[0], dtype=np.bool)
     separation[idx_sep] = 1
@@ -321,7 +331,6 @@ def fluid_pressure(x, fluid_props):
     attached[idx_sep:] = 0
 
     p = attached*p + separation*factor*p[idx_sep]
-    assert(p[idx_sep-1] == p_prev)
 
     flow_rate = flow_rate_sqr**0.5
     dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
@@ -440,6 +449,8 @@ def flow_sensitivity(x, fluid_props):
     dfactor_du[j_min] += dnum_dy_min/den
     dfactor_du[j_sep] += dnum_dy_sep/den - num/den**2*dden_dy_sep
     dfactor_du[j_sep+2] = -num/den**2*dden_dy_sep1
+    factor = 0
+    dfactor_du = 0
 
     dp_du[idx_sep, :] = factor*dp_sep_du + dfactor_du*p_sep
 
