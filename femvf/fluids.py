@@ -275,21 +275,28 @@ def fluid_pressure(x, fluid_props):
     y_midline = fluid_props['y_midline']
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
+    a_sub = fluid_props['a_sub']
 
     # Calculate transverse plane areas using the y component of 'u' (aka x[0]) of the surface
+    # and also minimum and separation locations
     area = 2 * (y_midline - x[0][:, 1])
     dt_area = -2 * (x[1][:, 1])
 
-    a_sub = fluid_props['a_sub']
+    ## Modify areas by limiting to a minimum value based on the buffer area; this prevents negative
+    # areas due to collision
+    a_coll = 2*0.002
+    idx_coll = area < a_coll
+    area[idx_coll] = a_coll
+    dt_area[idx_coll] = 0
 
-    idx_min = np.argmin(area)
+    # Calculate minimum and separation area locations
+    idx_min = area.size-1-np.argmin(area[::-1])
     a_min = area[idx_min]
     dt_a_min = dt_area[idx_min]
-
     # The separation pressure is computed at the node before 'total' separation
-    a_sep = SEPARATION_FACTOR * a_min
-    dt_a_sep = SEPARATION_FACTOR * dt_a_min
+    a_sep = SEPARATION_FACTOR * area[idx_min]
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
+    dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
     # 1D Bernoulli approximation of the flow
     p_sep = p_sup
@@ -297,10 +304,12 @@ def fluid_pressure(x, fluid_props):
     dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
 
     p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
+    p_prev = p[idx_sep-1]
 
     # Calculate the pressure along the separation edge
     # Separation happens inbetween vertex i and i+1, so adjust the bernoulli pressure at vertex i
     # based on where separation occurs
+    # breakpoint()
     num = (a_sep - area[idx_sep])
     den = (area[idx_sep+1] - area[idx_sep])
     factor = num/den
@@ -312,6 +321,7 @@ def fluid_pressure(x, fluid_props):
     attached[idx_sep:] = 0
 
     p = attached*p + separation*factor*p[idx_sep]
+    assert(p[idx_sep-1] == p_prev)
 
     flow_rate = flow_rate_sqr**0.5
     dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
@@ -326,7 +336,8 @@ def fluid_pressure(x, fluid_props):
             'xy_sep': xy_sep,
             'a_min': a_min,
             'a_sep': a_sep,
-            'area': area}
+            'area': area,
+            'pressure': p}
     return p, info
 
 def get_pressure_form(model, x, fluid_props):
@@ -353,7 +364,6 @@ def get_pressure_form(model, x, fluid_props):
     surface_verts = model.surface_vertices
     pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
 
-    info['pressure'] = pressure_vector
     return pressure, info
 
 def flow_sensitivity(x, fluid_props):
