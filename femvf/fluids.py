@@ -8,7 +8,6 @@ import math
 import dolfin as dfn
 from petsc4py import PETSc
 
-
 # 1D viscous euler approximation
 def fluid_pressure_vasu(x, x0, xr, fluid_props):
     """
@@ -193,7 +192,7 @@ def res_fluid_quasistatic(n, p_bcs, qp0, xy_ref, uva0, fluid_props):
     return res_continuity, res_momentum, info
 
 def separation_factor(sep_factor_min, alpha_max, alpha):
-    """
+    r"""
     Return the separation factor (a fancy x)
 
     parameters
@@ -252,7 +251,7 @@ def bd_df(f, n, dx):
     vals = [-1/dx, 1/dx]
 
 # 1D Bernoulli approximation codes
-SEPARATION_FACTOR = 1.0000000000000000001
+SEPARATION_FACTOR = 1.000000000000000000001
 
 def fluid_pressure(x, fluid_props):
     """
@@ -301,10 +300,16 @@ def fluid_pressure(x, fluid_props):
     # Calculate minimum and separation area locations
     idx_min = area.size-1-np.argmin(area[::-1])
     # idx_min = np.argmin(area)
-    a_min = area[idx_min]
-    dt_a_min = dt_area[idx_min]
+    a_min = smooth_minimum(area)
+    dt_a_min = np.sum(dsmooth_minimum_dx(area) * dt_area)
+
     # The separation pressure is computed at the node before 'total' separation
-    a_sep = SEPARATION_FACTOR * area[idx_min]
+    # a_sep = SEPARATION_FACTOR * area[idx_min]
+    # idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
+    # dt_a_sep = SEPARATION_FACTOR * dt_a_min
+
+    # breakpoint()
+    a_sep = SEPARATION_FACTOR * a_min
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
     dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
@@ -348,6 +353,36 @@ def fluid_pressure(x, fluid_props):
             'area': area,
             'pressure': p}
     return p, info
+
+def smooth_minimum(x, alpha=-1000):
+    """
+    Return the smooth approximation to the minimum element of x.
+
+    Parameters
+    ----------
+    x : array_like
+        Array of values to compute the minimum of
+    alpha : float
+        Factor that control the sharpness of the minimum. The function approaches the true minimum 
+        function as `alpha` approachs negative infinity.
+    """
+    weights = np.exp(alpha*x)
+    return np.sum(x*weights) / np.sum(weights)
+
+def dsmooth_minimum_dx(x, alpha=-1000):
+    """
+    Return the derivative of the smooth minimum with respect to x.
+
+    Parameters
+    ----------
+    x : array_like
+        Array of values to compute the minimum of
+    alpha : float
+        Factor that control the sharpness of the minimum. The function approaches the true minimum 
+        function as `alpha` approachs negative infinity.
+    """
+    weights = np.exp(alpha*x)
+    return weights/np.sum(weights)*(1+alpha*(x - smooth_minimum(x, alpha)))
 
 def get_pressure_form(model, x, fluid_props):
     """
@@ -397,7 +432,8 @@ def flow_sensitivity(x, fluid_props):
     a_sub = fluid_props['a_sub']
 
     idx_min = np.argmin(area)
-    a_min = area[idx_min]
+    a_min = smooth_minimum(area)
+    da_min_darea = dsmooth_minimum_dx(area)
 
     a_sep = SEPARATION_FACTOR * a_min
     da_sep_da_min = SEPARATION_FACTOR
@@ -422,12 +458,12 @@ def flow_sensitivity(x, fluid_props):
         # p[i] = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 + 1/area[i]**2)
         dp_darea = 1/2*rho*flow_rate_sqr*(2/area[i]**3)
         dp_darea_sep = 1/2*rho*dflow_rate_sqr_da_sep*(1/a_sub**2 - 1/area[i]**2)
-        dp_darea_sub = 1/2*rho*dflow_rate_sqr_da_sub*(1/a_sub**2 - 1/area[i]**2) \
-                       + 1/2*rho*flow_rate_sqr*(-2/a_sub**3)
-
+        # dp_darea_sub = 1/2*rho*dflow_rate_sqr_da_sub*(1/a_sub**2 - 1/area[i]**2) \
+        #                + 1/2*rho*flow_rate_sqr*(-2/a_sub**3)
+        # breakpoint()
         dp_du[i, j] += dp_darea * darea_dy
-        dp_du[i, j_min] += dp_darea_sep * da_sep_da_min * darea_dy
-        dp_du[i, j_sub] += dp_darea_sub * darea_dy
+        dp_du[i, 1::2] += dp_darea_sep * da_sep_da_min * da_min_darea * darea_dy
+        # dp_du[i, j_sub] += dp_darea_sub * darea_dy
 
     # Account for factor on separation pressure
     p_sep = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area[idx_sep]**2)

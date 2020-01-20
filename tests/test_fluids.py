@@ -7,6 +7,7 @@ import unittest
 
 import dolfin as dfn
 
+import pandas as pd
 import matplotlib.pyplot as plt
 import autograd
 import autograd.numpy as np
@@ -92,6 +93,7 @@ class CommonSetup(unittest.TestCase):
         self.p_sub = 800.0*PASCAL_TO_CGS
         self.p_sup = 0*PASCAL_TO_CGS
 
+@unittest.skip("I don't care about the euler fluid law yet.")
 class Test1DEuler(CommonSetup):
 
     def test_res_fluid(self):
@@ -168,11 +170,12 @@ class TestBernoulli(CommonSetup):
 
         plt.show()
 
-    def test_pressure_sensitivity(self):
+    # @unittest.skip()
+    def test_flow_sensitivity(self):
         surface_coordinates = self.surface_coordinates
         fluid_props = self.fluid_properties
 
-        # Calculate pressure sensitivity with finite differences
+        ## Calculate pressure sensitivity with finite differences
         dp_du_fd = np.zeros((surface_coordinates.shape[0], surface_coordinates.shape[0]*2))
         dy = np.zeros(surface_coordinates.shape)
         DY = 0.0001
@@ -181,29 +184,33 @@ class TestBernoulli(CommonSetup):
             dy[ii, 1] += DY
             x = (surface_coordinates+dy, np.zeros(dy.shape), np.zeros(dy.shape))
             pressure, *_ = fluids.fluid_pressure(x, fluid_props)
+            # breakpoint()
 
-            dp_du_fd[:, 2*ii+1] = pressure
+            dp_du_fd[:, 2*ii+1] = np.array(pressure)
 
+        breakpoint()
         x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
         pressure, *_ = fluids.fluid_pressure(x, fluid_props)
         dp_du_fd[:, 1::2] -= pressure[..., None]
 
         dp_du_fd /= DY
 
-        # Calculate pressure sensitivity with auto-differentiation
-        def fluid_pressure(x):
-            x_ = x.reshape(-1, 2)
-            return fluids.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)), fluid_props)[0]
+        # fig, ax = plt.subplots(1, 1)
+        # ax.matshow(dp_du_fd)
 
-        dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
+        # Calculate pressure sensitivity with auto-differentiation
+        # def fluid_pressure(x):
+        #     x_ = x.reshape(-1, 2)
+        #     return fluids.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)), fluid_props)[0]
+
+        # dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
 
         # Calculate pressure sensitivity with the analytical derivation
         x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
         dp_du_an = fluids.flow_sensitivity(x, fluid_props)[0]
 
-        close = np.isclose(dp_du_an, dp_du_ad)
-
-        self.assertTrue(np.allclose(dp_du_an, dp_du_ad))
+        breakpoint()
+        self.assertTrue(np.allclose(dp_du_an, dp_du_fd))
 
 if __name__ == '__main__':
     unittest.main()

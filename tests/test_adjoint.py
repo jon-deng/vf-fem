@@ -45,7 +45,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         """
         dfn.set_log_level(30)
         np.random.seed(123)
-        np.seterr(all='raise')
+        # np.seterr(all='raise')
 
         ##### Set up parameters as you see fit
 
@@ -63,7 +63,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.02275
+        t_final = 0.025
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
@@ -71,13 +71,13 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         emod[:] = 2.5e3 * PASCAL_TO_CGS
 
         ## Set the stepping direction
-        hs = np.concatenate(([0], 2.0**(np.arange(-7, 3))), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-7, 0)-5)), axis=0)
         step_size = 0.5e0 * PASCAL_TO_CGS
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
         rewrite_states = True
-        save_path = f'out/FiniteDifferenceStates-uniformstep-notstiff-shortduration-modifiedcollarea-pos-{t_final:.5f}.h5'
+        save_path = f'out/FiniteDifferenceStates-uniformstep-notstiff-shortduration-modifiedcollarea-pos-fluid-{t_final:.5f}.h5'
 
         # Run the simulations
         y_gap = 0.005
