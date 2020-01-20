@@ -251,7 +251,7 @@ def bd_df(f, n, dx):
     vals = [-1/dx, 1/dx]
 
 # 1D Bernoulli approximation codes
-SEPARATION_FACTOR = 1.000000000000000000001
+SEPARATION_FACTOR = 1.0000000000000001
 
 def fluid_pressure(x, fluid_props):
     """
@@ -281,22 +281,6 @@ def fluid_pressure(x, fluid_props):
     area = 2 * (y_midline - x[0][:, 1])
     dt_area = -2 * (x[1][:, 1])
 
-    ## Modify areas by limiting to a minimum value based on the buffer area; this prevents negative
-    # areas due to collision
-    # a_coll = 2*0.002
-
-    # a_coll_buffer = 2.5 * a_coll
-    # idx_coll = area < a_coll_buffer
-    # blend_coll = (a_coll_buffer - area[idx_coll])/(a_coll_buffer-a_coll)
-    # blend_area = (area[idx_coll]-a_coll)/(a_coll_buffer-a_coll)
-    # dt_area_blend_factor = dt_area[idx_coll]/(a_coll_buffer-a_coll)
-    # area[idx_coll] = blend_area*area[idx_coll] + blend_coll*a_coll
-    # dt_area[idx_coll] = dt_area_blend_factor*a_coll
-
-    # idx_coll = area < a_coll
-    # area[idx_coll] = a_coll
-    # dt_area[idx_coll] = 0
-
     # Calculate minimum and separation area locations
     idx_min = area.size-1-np.argmin(area[::-1])
     # idx_min = np.argmin(area)
@@ -304,11 +288,6 @@ def fluid_pressure(x, fluid_props):
     dt_a_min = np.sum(dsmooth_minimum_dx(area) * dt_area)
 
     # The separation pressure is computed at the node before 'total' separation
-    # a_sep = SEPARATION_FACTOR * area[idx_min]
-    # idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
-    # dt_a_sep = SEPARATION_FACTOR * dt_a_min
-
-    # breakpoint()
     a_sep = SEPARATION_FACTOR * a_min
     idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
     dt_a_sep = SEPARATION_FACTOR * dt_a_min
@@ -323,7 +302,6 @@ def fluid_pressure(x, fluid_props):
     # Calculate the pressure along the separation edge
     # Separation happens inbetween vertex i and i+1, so adjust the bernoulli pressure at vertex i
     # based on where separation occurs
-    # breakpoint()
     num = (a_sep - area[idx_sep])
     den = (area[idx_sep+1] - area[idx_sep])
     factor = num/den
@@ -363,7 +341,7 @@ def smooth_minimum(x, alpha=-1000):
     x : array_like
         Array of values to compute the minimum of
     alpha : float
-        Factor that control the sharpness of the minimum. The function approaches the true minimum 
+        Factor that control the sharpness of the minimum. The function approaches the true minimum
         function as `alpha` approachs negative infinity.
     """
     weights = np.exp(alpha*x)
@@ -378,7 +356,7 @@ def dsmooth_minimum_dx(x, alpha=-1000):
     x : array_like
         Array of values to compute the minimum of
     alpha : float
-        Factor that control the sharpness of the minimum. The function approaches the true minimum 
+        Factor that control the sharpness of the minimum. The function approaches the true minimum
         function as `alpha` approachs negative infinity.
     """
     weights = np.exp(alpha*x)

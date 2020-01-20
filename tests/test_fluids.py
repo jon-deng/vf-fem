@@ -170,7 +170,6 @@ class TestBernoulli(CommonSetup):
 
         plt.show()
 
-    # @unittest.skip()
     def test_flow_sensitivity(self):
         surface_coordinates = self.surface_coordinates
         fluid_props = self.fluid_properties
@@ -178,7 +177,7 @@ class TestBernoulli(CommonSetup):
         ## Calculate pressure sensitivity with finite differences
         dp_du_fd = np.zeros((surface_coordinates.shape[0], surface_coordinates.shape[0]*2))
         dy = np.zeros(surface_coordinates.shape)
-        DY = 0.0001
+        DY = 1e-7
         for ii in range(surface_coordinates.shape[0]):
             dy[...] = 0
             dy[ii, 1] += DY
@@ -188,12 +187,20 @@ class TestBernoulli(CommonSetup):
 
             dp_du_fd[:, 2*ii+1] = np.array(pressure)
 
-        breakpoint()
         x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
         pressure, *_ = fluids.fluid_pressure(x, fluid_props)
         dp_du_fd[:, 1::2] -= pressure[..., None]
 
         dp_du_fd /= DY
+
+
+        # Calculate pressure sensitivity with the analytical derivation
+        x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
+        dp_du_an = fluids.flow_sensitivity(x, fluid_props)[0]
+
+        close = np.isclose(dp_du_fd, dp_du_an, rtol=1e-3, atol=1e-4)
+        # breakpoint()
+        self.assertTrue(np.all(close))
 
         # fig, ax = plt.subplots(1, 1)
         # ax.matshow(dp_du_fd)
@@ -204,13 +211,6 @@ class TestBernoulli(CommonSetup):
         #     return fluids.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)), fluid_props)[0]
 
         # dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
-
-        # Calculate pressure sensitivity with the analytical derivation
-        x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
-        dp_du_an = fluids.flow_sensitivity(x, fluid_props)[0]
-
-        breakpoint()
-        self.assertTrue(np.allclose(dp_du_an, dp_du_fd))
 
 if __name__ == '__main__':
     unittest.main()
