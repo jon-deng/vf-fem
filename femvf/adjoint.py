@@ -124,8 +124,10 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
     Returns
     -------
-    np.array of float
-        The sensitivity of the functional wrt parameters.
+    float
+        The value of the functional
+    dfn.GenericVector
+        The gradient of the functional wrt parameters
     """
     # Assuming that fluid and solid properties are constant in time so set them once
     # and leave them

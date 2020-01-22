@@ -23,6 +23,7 @@ import unittest
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import h5py
 import dolfin as dfn
 
 sys.path.append('../')
@@ -340,8 +341,14 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 
         model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
+        p_sub = 1000
 
-        p_sub = 800
+        fkwargs = {}
+        Functional = funcs.FinalDisplacementNorm
+        # Functional = funcs.DisplacementNorm
+        # Functional = funcs.VelocityNorm
+        # Functional = funcs.StrainEnergy
+        # Functional = extra_funcs.AcousticEfficiency
 
         ## Set the solution parameters
         dt_sample = 1e-4
@@ -363,7 +370,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
-        rewrite_states = False
+        rewrite_states = True
         save_path = f'out/C2SmoothnessStates-{t_final:.5f}-psub{p_sub:.1f}.h5'
 
         # Run the simulations
@@ -393,7 +400,14 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
                 solid_props['elastic_modulus'] = emod + h*step_dir
                 info = forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}')
+
+                grad = None
+                with sf.StateFile(save_path, group=f'{n}', mode='r') as f:
+                    _, grad = adjoint(model, f, Functional, fkwargs)
                 runtime_end = perf_counter()
+
+                with h5py.File(save_path, mode='a') as f:
+                    f[f'{n}/grad'] = grad
 
                 if h == 0:
                     # Save the run info to a pickled file
@@ -416,17 +430,12 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         step_dir = self.step_dir
         model = self.model
         save_path = self.save_path
+        fkwargs = self.fkwargs
+        Functional = self.Functional
 
         run_info = None
         with open(save_path+".pickle", 'rb') as f:
             run_info = pickle.load(f)
-
-        fkwargs = {}
-        Functional = funcs.FinalDisplacementNorm
-        # Functional = funcs.DisplacementNorm
-        # Functional = funcs.VelocityNorm
-        # Functional = funcs.StrainEnergy
-        # Functional = extra_funcs.AcousticEfficiency
 
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")
@@ -513,8 +522,13 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 
 if __name__ == '__main__':
     # unittest.main()
+
+    # test = TestAdjointGradientCalculation()
+    # test.setUp()
+    # test.test_adjoint()
+
     test = Test2ndOrderDifferentiability()
     test.setUp()
-    test.test_c2smoothness()
+    # test.test_c2smoothness()
     # test.show_solution_info()
     # test.test_adjoint()
