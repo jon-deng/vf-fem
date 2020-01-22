@@ -147,6 +147,7 @@ class Test1DEuler(CommonSetup):
         print(np.array(sep))
 
 class TestBernoulli(CommonSetup):
+    @unittest.skip("Validated")
     def test_fluid_pressure(self):
         """
         Tests if bernoulli fluid pressures are calculated correctly
@@ -177,7 +178,7 @@ class TestBernoulli(CommonSetup):
         ## Calculate pressure sensitivity with finite differences
         dp_du_fd = np.zeros((surface_coordinates.shape[0], surface_coordinates.shape[0]*2))
         dy = np.zeros(surface_coordinates.shape)
-        DY = 1e-7
+        DY = 1e-5
         for ii in range(surface_coordinates.shape[0]):
             dy[...] = 0
             dy[ii, 1] += DY
@@ -193,24 +194,37 @@ class TestBernoulli(CommonSetup):
 
         dp_du_fd /= DY
 
-
         # Calculate pressure sensitivity with the analytical derivation
         x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
         dp_du_an = fluids.flow_sensitivity(x, fluid_props)[0]
 
         close = np.isclose(dp_du_fd, dp_du_an, rtol=1e-3, atol=1e-4)
-        # breakpoint()
-        self.assertTrue(np.all(close))
 
-        # fig, ax = plt.subplots(1, 1)
-        # ax.matshow(dp_du_fd)
+        fig, ax = plt.subplots(1, 1, constrained_layout=True)
+        err = np.abs(dp_du_fd - dp_du_an)
+        rel_err = np.where(np.abs(dp_du_fd) == 0, 0, err/np.abs(dp_du_fd))
+        mappable = ax.matshow(rel_err)
+        fig.colorbar(mappable, ax=ax)
+        ax.set_ylabel("pressure node")
+        ax.set_xlabel("(x, y) node")
+        plt.show()
+
+        # print(dp_du_fd[:, 1])
+        # print(dp_du_an[:, 1])
+
+        print(dp_du_fd[28, 59])
+        print(dp_du_an[28, 59])
 
         # Calculate pressure sensitivity with auto-differentiation
-        # def fluid_pressure(x):
-        #     x_ = x.reshape(-1, 2)
-        #     return fluids.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)), fluid_props)[0]
+        def fluid_pressure(x):
+            x_ = x.reshape(-1, 2)
+            return fluids.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)), fluid_props)[0]
 
-        # dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
+        dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
+
+        breakpoint()
+        self.assertTrue(np.all(close))
 
 if __name__ == '__main__':
     unittest.main()
+surface_state

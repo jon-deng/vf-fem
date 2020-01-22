@@ -3,6 +3,7 @@ Functionality related to fluids
 """
 
 import numpy as np
+import autograd.numpy as np
 import math
 
 import dolfin as dfn
@@ -250,10 +251,10 @@ def bd_df(f, n, dx):
     idxs = [n-1, n]
     vals = [-1/dx, 1/dx]
 
-# 1D Bernoulli approximation codes
-SEPARATION_FACTOR = 1.0000000000000001
+### 1D Bernoulli approximation codes
+SEPARATION_FACTOR = 1.0
 
-def fluid_pressure(x, fluid_props):
+def fluid_pressure(surface_state, fluid_props):
     """
     Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
@@ -276,20 +277,15 @@ def fluid_pressure(x, fluid_props):
     rho = fluid_props['rho']
     a_sub = fluid_props['a_sub']
 
-    # Calculate transverse plane areas using the y component of 'u' (aka x[0]) of the surface
-    # and also minimum and separation locations
-    area = 2 * (y_midline - x[0][:, 1])
-    dt_area = -2 * (x[1][:, 1])
+    x, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
-    # Calculate minimum and separation area locations
-    idx_min = area.size-1-np.argmin(area[::-1])
-    # idx_min = np.argmin(area)
+    area = 2 * (y_midline - y)
+    dt_area = -2 * (y)
+
+    # Calculate minimum and separation areas/locations
     a_min = smooth_minimum(area)
     dt_a_min = np.sum(dsmooth_minimum_dx(area) * dt_area)
-
-    # The separation pressure is computed at the node before 'total' separation
     a_sep = SEPARATION_FACTOR * a_min
-    idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
     dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
     # 1D Bernoulli approximation of the flow
@@ -297,70 +293,32 @@ def fluid_pressure(x, fluid_props):
     flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
     dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
 
-    p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
+    p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
 
-    # Calculate the pressure along the separation edge
-    # Separation happens inbetween vertex i and i+1, so adjust the bernoulli pressure at vertex i
-    # based on where separation occurs
-    num = (a_sep - area[idx_sep])
-    den = (area[idx_sep+1] - area[idx_sep])
-    factor = num/den
-    factor = 0
+    x_sep = gaussian_selection(x, area, a_sep, sigma=0.001)
+    sep_multiplier = smooth_cutoff(x, x_sep, k=100)
 
-    separation = np.zeros(x[0].shape[0], dtype=np.bool)
-    separation[idx_sep] = 1
-
-    attached = np.ones(x[0].shape[0], dtype=np.bool)
-    attached[idx_sep:] = 0
-
-    p = attached*p + separation*factor*p[idx_sep]
+    p = sep_multiplier * p_bernoulli
 
     flow_rate = flow_rate_sqr**0.5
     dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
 
-    xy_min = x[0][idx_min]
-    xy_sep = x[0][idx_sep]
+    idx_min = 0
+    idx_sep = 0
+    xy_min = surface_state[0][idx_min]
+    xy_sep = surface_state[0][idx_sep]
     info = {'flow_rate': flow_rate,
             'dt_flow_rate': dt_flow_rate,
             'idx_min': idx_min,
             'idx_sep': idx_sep,
             'xy_min': xy_min,
             'xy_sep': xy_sep,
+            'x_sep': x_sep, 
             'a_min': a_min,
             'a_sep': a_sep,
             'area': area,
             'pressure': p}
     return p, info
-
-def smooth_minimum(x, alpha=-1000):
-    """
-    Return the smooth approximation to the minimum element of x.
-
-    Parameters
-    ----------
-    x : array_like
-        Array of values to compute the minimum of
-    alpha : float
-        Factor that control the sharpness of the minimum. The function approaches the true minimum
-        function as `alpha` approachs negative infinity.
-    """
-    weights = np.exp(alpha*x)
-    return np.sum(x*weights) / np.sum(weights)
-
-def dsmooth_minimum_dx(x, alpha=-1000):
-    """
-    Return the derivative of the smooth minimum with respect to x.
-
-    Parameters
-    ----------
-    x : array_like
-        Array of values to compute the minimum of
-    alpha : float
-        Factor that control the sharpness of the minimum. The function approaches the true minimum
-        function as `alpha` approachs negative infinity.
-    """
-    weights = np.exp(alpha*x)
-    return weights/np.sum(weights)*(1+alpha*(x - smooth_minimum(x, alpha)))
 
 def get_pressure_form(model, x, fluid_props):
     """
@@ -388,7 +346,7 @@ def get_pressure_form(model, x, fluid_props):
 
     return pressure, info
 
-def flow_sensitivity(x, fluid_props):
+def flow_sensitivity(surface_state, fluid_props):
     """
     Returns the sensitivities of flow properties at a surface state.
 
@@ -402,78 +360,58 @@ def flow_sensitivity(x, fluid_props):
     y_midline = fluid_props['y_midline']
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
-
-    area = 2 * (y_midline - x[0][:, 1])
-    darea_dy = -2 # darea_dx = 0
-
-    # a_sub = area[0]
     a_sub = fluid_props['a_sub']
 
-    idx_min = np.argmin(area)
+    x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+
+    area = 2 * (y_midline - y)
+    darea_dy = -2 # darea_dx = 0
+
     a_min = smooth_minimum(area)
-    da_min_darea = dsmooth_minimum_dx(area)
+    da_min_darea = dsmooth_minimum_dx(area) # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the minimum value
 
     a_sep = SEPARATION_FACTOR * a_min
     da_sep_da_min = SEPARATION_FACTOR
-    idx_sep = np.argmax(np.logical_and(area >= a_sep, np.arange(area.size) > idx_min)) - 1
+    da_sep_dy = da_sep_da_min * da_min_darea * darea_dy
 
-    # 1D Bernoulli approximation of the flow
-    coeff = 2*(p_sup - p_sub)/rho
-    flow_rate_sqr = coeff/(1/a_sub**2-1/a_sep**2)
-    dflow_rate_sqr_da_sub = -coeff / (1/a_sub**2-1/a_sep**2)**2 * (-2/a_sub**3)
-    dflow_rate_sqr_da_sep = -coeff / (1/a_sub**2-1/a_sep**2)**2 * (2/a_sep**3)
+    # Calculate the flow rate using Bernoulli equation
+    p_sep = p_sup
+    coeff = 2*(p_sep - p_sub)/rho
+    flow_rate_sqr = coeff/(a_sub**-2 - a_sep**-2)
+    dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
 
-    assert x[0].size%2 == 0
-    j_sep = 2*idx_sep + 1
-    j_min = 2*idx_min + 1
-    j_sub = 1
+    # Find Bernoulli and separated pressures
+    p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
+    dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area**3)
+    dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area**-2) * dflow_rate_sqr_da_sep
+    dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
+    
+    x_sep = gaussian_selection(x, area, a_sep, sigma=0.001)
+    dx_sep_dx = dgaussian_selection_dx(x, area, a_sep, sigma=0.001)
+    dx_sep_dy = dgaussian_selection_dy(x, area, a_sep, sigma=0.001)*darea_dy \
+                + dgaussian_selection_dy0(x, area, a_sep, sigma=0.001)*da_sep_dy
 
-    ## Calculate the pressure sensitivity
-    dp_du = np.zeros((x[0].size//2, x[0].size))
-    for i in range(idx_sep+1):
-        j = 2*i + 1
+    sep_multiplier = smooth_cutoff(x, x_sep, k=100)
+    _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k=100)
+    _dsep_multiplier_dx_sep = dsmooth_cutoff_dx0(x, x_sep, k=100)
+    dsep_multiplier_dx = np.diag(_dsep_multiplier_dx) + _dsep_multiplier_dx_sep[:, None]*dx_sep_dx
+    dsep_multiplier_dy = _dsep_multiplier_dx_sep[:, None]*dx_sep_dy
 
-        # p[i] = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 + 1/area[i]**2)
-        dp_darea = 1/2*rho*flow_rate_sqr*(2/area[i]**3)
-        dp_darea_sep = 1/2*rho*dflow_rate_sqr_da_sep*(1/a_sub**2 - 1/area[i]**2)
-        # dp_darea_sub = 1/2*rho*dflow_rate_sqr_da_sub*(1/a_sub**2 - 1/area[i]**2) \
-        #                + 1/2*rho*flow_rate_sqr*(-2/a_sub**3)
-        # breakpoint()
-        dp_du[i, j] += dp_darea * darea_dy
-        dp_du[i, 1::2] += dp_darea_sep * da_sep_da_min * da_min_darea * darea_dy
-        # dp_du[i, j_sub] += dp_darea_sub * darea_dy
+    p = sep_multiplier * p_bernoulli
 
-    # Account for factor on separation pressure
-    p_sep = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area[idx_sep]**2)
-    p = p_sub + 1/2*rho*flow_rate_sqr*(1/a_sub**2 - 1/area**2)
-    p_sep = p[idx_sep]
-    dp_sep_du = dp_du[idx_sep, :]
+    dp_dy = dsep_multiplier_dy*p_bernoulli[:, None] + sep_multiplier[:, None]*dp_bernoulli_dy
+    dp_dx = dsep_multiplier_dx*p_bernoulli[:, None] #+ sep_multiplier* 0
 
-    num = (a_sep - area[idx_sep])
-    dnum_dy_min = da_sep_da_min*darea_dy
-    dnum_dy_sep = -1*darea_dy
+    # breakpoint()
+    dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
+    dp_du[:, :-1:2] = dp_dx
+    dp_du[:, 1::2] = dp_dy
 
-    den = (area[idx_sep+1] - area[idx_sep])
-    dden_dy_sep1 = 1*darea_dy
-    dden_dy_sep = -darea_dy
-
-    factor = num/den
-
-    dfactor_du = np.zeros(x[0].size)
-    dfactor_du[j_min] += dnum_dy_min/den
-    dfactor_du[j_sep] += dnum_dy_sep/den - num/den**2*dden_dy_sep
-    dfactor_du[j_sep+2] = -num/den**2*dden_dy_sep1
-    factor = 0
-    dfactor_du = 0
-
-    dp_du[idx_sep, :] = factor*dp_sep_du + dfactor_du*p_sep
+    assert surface_state[0].size%2 == 0
 
     ## Calculate the flow rate sensitivity
-    dflow_rate_du = np.zeros(x[0].size)
-    dflow_rate_du[j_min] += dflow_rate_sqr_da_sep / (2*flow_rate_sqr**(1/2)) * da_sep_da_min * darea_dy
-    dflow_rate_du[j_sub] += dflow_rate_sqr_da_sub / (2*flow_rate_sqr**(1/2)) * darea_dy
-
-    #dp_du = pressure_sensitivity_ad(coordinates, fluid_props)
+    dflow_rate_du = np.zeros(surface_state[0].size)
+    dflow_rate_du = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
 
     return dp_du, dflow_rate_du
 
@@ -526,3 +464,176 @@ def get_flow_sensitivity(model, x, fluid_props):
     dq_du[model.vert_to_vdof[pressure_vertices].reshape(-1)] = _dq_du
 
     return dp_du, dq_du
+
+## Below are a collection of smoothened discrete operators. These are used in the bernoulli code to
+## smoothen the specification of the bernoullie model such as specifying separation points
+
+def smooth_minimum(x, alpha=-1000):
+    """
+    Return the smooth approximation to the minimum element of x.
+
+    Parameters
+    ----------
+    x : array_like
+        Array of values to compute the minimum of
+    alpha : float
+        Factor that control the sharpness of the minimum. The function approaches the true minimum
+        function as `alpha` approachs negative infinity.
+    """
+    w = np.exp(alpha*x)
+    return np.sum(x*w) / np.sum(w)
+
+def dsmooth_minimum_dx(x, alpha=-1000):
+    """
+    Return the derivative of the smooth minimum with respect to x.
+
+    Parameters
+    ----------
+    x : array_like
+        Array of values to compute the minimum of
+    alpha : float
+        Factor that control the sharpness of the minimum. The function approaches the true minimum
+        function as `alpha` approachs negative infinity.
+    """
+    w = np.exp(alpha*x)
+    return w/np.sum(w)*(1+alpha*(x - smooth_minimum(x, alpha)))
+
+
+def sigmoid(x):
+    return 1/(1+np.exp(-x))
+
+def dsigmoid_dx(x):
+    """
+    This is a diagonal matrix
+    """
+    sig = sigmoid(x)
+    return sig * (1-sig)
+
+def smooth_cutoff(x, x0, k=100):
+    """
+    Return the mirrored logistic function evaluated at x-x0
+    """
+    arg = -k*(x-x0)
+    return sigmoid(arg)
+
+def dsmooth_cutoff_dx(x, x0, k=100):
+    """
+    Return the logistic function evaluated at x-xref
+    """
+    arg = -k*(x-x0)
+    darg_dx = -k
+    return dsigmoid_dx(arg) * darg_dx
+
+def dsmooth_cutoff_dx0(x, x0, k=100):
+    """
+    Return the logistic function evaluated at x-xref
+    """
+    arg = -k*(x-x0)
+    darg_dx0 = k
+    return dsigmoid_dx(arg) * darg_dx0
+
+
+def gaussian(x, x0, sigma=1.0):
+    return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
+
+def dgaussian_dx(x, x0, sigma=1.0):
+    return gaussian(x, x0, sigma) * -(x-x0)/sigma
+    
+def dgaussian_dx0(x, x0, sigma=1.0):
+    return gaussian(x, x0, sigma) * (x-x0)/sigma
+
+def gaussian_selection(x, y, y0, sigma=1.0):
+    """
+    Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
+
+    Weights are computed according to a gaussian distribution.
+
+    Parameters
+    ----------
+    x, y : array_like
+        Paired array of values
+    sigma : float
+        Standard deviation of the selection criteria
+    """
+    assert x.size == y.size
+    w = gaussian(y, y0, sigma)
+
+    return np.sum(x*w) / np.sum(w)
+
+def dgaussian_selection_dx(x, y, y0, sigma=1.0):
+    """
+    Return the derivative of `gaussian_selection` w.r.t `x`.
+
+    Weights are computed according to a gaussian distribution.
+
+    Parameters
+    ----------
+    x, y : array_like
+        Paired array of values
+    sigma : float
+        Standard deviation of the selection criteria
+    """
+    assert x.size == y.size
+    w = gaussian(y, y0, sigma) 
+
+    # The returned value would be 
+    # return np.sum(x*weights) / np.sum(weights)
+    # so the derivative is given by
+    return w / np.sum(w)
+
+def dgaussian_selection_dy(x, y, y0, sigma=1.0):
+    """
+    Return the derivative of `gaussian_selection` w.r.t `y`.
+
+    Weights are computed according to a gaussian distribution.
+
+    Parameters
+    ----------
+    x, y : array_like
+        Paired array of values
+    sigma : float
+        Standard deviation of the selection criteria
+    """
+    assert x.size == y.size
+    w = gaussian(y, y0, sigma) 
+    dw_dy = dgaussian_dx(y, y0, sigma)
+
+    norm = np.sum(w)
+    dnorm_dw = 1
+
+    weighted_vals = np.sum(x*w)
+    dweighted_vals_dw = x
+
+    # out = weighted_vals/norm
+    
+    dout_dw = dweighted_vals_dw/norm + weighted_vals*-norm**(-2)*dnorm_dw
+    return dout_dw * dw_dy
+
+def dgaussian_selection_dy0(x, y, y0, sigma=1.0):
+    """
+    Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
+
+    Weights are computed according to a gaussian distribution.
+
+    Parameters
+    ----------
+    x, y : array_like
+        Paired array of values
+    sigma : float
+        Standard deviation of the selection criteria
+    """
+    assert x.size == y.size
+    w = gaussian(y, y0, sigma) 
+    dw_dy0 = dgaussian_dx(y, y0, sigma)
+
+    norm = np.sum(w)
+    dnorm_dw = 1
+
+    weighted_vals = np.sum(x*w)
+    dweighted_vals_dw = x
+
+    # out = weighted_vals/norm
+    
+    dout_dw = dweighted_vals_dw/norm + weighted_vals*-norm**(-2)*dnorm_dw
+    return dout_dw * dw_dy0
+    
