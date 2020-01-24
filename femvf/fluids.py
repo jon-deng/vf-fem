@@ -295,7 +295,7 @@ def fluid_pressure(surface_state, fluid_props):
 
     p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
 
-    x_sep = gaussian_selection(x, area, a_sep, sigma=0.001)
+    x_sep = smooth_selection(x, area, a_sep, sigma=0.001)
     sep_multiplier = smooth_cutoff(x, x_sep, k=100)
 
     p = sep_multiplier * p_bernoulli
@@ -380,16 +380,17 @@ def flow_sensitivity(surface_state, fluid_props):
     flow_rate_sqr = coeff/(a_sub**-2 - a_sep**-2)
     dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
 
-    # Find Bernoulli and separated pressures
+    # Find Bernoulli pressure
     p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
     dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area**3)
     dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area**-2) * dflow_rate_sqr_da_sep
     dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
     
-    x_sep = gaussian_selection(x, area, a_sep, sigma=0.001)
-    dx_sep_dx = dgaussian_selection_dx(x, area, a_sep, sigma=0.001)
-    dx_sep_dy = dgaussian_selection_dy(x, area, a_sep, sigma=0.001)*darea_dy \
-                + dgaussian_selection_dy0(x, area, a_sep, sigma=0.001)*da_sep_dy
+    # Correct Bernoulli pressure by applying a smooth mask after separation
+    x_sep = smooth_selection(x, area, a_sep, sigma=0.001)
+    dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, sigma=0.001)
+    dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, sigma=0.001)*darea_dy \
+                + dsmooth_selection_dy0(x, area, a_sep, sigma=0.001)*da_sep_dy
 
     sep_multiplier = smooth_cutoff(x, x_sep, k=100)
     _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k=100)
@@ -537,12 +538,12 @@ def gaussian(x, x0, sigma=1.0):
     return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
 
 def dgaussian_dx(x, x0, sigma=1.0):
-    return gaussian(x, x0, sigma) * -(x-x0)/sigma
+    return gaussian(x, x0, sigma) * -(x-x0)/sigma**2
     
 def dgaussian_dx0(x, x0, sigma=1.0):
-    return gaussian(x, x0, sigma) * (x-x0)/sigma
+    return gaussian(x, x0, sigma) * (x-x0)/sigma**2
 
-def gaussian_selection(x, y, y0, sigma=1.0):
+def smooth_selection(x, y, y0, sigma=1.0):
     """
     Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
 
@@ -555,12 +556,12 @@ def gaussian_selection(x, y, y0, sigma=1.0):
     sigma : float
         Standard deviation of the selection criteria
     """
-    assert x.size == y.size
+    # assert x.size == y.size
     w = gaussian(y, y0, sigma)
 
     return np.sum(x*w) / np.sum(w)
 
-def dgaussian_selection_dx(x, y, y0, sigma=1.0):
+def dsmooth_selection_dx(x, y, y0, sigma=1.0):
     """
     Return the derivative of `gaussian_selection` w.r.t `x`.
 
@@ -573,7 +574,7 @@ def dgaussian_selection_dx(x, y, y0, sigma=1.0):
     sigma : float
         Standard deviation of the selection criteria
     """
-    assert x.size == y.size
+    # assert x.size == y.size
     w = gaussian(y, y0, sigma) 
 
     # The returned value would be 
@@ -581,7 +582,7 @@ def dgaussian_selection_dx(x, y, y0, sigma=1.0):
     # so the derivative is given by
     return w / np.sum(w)
 
-def dgaussian_selection_dy(x, y, y0, sigma=1.0):
+def dsmooth_selection_dy(x, y, y0, sigma=1.0):
     """
     Return the derivative of `gaussian_selection` w.r.t `y`.
 
@@ -594,7 +595,7 @@ def dgaussian_selection_dy(x, y, y0, sigma=1.0):
     sigma : float
         Standard deviation of the selection criteria
     """
-    assert x.size == y.size
+    # assert x.size == y.size
     w = gaussian(y, y0, sigma) 
     dw_dy = dgaussian_dx(y, y0, sigma)
 
@@ -609,7 +610,7 @@ def dgaussian_selection_dy(x, y, y0, sigma=1.0):
     dout_dw = dweighted_vals_dw/norm + weighted_vals*-norm**(-2)*dnorm_dw
     return dout_dw * dw_dy
 
-def dgaussian_selection_dy0(x, y, y0, sigma=1.0):
+def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
     """
     Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
 
@@ -622,9 +623,9 @@ def dgaussian_selection_dy0(x, y, y0, sigma=1.0):
     sigma : float
         Standard deviation of the selection criteria
     """
-    assert x.size == y.size
+    # assert x.size == y.size
     w = gaussian(y, y0, sigma) 
-    dw_dy0 = dgaussian_dx(y, y0, sigma)
+    dw_dy0 = dgaussian_dx0(y, y0, sigma)
 
     norm = np.sum(w)
     dnorm_dw = 1
@@ -634,6 +635,6 @@ def dgaussian_selection_dy0(x, y, y0, sigma=1.0):
 
     # out = weighted_vals/norm
     
-    dout_dw = dweighted_vals_dw/norm + weighted_vals*-norm**(-2)*dnorm_dw
-    return dout_dw * dw_dy0
+    dout_dw = dweighted_vals_dw/norm + -weighted_vals*norm**-2*dnorm_dw
+    return np.sum(dout_dw * dw_dy0)
     

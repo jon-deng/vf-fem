@@ -171,6 +171,7 @@ class TestBernoulli(CommonSetup):
 
         plt.show()
 
+    # @unittest.skip("...")
     def test_flow_sensitivity(self):
         surface_coordinates = self.surface_coordinates
         fluid_props = self.fluid_properties
@@ -178,7 +179,7 @@ class TestBernoulli(CommonSetup):
         ## Calculate pressure sensitivity with finite differences
         dp_du_fd = np.zeros((surface_coordinates.shape[0], surface_coordinates.shape[0]*2))
         dy = np.zeros(surface_coordinates.shape)
-        DY = 1e-5
+        DY = 1e-7
         for ii in range(surface_coordinates.shape[0]):
             dy[...] = 0
             dy[ii, 1] += DY
@@ -222,9 +223,60 @@ class TestBernoulli(CommonSetup):
 
         dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
 
+        fig, ax = plt.subplots(1, 1, constrained_layout=True)
+        err = np.abs(dp_du_ad - dp_du_an)
+        rel_err = np.where(np.abs(dp_du_ad) == 0, 0, err/np.abs(dp_du_ad))
+        mappable = ax.matshow(err)
+        fig.colorbar(mappable, ax=ax)
+        ax.set_ylabel("pressure node")
+        ax.set_xlabel("(x, y) node")
+        plt.show()
+
         breakpoint()
         self.assertTrue(np.all(close))
 
+    def test_gaussian(self):
+        dgaussian_dx_ad = autograd.grad(fluids.gaussian, 0)
+        dgaussian_dx0_ad = autograd.grad(fluids.gaussian, 1)
+        x, x0, sigma = 0.1, 0.0, 0.1
+
+        self.assertAlmostEqual(dgaussian_dx_ad(x, x0, sigma), fluids.dgaussian_dx(x, x0, sigma))
+
+        self.assertAlmostEqual(dgaussian_dx0_ad(x, x0, sigma), fluids.dgaussian_dx0(x, x0, sigma))
+
+    def test_sigmoid(self):
+        dsigmoid_dx_ad = autograd.grad(fluids.sigmoid, 0)
+        x = 0.1
+
+        self.assertAlmostEqual(dsigmoid_dx_ad(x), fluids.dsigmoid_dx(x))
+
+    def test_smooth_cutoff(self):
+        dsmooth_cutoff_dx_ad = autograd.grad(fluids.smooth_cutoff, 0)
+        dsmooth_cutoff_dx0_ad = autograd.grad(fluids.smooth_cutoff, 1)
+        x, k = 0.1, 100.0
+
+        self.assertAlmostEqual(dsmooth_cutoff_dx_ad(x, k), fluids.dsmooth_cutoff_dx(x, k))
+        self.assertAlmostEqual(dsmooth_cutoff_dx0_ad(x, k), fluids.dsmooth_cutoff_dx0(x, k))
+
+    def test_smooth_selection(self):
+        dsmooth_selection_dx_ad = autograd.grad(fluids.smooth_selection, 0)
+        dsmooth_selection_dy_ad = autograd.grad(fluids.smooth_selection, 1)
+        dsmooth_selection_dy0_ad = autograd.grad(fluids.smooth_selection, 2)
+        x, y, y0, sigma = 1.0, 2.0, 2.1, 0.1
+
+        x, y, y0, sigma = np.array([1.0, 2.0]), np.array([2.1, 2.2]), 2.1, 0.1
+        
+        a = dsmooth_selection_dx_ad(x, y, y0, sigma)
+        b = fluids.dsmooth_selection_dx(x, y, y0, sigma)
+        self.assertTrue(np.all(np.isclose(a, b)))
+
+        a = dsmooth_selection_dy_ad(x, y, y0, sigma)
+        b = fluids.dsmooth_selection_dy(x, y, y0, sigma)
+        self.assertTrue(np.all(np.isclose(a, b)))
+
+        a = dsmooth_selection_dy0_ad(x, y, y0, sigma)
+        b = fluids.dsmooth_selection_dy0(x, y, y0, sigma)
+        self.assertTrue(np.all(np.isclose(a, b)))
+
 if __name__ == '__main__':
     unittest.main()
-surface_state
