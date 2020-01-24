@@ -265,7 +265,7 @@ class TestBernoulli(CommonSetup):
         x, y, y0, sigma = 1.0, 2.0, 2.1, 0.1
 
         x, y, y0, sigma = np.array([1.0, 2.0]), np.array([2.1, 2.2]), 2.1, 0.1
-        
+
         a = dsmooth_selection_dx_ad(x, y, y0, sigma)
         b = fluids.dsmooth_selection_dx(x, y, y0, sigma)
         self.assertTrue(np.all(np.isclose(a, b)))

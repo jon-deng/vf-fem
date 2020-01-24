@@ -64,7 +64,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.1
+        t_final = 0.15
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
@@ -72,25 +72,25 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         emod[:] = 2.5e3 * PASCAL_TO_CGS
 
         ## Set the stepping direction
-        hs = np.concatenate(([0], 2.0**(np.arange(-5, 4)-2)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-2)), axis=0)
         step_size = 0.5e0 * PASCAL_TO_CGS
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
-        rewrite_states = False
-        save_path = f'out/FiniteDifferenceStates-uniformstep-notstiff-shortduration-modifiedcollarea-pos-fluid-{t_final:.5f}.h5'
+        rewrite_states = True
+        save_path = f'out/FiniteDifferenceStates-{t_final:.5f}_smoothseparation_2_smoothcontact_0.h5'
 
         # Run the simulations
         y_gap = 0.005
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
+        fluid_props['p_sub'] = 700 * PASCAL_TO_CGS
 
         solid_props = SolidProperties()
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
-        solid_props['k_collision'] = 1e12
+        solid_props['k_collision'] = 1e5
         solid_props['y_collision'] = fluid_props['y_midline'] - 0.002
 
         # Compute functionals along step direction
@@ -106,7 +106,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
                 # _solid_props = solid_props.copy()
                 solid_props['elastic_modulus'] = emod + h*step_dir
                 info = forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
-                               h5file=save_path, h5group=f'{n}')
+                               h5file=save_path, h5group=f'{n}', show_figure=False)
                 runtime_end = perf_counter()
 
                 if h == 0:
@@ -523,12 +523,12 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    # test = TestAdjointGradientCalculation()
-    # test.setUp()
-    # test.test_adjoint()
-
-    test = Test2ndOrderDifferentiability()
+    test = TestAdjointGradientCalculation()
     test.setUp()
+    test.test_adjoint()
+
+    # test = Test2ndOrderDifferentiability()
+    # test.setUp()
     # test.test_c2smoothness()
     # test.show_solution_info()
     # test.test_adjoint()

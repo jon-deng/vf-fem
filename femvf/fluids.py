@@ -254,7 +254,12 @@ def bd_df(f, n, dx):
 ### 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
 
-def fluid_pressure(surface_state, fluid_props):
+# TODO: Move k and sigma into fluid_props constant
+# k=200, sigma=0.0005
+# k=100, sigma=0.001
+# k=50, sigma=0.002
+# k=25, sigma=0.004
+def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
     """
     Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
@@ -295,8 +300,8 @@ def fluid_pressure(surface_state, fluid_props):
 
     p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
 
-    x_sep = smooth_selection(x, area, a_sep, sigma=0.001)
-    sep_multiplier = smooth_cutoff(x, x_sep, k=100)
+    x_sep = smooth_selection(x, area, a_sep, sigma=sigma)
+    sep_multiplier = smooth_cutoff(x, x_sep, k=k)
 
     p = sep_multiplier * p_bernoulli
 
@@ -313,14 +318,14 @@ def fluid_pressure(surface_state, fluid_props):
             'idx_sep': idx_sep,
             'xy_min': xy_min,
             'xy_sep': xy_sep,
-            'x_sep': x_sep, 
+            'x_sep': x_sep,
             'a_min': a_min,
             'a_sep': a_sep,
             'area': area,
             'pressure': p}
     return p, info
 
-def get_pressure_form(model, x, fluid_props):
+def get_pressure_form(model, x, fluid_props, k=50, sigma=0.002):
     """
     Returns the ufl.Coefficient pressure.
 
@@ -340,13 +345,13 @@ def get_pressure_form(model, x, fluid_props):
     """
     pressure = dfn.Function(model.scalar_function_space)
 
-    pressure_vector, info = fluid_pressure(x, fluid_props)
+    pressure_vector, info = fluid_pressure(x, fluid_props, k, sigma)
     surface_verts = model.surface_vertices
     pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
 
     return pressure, info
 
-def flow_sensitivity(surface_state, fluid_props):
+def flow_sensitivity(surface_state, fluid_props, k=50, sigma=0.002):
     """
     Returns the sensitivities of flow properties at a surface state.
 
@@ -357,6 +362,8 @@ def flow_sensitivity(surface_state, fluid_props):
     fluid_props : dict
         A dictionary of fluid property keyword arguments.
     """
+    assert surface_state[0].size%2 == 0
+
     y_midline = fluid_props['y_midline']
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
@@ -367,8 +374,10 @@ def flow_sensitivity(surface_state, fluid_props):
     area = 2 * (y_midline - y)
     darea_dy = -2 # darea_dx = 0
 
+    # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the
+    #  minimum value
     a_min = smooth_minimum(area)
-    da_min_darea = dsmooth_minimum_dx(area) # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the minimum value
+    da_min_darea = dsmooth_minimum_dx(area)
 
     a_sep = SEPARATION_FACTOR * a_min
     da_sep_da_min = SEPARATION_FACTOR
@@ -385,38 +394,35 @@ def flow_sensitivity(surface_state, fluid_props):
     dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area**3)
     dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area**-2) * dflow_rate_sqr_da_sep
     dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
-    
-    # Correct Bernoulli pressure by applying a smooth mask after separation
-    x_sep = smooth_selection(x, area, a_sep, sigma=0.001)
-    dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, sigma=0.001)
-    dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, sigma=0.001)*darea_dy \
-                + dsmooth_selection_dy0(x, area, a_sep, sigma=0.001)*da_sep_dy
 
-    sep_multiplier = smooth_cutoff(x, x_sep, k=100)
-    _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k=100)
-    _dsep_multiplier_dx_sep = dsmooth_cutoff_dx0(x, x_sep, k=100)
+    # Correct Bernoulli pressure by applying a smooth mask after separation
+    x_sep = smooth_selection(x, area, a_sep, sigma)
+    dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, sigma)
+    dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, sigma)*darea_dy \
+                + dsmooth_selection_dy0(x, area, a_sep, sigma)*da_sep_dy
+
+    sep_multiplier = smooth_cutoff(x, x_sep, k)
+    _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k)
+    _dsep_multiplier_dx_sep = dsmooth_cutoff_dx0(x, x_sep, k)
     dsep_multiplier_dx = np.diag(_dsep_multiplier_dx) + _dsep_multiplier_dx_sep[:, None]*dx_sep_dx
     dsep_multiplier_dy = _dsep_multiplier_dx_sep[:, None]*dx_sep_dy
 
-    p = sep_multiplier * p_bernoulli
+    # p = sep_multiplier * p_bernoulli
 
     dp_dy = dsep_multiplier_dy*p_bernoulli[:, None] + sep_multiplier[:, None]*dp_bernoulli_dy
     dp_dx = dsep_multiplier_dx*p_bernoulli[:, None] #+ sep_multiplier* 0
 
-    # breakpoint()
     dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
     dp_du[:, :-1:2] = dp_dx
     dp_du[:, 1::2] = dp_dy
 
-    assert surface_state[0].size%2 == 0
-
     ## Calculate the flow rate sensitivity
     dflow_rate_du = np.zeros(surface_state[0].size)
-    dflow_rate_du = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
+    dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
 
     return dp_du, dflow_rate_du
 
-def get_flow_sensitivity(model, x, fluid_props):
+def get_flow_sensitivity(model, x, fluid_props, k=50, sigma=0.002):
     """
     Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
@@ -435,7 +441,7 @@ def get_flow_sensitivity(model, x, fluid_props):
     dq_du : PETSc.Vec
         Sensitivity of flow rate with respect to displacement
     """
-    _dp_du, _dq_du = flow_sensitivity(x, fluid_props)
+    _dp_du, _dq_du = flow_sensitivity(x, fluid_props, k, sigma)
 
     dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
     dp_du.setType('aij')
@@ -466,8 +472,8 @@ def get_flow_sensitivity(model, x, fluid_props):
 
     return dp_du, dq_du
 
-## Below are a collection of smoothened discrete operators. These are used in the bernoulli code to
-## smoothen the specification of the bernoullie model such as specifying separation points
+# Below are a collection of smoothened functions for selecting the minimum area, separation point,
+# and simulating separation
 
 def smooth_minimum(x, alpha=-1000):
     """
@@ -539,7 +545,7 @@ def gaussian(x, x0, sigma=1.0):
 
 def dgaussian_dx(x, x0, sigma=1.0):
     return gaussian(x, x0, sigma) * -(x-x0)/sigma**2
-    
+
 def dgaussian_dx0(x, x0, sigma=1.0):
     return gaussian(x, x0, sigma) * (x-x0)/sigma**2
 
@@ -575,9 +581,9 @@ def dsmooth_selection_dx(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma) 
+    w = gaussian(y, y0, sigma)
 
-    # The returned value would be 
+    # The returned value would be
     # return np.sum(x*weights) / np.sum(weights)
     # so the derivative is given by
     return w / np.sum(w)
@@ -596,7 +602,7 @@ def dsmooth_selection_dy(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma) 
+    w = gaussian(y, y0, sigma)
     dw_dy = dgaussian_dx(y, y0, sigma)
 
     norm = np.sum(w)
@@ -606,7 +612,7 @@ def dsmooth_selection_dy(x, y, y0, sigma=1.0):
     dweighted_vals_dw = x
 
     # out = weighted_vals/norm
-    
+
     dout_dw = dweighted_vals_dw/norm + weighted_vals*-norm**(-2)*dnorm_dw
     return dout_dw * dw_dy
 
@@ -624,7 +630,7 @@ def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma) 
+    w = gaussian(y, y0, sigma)
     dw_dy0 = dgaussian_dx0(y, y0, sigma)
 
     norm = np.sum(w)
@@ -634,7 +640,6 @@ def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
     dweighted_vals_dw = x
 
     # out = weighted_vals/norm
-    
+
     dout_dw = dweighted_vals_dw/norm + -weighted_vals*norm**-2*dnorm_dw
     return np.sum(dout_dw * dw_dy0)
-    

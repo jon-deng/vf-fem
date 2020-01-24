@@ -76,8 +76,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     fig, axs
     """
     axs[0, 0].clear()
-
-    delta_xy = x[0][model.vert_to_vdof.reshape(-1)].reshape(-1, 2)
+    delta_xy = x[0].vector()[model.vert_to_vdof.reshape(-1)].reshape(-1, 2)
     xy_current = model.mesh.coordinates() + delta_xy
     triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
                                       triangles=model.mesh.cells())
@@ -95,7 +94,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     axs[0, 0].plot(xy_surface[:, 0], xy_surface[:, 1], color='C3')
 
     axs[0, 0].set_title(f'Time: {1e3*t:>5.1f} ms')
-    axs[0, 0].set_xlim(-0.2, 1.4, auto=False)
+    axs[0, 0].set_xlim(-0.2, 1.8, auto=False)
     axs[0, 0].set_ylim(0.0, 1.0, auto=False)
 
     axs[0, 0].axhline(y=fluid_props['y_midline'], ls='-.', lw=0.5)
@@ -103,6 +102,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
 
     pressure_profile = axs[1, 0].lines[0]
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
+    axs[1, 0].set_xlim(-0.2, 1.8, auto=False)
 
     gw = fluid_props['y_midline'] - np.amax(xy_current[:, 1])
     line = axs[2, 0].lines[0]
