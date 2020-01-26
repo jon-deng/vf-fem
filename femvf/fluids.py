@@ -312,6 +312,7 @@ def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
     idx_sep = 0
     xy_min = surface_state[0][idx_min]
     xy_sep = surface_state[0][idx_sep]
+    breakpoint()
     info = {'flow_rate': flow_rate,
             'dt_flow_rate': dt_flow_rate,
             'idx_min': idx_min,
@@ -475,7 +476,7 @@ def get_flow_sensitivity(model, x, fluid_props, k=50, sigma=0.002):
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
-def smooth_minimum(x, alpha=-1000):
+def smooth_minimum(x, alpha=-2000):
     """
     Return the smooth approximation to the minimum element of x.
 
@@ -490,7 +491,7 @@ def smooth_minimum(x, alpha=-1000):
     w = np.exp(alpha*x)
     return np.sum(x*w) / np.sum(w)
 
-def dsmooth_minimum_dx(x, alpha=-1000):
+def dsmooth_minimum_dx(x, alpha=-2000):
     """
     Return the derivative of the smooth minimum with respect to x.
 
