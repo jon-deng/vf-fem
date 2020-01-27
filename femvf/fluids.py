@@ -254,12 +254,7 @@ def bd_df(f, n, dx):
 ### 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
 
-# TODO: Move k and sigma into fluid_props constant
-# k=200, sigma=0.0005
-# k=100, sigma=0.001
-# k=50, sigma=0.002
-# k=25, sigma=0.004
-def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
+def fluid_pressure(surface_state, fluid_props):
     """
     Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
@@ -267,7 +262,7 @@ def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
     ----------
     x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
+    fluid_props : properties.FluidProperties
         A dictionary of fluid properties.
 
     Returns
@@ -281,6 +276,7 @@ def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
     a_sub = fluid_props['a_sub']
+    alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
 
     x, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
@@ -288,8 +284,8 @@ def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
     dt_area = -2 * (y)
 
     # Calculate minimum and separation areas/locations
-    a_min = smooth_minimum(area)
-    dt_a_min = np.sum(dsmooth_minimum_dx(area) * dt_area)
+    a_min = smooth_minimum(area, alpha)
+    dt_a_min = np.sum(dsmooth_minimum_dx(area, alpha) * dt_area)
     a_sep = SEPARATION_FACTOR * a_min
     dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
@@ -312,7 +308,7 @@ def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
     idx_sep = 0
     xy_min = surface_state[0][idx_min]
     xy_sep = surface_state[0][idx_sep]
-    breakpoint()
+    # breakpoint()
     info = {'flow_rate': flow_rate,
             'dt_flow_rate': dt_flow_rate,
             'idx_min': idx_min,
@@ -326,7 +322,7 @@ def fluid_pressure(surface_state, fluid_props, k=50, sigma=0.002):
             'pressure': p}
     return p, info
 
-def get_pressure_form(model, x, fluid_props, k=50, sigma=0.002):
+def get_pressure_form(model, x, fluid_props):
     """
     Returns the ufl.Coefficient pressure.
 
@@ -336,7 +332,7 @@ def get_pressure_form(model, x, fluid_props, k=50, sigma=0.002):
         The coefficient representing the pressure
     x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
+    fluid_props : properties.FluidProperties
         A dictionary of fluid property keyword arguments.
 
     Returns
@@ -346,13 +342,13 @@ def get_pressure_form(model, x, fluid_props, k=50, sigma=0.002):
     """
     pressure = dfn.Function(model.scalar_function_space)
 
-    pressure_vector, info = fluid_pressure(x, fluid_props, k, sigma)
+    pressure_vector, info = fluid_pressure(x, fluid_props)
     surface_verts = model.surface_vertices
     pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
 
     return pressure, info
 
-def flow_sensitivity(surface_state, fluid_props, k=50, sigma=0.002):
+def flow_sensitivity(surface_state, fluid_props):
     """
     Returns the sensitivities of flow properties at a surface state.
 
@@ -360,7 +356,7 @@ def flow_sensitivity(surface_state, fluid_props, k=50, sigma=0.002):
     ----------
     x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
+    fluid_props : properties.FluidProperties
         A dictionary of fluid property keyword arguments.
     """
     assert surface_state[0].size%2 == 0
@@ -369,6 +365,7 @@ def flow_sensitivity(surface_state, fluid_props, k=50, sigma=0.002):
     p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
     rho = fluid_props['rho']
     a_sub = fluid_props['a_sub']
+    alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
 
     x, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
@@ -377,8 +374,8 @@ def flow_sensitivity(surface_state, fluid_props, k=50, sigma=0.002):
 
     # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the
     #  minimum value
-    a_min = smooth_minimum(area)
-    da_min_darea = dsmooth_minimum_dx(area)
+    a_min = smooth_minimum(area, alpha)
+    da_min_darea = dsmooth_minimum_dx(area, alpha)
 
     a_sep = SEPARATION_FACTOR * a_min
     da_sep_da_min = SEPARATION_FACTOR
@@ -423,7 +420,7 @@ def flow_sensitivity(surface_state, fluid_props, k=50, sigma=0.002):
 
     return dp_du, dflow_rate_du
 
-def get_flow_sensitivity(model, x, fluid_props, k=50, sigma=0.002):
+def get_flow_sensitivity(model, x, fluid_props):
     """
     Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
@@ -432,7 +429,7 @@ def get_flow_sensitivity(model, x, fluid_props, k=50, sigma=0.002):
     model
     x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
+    fluid_props : properties.FluidProperties
         A dictionary of fluid properties.
 
     Returns
@@ -442,7 +439,7 @@ def get_flow_sensitivity(model, x, fluid_props, k=50, sigma=0.002):
     dq_du : PETSc.Vec
         Sensitivity of flow rate with respect to displacement
     """
-    _dp_du, _dq_du = flow_sensitivity(x, fluid_props, k, sigma)
+    _dp_du, _dq_du = flow_sensitivity(x, fluid_props)
 
     dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
     dp_du.setType('aij')
@@ -476,7 +473,7 @@ def get_flow_sensitivity(model, x, fluid_props, k=50, sigma=0.002):
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
-def smooth_minimum(x, alpha=-2000):
+def smooth_minimum(x, alpha=-1000):
     """
     Return the smooth approximation to the minimum element of x.
 
@@ -491,7 +488,7 @@ def smooth_minimum(x, alpha=-2000):
     w = np.exp(alpha*x)
     return np.sum(x*w) / np.sum(w)
 
-def dsmooth_minimum_dx(x, alpha=-2000):
+def dsmooth_minimum_dx(x, alpha=-1000):
     """
     Return the derivative of the smooth minimum with respect to x.
 

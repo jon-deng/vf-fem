@@ -64,12 +64,20 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.15
+        t_final = 0.1
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
         emod = model.emod.vector()[:].copy()
         emod[:] = 2.5e3 * PASCAL_TO_CGS
+
+        k_coll = 1e12
+        y_gap = 0.02
+        y_coll_offset = 0.01
+        # alpha=-1000, k=200, sigma=0.0005
+        # alpha=-1000, k=100, sigma=0.001
+        alpha, k, sigma = -5000, 50, 0.002
+        # alpha=-1000, k=25, sigma=0.004
 
         ## Set the stepping direction
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-2)), axis=0)
@@ -77,21 +85,25 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
-        rewrite_states = True
-        save_path = f'out/FiniteDifferenceStates-{t_final:.5f}_smoothseparation_2_smoothcontact_0.h5'
+        rewrite_states = False
+        save_path = f'out/FiniteDifferenceStates-cubic-{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}.h5'
 
         # Run the simulations
-        y_gap = 0.005
+        
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = 700 * PASCAL_TO_CGS
+        fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
+        fluid_props['alpha'] = alpha
+        fluid_props['k'] = k
+        fluid_props['sigma'] = sigma
+        
 
         solid_props = SolidProperties()
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
-        solid_props['k_collision'] = 1e5
-        solid_props['y_collision'] = fluid_props['y_midline'] - 0.002
+        solid_props['k_collision'] = k_coll
+        solid_props['y_collision'] = fluid_props['y_midline'] - y_coll_offset
 
         # Compute functionals along step direction
         print(f"Computing {len(hs)} finite difference points")

@@ -90,7 +90,10 @@ class FluidProperties(Properties):
     """
     Represents a collection of 1D potential flow fluid properties
 
-    TODO: Remove subglottal pressure as a property. It's more like a boundary condition
+    TODO: Remove subglottal pressure as a property. It's more like a boundary condition?
+
+    alpha, k and sigma are smoothing parameters that control smoothness of approximations used in 
+    separation
     """
 
     TYPES = {'p_sub': ('const', ()),
@@ -98,7 +101,10 @@ class FluidProperties(Properties):
              'a_sub': ('const', ()),
              'a_sup': ('const', ()),
              'rho': ('const', ()),
-             'y_midline': ('const', ())}
+             'y_midline': ('const', ()),
+             'alpha': ('const', ()),
+             'k': ('const', ()),
+             'sigma': ('const', ())}
 
     # LABELS = tuple(TYPES.keys())
 
@@ -107,4 +113,7 @@ class FluidProperties(Properties):
                 'a_sub': 100000,
                 'a_sup': 0.6,
                 'rho': 1.1225 * SI_DENSITY_TO_CGS,
-                'y_midline': 0.61}
+                'y_midline': 0.61,
+                'alpha': -1000, 
+                'k': 50, 
+                'sigma': 0.002}

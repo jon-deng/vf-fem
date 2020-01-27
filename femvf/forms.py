@@ -217,7 +217,6 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
     gap = ufl.dot(x_reference+u1, collision_normal) - y_collision
     positive_gap = (gap + abs(gap)) / 2
 
-
     # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
     penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
               * ds(facet_labels['pressure'])
