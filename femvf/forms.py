@@ -716,16 +716,26 @@ class ForwardModel:
         """
         labels = SolidProperties.TYPES.keys()
         forms = self.forms
-        coefficients = [forms['coeff.emod'], forms['coeff.nu'], forms['coeff.rho'],
-                        forms['coeff.rayleigh_m'], forms['coeff.rayleigh_k'],
-                        forms['coeff.y_collision']]
 
-        for coefficient, label in zip(coefficients, labels):
-            if label in solid_props:
-                if label == 'elastic_modulus':
-                    coefficient.vector()[:] = solid_props[label]
-                else:
-                    coefficient.assign(solid_props[label])
+        coeff_to_prop_label = {
+            'coeff.emod': 'elastic_modulus',
+            'coeff.nu': 'poissons_ratio',
+            'coeff.rho': 'density',
+            'coeff.rayleigh_m': 'rayleigh_m',
+            'coeff.rayleigh_k': 'rayleigh_k',
+            'coeff.y_collision': 'y_collision',
+            'coeff.k_collision': 'k_collision'}
+
+        for coeff_label, prop_label in coeff_to_prop_label.items():
+            assert prop_label in solid_props
+
+            coefficient = forms[coeff_label]
+            value = solid_props[prop_label]
+
+            if prop_label == 'elastic_modulus':
+                coefficient.vector()[:] = value
+            else:
+                coefficient.assign(value)
 
     def set_fluid_props(self, fluid_props):
         """

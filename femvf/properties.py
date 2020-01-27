@@ -92,7 +92,7 @@ class FluidProperties(Properties):
 
     TODO: Remove subglottal pressure as a property. It's more like a boundary condition?
 
-    alpha, k and sigma are smoothing parameters that control smoothness of approximations used in 
+    alpha, k and sigma are smoothing parameters that control smoothness of approximations used in
     separation
     """
 
@@ -114,6 +114,6 @@ class FluidProperties(Properties):
                 'a_sup': 0.6,
                 'rho': 1.1225 * SI_DENSITY_TO_CGS,
                 'y_midline': 0.61,
-                'alpha': -1000, 
-                'k': 50, 
+                'alpha': -1000,
+                'k': 50,
                 'sigma': 0.002}
