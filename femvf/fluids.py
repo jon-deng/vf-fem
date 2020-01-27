@@ -578,6 +578,7 @@ def smooth_selection(x, y, y0, sigma=1.0):
     # exponentiation doesn't change anything in the final ratio of weights
     log_w = log_gaussian(y, y0, sigma)
     w = np.exp(log_w - np.max(log_w))
+    # breakpoint()
 
     return np.sum(x*w) / np.sum(w)
 
@@ -617,8 +618,8 @@ def dsmooth_selection_dy(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    log_w = log_gaussian(y, y0, sigma)
-    w = np.exp(log_w - np.max(log_w))
+    # log_w = log_gaussian(y, y0, sigma)
+    w = gaussian(y, y0, sigma)
     dw_dy = dgaussian_dx(y, y0, sigma)
 
     norm = np.sum(w)
@@ -646,8 +647,8 @@ def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    log_w = log_gaussian(y, y0, sigma)
-    w = np.exp(log_w - np.max(log_w))
+    # log_w = log_gaussian(y, y0, sigma)
+    w = gaussian(y, y0, sigma)
     dw_dy0 = dgaussian_dx0(y, y0, sigma)
 
     norm = np.sum(w)
