@@ -485,7 +485,11 @@ def smooth_minimum(x, alpha=-1000):
         Factor that control the sharpness of the minimum. The function approaches the true minimum
         function as `alpha` approachs negative infinity.
     """
-    w = np.exp(alpha*x)
+
+    # For numerical stability subtract off a judicious constant from `alpha*x` to prevent exponents
+    # being too small or too large. This constant factors out from the division.
+    const_numerical_stability = np.max(alpha*x)
+    w = np.exp(alpha*x - const_numerical_stability)
     return np.sum(x*w) / np.sum(w)
 
 def dsmooth_minimum_dx(x, alpha=-1000):
@@ -500,8 +504,9 @@ def dsmooth_minimum_dx(x, alpha=-1000):
         Factor that control the sharpness of the minimum. The function approaches the true minimum
         function as `alpha` approachs negative infinity.
     """
-    w = np.exp(alpha*x)
-    return w/np.sum(w)*(1+alpha*(x - smooth_minimum(x, alpha)))
+    const_numerical_stability = np.max(alpha*x)
+    w = np.exp(alpha*x - const_numerical_stability)
+    return (w/np.sum(w)) * (1+alpha*(x - smooth_minimum(x, alpha)))
 
 
 def sigmoid(x):
@@ -537,6 +542,14 @@ def dsmooth_cutoff_dx0(x, x0, k=100):
     darg_dx0 = k
     return dsigmoid_dx(arg) * darg_dx0
 
+def log_gaussian(x, x0, sigma=1.0):
+    return np.log(1/(sigma*(2*np.pi)**0.5)) + -0.5*((x-x0)/sigma)**2
+
+def log_dgaussian_dx(x, x0, sigma=1.0):
+    return log_gaussian(x, x0, sigma) * -(x-x0)/sigma**2
+
+def log_dgaussian_dx0(x, x0, sigma=1.0):
+    return log_gaussian(x, x0, sigma) * -(x-x0)/sigma**2
 
 def gaussian(x, x0, sigma=1.0):
     return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
@@ -561,7 +574,10 @@ def smooth_selection(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma)
+    # Use the log density for a numerically stable computation. Subtracting off a constant from the
+    # exponentiation doesn't change anything in the final ratio of weights
+    log_w = log_gaussian(y, y0, sigma)
+    w = np.exp(log_w - np.max(log_w))
 
     return np.sum(x*w) / np.sum(w)
 
@@ -579,7 +595,8 @@ def dsmooth_selection_dx(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma)
+    log_w = log_gaussian(y, y0, sigma)
+    w = np.exp(log_w - np.max(log_w))
 
     # The returned value would be
     # return np.sum(x*weights) / np.sum(weights)
@@ -600,7 +617,8 @@ def dsmooth_selection_dy(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma)
+    log_w = log_gaussian(y, y0, sigma)
+    w = np.exp(log_w - np.max(log_w))
     dw_dy = dgaussian_dx(y, y0, sigma)
 
     norm = np.sum(w)
@@ -628,7 +646,8 @@ def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
         Standard deviation of the selection criteria
     """
     # assert x.size == y.size
-    w = gaussian(y, y0, sigma)
+    log_w = log_gaussian(y, y0, sigma)
+    w = np.exp(log_w - np.max(log_w))
     dw_dy0 = dgaussian_dx0(y, y0, sigma)
 
     norm = np.sum(w)
