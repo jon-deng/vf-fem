@@ -211,7 +211,7 @@ def increment_forward(model, x0, dt):
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
     # form. During collision the equations are non-linear but in all other cases they are currently
     # linear.
-    newton_prm = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-6}
+    newton_prm = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-11}
     dfn.solve(model.f1 == 0, model.u1, bcs=model.bc_base, J=model.df1_du1,
               solver_parameters={"newton_solver": newton_prm})
     u1.assign(model.u1)

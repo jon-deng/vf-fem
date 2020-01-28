@@ -714,7 +714,7 @@ class ForwardModel:
         ----------
         solid_props : properties.SolidProperties
         """
-        labels = SolidProperties.TYPES.keys()
+        # labels = SolidProperties.TYPES.keys()
         forms = self.forms
 
         coeff_to_prop_label = {

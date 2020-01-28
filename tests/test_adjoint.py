@@ -64,20 +64,20 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.1
+        t_final = 0.4
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
         emod = model.emod.vector()[:].copy()
         emod[:] = 2.5e3 * PASCAL_TO_CGS
 
-        k_coll = 1e12
+        k_coll = 1e11
         y_gap = 0.02
         y_coll_offset = 0.01
-        # alpha=-1000, k=200, sigma=0.0005
-        # alpha=-1000, k=100, sigma=0.001
-        alpha, k, sigma = -5000, 50, 0.002
-        # alpha=-1000, k=25, sigma=0.004
+        # alpha, k, sigma = -1000, 200, 0.0005
+        # alpha, k, sigma = -1000, 100, 0.001
+        alpha, k, sigma = -3000, 50, 0.002
+        # alpha, k, sigma = -1000, 25, 0.004
 
         ## Set the stepping direction
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-2)), axis=0)
@@ -86,17 +86,15 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         step_dir = np.ones(emod.size) * step_size
 
         rewrite_states = False
-        save_path = f'out/FiniteDifferenceStates-cubic-{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}.h5'
+        case_postfix = f'cubic_{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
+        save_path = f'out/FiniteDifferenceStates-{case_postfix}.h5'
 
-        # Run the simulations
-        
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
         fluid_props['alpha'] = alpha
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
-        
 
         solid_props = SolidProperties()
         solid_props['elastic_modulus'] = emod
@@ -136,6 +134,8 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         self.save_path = save_path
         self.times_meas = times_meas
         self.dt_max = dt_max
+
+        self.case_postfix = case_postfix
 
     def test_adjoint(self):
         hs = self.hs
@@ -216,6 +216,8 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         ax.set_ylabel("Gradient of functional")
         ax.legend()
 
+        fig.savefig(f'Convergence_{self.case_postfix}.png')
+
         # Plot the glottal width vs time of the simulation at zero step size
         fig, axs = plt.subplots(3, 1, constrained_layout=True, sharex=True)
 
@@ -246,11 +248,13 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Pressure [Pa]")
 
+        fig.savefig(f'Kinematics_{self.case_postfix}.png')
+
         plt.show()
 
         # print(run_info['idx_min_area'])
         # print(run_info['idx_separation'])
-        breakpoint()
+        # breakpoint()
 
     def show_solution_info(self):
         save_path = self.save_path
