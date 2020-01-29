@@ -45,18 +45,18 @@ class TestForward(unittest.TestCase):
         # fluid_props['p_sub'] = [1500*PASCAL_TO_CGS, 1500*PASCAL_TO_CGS, 1, 1]
         # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
         # Constant fluid properties
-        p_sub = 1000
+        p_sub = 800
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
         solid_props = SolidProperties()
         emod = model.emod.vector()[:].copy()
-        emod[:] = 2.5e3 * PASCAL_TO_CGS
+        emod[:] = 5.0e3 * PASCAL_TO_CGS
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
-        solid_props['k_collision'] = 1e12
+        solid_props['k_collision'] = 1e11
         solid_props['y_collision'] = fluid_props['y_midline'] - y_gap*1/2
 
         save_path = 'out/test_forward.h5'
@@ -74,5 +74,7 @@ class TestForward(unittest.TestCase):
         # plt.plot(info['time'], info['glottal_width'])
         # plt.show()
 
+    def plot(self):
+        
 if __name__ == '__main__':
     unittest.main()

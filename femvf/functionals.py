@@ -92,9 +92,9 @@ class AbstractFunctional():
 
 class FinalDisplacementNorm(AbstractFunctional):
     r"""
-    Represents the sum over time of l2 norms of displacements.
+    Return the l2 norm of displacement at the final time
 
-    :math:`\sum{||\vec{u}||}_2`
+    This returns :math:`\sum{||\vec{u}||}_2`.
     """
 
     # def __init__(self, model, f, **kwargs):
@@ -270,9 +270,9 @@ class StrainEnergy(AbstractFunctional):
     def dparam(self):
         return None
 
-class FluidWork(AbstractFunctional):
+class FluidtoSolidWork(AbstractFunctional):
     """
-    Represents work done by the fluid on the vocal folds.
+    Return work done by the fluid on the vocal folds.
 
     Parameters
     ----------
@@ -282,7 +282,7 @@ class FluidWork(AbstractFunctional):
     # TODO: fluid_work is implemented in the ForwardModel class, but you could (should) shift it
     # into here.
     def __init__(self, model, f, **kwargs):
-        super(FluidWork, self).__init__(model, f, **kwargs)
+        super(FluidtoSolidWork, self).__init__(model, f, **kwargs)
 
         self.kwargs.setdefault('m_start', 0)
 
@@ -344,7 +344,7 @@ class FluidWork(AbstractFunctional):
 
 class VolumeFlow(AbstractFunctional):
     """
-    Returns the volume of fluid that flowed through the vocal folds.
+    Return the total volume of fluid that flowed through the vocal folds
 
     Parameters
     ----------
@@ -388,7 +388,7 @@ class VolumeFlow(AbstractFunctional):
 
 class SubglottalWork(AbstractFunctional):
     """
-    Returns the total work input into the fluid from the subglottal region (lungs).
+    Return the total work input into the fluid from the lungs (subglottal).
     """
     def __init__(self, model, f, **kwargs):
         super(SubglottalWork, self).__init__(model, f, **kwargs)
@@ -444,7 +444,7 @@ class TransferEfficiency(AbstractFunctional):
 
         self.kwargs.setdefault('m_start', 0)
 
-        self.funcs['FluidWork'] = FluidWork(model, f, **kwargs)
+        self.funcs['FluidWork'] = FluidtoSolidWork(model, f, **kwargs)
         self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
 
     def __call__(self):
@@ -545,7 +545,11 @@ class MFDR(AbstractFunctional):
 
 class WSSGlottalWidth(AbstractFunctional):
     """
-    Returns the weighted sum of squared glottal widths.
+    Return the weighted sum of squared glottal widths.
+
+    # TODO: This class uses the 'hard maximum' approach to measuring minimum area which would lead
+    # non-smoothness in the functional. You should change this to use the smooth minimum used in the 
+    # Bernoulli fluids model.
     """
     def __init__(self, model, f, **kwargs):
         super(WSSGlottalWidth, self).__init__(model, f, **kwargs)
@@ -616,10 +620,10 @@ class WSSGlottalWidth(AbstractFunctional):
             dgw_modl_du_width = -2
 
             # Find the vertex number according to the mesh vertex numbering scheme
-            idx_body = self.model.surface_vertices[idx_surface]
+            global_idx_surface = self.model.surface_vertices[idx_surface]
 
             # Finally convert it to the u-DOF number that actually influences glottal width
-            dof_width = self.model.vert_to_vdof[idx_body, 1]
+            dof_width = self.model.vert_to_vdof[global_idx_surface, 1]
 
             # wss = weight * (gw_modl - gw_meas)**2
             dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
