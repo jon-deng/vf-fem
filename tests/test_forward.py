@@ -39,7 +39,8 @@ class TestForward(unittest.TestCase):
         dt = 5e-5
         times_meas = [0, 0.2]
 
-        y_gap = 0.02
+        y_gap = 0.01
+        alpha, k, sigma = -3000, 50, 0.002
         # Time varying fluid properties
         # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
         # fluid_props['p_sub'] = [1500*PASCAL_TO_CGS, 1500*PASCAL_TO_CGS, 1, 1]
@@ -49,6 +50,9 @@ class TestForward(unittest.TestCase):
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
+        fluid_props['alpha'] = alpha
+        fluid_props['k'] = k
+        fluid_props['sigma'] = sigma
 
         solid_props = SolidProperties()
         emod = model.emod.vector()[:].copy()
@@ -71,10 +75,14 @@ class TestForward(unittest.TestCase):
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
         breakpoint()
-        # plt.plot(info['time'], info['glottal_width'])
-        # plt.show()
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(info['time'], info['glottal_width'])
+
+        plt.show()
 
     def plot(self):
-        
+        pass
+
 if __name__ == '__main__':
     unittest.main()

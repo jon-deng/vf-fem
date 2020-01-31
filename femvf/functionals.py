@@ -548,7 +548,7 @@ class WSSGlottalWidth(AbstractFunctional):
     Return the weighted sum of squared glottal widths.
 
     # TODO: This class uses the 'hard maximum' approach to measuring minimum area which would lead
-    # non-smoothness in the functional. You should change this to use the smooth minimum used in the 
+    # non-smoothness in the functional. You should change this to use the smooth minimum used in the
     # Bernoulli fluids model.
     """
     def __init__(self, model, f, **kwargs):
