@@ -42,7 +42,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
     def setUp(self):
         """
-        Stores forward model states along parameter steps
+        Runs the forward model over several parameters 'steps' and saves their history.
         """
         dfn.set_log_level(30)
         np.random.seed(123)
@@ -188,11 +188,6 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
         order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
 
-        # taylor_remainder_2_fd = (functionals[1:] - functionals[0]) / hs[1:]
-        # order_2_fd = np.log(taylor_remainder_2_fd[1:]/taylor_remainder_2_fd[:-1]) / np.log(2)
-        # print("Numerical order of FD: ", order_2_fd)
-        # breakpoint()
-
         print("\nSteps:", hs[1:])
 
         print("\n1st order taylor remainders: \n", taylor_remainder_1)
@@ -251,10 +246,6 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         fig.savefig(f'Kinematics_{self.case_postfix}.png')
 
         plt.show()
-
-        # print(run_info['idx_min_area'])
-        # print(run_info['idx_separation'])
-        # breakpoint()
 
     def show_solution_info(self):
         save_path = self.save_path

@@ -19,6 +19,10 @@ from femvf import functionals as basic_functionals
 sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from vfopt import functionals
 
+class TestFunctionals:
+    def setUp(self):
+
+    def test_functional(self):
 
 def test_functional(Functional, model, f, gkwargs):
     """
