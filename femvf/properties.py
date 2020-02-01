@@ -49,6 +49,12 @@ class Properties:
     def __contains__(self, key):
         return key in self.TYPES
 
+    def __str__(self):
+        return self.data.__str__()
+
+    def __repr__(self):
+        return self.data.__repr__()
+
     def items(self):
         """
         Return underlying property dict's iterms

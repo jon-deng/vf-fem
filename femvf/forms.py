@@ -801,7 +801,7 @@ class ForwardModel:
 
         return fluid_info
 
-    def set_params_fromfile(self, statefile, n, update_props=False):
+    def set_params_fromfile(self, statefile, n, update_props=True):
         """
         Set all parameters needed to integrate the model from a recorded value.
 
@@ -829,7 +829,7 @@ class ForwardModel:
 
         return fluid_info
 
-    def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=False):
+    def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=True):
         """
         Set all parameters needed to integrate the model and an initial guess, based on a recorded
         iteration.

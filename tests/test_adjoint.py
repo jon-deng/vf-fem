@@ -39,6 +39,7 @@ sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from vfopt import functionals as extra_funcs
 
 class TestAdjointGradientCalculation(unittest.TestCase):
+    OVERWRITE_FORWARD_SIMULATIONS = False
 
     def setUp(self):
         """
@@ -64,7 +65,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.4
+        t_final = 0.15
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
@@ -85,8 +86,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
-        rewrite_states = False
-        case_postfix = f'cubic_{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
+        case_postfix = f'quartic_{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
         save_path = f'out/FiniteDifferenceStates-{case_postfix}.h5'
 
         fluid_props = FluidProperties()
@@ -105,7 +105,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         # Compute functionals along step direction
         print(f"Computing {len(hs)} finite difference points")
-        if not rewrite_states and os.path.exists(save_path):
+        if not self.OVERWRITE_FORWARD_SIMULATIONS and os.path.exists(save_path):
             print("Using existing files")
         else:
             if os.path.exists(save_path):
@@ -148,11 +148,11 @@ class TestAdjointGradientCalculation(unittest.TestCase):
             run_info = pickle.load(f)
 
         fkwargs = {}
-        Functional = funcs.FinalDisplacementNorm
+        # Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
-        # Functional = extra_funcs.AcousticEfficiency
+        Functional = extra_funcs.AcousticEfficiency
 
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")

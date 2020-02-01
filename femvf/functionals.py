@@ -247,7 +247,7 @@ class StrainEnergy(AbstractFunctional):
 
         self.ddamping_power_dv = ufl.derivative(self.damping_power, v0, vector_trial)
 
-        kwargs.setdefault('m_start', 0)
+        self.kwargs.setdefault('m_start', 0)
 
     def __call__(self):
         N_START = self.kwargs['m_start']
