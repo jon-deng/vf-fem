@@ -131,6 +131,45 @@ class FinalDisplacementNorm(AbstractFunctional):
 
         return res
 
+class FinalVelocityNorm(AbstractFunctional):
+    r"""
+    Return the l2 norm of velocity at the final time
+
+    This returns :math:`\sum{||\vec{u}||}_2`.
+    """
+
+    # def __init__(self, model, f, **kwargs):
+    #     super(FinalDisplacementNorm, self).__init__(model, f, **kwargs)
+
+    def __call__(self):
+        v = dfn.Function(self.model.vector_function_space).vector()
+
+        _, _v, _ = self.f.get_state(self.f.size-1)
+        v[:] = _v
+
+        return v.norm('l2')
+
+    def du(self, n, iter_params0, iter_params1):
+        res = None
+
+        if n == self.f.size-1:
+            _v = iter_params1['x0'][1]
+
+            v = dfn.Function(self.model.vector_function_space).vector()
+            v[:] = _v
+
+            v_norm = v.norm('l2')
+
+            res = None
+            if v_norm == 0:
+                res = dfn.Function(self.model.vector_function_space).vector()
+            else:
+                res = 1/v_norm * v
+        else:
+            res = dfn.Function(self.model.vector_function_space).vector()
+
+        return res
+
 class DisplacementNorm(AbstractFunctional):
     r"""
     Represents the sum over time of l2 norms of displacements.
@@ -258,14 +297,15 @@ class StrainEnergy(AbstractFunctional):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_iter_params_fromfile(self.f, ii+1)
 
-            res += dfn.assemble(self.damping_power)*self.model.dt.values()[0]
+            res += dfn.assemble(self.damping_power) # * self.model.dt.values()[0]
 
         return res
 
     def dv(self, n, iter_params0, iter_params1):
+        # breakpoint()
         self.model.set_iter_params(**iter_params1)
 
-        return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
+        return dfn.assemble(self.ddamping_power_dv)# * self.model.dt.values()[0]
 
     def dparam(self):
         return None

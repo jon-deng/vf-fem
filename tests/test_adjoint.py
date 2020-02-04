@@ -47,13 +47,11 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         """
         dfn.set_log_level(30)
         np.random.seed(123)
-        # np.seterr(all='raise')
 
         ##### Set up parameters as you see fit
 
         ## Set the mesh to be used and initialize the forward model
         mesh_dir = '../meshes'
-
         mesh_base_filename = 'geometry2'
         mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
@@ -149,10 +147,11 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         fkwargs = {}
         # Functional = funcs.FinalDisplacementNorm
+        Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
-        Functional = extra_funcs.AcousticEfficiency
+        # Functional = extra_funcs.AcousticEfficiency
 
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")
