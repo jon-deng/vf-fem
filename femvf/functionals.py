@@ -149,7 +149,7 @@ class FinalVelocityNorm(AbstractFunctional):
 
         return v.norm('l2')
 
-    def du(self, n, iter_params0, iter_params1):
+    def dv(self, n, iter_params0, iter_params1):
         res = None
 
         if n == self.f.size-1:
@@ -266,7 +266,7 @@ class VelocityNorm(AbstractFunctional):
 
 class StrainEnergy(AbstractFunctional):
     """
-    Represent the total sum of
+    Represent the total sum of strain work dissipated in the tissue from damping
     """
     def __init__(self, model, f, **kwargs):
         super(StrainEnergy, self).__init__(model, f, **kwargs)
@@ -274,6 +274,7 @@ class StrainEnergy(AbstractFunctional):
         from .forms import biform_m, biform_k
 
         vector_trial = model.forms['trial.vector']
+        scalar_trial = model.forms['trial.scalar']
         ray_m = model.forms['coeff.rayleigh_m']
         ray_k = model.forms['coeff.rayleigh_k']
         rho = model.forms['coeff.rho']
@@ -285,6 +286,7 @@ class StrainEnergy(AbstractFunctional):
         self.damping_power = ray_m*biform_m(v0, v0, rho) + ray_k*biform_k(v0, v0, emod, nu)
 
         self.ddamping_power_dv = ufl.derivative(self.damping_power, v0, vector_trial)
+        self.ddamping_power_demod = ufl.derivative(self.damping_power, emod, scalar_trial)
 
         self.kwargs.setdefault('m_start', 0)
 
@@ -297,7 +299,7 @@ class StrainEnergy(AbstractFunctional):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_iter_params_fromfile(self.f, ii+1)
 
-            res += dfn.assemble(self.damping_power) # * self.model.dt.values()[0]
+            res += dfn.assemble(self.damping_power) * self.model.dt.values()[0]
 
         return res
 
@@ -305,10 +307,10 @@ class StrainEnergy(AbstractFunctional):
         # breakpoint()
         self.model.set_iter_params(**iter_params1)
 
-        return dfn.assemble(self.ddamping_power_dv)# * self.model.dt.values()[0]
+        return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
 
     def dparam(self):
-        return None
+        return dfn.assemble(self.ddamping_power_demod) * self.model.dt.values()[0]
 
 class FluidtoSolidWork(AbstractFunctional):
     """

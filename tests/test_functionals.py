@@ -74,11 +74,11 @@ class TestFunctionals(unittest.TestCase):
     def test_functionals(self):
         model = self.model
         ## Set the functional to test
-        Functional = basic_functionals.DisplacementNorm
-        gkwargs = {}
-
-        # Functional = basic_functionals.VelocityNorm
+        # Functional = basic_functionals.DisplacementNorm
         # gkwargs = {}
+
+        Functional = basic_functionals.VelocityNorm
+        gkwargs = {}
 
         # Functional = functionals.AcousticEfficiency
         # gkwargs = {'tukey_alpha': 0.1}
@@ -118,17 +118,20 @@ class TestFunctionals(unittest.TestCase):
             g = Functional(model, f, **gkwargs)
 
             model.set_ini_state(*x_0)
-            alpha_ = alpha * min(x_0[0].max(), model.get_collision_gap())
+            alpha_u = alpha * min(x_0[0].max(), model.get_collision_gap())
+            alpha_v = alpha * x_0[1].max()
+            alpha_a = alpha * x_0[2].max()
 
             func_0 = g()
 
-            dfunc_du_an = g.du(n, f.get_iter_params(n-1), f.get_iter_params(n))
-            dfunc_dv_an = g.dv(n, f.get_iter_params(n-1), f.get_iter_params(n))
-            dfunc_da_an = g.da(n, f.get_iter_params(n-1), f.get_iter_params(n))
+            iter_params0, iter_params1 = f.get_iter_params(n), f.get_iter_params(n+1)
+            dfunc_du_an = g.du(n, iter_params0, iter_params1)
+            dfunc_dv_an = g.dv(n, iter_params0, iter_params1)
+            dfunc_da_an = g.da(n, iter_params0, iter_params1)
 
-            dfunc_du_fd = (functional_wrapper(g, x_0[0]+alpha_*du, f, i=0, n=n)-func_0) / alpha_
-            dfunc_dv_fd = (functional_wrapper(g, x_0[1]+alpha_*du, f, i=1, n=n)-func_0) / alpha_
-            dfunc_da_fd = (functional_wrapper(g, x_0[2]+alpha_*du, f, i=2, n=n)-func_0) / alpha_
+            dfunc_du_fd = (functional_wrapper(g, x_0[0]+alpha_u*du, f, i=0, n=n)-func_0) / alpha_u
+            dfunc_dv_fd = (functional_wrapper(g, x_0[1]+alpha_v*du, f, i=1, n=n)-func_0) / alpha_v
+            dfunc_da_fd = (functional_wrapper(g, x_0[2]+alpha_a*du, f, i=2, n=n)-func_0) / alpha_a
 
         # print(f"dg/du_n [:10] = {dfunc_du_an[:10]}")
         # print("||dg/du_n|| = " f"{dfunc_du_an.norm('l2')}")

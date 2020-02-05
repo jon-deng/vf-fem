@@ -147,24 +147,26 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         fkwargs = {}
         # Functional = funcs.FinalDisplacementNorm
-        Functional = funcs.FinalVelocityNorm
+        # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
-        # Functional = funcs.StrainEnergy
+        Functional = funcs.StrainEnergy
         # Functional = extra_funcs.AcousticEfficiency
 
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")
-        runtime_start = perf_counter()
 
+        total_runtime = 0
         functionals = list()
         with sf.StateFile(save_path, group='0', mode='r') as f:
             for n, h in enumerate(hs):
                 f.root_group_name = f'{n}'
+                runtime_start = perf_counter()
                 functionals.append(Functional(model, f, **fkwargs)())
-
-        runtime_end = perf_counter()
-        print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+                runtime_end = perf_counter()
+                total_runtime += runtime_end-runtime_start
+                print(runtime_end-runtime_start)
+        print(f"Runtime {total_runtime:.2f} seconds")
 
         functionals = np.array(functionals)
 
@@ -174,7 +176,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         runtime_start = perf_counter()
         info = None
         gradient_ad = None
-        with sf.StateFile(save_path, group='0', mode='r') as f:
+        with sf.StateFile(save_path, group='0', mode='r', driver='core') as f:
             _, gradient_ad = adjoint(model, f, Functional, fkwargs)
         runtime_end = perf_counter()
 
