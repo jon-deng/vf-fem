@@ -164,6 +164,8 @@ def forward(model, timing_props, solid_props, fluid_props,
         info['idx_separation'] = np.array(idx_separation)
         info['idx_min_area'] = np.array(idx_min_area)
         info['pressure'] = np.array(pressure)
+        info['h5file'] = h5file
+        info['h5group'] = h5group
 
         return info
 
