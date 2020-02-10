@@ -17,7 +17,7 @@ from . import vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 # @profile
-def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
+def forward(model, timing_props, solid_props, fluid_props,
             h5file='tmp.h5', h5group='/', abs_tol=1e-5, abs_tol_bounds=(0, 1.2),
             show_figure=False, figure_path=None):
     """
@@ -30,18 +30,12 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     ----------
     model : forms.ForwardModel
         An object representing the forward model.
-    t0 : float
-        Simulation starting time.
-    tmeas : array_like of float
-        Specific times at which the model should be solved. There should be a minimum of two
-        entries. The first/final entries are the first/final measurements. A common way to set this
-        would be to set [0, tfinal] to record the first/final times and all steps in between.
-    dt : float
-        The time step in seconds.
+    timing_props : properties.TimingProperties
+        A timing properties object
     solid_props : properties.SolidProperties
-        A dictionary of solid properties.
+        A solid properties object
     fluid_props : properties.FluidProperties
-        A dictionary of fluid properties.
+        A fluid properties object
     h5file : string
         Path to an hdf5 file where solution information will be appended.
     h5group : string
@@ -64,6 +58,7 @@ def forward(model, t0, tmeas, dt_max, solid_props, fluid_props,
     """
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
+    t0, tmeas, dt_max = timing_props['t0'], timing_props['tmeas'], timing_props['dt_max']
 
     info = {}
 

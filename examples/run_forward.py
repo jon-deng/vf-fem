@@ -22,9 +22,13 @@ from femvf import properties as props
 if __name__ == '__main__':
     dfn.set_log_level(30)
 
+    dt = 5e-5
+    times_meas = np.linspace(0, 0.1, round(0.1/dt)+1)
+
     # Solid and Fluid properties
     solid_props = props.SolidProperties()
     fluid_props = props.FluidProperties()
+    timing_props = props.TimingProperties(**{'t0': 0.0, 'tmeas': times_meas, 'dt_max': dt})
 
     mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
     mesh_base_filename = 'geometry2'
@@ -33,16 +37,14 @@ if __name__ == '__main__':
     model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
     breakpoint()
 
-    dt = 5e-5
-    times_meas = np.linspace(0, 0.1, round(0.1/dt)+1)
+
 
     h5file = 'forward_example.h5'
     if os.path.exists(h5file):
         os.remove(h5file)
 
     runtime_start = perf_counter()
-    forward(model, 0, times_meas, dt, solid_props, fluid_props, h5file=h5file,
-            abs_tol=None)
+    forward(model, timing_props, solid_props, fluid_props, h5file=h5file, abs_tol=None)
     runtime_end = perf_counter()
 
     print("Finished!")

@@ -12,7 +12,7 @@ sys.path.append('../')
 from femvf.forward import forward
 from femvf import forms
 from femvf import statefile as sf
-from femvf.properties import SolidProperties, FluidProperties
+from femvf.properties import SolidProperties, FluidProperties, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf import functionals as basic_functionals
@@ -45,6 +45,7 @@ class TestFunctionals(unittest.TestCase):
         t_final = 0.1
         tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
 
+        timing_props = TimingProperties(**{'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max})
         solid_props = SolidProperties()
         fluid_props = FluidProperties()
 
@@ -65,7 +66,7 @@ class TestFunctionals(unittest.TestCase):
             print("Forward model states already exist. Using existing file.")
         else:
             print("Running forward model to generate data.")
-            forward(model, t0, tmeas, dt_max, solid_props, fluid_props, h5file=h5file,
+            forward(model, timing_props, solid_props, fluid_props, h5file=h5file,
                     abs_tol=None)
 
         self.h5file = h5file

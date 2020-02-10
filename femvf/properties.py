@@ -3,6 +3,7 @@ Classes for definining property values
 """
 
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+import numpy as np
 
 class Properties:
     """
@@ -15,7 +16,7 @@ class Properties:
     DEFAULTS = {'foo': 1.0,
                 'bar': -2.0}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         self.data = dict()
 
         for key in self.TYPES.keys():
@@ -70,6 +71,18 @@ class Properties:
 class SolidProperties(Properties):
     """
     Represents a collection of linear-elastic solid properties
+
+    Parameters
+    ----------
+    elastic_modulus :
+    poissons_ratio :
+    density :
+    rayleigh_m, rayleigh_k :
+        Rayleigh damping parameters for the mass and stiffness matrix terms
+    y_collision :
+        The y-coordinate of the collision plane
+    k_collision :
+        The stiffness of the collision penalty spring
     """
     # `types` indicates if each property is either a field or constant variable
     # and its shape in a tuple. A shape of `None` indicates a scalar value
@@ -96,10 +109,18 @@ class FluidProperties(Properties):
     """
     Represents a collection of 1D potential flow fluid properties
 
-    TODO: Remove subglottal pressure as a property. It's more like a boundary condition?
-
-    alpha, k and sigma are smoothing parameters that control the smoothness of approximations used in
-    separation
+    Parameters
+    ----------
+    p_sub, p_sup :
+        Subglottal and supraglottal pressure
+    a_sub, a_sup :
+        Subglottal and supraglottal area
+    rho :
+        Density of air
+    y_midline :
+        The y-coordinate of the midline for the fluid
+    alpha, k, sigma :
+        Smoothing parameters that control the smoothness of approximations used in separation.
     """
 
     TYPES = {'p_sub': ('const', ()),
@@ -123,3 +144,24 @@ class FluidProperties(Properties):
                 'alpha': -3000,
                 'k': 50,
                 'sigma': 0.002}
+
+class TimingProperties(Properties):
+    """
+    A class storing timing parameters for a forward simulation.
+
+    Parameters
+    ----------
+    dt_max :
+        The maximum time step to integrate over
+    tmeas :
+        Times at which to record the solution
+    t0 :
+        Starting time of simulation
+    """
+    TYPES = {'dt_max': ('const', ()),
+             'tmeas': ('const', (None,)),
+             't0': ('const', ())}
+
+    DEFAULTS = {'dt_max': 1e-4,
+                'tmeas': np.array([0, 1e-4]),
+                't0': 0.0}

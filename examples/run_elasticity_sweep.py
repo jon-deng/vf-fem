@@ -23,16 +23,16 @@ sys.path.append('../')
 from femvf import forms
 from femvf.forward import forward
 from femvf.adjoint import adjoint
-from femvf import constants
+from femvf import properties as props
 from femvf import functionals
 
-def gradient(model, t0, tspan, dt, solid_props, fluid_props):
+def gradient(model, timing_props, solid_props, fluid_props):
     """
     Returns the gradient and functional value for a functional.
     """
     with h5py.File('_tmp.h5', mode='w') as f:
         pass
-    forward(model, t0, tspan, dt, solid_props, fluid_props, h5file='_tmp.h5')
+    forward(model, timing_props, solid_props, fluid_props, h5file='_tmp.h5')
 
     totalfluidwork = None
     totalinputwork = None
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     # fluid_props['p_sub'] = 800
 
     emod = model.emod.vector()[:].copy()
-    solid_props = constants.DEFAULT_SOLID_PROPERTIES
+    solid_props = props.DEFAULT_SOLID_PROPERTIES
     solid_props['elastic_modulus'] = emod
 
     grad = gradient(model, 0, [0, 0.1], dt, solid_props, fluid_props)[1]

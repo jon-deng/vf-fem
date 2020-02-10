@@ -15,7 +15,7 @@ import dolfin as dfn
 sys.path.append('../')
 from femvf.forward import forward
 from femvf import forms
-from femvf.properties import SolidProperties, FluidProperties
+from femvf.properties import SolidProperties, FluidProperties, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 from femvf import functionals
 
@@ -37,7 +37,7 @@ class TestForward(unittest.TestCase):
 
         # dt = 2.5e-6
         dt = 5e-5
-        times_meas = [0, 0.2]
+        times_meas = [0, 0.1]
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -47,6 +47,9 @@ class TestForward(unittest.TestCase):
         # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
         # Constant fluid properties
         p_sub = 800
+
+        timing_props = TimingProperties(**{'t0': 0, 'tmeas': times_meas, 'dt_max': dt})
+
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
@@ -69,12 +72,12 @@ class TestForward(unittest.TestCase):
 
         print("Running forward model")
         runtime_start = perf_counter()
-        info = forward(model, 0, times_meas, dt, solid_props, fluid_props,
+        info = forward(model, timing_props, solid_props, fluid_props,
                        h5file=save_path, h5group='/', abs_tol=None, show_figure=False)
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-        breakpoint()
+        # breakpoint()
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(info['time'], info['glottal_width'])

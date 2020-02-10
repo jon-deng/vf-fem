@@ -31,7 +31,7 @@ from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
-from femvf.properties import FluidProperties, SolidProperties
+from femvf.properties import FluidProperties, SolidProperties, TimingProperties
 from femvf import functionals as funcs
 from femvf import statefile as sf
 
@@ -87,6 +87,9 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         case_postfix = f'quartic_{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
         save_path = f'out/FiniteDifferenceStates-{case_postfix}.h5'
 
+        timing_props = TimingProperties(
+            **{'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max})
+
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
@@ -113,7 +116,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
                 solid_props['elastic_modulus'] = emod + h*step_dir
-                info = forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
+                info = forward(model, timing_props, solid_props, fluid_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}', show_figure=False)
                 runtime_end = perf_counter()
 
@@ -129,9 +132,11 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         self.model = model
         self.fluid_props = fluid_props
         self.solid_props = solid_props
+        self.timing_props = timing_props
+
         self.save_path = save_path
-        self.times_meas = times_meas
-        self.dt_max = dt_max
+        # self.times_meas = times_meas
+        # self.dt_max = dt_max
 
         self.case_postfix = case_postfix
 
@@ -256,7 +261,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         solution_file = 'tmp.h5'
         if path.isfile(solution_file):
             os.remove(solution_file)
-        run_info = forward(model, 0, self.times_meas, self.dt_max, self.solid_props, fluid_props,
+        run_info = forward(model, self.timing_props, self.solid_props, fluid_props,
                            h5file=solution_file, abs_tol=None)
 
         surface_area = []
@@ -382,6 +387,9 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         save_path = f'out/C2SmoothnessStates-{t_final:.5f}-psub{p_sub:.1f}.h5'
 
         # Run the simulations
+        timing_props = TimingProperties(
+            **{'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max})
+
         y_gap = 0.005
         fluid_props = FluidProperties()
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
@@ -406,7 +414,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
                 solid_props['elastic_modulus'] = emod + h*step_dir
-                info = forward(model, 0, times_meas, dt_max, solid_props, fluid_props, abs_tol=None,
+                info = forward(model, timing_props, solid_props, fluid_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}')
 
                 grad = None
@@ -429,9 +437,8 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         self.model = model
         self.fluid_props = fluid_props
         self.solid_props = solid_props
+        self.timing_props = timing_props
         self.save_path = save_path
-        self.times_meas = times_meas
-        self.dt_max = dt_max
 
     def test_c2smoothness(self):
         hs = self.hs
