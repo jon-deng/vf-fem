@@ -345,7 +345,7 @@ class StateFile:
         """
         Returns the fluid properties dictionary at index n.
         """
-        fluid_props = dict()
+        fluid_props = FluidProperties()
         fluid_group = self.root_group['fluid_properties']
 
         # Correct for constant fluid properties in time
@@ -363,7 +363,7 @@ class StateFile:
         """
         Returns the solid properties
         """
-        solid_props = dict()
+        solid_props = SolidProperties()
         solid_group = self.root_group['solid_properties']
         for label in SolidProperties.TYPES:
             data = solid_group[label]
