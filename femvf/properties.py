@@ -16,11 +16,23 @@ class Properties:
     DEFAULTS = {'foo': 1.0,
                 'bar': -2.0}
 
-    def __init__(self, **kwargs):
+    def __new__(cls, data_dict=None, **kwargs):
+        # Check that there is a default value for each type
+        for key in cls.TYPES:
+            if key not in cls.DEFAULTS:
+                raise KeyError(f"Property key `{key}`` does not have a default value")
+
+        return super().__new__(cls)
+
+    def __init__(self, data_dict=None, **kwargs):
         self.data = dict()
 
-        for key in self.TYPES.keys():
-            self.data[key] = kwargs.get(key, self.DEFAULTS[key])
+        if data_dict is not None:
+            for key in self.TYPES.keys():
+                self.data[key] = np.array(data_dict.get(key, self.DEFAULTS[key]))
+        else:
+            for key in self.TYPES.keys():
+                self.data[key] = np.array(kwargs.get(key, self.DEFAULTS[key]))
 
     def __getitem__(self, key):
         """
@@ -29,7 +41,7 @@ class Properties:
         Raises an errors if the key does not exist.
         """
         if key not in self.TYPES:
-            raise ValueError(f"{key} is not a valid property")
+            raise KeyError(f"`{key}` is not a valid property")
         else:
             return self.data[key]
 
@@ -38,12 +50,9 @@ class Properties:
         Gives dictionary like behaviour.
 
         Raises an errors if the key does not exist.
-
-        TODO: You might want to raise an error if you set the property wrong. For example and error
-        should be raised if you try to set a field of values to a constant property.
         """
         if key not in self.TYPES:
-            raise ValueError(f"{key} is not a valid property")
+            raise KeyError(f"`{key}` is not a valid property")
         else:
             self.data[key] = value
 

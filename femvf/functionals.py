@@ -24,7 +24,9 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-class AbstractFunctional():
+import scipy.signal as sig
+
+class AbstractFunctional:
     """
     Represents a functional over the solution history of a forward model run.
 
@@ -397,6 +399,7 @@ class VolumeFlow(AbstractFunctional):
         super(VolumeFlow, self).__init__(model, f, **kwargs)
 
         self.kwargs.setdefault('m_start', 0)
+        self.kwargs.setdefault('tukey_alpha', 0.0)
 
     def __call__(self):
         N_STATE = self.f.get_num_states()
@@ -711,6 +714,45 @@ class WSSGlottalWidth(AbstractFunctional):
             dwss_dt += weight * 2 * (gw_modl - gw_meas) * dgw_modl_dt
 
         return dwss_dt
+
+class SampledMeanFlowRate(AbstractFunctional):
+    def __init__(self, model, f, **kwargs):
+        super(SampledMeanFlowRate, self).__init__(model, f, **kwargs)
+
+        self.kwargs.setdefault('tukey_alpha', 0.0)
+
+    def __call__(self):
+        meas_ind = self.f.get_meas_indices()
+        tukey_window = sig.tukey(meas_ind.size, alpha=self.kwargs['tukey_alpha'])
+
+        # Note that we loop through measured indices
+        # you should space these at equal time intervals for a valid DFT result
+        sum_flow_rate = 0
+        for m, n in enumerate(meas_ind):
+            self.model.set_params_fromfile(self.f, n)
+            sum_flow_rate += self.model.get_pressure()['flow_rate'] * tukey_window[m]
+
+        return sum_flow_rate / meas_ind.size
+
+    def du(self, n, iter_params0, iter_params1):
+        meas_ind = self.f.get_meas_indices()
+        tukey_window = sig.tukey(meas_ind.size, alpha=self.kwargs['tukey_alpha'])
+
+        dtotalflow_dun = None
+
+        m = np.where(meas_ind == n)[0]
+        assert m.size == 0 or m.size == 1
+        if m.size == 1:
+            self.model.set_iter_params(**iter_params1)
+            _, dq_dun = self.model.get_flow_sensitivity()
+            dtotalflow_dun = dq_dun * tukey_window[m] / meas_ind.size
+        else:
+            dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
+
+        return dtotalflow_dun
+
+    def dparam(self):
+        return None
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
 # deleted that code... need to make it again.

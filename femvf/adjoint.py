@@ -243,4 +243,4 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         dt2 = dt1
 
-    return functional_value, gradient
+    return functional_value, gradient, functional

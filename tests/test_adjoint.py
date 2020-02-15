@@ -182,7 +182,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         info = None
         gradient_ad = None
         with sf.StateFile(save_path, group='0', mode='r', driver='core') as f:
-            _, gradient_ad = adjoint(model, f, Functional, fkwargs)
+            _, gradient_ad, _ = adjoint(model, f, Functional, fkwargs)
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -419,7 +419,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 
                 grad = None
                 with sf.StateFile(save_path, group=f'{n}', mode='r') as f:
-                    _, grad = adjoint(model, f, Functional, fkwargs)
+                    _, grad, _ = adjoint(model, f, Functional, fkwargs)
                 runtime_end = perf_counter()
 
                 with h5py.File(save_path, mode='a') as f:
@@ -474,7 +474,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         # info = None
         # gradient_ad = None
         # with sf.StateFile(save_path, group='0', mode='r') as f:
-        #     _, gradient_ad = adjoint(model, f, Functional, fkwargs)
+        #     _, gradient_ad, _ = adjoint(model, f, Functional, fkwargs)
         # runtime_end = perf_counter()
 
         # print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
