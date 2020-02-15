@@ -495,7 +495,7 @@ class ForwardModel:
         """
         Returns the current configuration of the body.
 
-        Coordinates of the body are ordered according to vertices.
+        Coordinates are in vertex order.
 
         Returns
         -------
@@ -508,7 +508,7 @@ class ForwardModel:
         """
         Returns the current configuration of the body.
 
-        Coordinates of the body are ordered according to vertices.
+        Coordinates are in vertex order.
 
         Returns
         -------

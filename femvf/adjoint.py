@@ -17,7 +17,6 @@ import ufl
 from . import forms
 # import .forms as forms
 
-
 # @profile
 def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     """
