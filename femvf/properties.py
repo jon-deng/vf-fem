@@ -7,7 +7,7 @@ import numpy as np
 
 class Properties:
     """
-    Represents a collection of properties
+    Represents a collection of properties with defined shapes
     """
 
     TYPES = {'foo': ('field', ()),
@@ -168,23 +168,25 @@ class FluidProperties(Properties):
                 'k': 50,
                 'sigma': 0.002}
 
-class TimingProperties(Properties):
-    """
-    A class storing timing parameters for a forward simulation.
+# def timing_props():
 
-    Parameters
-    ----------
-    dt_max :
-        The maximum time step to integrate over
-    tmeas :
-        Times at which to record the solution
-    t0 :
-        Starting time of simulation
-    """
-    TYPES = {'dt_max': ('const', ()),
-             'tmeas': ('const', (None,)),
-             't0': ('const', ())}
+#     class TimingProperties(Properties):
+#         """
+#         A class storing timing parameters for a forward simulation.
 
-    DEFAULTS = {'dt_max': 1e-4,
-                'tmeas': np.array([0, 1e-4]),
-                't0': 0.0}
+#         Parameters
+#         ----------
+#         dt_max :
+#             The maximum time step to integrate over
+#         tmeas :
+#             Times at which to record the solution
+#         t0 :
+#             Starting time of simulation
+#         """
+#         TYPES = {'dt_max': ('const', ()),
+#                 'tmeas': ('const', (None,)),
+#                 't0': ('const', ())}
+
+#         DEFAULTS = {'dt_max': 1e-4,
+#                     'tmeas': np.array([0, 1e-4]),
+#                     't0': 0.0}

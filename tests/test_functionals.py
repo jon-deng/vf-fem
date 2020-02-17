@@ -12,7 +12,7 @@ sys.path.append('../')
 from femvf.forward import forward
 from femvf import forms
 from femvf import statefile as sf
-from femvf.properties import SolidProperties, FluidProperties, TimingProperties
+from femvf.properties import SolidProperties, FluidProperties #, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf import functionals as basic_functionals
@@ -45,7 +45,7 @@ class TestFunctionals(unittest.TestCase):
         t_final = 0.1
         tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
 
-        timing_props = TimingProperties(**{'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max})
+        timing_props = {'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max}
         solid_props = SolidProperties(model)
         fluid_props = FluidProperties(model)
 
@@ -114,7 +114,7 @@ class TestFunctionals(unittest.TestCase):
         dfunc_du_an, dfunc_dv_an, dfunc_da_an = None, None, None
         dfunc_du_fd, dfunc_dv_fd, dfunc_da_fd = None, None, None
 
-        with sf.StateFile(self.h5file, mode='a') as f:
+        with sf.StateFile(self.model, self.h5file, mode='a') as f:
             x_0 = f.get_state(n)
             g = Functional(model, f, **gkwargs)
 

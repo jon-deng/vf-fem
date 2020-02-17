@@ -17,7 +17,7 @@ from . import vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 # @profile
-def forward(model, solid_props, fluid_props, timing_props, 
+def forward(model, solid_props, fluid_props, timing_props,
             h5file='tmp.h5', h5group='/', abs_tol=1e-5, abs_tol_bounds=(0, 1.2),
             show_figure=False, figure_path=None):
     """
@@ -82,7 +82,7 @@ def forward(model, solid_props, fluid_props, timing_props,
     assert tmeas[-1] > tmeas[0]
 
     ## Initialize datasets to save in h5 file
-    with sf.StateFile(h5file, group=h5group, mode='a') as f:
+    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
         f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 
@@ -97,7 +97,7 @@ def forward(model, solid_props, fluid_props, timing_props,
     glottal_width = []
     flow_rate = []
     pressure = []
-    with sf.StateFile(h5file, group=h5group, mode='a') as f:
+    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
         t_current = t0
         n_state = 0
 

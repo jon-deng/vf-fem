@@ -39,7 +39,8 @@ class StateFile:
         Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, name, group='/', mode='r', **kwargs):
+    def __init__(self, model, name, group='/', mode='r', **kwargs):
+        self.model = model
         self.file = h5py.File(name, mode=mode, **kwargs)
         self.root_group_name = group
 
@@ -345,7 +346,7 @@ class StateFile:
         """
         Returns the fluid properties dictionary at index n.
         """
-        fluid_props = FluidProperties()
+        fluid_props = FluidProperties(self.model)
         fluid_group = self.root_group['fluid_properties']
 
         # Correct for constant fluid properties in time
@@ -363,7 +364,7 @@ class StateFile:
         """
         Returns the solid properties
         """
-        solid_props = SolidProperties()
+        solid_props = SolidProperties(self.model)
         solid_group = self.root_group['solid_properties']
         for label in SolidProperties.TYPES:
             data = solid_group[label]

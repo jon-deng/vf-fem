@@ -31,7 +31,7 @@ from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
-from femvf.properties import FluidProperties, SolidProperties, TimingProperties
+from femvf.properties import FluidProperties, SolidProperties#, TimingProperties
 from femvf import functionals as funcs
 from femvf import statefile as sf
 
@@ -39,7 +39,7 @@ sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from vfopt import functionals as extra_funcs
 
 class TestAdjointGradientCalculation(unittest.TestCase):
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
 
     def setUp(self):
         """
@@ -87,8 +87,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         case_postfix = f'quartic_{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
         save_path = f'out/FiniteDifferenceStates-{case_postfix}.h5'
 
-        timing_props = TimingProperties(
-            **{'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max})
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max}
 
         fluid_props = FluidProperties(model)
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
@@ -116,7 +115,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
                 solid_props['elastic_modulus'] = emod + h*step_dir
-                info = forward(model, timing_props, solid_props, fluid_props, abs_tol=None,
+                info = forward(model, solid_props, fluid_props, timing_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}', show_figure=False)
                 runtime_end = perf_counter()
 
@@ -151,11 +150,11 @@ class TestAdjointGradientCalculation(unittest.TestCase):
             run_info = pickle.load(f)
 
         fkwargs = {}
-        # Functional = funcs.FinalDisplacementNorm
+        Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
-        Functional = funcs.StrainEnergy
+        # Functional = funcs.StrainEnergy
         # Functional = extra_funcs.AcousticEfficiency
 
         # Calculate functional values at each step
@@ -163,7 +162,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         total_runtime = 0
         functionals = list()
-        with sf.StateFile(save_path, group='0', mode='r') as f:
+        with sf.StateFile(model, save_path, group='0', mode='r') as f:
             for n, h in enumerate(hs):
                 f.root_group_name = f'{n}'
                 runtime_start = perf_counter()
@@ -181,7 +180,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         runtime_start = perf_counter()
         info = None
         gradient_ad = None
-        with sf.StateFile(save_path, group='0', mode='r', driver='core') as f:
+        with sf.StateFile(model, save_path, group='0', mode='r', driver='core') as f:
             _, gradient_ad, _ = adjoint(model, f, Functional, fkwargs)
         runtime_end = perf_counter()
 
@@ -254,17 +253,16 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         plt.show()
 
     def show_solution_info(self):
-        save_path = self.save_path
         model = self.model
 
         solution_file = 'tmp.h5'
         if path.isfile(solution_file):
             os.remove(solution_file)
-        run_info = forward(model, self.solid_props, self.fluid_props, self.timing_props, 
+        run_info = forward(model, self.solid_props, self.fluid_props, self.timing_props,
                            h5file=solution_file, abs_tol=None)
 
         surface_area = []
-        with sf.StateFile(solution_file, group='/', mode='r') as f:
+        with sf.StateFile(model, solution_file, group='/', mode='r') as f:
             for n in range(f.get_num_states()):
                 surface_dofs = model.vert_to_vdof[model.surface_vertices].reshape(-1)
                 u = f.get_state(n)[0]
@@ -386,8 +384,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         save_path = f'out/C2SmoothnessStates-{t_final:.5f}-psub{p_sub:.1f}.h5'
 
         # Run the simulations
-        timing_props = TimingProperties(
-            **{'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max})
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max}
 
         y_gap = 0.005
         fluid_props = FluidProperties(model)
@@ -417,7 +414,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
                                h5file=save_path, h5group=f'{n}')
 
                 grad = None
-                with sf.StateFile(save_path, group=f'{n}', mode='r') as f:
+                with sf.StateFile(model, save_path, group=f'{n}', mode='r') as f:
                     _, grad, _ = adjoint(model, f, Functional, fkwargs)
                 runtime_end = perf_counter()
 
@@ -456,7 +453,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         runtime_start = perf_counter()
 
         functionals = list()
-        with sf.StateFile(save_path, group='0', mode='r') as f:
+        with sf.StateFile(model, save_path, group='0', mode='r') as f:
             for n, h in enumerate(hs):
                 f.root_group_name = f'{n}'
                 functionals.append(Functional(model, f, **fkwargs)())
@@ -472,7 +469,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         # runtime_start = perf_counter()
         # info = None
         # gradient_ad = None
-        # with sf.StateFile(save_path, group='0', mode='r') as f:
+        # with sf.StateFile(model, save_path, group='0', mode='r') as f:
         #     _, gradient_ad, _ = adjoint(model, f, Functional, fkwargs)
         # runtime_end = perf_counter()
 

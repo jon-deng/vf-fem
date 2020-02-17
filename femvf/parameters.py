@@ -15,12 +15,12 @@ class AbstractParameterization:
     """
     A parameterization is a mapping from a set of parameters to those of the forward model.
 
-    The parameters are stored in a dictionary mapping `{parameter_label: parameter_array}`, where 
+    The parameters are stored in a dictionary mapping `{parameter_label: parameter_array}`, where
     the parameterization can consist of multiple parameters labels. For example, these could be
-    `{'body_elastic_modulus': 2.0, 
-      'cover_elastic_modulus': 1.0, 
+    `{'body_elastic_modulus': 2.0,
+      'cover_elastic_modulus': 1.0,
       'interior_elastic_moduli': [3, 2, 3, ... , 5.2]}`
-    This is, hopefully, a readable way to store potentially unrelated parameters. Methods are 
+    This is, hopefully, a readable way to store potentially unrelated parameters. Methods are
     provided to convert this to a single vector which is needed for optimization routines.
 
     Parameters
@@ -58,7 +58,7 @@ class AbstractParameterization:
                 shape = (N_DOF, *parameter_type[1])
             else:
                 shape = (*parameter_type[1], )
-            
+
             self.data[key] = np.zeros(shape)
             if key in parameters:
                 self.data[key][:] = parameters[key]
@@ -125,7 +125,7 @@ class AbstractParameterization:
 
     def get_vector(self):
         return self.vector
-    
+
     def set_vector(self, value):
         """
         Assigns a parameter vector to the parameterization
@@ -184,12 +184,12 @@ class NodalElasticModuli(AbstractParameterization):
         # Store the default values as a copy of the pass default properties
         self.default_solid_props = props.FluidProperties(model, kwargs['default_solid_props'])
         self.default_fluid_props = props.SolidProperties(model, kwargs['default_fluid_props'])
-        self.default_timing_props = props.FluidProperties(model, kwargs['default_timing_props'])
+        self.default_timing_props = kwargs['default_timing_props']
 
     def convert(self):
-        solid_props = props.SolidProperties(model, self.default_solid_props)
-        fluid_props = props.FluidProperties(model, self.default_fluid_props)
-        timing_props = props.TimingProperties(model, self.default_timing_props)
+        solid_props = props.SolidProperties(self.model, self.default_solid_props)
+        fluid_props = props.FluidProperties(self.model, self.default_fluid_props)
+        timing_props = self.default_timing_props
 
         solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
 

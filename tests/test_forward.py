@@ -15,7 +15,7 @@ import dolfin as dfn
 sys.path.append('../')
 from femvf.forward import forward
 from femvf import forms
-from femvf.properties import SolidProperties, FluidProperties, TimingProperties
+from femvf.properties import SolidProperties, FluidProperties#, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 from femvf import functionals
 
@@ -48,7 +48,7 @@ class TestForward(unittest.TestCase):
         # Constant fluid properties
         p_sub = 800
 
-        timing_props = TimingProperties(**{'t0': 0, 'tmeas': times_meas, 'dt_max': dt})
+        timing_props = {'t0': 0, 'tmeas': times_meas, 'dt_max': dt}
 
         fluid_props = FluidProperties(model)
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
@@ -72,7 +72,7 @@ class TestForward(unittest.TestCase):
 
         print("Running forward model")
         runtime_start = perf_counter()
-        info = forward(model, solid_props, fluid_props, timing_props, 
+        info = forward(model, solid_props, fluid_props, timing_props,
                        h5file=save_path, h5group='/', abs_tol=None, show_figure=False)
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
