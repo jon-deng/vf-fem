@@ -50,14 +50,14 @@ class TestForward(unittest.TestCase):
 
         timing_props = TimingProperties(**{'t0': 0, 'tmeas': times_meas, 'dt_max': dt})
 
-        fluid_props = FluidProperties()
+        fluid_props = FluidProperties(model)
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
         fluid_props['alpha'] = alpha
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
 
-        solid_props = SolidProperties()
+        solid_props = SolidProperties(model)
         emod = model.emod.vector()[:].copy()
         emod[:] = 5.0e3 * PASCAL_TO_CGS
         solid_props['elastic_modulus'] = emod
@@ -72,7 +72,7 @@ class TestForward(unittest.TestCase):
 
         print("Running forward model")
         runtime_start = perf_counter()
-        info = forward(model, timing_props, solid_props, fluid_props,
+        info = forward(model, solid_props, fluid_props, timing_props, 
                        h5file=save_path, h5group='/', abs_tol=None, show_figure=False)
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

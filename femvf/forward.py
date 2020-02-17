@@ -17,7 +17,7 @@ from . import vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 # @profile
-def forward(model, timing_props, solid_props, fluid_props,
+def forward(model, solid_props, fluid_props, timing_props, 
             h5file='tmp.h5', h5group='/', abs_tol=1e-5, abs_tol_bounds=(0, 1.2),
             show_figure=False, figure_path=None):
     """

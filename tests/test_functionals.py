@@ -46,8 +46,8 @@ class TestFunctionals(unittest.TestCase):
         tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
 
         timing_props = TimingProperties(**{'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max})
-        solid_props = SolidProperties()
-        fluid_props = FluidProperties()
+        solid_props = SolidProperties(model)
+        fluid_props = FluidProperties(model)
 
         # Use an elasticity that varies linearly with y coordinate.
         y = model.mesh.coordinates()[..., 1]
@@ -66,7 +66,7 @@ class TestFunctionals(unittest.TestCase):
             print("Forward model states already exist. Using existing file.")
         else:
             print("Running forward model to generate data.")
-            forward(model, timing_props, solid_props, fluid_props, h5file=h5file,
+            forward(model, solid_props, fluid_props, timing_props, h5file=h5file,
                     abs_tol=None)
 
         self.h5file = h5file

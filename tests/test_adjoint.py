@@ -90,14 +90,14 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         timing_props = TimingProperties(
             **{'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max})
 
-        fluid_props = FluidProperties()
+        fluid_props = FluidProperties(model)
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
         fluid_props['alpha'] = alpha
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
 
-        solid_props = SolidProperties()
+        solid_props = SolidProperties(model)
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
@@ -256,12 +256,11 @@ class TestAdjointGradientCalculation(unittest.TestCase):
     def show_solution_info(self):
         save_path = self.save_path
         model = self.model
-        fluid_props = self.fluid_props
 
         solution_file = 'tmp.h5'
         if path.isfile(solution_file):
             os.remove(solution_file)
-        run_info = forward(model, self.timing_props, self.solid_props, fluid_props,
+        run_info = forward(model, self.solid_props, self.fluid_props, self.timing_props, 
                            h5file=solution_file, abs_tol=None)
 
         surface_area = []
@@ -391,11 +390,11 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
             **{'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max})
 
         y_gap = 0.005
-        fluid_props = FluidProperties()
+        fluid_props = FluidProperties(model)
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
-        solid_props = SolidProperties()
+        solid_props = SolidProperties(model)
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
@@ -414,7 +413,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
                 solid_props['elastic_modulus'] = emod + h*step_dir
-                info = forward(model, timing_props, solid_props, fluid_props, abs_tol=None,
+                info = forward(model, solid_props, fluid_props, timing_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}')
 
                 grad = None

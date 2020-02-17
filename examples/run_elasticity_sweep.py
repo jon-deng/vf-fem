@@ -32,7 +32,7 @@ def gradient(model, timing_props, solid_props, fluid_props):
     """
     with h5py.File('_tmp.h5', mode='w') as f:
         pass
-    forward(model, timing_props, solid_props, fluid_props, h5file='_tmp.h5')
+    forward(model, solid_props, fluid_props, timing_props, h5file='_tmp.h5')
 
     totalfluidwork = None
     totalinputwork = None

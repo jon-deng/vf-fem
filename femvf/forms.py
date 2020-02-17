@@ -134,19 +134,13 @@ def biform_m(a, b, rho):
     """
     return rho*ufl.dot(a, b) * ufl.dx
 
-def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cell_labels,
-    solid_props=None, fluid_props=None):
+def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cell_labels):
     """
     Return a dictionary of variational forms and other parameters.
 
     This is specific to the forward model and only exists to separate out this long ass section of
     code.
     """
-
-    if solid_props is None:
-        solid_props = SolidProperties()
-    if fluid_props is None:
-        fluid_props = FluidProperties()
 
     scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
     vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
@@ -162,15 +156,15 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
     beta = dfn.Constant(1/4)
 
     # Solid material properties
-    y_collision = dfn.Constant(solid_props['y_collision'])
-    k_collision = dfn.Constant(solid_props['k_collision'])
-    rho = dfn.Constant(solid_props['density'])
-    nu = dfn.Constant(solid_props['poissons_ratio'])
-    rayleigh_m = dfn.Constant(solid_props['rayleigh_m'])
-    rayleigh_k = dfn.Constant(solid_props['rayleigh_k'])
+    y_collision = dfn.Constant(1.0)
+    k_collision = dfn.Constant(1.0)
+    rho = dfn.Constant(1.0)
+    nu = dfn.Constant(1.0)
+    rayleigh_m = dfn.Constant(1.0)
+    rayleigh_k = dfn.Constant(1.0)
     emod = dfn.Function(scalar_fspace)
 
-    emod.vector()[:] = solid_props['elastic_modulus']
+    emod.vector()[:] = 1.0
 
     # Initial and final states
     # u: displacement, v: velocity, a: acceleration
@@ -208,7 +202,7 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
     traction = ufl.dot(fluid_force, vector_test)*ds(facet_labels['pressure'])
 
     # Use the penalty method to account for collision
-    collision_normal = dfn.Constant([0, 1])
+    collision_normal = dfn.Constant([0.0, 1.0])
     x_reference = dfn.Function(vector_fspace)
 
     vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
@@ -231,7 +225,7 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
 
     ## Boundary conditions
     # Specify DirichletBC at the VF base
-    bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0, 0]),
+    bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
                               facet_function, facet_labels['fixed'])
 
     ## Adjoint forms
@@ -297,7 +291,6 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
         'bilin.df1_demod': df1_demod}
 
     return forms
-
 
 def load_mesh(mesh_path, facet_labels, cell_labels):
     """
@@ -444,11 +437,6 @@ class ForwardModel:
         self.surface_vertices = surface_vertices[idx_sort]
         self.surface_coordinates = surface_coordinates[idx_sort]
 
-        ## Set properties
-        # Default property values are used
-        self.fluid_props = FluidProperties()
-        self.solid_props = SolidProperties()
-
         ## Variational Forms
         self._forms = _linear_elastic_forms(self.mesh,
             self.facet_function, facet_labels, self.cell_function, cell_labels)
@@ -485,6 +473,13 @@ class ForwardModel:
             'bilin.df1_dv0_adj': CachedBiFormAssembler(self.forms['bilin.df1_dv0_adj']),
             'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['bilin.df1_da0_adj'])
         }
+
+        ## Set properties
+        # Default property values are used
+        # TODO: This is a bit weird because fluid_properties only needs the function
+        # space of self to work, as long as that's defined before this then it should be okay
+        self.fluid_props = FluidProperties(self)
+        self.solid_props = SolidProperties(self)
 
     @property
     def forms(self):

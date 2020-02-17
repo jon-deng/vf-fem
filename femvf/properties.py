@@ -16,7 +16,7 @@ class Properties:
     DEFAULTS = {'foo': 1.0,
                 'bar': -2.0}
 
-    def __new__(cls, data_dict=None, **kwargs):
+    def __new__(cls, model, data_dict=None, **kwargs):
         # Check that there is a default value for each type
         for key in cls.TYPES:
             if key not in cls.DEFAULTS:
@@ -24,15 +24,29 @@ class Properties:
 
         return super().__new__(cls)
 
-    def __init__(self, data_dict=None, **kwargs):
+    def __init__(self, model, data_dict=None, **kwargs):
+        self.model = model
         self.data = dict()
 
-        if data_dict is not None:
-            for key in self.TYPES.keys():
-                self.data[key] = np.array(data_dict.get(key, self.DEFAULTS[key]))
-        else:
-            for key in self.TYPES.keys():
-                self.data[key] = np.array(kwargs.get(key, self.DEFAULTS[key]))
+        if data_dict is None:
+            data_dict = dict()
+        data_dict.update(kwargs)
+
+        for key in self.TYPES.keys():
+            data_type, data_shape = self.TYPES[key]
+
+            vector_shape = None
+            if data_type == 'field':
+                vector_shape = (model.scalar_function_space.dim(), *data_shape)
+            else:
+                vector_shape = (*data_shape, )
+
+            # Store scalar data directly as a float
+            if vector_shape == ():
+                self.data[key] = data_dict.get(key, self.DEFAULTS[key])
+            else:
+                self.data[key] = np.zeros(vector_shape)
+                self.data[key][:] = data_dict.get(key, self.DEFAULTS[key])
 
     def __getitem__(self, key):
         """
