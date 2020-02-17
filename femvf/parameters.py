@@ -11,7 +11,7 @@ from petsc4py import PETSc
 
 import numpy as np
 
-class AbstractParameterization:
+class Parameterization:
     """
     A parameterization is a mapping from a set of parameters to those of the forward model.
 
@@ -34,10 +34,10 @@ class AbstractParameterization:
 
     Attributes
     ----------
-    SHAPES : dict(tuple(str, tuple), ...)
+    TYPES : dict(tuple(str, tuple), ...)
         A dictionary storing the shape of each labeled parameter in the parameterization
     """
-    SHAPES = OrderedDict(
+    TYPES = OrderedDict(
         {'abstract_parameters': ('field', ())}
         )
 
@@ -48,13 +48,13 @@ class AbstractParameterization:
         self.model = model
         self.data = OrderedDict()
 
-        if parameters == None:
+        if parameters is None:
             parameters = {}
 
         N_DOF = model.scalar_function_space.dim()
-        for key, parameter_type in self.SHAPES.items():
+        for key, parameter_type in self.TYPES.items():
             shape = None
-            if shape[0] == 'field':
+            if parameter_type[0] == 'field':
                 shape = (N_DOF, *parameter_type[1])
             else:
                 shape = (*parameter_type[1], )
@@ -63,13 +63,16 @@ class AbstractParameterization:
             if key in parameters:
                 self.data[key][:] = parameters[key]
 
+    def __contains__(self, key):
+        return key in self.TYPES
+
     def __getitem__(self, key):
         """
         Gives dictionary like behaviour.
 
         Raises an errors if the key does not exist.
         """
-        if key not in self.TYPES:
+        if key not in self:
             raise KeyError(f"`{key}` is not a valid property")
         else:
             return self.data[key]
@@ -82,7 +85,7 @@ class AbstractParameterization:
 
         Raises an errors if the key does not exist.
         """
-        if key not in self.TYPES:
+        if key not in self:
             raise KeyError(f"`{key}` is not a valid property")
         else:
             self.data[key][:] = value
@@ -119,7 +122,7 @@ class AbstractParameterization:
         Return the size of the parameter vector
         """
         n = 0
-        for key, item in self.data:
+        for key, item in self.data.items():
             n += item.size
         return n
 
@@ -170,11 +173,11 @@ class AbstractParameterization:
         """
         return NotImplementedError
 
-class NodalElasticModuli(AbstractParameterization):
+class NodalElasticModuli(Parameterization):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
-    SHAPES = OrderedDict(
+    TYPES = OrderedDict(
         {'elastic_moduli': ('field', ())}
     )
 
@@ -213,7 +216,7 @@ class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
-    SHAPES = OrderedDict(
+    TYPES = OrderedDict(
         {'elastic_moduli': ('field', ()),
          'lagrange_multiplier': ('const', ())}
     )

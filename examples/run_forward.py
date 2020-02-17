@@ -28,8 +28,7 @@ if __name__ == '__main__':
     # Solid and Fluid properties
     solid_props = props.SolidProperties(model)
     fluid_props = props.FluidProperties(model)
-    timing_props = props.TimingProperties(model, 
-        **{'t0': 0.0, 'tmeas': times_meas, 'dt_max': dt})
+    timing_props = {'t0': 0.0, 'tmeas': times_meas, 'dt_max': dt}
 
     mesh_dir = os.path.expanduser('~/GraduateSchool/Projects/FEMVFOptimization/meshes/')
     mesh_base_filename = 'geometry2'
