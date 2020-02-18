@@ -26,6 +26,9 @@ class Parameterization:
     Parameters
     ----------
     model : forms.ForwardModel
+    constants : dict
+        A dictionary of labelled constants mapping needed labels to constant values
+        used in the parameterization.
     parameters : dict, optional
         A mapping of labeled parameters to values to initialize the parameterization
     kwargs : optional
@@ -34,6 +37,9 @@ class Parameterization:
 
     Attributes
     ----------
+    model
+
+
     TYPES : dict(tuple(str, tuple), ...)
         A dictionary storing the shape of each labeled parameter in the parameterization
     """
@@ -44,7 +50,8 @@ class Parameterization:
     # def __new__(cls, model, **kwargs):
     #     return super().__new__(cls)
 
-    def __init__(self, model, parameters=None, **kwargs):
+    def __init__(self, model, constants, parameters=None):
+        self._constants = constants
         self.model = model
         self.data = OrderedDict()
 
@@ -103,7 +110,14 @@ class Parameterization:
         return self.data.__repr__()
 
     def copy(self):
-        return type(self)(self.model, parameters=self.data)
+        return type(self)(self.model, self._constants, parameters=self.data)
+
+    @property
+    def constants(self):
+        """
+        Returns constant values associated with the parameterization
+        """
+        return self._constants
 
     @property
     def vector(self):
@@ -181,20 +195,23 @@ class NodalElasticModuli(Parameterization):
         {'elastic_moduli': ('field', ())}
     )
 
-    def __init__(self, model, **kwargs):
-        super(NodalElasticModuli, self).__init__(model, **kwargs)
+    CONSTANTS_LABELS = ('default_solid_props', 
+                        'default_fluid_props', 
+                        'default_timing_props')
+    def __init__(self, model, constants, parameters=None):
+        
+        for label in self.CONSTANTS_LABELS:
+            if label not in constants:
+                raise ValueError(f"{label} was not found as a constant value")
 
-        # Store the default values as a copy of the pass default properties
-        self.default_solid_props = props.FluidProperties(model, kwargs['default_solid_props'])
-        self.default_fluid_props = props.SolidProperties(model, kwargs['default_fluid_props'])
-        self.default_timing_props = kwargs['default_timing_props']
+        super(NodalElasticModuli, self).__init__(model, constants, parameters)
 
     def convert(self):
-        solid_props = props.SolidProperties(self.model, self.default_solid_props)
-        fluid_props = props.FluidProperties(self.model, self.default_fluid_props)
-        timing_props = self.default_timing_props
+        solid_props = props.SolidProperties(self.model, self.constants['default_solid_props'])
+        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
+        timing_props = self.constants['default_timing_props']
 
-        solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
+        solid_props['elastic_modulus'] = self.data['elastic_moduli']
 
         return solid_props, fluid_props, timing_props
 
