@@ -2,6 +2,8 @@
 Contains definitions of parametrizations. These objects should provide a mapping from their specific parameters to standardized parameters of the forward model, as well as the derivative of the map.
 """
 
+import math
+# from functools import reduce
 from collections import OrderedDict
 from . import properties as props
 from . import constants
@@ -15,19 +17,21 @@ class Parameterization:
     """
     A parameterization is a mapping from a set of parameters to those of the forward model.
 
-    The parameters are stored in a dictionary mapping `{parameter_label: parameter_array}`, where
-    the parameterization can consist of multiple parameters labels. For example, these could be
+    The parameters are stored in a dictionary mapping `{param_label: param_values}`. The
+    the parameterization can consist of multiple parameters labels, for example,
     `{'body_elastic_modulus': 2.0,
       'cover_elastic_modulus': 1.0,
-      'interior_elastic_moduli': [3, 2, 3, ... , 5.2]}`
-    This is, hopefully, a readable way to store potentially unrelated parameters. Methods are
+      'interior_elastic_moduli': np.array([3, 2, 3, ... , 5.2])}`
+
+    The underlying data is stored in a single vector but can be accessed either using the label or
+    the vector. This is, hopefully, a readable way to store potentially unrelated parameters. Methods are
     provided to convert this to a single vector which is needed for optimization routines.
 
     Parameters
     ----------
     model : forms.ForwardModel
     constants : dict
-        A dictionary of labelled constants mapping needed labels to constant values
+        A dictionary of labelled constants mapping labels to constant values
         used in the parameterization.
     parameters : dict, optional
         A mapping of labeled parameters to values to initialize the parameterization
@@ -37,15 +41,21 @@ class Parameterization:
 
     Attributes
     ----------
-    model
-
-
-    TYPES : dict(tuple(str, tuple), ...)
+    model : femvf.forms.ForwardModel
+    constants : dict({str: value})
+        A dictionary of labeled constants to values
+    vector : np.ndarray
+        The parameter vector
+    PARAM_TYPES : OrderedDict(tuple( 'field'|'const' , tuple), ...)
         A dictionary storing the shape of each labeled parameter in the parameterization
+    _PARAM_SHAPES : dict({param_label: shape_of_param_array})
+    _PARAM_OFFSETS : dict({param_label: idx_offset_in_vector})
     """
-    TYPES = OrderedDict(
+
+    PARAM_TYPES = OrderedDict(
         {'abstract_parameters': ('field', ())}
         )
+    CONSTANT_LABELS = {'foo': 2, 'bar': 99}
 
     # def __new__(cls, model, **kwargs):
     #     return super().__new__(cls)
@@ -53,64 +63,96 @@ class Parameterization:
     def __init__(self, model, constants, parameters=None):
         self._constants = constants
         self.model = model
-        self.data = OrderedDict()
 
+        # Calculate the shape of the array for each labeled parameter and its offset in the vector
+        self._PARAM_SHAPES = dict()
+        self._PARAM_OFFSETS = dict()
+        offset = 0
+        N_DOF = model.scalar_function_space.dim()
+        for key, param_type in self.PARAM_TYPES.items():
+            shape = None
+            if param_type[0] == 'field':
+                shape = (N_DOF, *param_type[1])
+            elif param_type[0] == 'const':
+                shape = (*param_type[1], )
+            else:
+                raise ValueError("I haven't though about what to do here yet.")
+            self._PARAM_SHAPES[key] = shape
+            self._PARAM_OFFSETS[key] = offset
+            offset += np.prod(shape)
+
+        # Initialize the size of the containing vector. The total offset from before is the
+        # final size
+        self._vector = np.zeros(offset, dtype=float)
+
+        # Assign any supplied values in the initialization
         if parameters is None:
             parameters = {}
 
-        N_DOF = model.scalar_function_space.dim()
-        for key, parameter_type in self.TYPES.items():
-            shape = None
-            if parameter_type[0] == 'field':
-                shape = (N_DOF, *parameter_type[1])
-            else:
-                shape = (*parameter_type[1], )
+        for label in self.PARAM_TYPES:
+            offset = self._PARAM_OFFSETS[label]
+            size = np.prod(self._PARAM_SHAPES[label])
 
-            self.data[key] = np.zeros(shape)
-            if key in parameters:
-                self.data[key][:] = parameters[key]
+            if label in parameters:
+                self._vector[offset:offset+size] = parameters[label]
 
     def __contains__(self, key):
-        return key in self.TYPES
+        return key in self.PARAM_TYPES
 
     def __getitem__(self, key):
         """
-        Gives dictionary like behaviour.
+        Returns the slice corresponding to the labelled parameter
 
-        Raises an errors if the key does not exist.
+        Parameters
+        ----------
+        key : str
+            A parameter label
         """
+        # Get the parameter label from the key
+        label = key
+
+        offset = self._PARAM_OFFSETS[label]
+        shape = self._PARAM_SHAPES[label]
+        size = np.prod(shape)
+
         if key not in self:
-            raise KeyError(f"`{key}` is not a valid property")
+            raise KeyError(f"`{key}` is not a valid parameter label")
         else:
-            return self.data[key]
+            return self.vector[offset:offset+size].reshape(shape)
 
-    def __setitem__(self, key, value):
-        """
-        Gives dictionary like behaviour.
+    # def __setitem__(self, key, value):
+    #     """
+    #     Gives access to labelled parameters
 
-        Note that this always tries to assign to the while parameter array for the specific key.
+    #     Raises an errors if the key does not exist.
 
-        Raises an errors if the key does not exist.
-        """
-        if key not in self:
-            raise KeyError(f"`{key}` is not a valid property")
-        else:
-            self.data[key][:] = value
+    #     Parameters
+    #     ----------
+    #     key : tuple(str, slice())
+    #         The key is a tuple with atleast 1 element. The first element is a parameter label.
+    #         Following elements are numpy style slices that index the sub-array for the given labeled
+    #         parameter.
+    #     """
+    #     # The slice is probably redundant here becase __getitem__ returns a slice anyway
+    #     # I put it here because the linter gives me an error
+    #     self.__getitem__(key)[:] = value
 
     def __iter__(self):
         """
         Copy dictionary iter behaviour
         """
-        return self.data.__iter__()
+        return self.PARAM_TYPES.__iter__()
 
     def __str__(self):
-        return self.data.__str__()
+        return self.PARAM_TYPES.__str__()
 
     def __repr__(self):
-        return self.data.__repr__()
+        return self.PARAM_TYPES.__repr__()
 
     def copy(self):
-        return type(self)(self.model, self._constants, parameters=self.data)
+        out = type(self)(self.model, self._constants)
+        out.vector[:] = self.vector
+        return out
 
     @property
     def constants(self):
@@ -124,35 +166,28 @@ class Parameterization:
         """
         Returns the flattened parameter vector
         """
-        parameter_vectors = []
-        for param_label in self:
-            parameter_vectors.append(self[param_label].flat)
-
-        return np.concatenate(parameter_vectors, axis=-1)
+        return self._vector
 
     @property
     def size(self):
         """
         Return the size of the parameter vector
         """
-        n = 0
-        for key, item in self.data.items():
-            n += item.size
-        return n
+        return self.vector.size
 
-    def get_vector(self):
-        return self.vector
+    # def get_vector(self):
+    #     return self.vector
 
-    def set_vector(self, value):
-        """
-        Assigns a parameter vector to the parameterization
-        """
-        idx_start = 0
-        for param_label in self:
-            idx_end = idx_start + self[param_label].size
-            self[param_label][:] = value[idx_start:idx_end]
+    # def set_vector(self, value):
+    #     """
+    #     Assigns a parameter vector to the parameterization
+    #     """
+    #     idx_start = 0
+    #     for param_label in self:
+    #         idx_end = idx_start + self[param_label].size
+    #         self[param_label][:] = value[idx_start:idx_end]
 
-            idx_start = idx_end
+    #         idx_start = idx_end
 
     def convert(self):
         """
@@ -191,16 +226,16 @@ class NodalElasticModuli(Parameterization):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
-    TYPES = OrderedDict(
+    PARAM_TYPES = OrderedDict(
         {'elastic_moduli': ('field', ())}
     )
 
-    CONSTANTS_LABELS = ('default_solid_props', 
-                        'default_fluid_props', 
-                        'default_timing_props')
+    CONSTANT_LABELS = ('default_solid_props',
+                       'default_fluid_props',
+                       'default_timing_props')
     def __init__(self, model, constants, parameters=None):
-        
-        for label in self.CONSTANTS_LABELS:
+
+        for label in self.CONSTANT_LABELS:
             if label not in constants:
                 raise ValueError(f"{label} was not found as a constant value")
 
@@ -211,11 +246,11 @@ class NodalElasticModuli(Parameterization):
         fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
         timing_props = self.constants['default_timing_props']
 
-        solid_props['elastic_modulus'] = self.data['elastic_moduli']
+        solid_props['elastic_modulus'] = self['elastic_moduli']
 
         return solid_props, fluid_props, timing_props
 
-    def dconvert(self):
+    def dconvert(self, demod):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -227,13 +262,13 @@ class NodalElasticModuli(Parameterization):
 
         # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
 
-        return 1.0
+        return 1.0*demod
 
 class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
-    TYPES = OrderedDict(
+    PARAM_TYPES = OrderedDict(
         {'elastic_moduli': ('field', ()),
          'lagrange_multiplier': ('const', ())}
     )

@@ -36,7 +36,7 @@ from femvf import functionals as funcs
 from femvf import statefile as sf
 
 sys.path.append(path.expanduser('~/lib/vf-optimization'))
-from vfopt import functionals as extra_funcs
+from optvf import functionals as extra_funcs
 
 class TestAdjointGradientCalculation(unittest.TestCase):
     OVERWRITE_FORWARD_SIMULATIONS = True

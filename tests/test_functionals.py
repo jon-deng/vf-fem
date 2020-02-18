@@ -18,7 +18,7 @@ from femvf.constants import PASCAL_TO_CGS
 from femvf import functionals as basic_functionals
 
 sys.path.append(path.expanduser('~/lib/vf-optimization'))
-from vfopt import functionals
+from optvf import functionals
 
 class TestFunctionals(unittest.TestCase):
     OVERWRITE_FORWARD_SIMULATIONS = False
