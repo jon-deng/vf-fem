@@ -62,7 +62,6 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     model.set_iter_params(**iter_params2)
 
     # Assemble needed forms
-    # breakpoint()
     df2_du1 = model.assem_df1_du0_adj()
     df2_dv1 = model.assem_df1_dv0_adj()
     df2_da1 = model.assem_df1_da0_adj()

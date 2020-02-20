@@ -26,7 +26,7 @@ import ufl
 
 import scipy.signal as sig
 
-class AbstractFunctional:
+class Functional:
     """
     Represents a functional over the solution history of a forward model run.
 
@@ -46,7 +46,7 @@ class AbstractFunctional:
     kwargs : dict
         A dictionary of additional options of how to compute the functional
     funcs : dict of callable
-        Dictionary containing sub-functionals instances that are used in computing the functional
+        Dictionary of member functionals which are used in computing the given functional.
     """
     def __init__(self, model, f, **kwargs):
         self.model = model
@@ -90,9 +90,28 @@ class AbstractFunctional:
         """
         Return the sensitivity of the functional with respect to the parameters.
         """
-        return None
+        return NotImplementedError("You have to implement this")
 
-class FinalDisplacementNorm(AbstractFunctional):
+class Null(Functional):
+    """
+    The null functional that always returns 0
+    """
+    def __call__(self):
+        return 0.0
+
+    def du(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def dv(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def da(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def dparam(self):
+        return dfn.Function(self.model.scalar_function_space).vector()
+
+class FinalDisplacementNorm(Functional):
     r"""
     Return the l2 norm of displacement at the final time
 
@@ -133,7 +152,10 @@ class FinalDisplacementNorm(AbstractFunctional):
 
         return res
 
-class FinalVelocityNorm(AbstractFunctional):
+    def dparam(self):
+        return dfn.Function(self.model.scalar_function_space).vector()
+
+class FinalVelocityNorm(Functional):
     r"""
     Return the l2 norm of velocity at the final time
 
@@ -172,7 +194,7 @@ class FinalVelocityNorm(AbstractFunctional):
 
         return res
 
-class DisplacementNorm(AbstractFunctional):
+class DisplacementNorm(Functional):
     r"""
     Represents the sum over time of l2 norms of displacements.
 
@@ -221,7 +243,7 @@ class DisplacementNorm(AbstractFunctional):
 
         return res
 
-class VelocityNorm(AbstractFunctional):
+class VelocityNorm(Functional):
     r"""
     Represents the sum over time of l2 norms of velocities.
 
@@ -266,7 +288,7 @@ class VelocityNorm(AbstractFunctional):
 
         return res
 
-class StrainEnergy(AbstractFunctional):
+class StrainEnergy(Functional):
     """
     Represent the total sum of strain work dissipated in the tissue from damping
     """
@@ -314,7 +336,7 @@ class StrainEnergy(AbstractFunctional):
     def dparam(self):
         return dfn.assemble(self.ddamping_power_demod) * self.model.dt.values()[0]
 
-class FluidtoSolidWork(AbstractFunctional):
+class FluidtoSolidWork(Functional):
     """
     Return work done by the fluid on the vocal folds.
 
@@ -386,7 +408,7 @@ class FluidtoSolidWork(AbstractFunctional):
     def dparam(self):
         return None
 
-class VolumeFlow(AbstractFunctional):
+class VolumeFlow(Functional):
     """
     Return the total volume of fluid that flowed through the vocal folds
 
@@ -431,7 +453,7 @@ class VolumeFlow(AbstractFunctional):
     def dparam(self):
         return None
 
-class SubglottalWork(AbstractFunctional):
+class SubglottalWork(Functional):
     """
     Return the total work input into the fluid from the lungs (subglottal).
     """
@@ -477,7 +499,7 @@ class SubglottalWork(AbstractFunctional):
     def dparam(self):
         return None
 
-class TransferEfficiency(AbstractFunctional):
+class TransferEfficiency(Functional):
     """
     Returns the total vocal efficiency.
 
@@ -520,7 +542,7 @@ class TransferEfficiency(AbstractFunctional):
     def dparam(self):
         return None
 
-class MFDR(AbstractFunctional):
+class MFDR(Functional):
     """
     Return the maximum flow declination rate.
     """
@@ -588,7 +610,7 @@ class MFDR(AbstractFunctional):
     def dparam(self):
         return None
 
-class WSSGlottalWidth(AbstractFunctional):
+class WSSGlottalWidth(Functional):
     """
     Return the weighted sum of squared glottal widths.
 
@@ -715,7 +737,7 @@ class WSSGlottalWidth(AbstractFunctional):
 
         return dwss_dt
 
-class SampledMeanFlowRate(AbstractFunctional):
+class SampledMeanFlowRate(Functional):
     def __init__(self, model, f, **kwargs):
         super(SampledMeanFlowRate, self).__init__(model, f, **kwargs)
 
@@ -752,7 +774,7 @@ class SampledMeanFlowRate(AbstractFunctional):
         return dtotalflow_dun
 
     def dparam(self):
-        return None
+        return dfn.Function(self.model.scalar_function_space).vector()
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
 # deleted that code... need to make it again.

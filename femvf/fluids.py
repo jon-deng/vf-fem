@@ -147,7 +147,6 @@ def res_fluid_quasistatic(n, p_bcs, qp0, xy_ref, uva0, fluid_props):
     fdiff = None
     NUM_NODE = xy_ref.shape[0]
 
-    # breakpoint()
     if n == NUM_NODE-1:
         fdiff = bd
     elif n == 0:
@@ -308,7 +307,6 @@ def fluid_pressure(surface_state, fluid_props):
     idx_sep = 0
     xy_min = surface_state[0][idx_min]
     xy_sep = surface_state[0][idx_sep]
-    # breakpoint()
     info = {'flow_rate': flow_rate,
             'dt_flow_rate': dt_flow_rate,
             'idx_min': idx_min,
@@ -486,7 +484,7 @@ def smooth_minimum(x, alpha=-1000):
         function as `alpha` approachs negative infinity.
     """
 
-    # For numerical stability subtract off a judicious constant from `alpha*x` to prevent exponents
+    # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
     # being too small or too large. This constant factors out from the division.
     const_numerical_stability = np.max(alpha*x)
     w = np.exp(alpha*x - const_numerical_stability)
@@ -507,7 +505,6 @@ def dsmooth_minimum_dx(x, alpha=-1000):
     const_numerical_stability = np.max(alpha*x)
     w = np.exp(alpha*x - const_numerical_stability)
     return (w/np.sum(w)) * (1+alpha*(x - smooth_minimum(x, alpha)))
-
 
 def sigmoid(x):
     return 1/(1+np.exp(-x))
@@ -578,7 +575,6 @@ def smooth_selection(x, y, y0, sigma=1.0):
     # exponentiation doesn't change anything in the final ratio of weights
     log_w = log_gaussian(y, y0, sigma)
     w = np.exp(log_w - np.max(log_w))
-    # breakpoint()
 
     return np.sum(x*w) / np.sum(w)
 

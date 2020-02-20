@@ -57,8 +57,14 @@ class Parameterization:
         )
     CONSTANT_LABELS = {'foo': 2, 'bar': 99}
 
-    # def __new__(cls, model, **kwargs):
-    #     return super().__new__(cls)
+    def __new__(cls, model, constants, parameters=None):
+        # Raise an error if one of the required constant labels is missing, then proceed with
+        # initializing
+        for label in cls.CONSTANT_LABELS:
+            if label not in constants:
+                raise ValueError(f"Could not find constant `{label}` in supplied constants")
+
+        return super().__new__(cls)
 
     def __init__(self, model, constants, parameters=None):
         self._constants = constants
@@ -79,17 +85,16 @@ class Parameterization:
                 raise ValueError("I haven't though about what to do here yet.")
             self._PARAM_SHAPES[key] = shape
             self._PARAM_OFFSETS[key] = offset
-            offset += np.prod(shape)
+            offset += np.prod(shape, dtype=int, initial=1)
 
-        # Initialize the size of the containing vector. The total offset from before is the
-        # final size
+        # Initialize the size of the containing vector (the final calculated offset)
         self._vector = np.zeros(offset, dtype=float)
 
-        # Assign any supplied values in the initialization
+        # Assign the parameter values supplied in the initialization
         if parameters is None:
             parameters = {}
 
-        for label in self.PARAM_TYPES:
+        for label in self:
             offset = self._PARAM_OFFSETS[label]
             size = np.prod(self._PARAM_SHAPES[label])
 
@@ -113,7 +118,7 @@ class Parameterization:
 
         offset = self._PARAM_OFFSETS[label]
         shape = self._PARAM_SHAPES[label]
-        size = np.prod(shape)
+        size = np.prod(shape, dtype=int, initial=1)
 
         if key not in self:
             raise KeyError(f"`{key}` is not a valid parameter label")
@@ -122,20 +127,24 @@ class Parameterization:
 
     # def __setitem__(self, key, value):
     #     """
-    #     Gives access to labelled parameters
-
-    #     Raises an errors if the key does not exist.
+    #     Sets the slice corresponding to the labelled parameter in the parameter vector
 
     #     Parameters
     #     ----------
-    #     key : tuple(str, slice())
-    #         The key is a tuple with atleast 1 element. The first element is a parameter label.
-    #         Following elements are numpy style slices that index the sub-array for the given labeled
-    #         parameter.
+    #     key : str
+    #         A parameter label
     #     """
-    #     # The slice is probably redundant here becase __getitem__ returns a slice anyway
-    #     # I put it here because the linter gives me an error
-    #     self.__getitem__(key)[:] = value
+    #     # Get the parameter label from the key
+    #     label = key
+
+    #     offset = self._PARAM_OFFSETS[label]
+    #     shape = self._PARAM_SHAPES[label]
+    #     size = np.prod(shape, dtype=int, initial=1)
+
+    #     if key not in self:
+    #         raise KeyError(f"`{key}` is not a valid parameter label")
+    #     else:
+    #         self.vector[offset:offset+size].reshape(shape)[:]
 
     def __iter__(self):
         """
@@ -150,21 +159,21 @@ class Parameterization:
         return self.PARAM_TYPES.__repr__()
 
     def copy(self):
-        out = type(self)(self.model, self._constants)
+        out = type(self)(self.model, self.constants)
         out.vector[:] = self.vector
         return out
 
     @property
     def constants(self):
         """
-        Returns constant values associated with the parameterization
+        Return constant values associated with the parameterization
         """
         return self._constants
 
     @property
     def vector(self):
         """
-        Returns the flattened parameter vector
+        Return the flattened parameter vector
         """
         return self._vector
 
@@ -174,20 +183,6 @@ class Parameterization:
         Return the size of the parameter vector
         """
         return self.vector.size
-
-    # def get_vector(self):
-    #     return self.vector
-
-    # def set_vector(self, value):
-    #     """
-    #     Assigns a parameter vector to the parameterization
-    #     """
-    #     idx_start = 0
-    #     for param_label in self:
-    #         idx_end = idx_start + self[param_label].size
-    #         self[param_label][:] = value[idx_start:idx_end]
-
-    #         idx_start = idx_end
 
     def convert(self):
         """
@@ -233,13 +228,6 @@ class NodalElasticModuli(Parameterization):
     CONSTANT_LABELS = ('default_solid_props',
                        'default_fluid_props',
                        'default_timing_props')
-    def __init__(self, model, constants, parameters=None):
-
-        for label in self.CONSTANT_LABELS:
-            if label not in constants:
-                raise ValueError(f"{label} was not found as a constant value")
-
-        super(NodalElasticModuli, self).__init__(model, constants, parameters)
 
     def convert(self):
         solid_props = props.SolidProperties(self.model, self.constants['default_solid_props'])
@@ -297,4 +285,3 @@ class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
     #     # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
 
     #     return 1.0
-

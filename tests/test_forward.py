@@ -77,8 +77,6 @@ class TestForward(unittest.TestCase):
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-        # breakpoint()
-
         fig, ax = plt.subplots(1, 1)
         ax.plot(info['time'], info['glottal_width'])
 

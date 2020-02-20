@@ -123,7 +123,6 @@ class Test1DEuler(CommonSetup):
         fluid_props['a_sub'] = self.area[0] # This is because I didn't set the subglottal area conditions for 1d euler version
         p_guess, info = fluids.fluid_pressure(x, fluid_props)
         q_guess = info['flow_rate']/self.area
-        # breakpoint()
 
         # You can approximate the momentum residual using
         # p_guess[2:]-p_guess[:-2] + rho*q_guess[1:-1]*(q_guess[2:]-q_guess[:-2])
@@ -185,7 +184,6 @@ class TestBernoulli(CommonSetup):
             dy[ii, 1] += DY
             x = (surface_coordinates+dy, np.zeros(dy.shape), np.zeros(dy.shape))
             pressure, *_ = fluids.fluid_pressure(x, fluid_props)
-            # breakpoint()
 
             dp_du_fd[:, 2*ii+1] = np.array(pressure)
 
