@@ -102,8 +102,7 @@ def forward(model, solid_props, fluid_props, timing_props,
         n_state = 0
 
         for t_target in tmeas:
-
-            # keep incrementing until you reach the target time
+            # Keep incrementing until you reach the target time
             dt_proposal = dt_max
             while not isclose(t_current, t_target, rel_tol=1e-7, abs_tol=10*2**-52):
                 assert t_current < t_target

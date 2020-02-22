@@ -225,7 +225,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         gradient += -(df1_dparam*adj_x1[0]) #+ BLAH*adj_x1[1] + BLAH*adj_x1[2]
 
-        dfunc_dparam = functional.dparam()
+        dfunc_dparam = functional.dp()
         if dfunc_dparam is not None:
             gradient += dfunc_dparam
 

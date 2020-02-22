@@ -26,18 +26,79 @@ import ufl
 
 import scipy.signal as sig
 
+# class TypeFunctional(type):
+#     """
+#     This is a metaclass for the Functional that could (will?) be used to implement special methods.
+    
+#     This could be used to allow creating new `Functional` classes by performing arithmetic 
+#     operations on existing functionals. This could make it easy to express a penalty function, for 
+#     example as:
+#     `PenaltyFunctional = Functional + (1/2)*penalty*ConstraintFunctional**2`
+#     """
+#     # Left binary ops
+#     # funcs = {'': 
+#     #          '': }
+#     def __new__(self, model, f, **kwargs):
+#         pass
+
+#     def __add__(self, other):
+#         class Ret(Functional):
+#             def eval(self):
+#                 return 
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
+
+#         return Ret
+
+#     def __sub__(self, other):
+#         return NotImplementedError("")
+
+#     def __mul__(self, other):
+#         return NotImplementedError("")
+
+#     def __truediv__(self, other):
+#         return NotImplementedError("")
+
+#     def __pow__(self, other):
+#         return NotImplementedError("")
+
+#     # Right binary ops
+#     def __radd__(self, other):
+#         return NotImplementedError("")
+
+#     def __rsub__(self, other):
+#         return NotImplementedError("")
+
+#     def __rmul__(self, other):
+#         return NotImplementedError("")
+
+#     def __rtruediv__(self, other):
+#         return NotImplementedError("")
+
+#     # Unary ops
+#     def __neg__(self):
+#         return NotImplementedError("")
+
+#     def __pos__(self):
+#         return NotImplementedError("")
+
 class Functional:
     """
-    Represents a functional over the solution history of a forward model run.
+    This class represents a functional computed over the solution history of a forward model run.
+
+    After creating an instance of the Functional, the value of the functional will basically be a
+    constant. After it's computed the first time, it's cached in _value.
 
     Parameters
     ----------
-    model : ForwardModel
+    model : forms.ForwardModel
         The forward model instance
     f : StateFile
         A file object containing the solution history of the model run.
     kwargs : optional
-        Additional arguments that specify how the functional should be computed
+        Additional arguments that specify functional specific options of how it should be computed
 
     Attributes
     ----------
@@ -45,8 +106,14 @@ class Functional:
     model : forms.ForwardModel
     kwargs : dict
         A dictionary of additional options of how to compute the functional
+    value : float
+        The value of the functional. This should be a constant any time it's computed because
+        the instance of the functional is always tied to the same file.
     funcs : dict of callable
-        Dictionary of member functionals which are used in computing the given functional.
+        Dictionary of any member functionals which are used in computing the functional.
+    cache : dict
+        A dictionary of cached values. These are specific to the functional and values are likely 
+        to be cached if they are needed to compute sensitivities and are expensive to compute. 
     """
     def __init__(self, model, f, **kwargs):
         self.model = model
@@ -55,12 +122,19 @@ class Functional:
 
         self.funcs = dict()
         self.cache = dict()
+        self._value = None
 
     def __call__(self):
+        if self._value is None:
+            self._value = self.eval()
+        else:
+            return self._value
+
+    def eval(self):
         """
         Return the value of the functional.
         """
-        raise NotImplementedError("Method not implemented")
+        raise NotImplementedError("You have to implement this you goofball")
 
     def du(self, n, iter_params0, iter_params1):
         """
@@ -86,7 +160,7 @@ class Functional:
     def da(self, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dparam(self):
+    def dp(self):
         """
         Return the sensitivity of the functional with respect to the parameters.
         """
@@ -96,7 +170,7 @@ class Null(Functional):
     """
     The null functional that always returns 0
     """
-    def __call__(self):
+    def eval(self):
         return 0.0
 
     def du(self, n, iter_params0, iter_params1):
@@ -108,7 +182,7 @@ class Null(Functional):
     def da(self, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dparam(self):
+    def dp(self):
         return dfn.Function(self.model.scalar_function_space).vector()
 
 class FinalDisplacementNorm(Functional):
@@ -121,7 +195,7 @@ class FinalDisplacementNorm(Functional):
     # def __init__(self, model, f, **kwargs):
     #     super(FinalDisplacementNorm, self).__init__(model, f, **kwargs)
 
-    def __call__(self):
+    def eval(self):
         u = dfn.Function(self.model.vector_function_space).vector()
 
         _u, _, _ = self.f.get_state(self.f.size-1)
@@ -152,7 +226,7 @@ class FinalDisplacementNorm(Functional):
 
         return res
 
-    def dparam(self):
+    def dp(self):
         return dfn.Function(self.model.scalar_function_space).vector()
 
 class FinalVelocityNorm(Functional):
@@ -165,7 +239,7 @@ class FinalVelocityNorm(Functional):
     # def __init__(self, model, f, **kwargs):
     #     super(FinalDisplacementNorm, self).__init__(model, f, **kwargs)
 
-    def __call__(self):
+    def eval(self):
         v = dfn.Function(self.model.vector_function_space).vector()
 
         _, _v, _ = self.f.get_state(self.f.size-1)
@@ -208,7 +282,7 @@ class DisplacementNorm(Functional):
         self.kwargs.setdefault('m_start', 0)
         self.kwargs.setdefault('m_final', self.f.size)
 
-    def __call__(self):
+    def eval(self):
         # N_STATE = self.f.size
 
         res = 0
@@ -255,7 +329,7 @@ class VelocityNorm(Functional):
 
         self.kwargs.setdefault('use_meas_indices', False)
 
-    def __call__(self):
+    def eval(self):
         N_STATE = self.f.size
         v = dfn.Function(self.model.vector_function_space).vector()
 
@@ -314,7 +388,7 @@ class StrainEnergy(Functional):
 
         self.kwargs.setdefault('m_start', 0)
 
-    def __call__(self):
+    def eval(self):
         N_START = self.kwargs['m_start']
         N_STATE = self.f.get_num_states()
 
@@ -333,7 +407,7 @@ class StrainEnergy(Functional):
 
         return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
 
-    def dparam(self):
+    def dp(self):
         return dfn.assemble(self.ddamping_power_demod) * self.model.dt.values()[0]
 
 class FluidtoSolidWork(Functional):
@@ -352,7 +426,7 @@ class FluidtoSolidWork(Functional):
 
         self.kwargs.setdefault('m_start', 0)
 
-    def __call__(self):
+    def eval(self):
         N_START = self.kwargs['m_start']
         N_STATE = self.f.get_num_states()
 
@@ -405,7 +479,7 @@ class FluidtoSolidWork(Functional):
     def da(self, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dparam(self):
+    def dp(self):
         return None
 
 class VolumeFlow(Functional):
@@ -423,7 +497,7 @@ class VolumeFlow(Functional):
         self.kwargs.setdefault('m_start', 0)
         self.kwargs.setdefault('tukey_alpha', 0.0)
 
-    def __call__(self):
+    def eval(self):
         N_STATE = self.f.get_num_states()
         N_START = self.kwargs['m_start']
 
@@ -450,7 +524,7 @@ class VolumeFlow(Functional):
 
         return dtotalflow_dun
 
-    def dparam(self):
+    def dp(self):
         return None
 
 class SubglottalWork(Functional):
@@ -462,7 +536,7 @@ class SubglottalWork(Functional):
 
         self.kwargs.setdefault('m_start', 0)
 
-    def __call__(self):
+    def eval(self):
         meas_ind = self.f.get_meas_indices()
         N_START = meas_ind[self.kwargs['m_start']]
         N_STATE = self.f.get_num_states()
@@ -496,7 +570,7 @@ class SubglottalWork(Functional):
 
         return ret
 
-    def dparam(self):
+    def dp(self):
         return None
 
 class TransferEfficiency(Functional):
@@ -514,7 +588,7 @@ class TransferEfficiency(Functional):
         self.funcs['FluidWork'] = FluidtoSolidWork(model, f, **kwargs)
         self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
 
-    def __call__(self):
+    def eval(self):
         totalfluidwork = self.funcs['FluidWork']()
         totalinputwork = self.funcs['SubglottalWork']()
 
@@ -539,7 +613,7 @@ class TransferEfficiency(Functional):
         else:
             return dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
 
-    def dparam(self):
+    def dp(self):
         return None
 
 class MFDR(Functional):
@@ -551,7 +625,7 @@ class MFDR(Functional):
 
         self.kwargs.setdefault('m_start', 0)
 
-    def __call__(self):
+    def eval(self):
         flow_rate = []
         info = {}
 
@@ -607,7 +681,7 @@ class MFDR(Functional):
 
         return res
 
-    def dparam(self):
+    def dp(self):
         return None
 
 class WSSGlottalWidth(Functional):
@@ -629,7 +703,7 @@ class WSSGlottalWidth(Functional):
 
         assert kwargs['meas_indices'].size == kwargs['meas_glottal_widths'].size
 
-    def __call__(self):
+    def eval(self):
         wss = 0
 
         u = dfn.Function(self.model.vector_function_space)
@@ -700,7 +774,7 @@ class WSSGlottalWidth(Functional):
 
         return dwss_du
 
-    def dparam(self):
+    def dp(self):
         """
         Returns the sensitivity of the thing wrt to the starting time.
         """
@@ -743,7 +817,7 @@ class SampledMeanFlowRate(Functional):
 
         self.kwargs.setdefault('tukey_alpha', 0.0)
 
-    def __call__(self):
+    def eval(self):
         meas_ind = self.f.get_meas_indices()
         tukey_window = sig.tukey(meas_ind.size, alpha=self.kwargs['tukey_alpha'])
 
@@ -773,7 +847,7 @@ class SampledMeanFlowRate(Functional):
 
         return dtotalflow_dun
 
-    def dparam(self):
+    def dp(self):
         return dfn.Function(self.model.scalar_function_space).vector()
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
