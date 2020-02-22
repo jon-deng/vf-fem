@@ -127,8 +127,8 @@ class Functional:
     def __call__(self):
         if self._value is None:
             self._value = self.eval()
-        else:
-            return self._value
+            
+        return self._value
 
     def eval(self):
         """
