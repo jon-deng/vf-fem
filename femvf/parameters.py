@@ -113,16 +113,17 @@ class Parameterization:
         key : str
             A parameter label
         """
-        # Get the parameter label from the key
         label = key
 
-        offset = self._PARAM_OFFSETS[label]
-        shape = self._PARAM_SHAPES[label]
-        size = np.prod(shape, dtype=int, initial=1)
-
-        if key not in self:
-            raise KeyError(f"`{key}` is not a valid parameter label")
+        if label not in self:
+            raise KeyError(f"`{label}` is not a valid parameter label")
         else:
+            # Get the parameter label from the key
+
+            offset = self._PARAM_OFFSETS[label]
+            shape = self._PARAM_SHAPES[label]
+            size = np.prod(shape, dtype=int, initial=1)
+
             return self.vector[offset:offset+size].reshape(shape)
 
     # def __setitem__(self, key, value):
