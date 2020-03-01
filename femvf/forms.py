@@ -251,12 +251,6 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
     df1_demod = ufl.derivative(f1, emod, scalar_trial)
     df1_dpressure_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
 
-    # Work done by pressure from u0 to u1
-    # fluid_work = ufl.dot(fluid_force, u1-u0) * ds(facet_labels['pressure'])
-    # dfluid_work_du0 = ufl.derivative(fluid_work, u0, vector_test)
-    # dfluid_work_du1 = ufl.derivative(fluid_work, u1, vector_test)
-    # dfluid_work_dp = ufl.derivative(fluid_work, pressure, scalar_test)
-
     forms = {
         'bcs.base': bc_base,
         # 'bcs.base'
@@ -418,16 +412,6 @@ class ForwardModel:
 
         pressure_vertices = vertices_from_edges(pressure_edges, self.mesh)
         fixed_vertices = vertices_from_edges(fixed_edges, self.mesh)
-
-        # TODO: Remove. This portion of code esssentially removes the very first and last vertices
-        # that are shared between fsi and fixed surfaces form pressure vertices. I'm keeping this
-        # here in case not using this breaks later code.
-        # vertex_marker = dfn.MeshFunction('size_t', self.mesh, 0)
-        # vertex_marker.set_all(0)
-        # vertex_marker.array()[pressure_vertices] = facet_labels['pressure']
-        # vertex_marker.array()[fixed_vertices] = facet_labels['fixed']
-
-        # surface_vertices = np.array(vertex_marker.where_equal(facet_labels['pressure']))
 
         surface_vertices = pressure_vertices
         surface_coordinates = self.mesh.coordinates()[surface_vertices]

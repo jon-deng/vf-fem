@@ -29,40 +29,64 @@ import scipy.signal as sig
 # class TypeFunctional(type):
 #     """
 #     This is a metaclass for the Functional that could (will?) be used to implement special methods.
-    
-#     This could be used to allow creating new `Functional` classes by performing arithmetic 
-#     operations on existing functionals. This could make it easy to express a penalty function, for 
+
+#     This could be used to allow creating new `Functional` classes by performing arithmetic
+#     operations on existing functionals. This could make it easy to express a penalty function, for
 #     example as:
 #     `PenaltyFunctional = Functional + (1/2)*penalty*ConstraintFunctional**2`
 #     """
 #     # Left binary ops
-#     # funcs = {'': 
+#     # funcs = {'':
 #     #          '': }
 #     def __new__(self, model, f, **kwargs):
 #         pass
 
 #     def __add__(self, other):
-#         class Ret(Functional):
+#         class SumOfFuncs(Functional):
 #             def eval(self):
-#                 return 
+#                 return
 #             def du(self, n, p0, p1):
 #             def dv(n, p0, p1):
 #             def da(n, p0, p1):
 #             def dp(n, p0, p1):
 
-#         return Ret
+#         return SumOfFuncs
 
 #     def __sub__(self, other):
-#         return NotImplementedError("")
+#         class DiffOfFuncs(Functional):
+#             def eval(self):
+#                 return
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
 
 #     def __mul__(self, other):
-#         return NotImplementedError("")
+#         class ProductOfFuncs(Functional):
+#             def eval(self):
+#                 return
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
 
 #     def __truediv__(self, other):
-#         return NotImplementedError("")
+#         class QuotientOfFuncs(Functional):
+#             def eval(self):
+#                 return
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
 
 #     def __pow__(self, other):
-#         return NotImplementedError("")
+#         class PowerOfFuncs(Functional):
+#             def eval(self):
+#                 return
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
 
 #     # Right binary ops
 #     def __radd__(self, other):
@@ -79,10 +103,22 @@ import scipy.signal as sig
 
 #     # Unary ops
 #     def __neg__(self):
-#         return NotImplementedError("")
+#         class IdentityOfFunc(Functional):
+#             def eval(self):
+#                 return
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
 
 #     def __pos__(self):
-#         return NotImplementedError("")
+#         class NegationOfFunc(Functional):
+#             def eval(self):
+#                 return
+#             def du(self, n, p0, p1):
+#             def dv(n, p0, p1):
+#             def da(n, p0, p1):
+#             def dp(n, p0, p1):
 
 class Functional:
     """
@@ -112,8 +148,8 @@ class Functional:
     funcs : dict of callable
         Dictionary of any member functionals which are used in computing the functional.
     cache : dict
-        A dictionary of cached values. These are specific to the functional and values are likely 
-        to be cached if they are needed to compute sensitivities and are expensive to compute. 
+        A dictionary of cached values. These are specific to the functional and values are likely
+        to be cached if they are needed to compute sensitivities and are expensive to compute.
     """
     def __init__(self, model, f, **kwargs):
         self.model = model
@@ -127,7 +163,7 @@ class Functional:
     def __call__(self):
         if self._value is None:
             self._value = self.eval()
-            
+
         return self._value
 
     def eval(self):
@@ -319,7 +355,7 @@ class DisplacementNorm(Functional):
 
 class VelocityNorm(Functional):
     r"""
-    Represents the sum over time of l2 norms of velocities.
+    Represents the sum over all solution states of l2 norms of velocities.
 
     :math:`\sum{||\vec{v}||}_2`
     """
@@ -362,12 +398,12 @@ class VelocityNorm(Functional):
 
         return res
 
-class StrainEnergy(Functional):
+class StrainWork(Functional):
     """
-    Represent the total sum of strain work dissipated in the tissue from damping
+    Represent the strain work dissipated in the tissue due to damping
     """
     def __init__(self, model, f, **kwargs):
-        super(StrainEnergy, self).__init__(model, f, **kwargs)
+        super(StrainWork, self).__init__(model, f, **kwargs)
 
         from .forms import biform_m, biform_k
 
@@ -410,7 +446,7 @@ class StrainEnergy(Functional):
     def dp(self):
         return dfn.assemble(self.ddamping_power_demod) * self.model.dt.values()[0]
 
-class FluidtoSolidWork(Functional):
+class TransferWork(Functional):
     """
     Return work done by the fluid on the vocal folds.
 
@@ -419,12 +455,28 @@ class FluidtoSolidWork(Functional):
     n_start : int, optional
         Starting index to compute the functional over
     """
-    # TODO: fluid_work is implemented in the ForwardModel class, but you could (should) shift it
-    # into here.
     def __init__(self, model, f, **kwargs):
-        super(FluidtoSolidWork, self).__init__(model, f, **kwargs)
+        super(TransferWork, self).__init__(model, f, **kwargs)
 
         self.kwargs.setdefault('m_start', 0)
+
+        # Define the form needed to compute the work transferred from fluid to solid
+        mesh = self.model.mesh
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=self.model.facet_function)
+        vector_test = self.model.forms['test.vector']
+        scalar_test = self.model.forms['test.scalar']
+        facet_labels = self.model.facet_labels
+        pressure = self.model.forms['pressure']
+
+        u1 = self.model.forms['u1']
+        u0 = self.model.forms['u0']
+        deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
+        deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+        fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
+        self.fluid_work = ufl.dot(fluid_force, u1-u0) * ds(facet_labels['pressure'])
+        self.dfluid_work_du0 = ufl.derivative(fluid_work, u0, vector_test)
+        self.dfluid_work_du1 = ufl.derivative(fluid_work, u1, vector_test)
+        self.dfluid_work_dpressure = ufl.derivative(fluid_work, pressure, scalar_test)
 
     def eval(self):
         N_START = self.kwargs['m_start']
@@ -432,7 +484,7 @@ class FluidtoSolidWork(Functional):
 
         res = 0
         for ii in range(N_START, N_STATE-1):
-            # Set form coefficients to represent the equation from state ii to ii+1
+            # Set parameters for the iteration
             self.model.set_iter_params_fromfile(self.f, ii+1)
             res += dfn.assemble(self.model.fluid_work)
 
@@ -447,16 +499,27 @@ class FluidtoSolidWork(Functional):
         if n < N_START:
             out += dfn.Function(self.model.vector_function_space).vector()
         else:
-            # Add the sensitivity component due to work from n to n+1
+            # The sensitivity of the functional to state [n] generally contains two components
+            # since the work is summed as
+            # ... + work(state[n-1], state[n]) + work(state[n], state[n+1]) + ...
+            # The below code adds the sensitivities of the two components only if n is not
+            # at the final or first time index.
+
+            if n > N_START:
+                # self.model.set_iter_params_fromfile(self.f, n)
+                self.model.set_iter_params(**iter_params0)
+
+                out += dfn.assemble(self.dfluid_work_du1)
+
             if n < N_STATE-1:
                 # self.model.set_iter_params_fromfile(self.f, n+1)
                 self.model.set_iter_params(**iter_params1)
                 dp_du, _ = self.model.get_flow_sensitivity()
 
-                out += dfn.assemble(self.model.dfluid_work_du0)
+                out += dfn.assemble(self.dfluid_work_du0)
 
                 # Correct dfluidwork_du0 since pressure depends on u0
-                dfluidwork_dp = dfn.assemble(self.model.dfluid_work_dp,
+                dfluidwork_dp = dfn.assemble(self.dfluid_work_dpressure,
                                              tensor=dfn.PETScVector()).vec()
 
                 dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
@@ -464,12 +527,108 @@ class FluidtoSolidWork(Functional):
 
                 out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
 
-            # Add the sensitivity component due to work from n-1 to n
+        return out
+
+    def dv(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def da(self, n, iter_params0, iter_params1):
+        return dfn.Function(self.model.vector_function_space).vector()
+
+    def dp(self):
+        return None
+
+class F0WeightedTransferPower(Functional):
+    """
+    Return work done by the fluid on the vocal folds.
+
+    Parameters
+    ----------
+    n_start : int, optional
+        Starting index to compute the functional over
+    """
+    def __init__(self, model, f, **kwargs):
+        super(F0WeightedTransferPower, self).__init__(model, f, **kwargs)
+
+        self.kwargs.setdefault('tukey_alpha', 0.05)
+
+        # Define the form needed to compute the work transferred from fluid to solid
+        mesh = self.model.mesh
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=self.model.facet_function)
+        vector_test = self.model.forms['test.vector']
+        scalar_test = self.model.forms['test.scalar']
+        facet_labels = self.model.facet_labels
+        pressure = self.model.forms['pressure']
+
+        u0 = self.model.forms['u0']
+        v0 = self.model.forms['v0']
+        deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
+        deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+        fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
+        self.fluid_power = ufl.dot(fluid_force, v0) * ds(facet_labels['pressure'])
+        self.dfluid_power_du0 = ufl.derivative(self.fluid_power, u0, vector_test)
+        self.dfluid_power_dv0 = ufl.derivative(self.fluid_power, v0, vector_test)
+        self.dfluid_power_dpressure = ufl.derivative(self.fluid_power, pressure, scalar_test)
+
+    def eval(self):
+        meas_ind = self.f.get_meas_indices()
+        meas_times = self.f.get_solution_times()[meas_ind]
+        M = meas_ind.size
+
+        # Calculate the instantaenous fluid power at every measured time index
+        fluid_power = []
+        for m in range(M):
+            # Set parameters for the iteration
+            self.model.set_params_fromfile(self.f, meas_ind[m])
+            fluid_power.append(dfn.assemble(self.fluid_power))
+
+        fluid_power = np.array(fluid_power)
+
+        # Convert the fluid power to the frequency domain with a tukey window
+        tukey_window = sig.tukey(M, alpha=self.kwargs['tukey_alpha'])
+
+        dft_fluid_power_tukey = np.fft.fft(fluid_power * tukey_window, n=M)
+        dft_freq = np.fft.fftfreq(M, d=meas_times[1]-meas_times[0])
+
+
+        return res
+
+    def du(self, n, iter_params0, iter_params1):
+        out = 0
+
+        N_START = self.kwargs['m_start']
+        N_STATE = self.f.get_num_states()
+
+        if n < N_START:
+            out += dfn.Function(self.model.vector_function_space).vector()
+        else:
+            # The sensitivity of the functional to state [n] generally contains two components
+            # since the work is summed as
+            # ... + work(state[n-1], state[n]) + work(state[n], state[n+1]) + ...
+            # The below code adds the sensitivities of the two components only if n is not
+            # at the final or first time index.
+
             if n > N_START:
                 # self.model.set_iter_params_fromfile(self.f, n)
                 self.model.set_iter_params(**iter_params0)
 
-                out += dfn.assemble(self.model.dfluid_work_du1)
+                out += dfn.assemble(self.dfluid_work_du1)
+
+            if n < N_STATE-1:
+                # self.model.set_iter_params_fromfile(self.f, n+1)
+                self.model.set_iter_params(**iter_params1)
+                dp_du, _ = self.model.get_flow_sensitivity()
+
+                out += dfn.assemble(self.dfluid_work_du0)
+
+                # Correct dfluidwork_du0 since pressure depends on u0
+                dfluidwork_dp = dfn.assemble(self.dfluid_work_dpressure,
+                                             tensor=dfn.PETScVector()).vec()
+
+                dfluidwork_du0_correction = dfn.as_backend_type(out).vec().copy()
+                dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
+
+                out += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
 
         return out
 
@@ -585,7 +744,7 @@ class TransferEfficiency(Functional):
 
         self.kwargs.setdefault('m_start', 0)
 
-        self.funcs['FluidWork'] = FluidtoSolidWork(model, f, **kwargs)
+        self.funcs['FluidWork'] = TransferWork(model, f, **kwargs)
         self.funcs['SubglottalWork'] = SubglottalWork(model, f, **kwargs)
 
     def eval(self):
