@@ -39,7 +39,7 @@ sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from optvf import functionals as extra_funcs
 
 class TestAdjointGradientCalculation(unittest.TestCase):
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
 
     def setUp(self):
         """
@@ -63,7 +63,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.15
+        t_final = 0.2
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
@@ -149,13 +149,14 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         with open(save_path+".pickle", 'rb') as f:
             run_info = pickle.load(f)
 
-        fkwargs = {}
-        Functional = funcs.FinalDisplacementNorm
+        fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':10}
+        # Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
-        # Functional = extra_funcs.AcousticEfficiency
+        Functional = extra_funcs.AcousticEfficiency
+        Functional = extra_funcs.F0WeightedAcousticPower
 
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")

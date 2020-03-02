@@ -48,21 +48,35 @@ class TestFunctionals(unittest.TestCase):
         # Set a tmeas for FFT
         tmeas = np.linspace(t_start, t_final, 512)
 
+        # Set parameters for the simulation
         timing_props = {'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max}
         solid_props = SolidProperties(model)
         fluid_props = FluidProperties(model)
+
+        y_gap = 0.01
+        alpha, k, sigma = -3000, 50, 0.002
+        p_sub = 800
+        fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
+        fluid_props['alpha'] = alpha
+        fluid_props['k'] = k
+        fluid_props['sigma'] = sigma
 
         # Use an elasticity that varies linearly with y coordinate.
         y = model.mesh.coordinates()[..., 1]
         y_max = y.max()
         y_min = y.min()
 
-        emod_at_ymin = 5e3*10
-        emod_at_ymax = 5e3*10
+        emod_at_ymin = 5e3*PASCAL_TO_CGS
+        emod_at_ymax = 5e3*PASCAL_TO_CGS
         emod = emod_at_ymax*(y-y_min)/(y_max-y_min) + emod_at_ymin*(y-y_max)/(y_min-y_max)
 
         sdof_to_vert = np.sort(model.vert_to_sdof)
         solid_props['elastic_modulus'] = emod[sdof_to_vert]
+        solid_props['rayleigh_m'] = 0
+        solid_props['rayleigh_k'] = 3e-4
+        solid_props['k_collision'] = 1e11
+        solid_props['y_collision'] = fluid_props['y_midline'] - y_gap*1/2
 
         h5file = 'out/test_functionals.h5'
         if path.isfile(h5file) and not self.OVERWRITE_FORWARD_SIMULATIONS:
@@ -71,8 +85,8 @@ class TestFunctionals(unittest.TestCase):
             if path.isfile(h5file):
                 os.remove(h5file)
             print("Running forward model to generate data.")
-            forward(model, solid_props, fluid_props, timing_props, h5file=h5file,
-                    abs_tol=None)
+            info = forward(model, solid_props, fluid_props, timing_props, h5file=h5file,
+                           abs_tol=None)
 
         self.h5file = h5file
         self.model = model
@@ -147,6 +161,7 @@ class TestFunctionals(unittest.TestCase):
         print(np.dot(dfunc_du_an, du), dfunc_du_fd)
         print(np.dot(dfunc_dv_an, du), dfunc_dv_fd)
         print(np.dot(dfunc_da_an, du), dfunc_da_fd)
+        breakpoint()
 
 # Calculate a functional along a perturbed direction
 def functional_wrapper(g, u, f, i=0, n=0):
@@ -174,7 +189,7 @@ def functional_wrapper(g, u, f, i=0, n=0):
     out = None
     try:
         f.set_state(n, x_subs)
-        out = g()
+        out = g.eval()
     except:
         raise
     finally:

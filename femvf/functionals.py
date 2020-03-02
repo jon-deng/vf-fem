@@ -1039,7 +1039,6 @@ def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
         n += 1
         fn = (n+1)*f0
 
-    breakpoint()
     return comb
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
