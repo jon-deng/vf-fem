@@ -545,7 +545,7 @@ class F0WeightedTransferPower(Functional):
     # TODO: This is a little bit tricky because the total work done is
     :math: \int_{time} \int_{surface} p \cdot v_n ds dt = <p, v_n>
     To apply parseval's theorem to get power spectral density, you have to decompose p and v_n along
-    the surface and time dimensions with a fft (a 2d one). The power spectral density is the product 
+    the surface and time dimensions with a fft (a 2d one). The power spectral density is the product
     of the two ffts and not the fft of p times vn! I'm not sure if this can be done in fenics easily
 
     Parameters
@@ -1017,9 +1017,30 @@ class SampledMeanFlowRate(Functional):
 def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
     """
     Return a 'comb' of gaussians at multiples of f0
+
+    Parameters
+    ----------
+    dft_freq : array_like
+        DFT discrete frequencies output by the FFT function
     """
-    harmonic_dft_freq = dft_freq - np.floor(dft_freq/f0) * f0
-    return np.exp(-0.5*((harmonic_dft_freq-f0)/df)^2)
+    # harmonic_dft_freq = dft_freq - np.floor(dft_freq/f0) * f0
+    # comb = np.exp(-0.5*((harmonic_dft_freq-f0)/df)**2)
+
+    # Build the comb by adding up each gaussian 'tooth' for every harmonic
+    comb = np.zeros(dft_freq.size)
+    n = 0
+    fn = f0
+    while fn < np.max(dft_freq):
+        # We need to add 'teeth' for bothe positive and negative frequencies
+        comb += np.exp(-0.5*((dft_freq-fn)/df)**2)
+
+        comb += np.exp(-0.5*((dft_freq+fn)/df)**2)
+
+        n += 1
+        fn = (n+1)*f0
+
+    breakpoint()
+    return comb
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
 # deleted that code... need to make it again.

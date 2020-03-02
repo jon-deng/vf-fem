@@ -21,7 +21,7 @@ sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from optvf import functionals
 
 class TestFunctionals(unittest.TestCase):
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
 
     def setUp(self):
         """
@@ -42,8 +42,11 @@ class TestFunctionals(unittest.TestCase):
         t0 = 0.0
 
         t_start = 0.0
-        t_final = 0.1
-        tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
+        t_final = 0.2
+        # tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
+
+        # Set a tmeas for FFT
+        tmeas = np.linspace(t_start, t_final, 512)
 
         timing_props = {'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max}
         solid_props = SolidProperties(model)
@@ -65,6 +68,8 @@ class TestFunctionals(unittest.TestCase):
         if path.isfile(h5file) and not self.OVERWRITE_FORWARD_SIMULATIONS:
             print("Forward model states already exist. Using existing file.")
         else:
+            if path.isfile(h5file):
+                os.remove(h5file)
             print("Running forward model to generate data.")
             forward(model, solid_props, fluid_props, timing_props, h5file=h5file,
                     abs_tol=None)
@@ -78,8 +83,8 @@ class TestFunctionals(unittest.TestCase):
         # Functional = basic_functionals.DisplacementNorm
         # gkwargs = {}
 
-        Functional = basic_functionals.VelocityNorm
-        gkwargs = {}
+        # Functional = basic_functionals.VelocityNorm
+        # gkwargs = {}
 
         # Functional = functionals.AcousticEfficiency
         # gkwargs = {'tukey_alpha': 0.1}
@@ -98,6 +103,9 @@ class TestFunctionals(unittest.TestCase):
 
         # Functional = basic_functionals.StrainEnergy
         # gkwargs = {}
+
+        Functional = functionals.F0WeightedAcousticPower
+        gkwargs = {'f0': 100.5, 'df':5}
 
         # Set the direction and step size to test the gradient of the functional
         np.random.seed(123)
