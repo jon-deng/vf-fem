@@ -542,6 +542,12 @@ class F0WeightedTransferPower(Functional):
     """
     Return work done by the fluid on the vocal folds.
 
+    # TODO: This is a little bit tricky because the total work done is
+    :math: \int_{time} \int_{surface} p \cdot v_n ds dt = <p, v_n>
+    To apply parseval's theorem to get power spectral density, you have to decompose p and v_n along
+    the surface and time dimensions with a fft (a 2d one). The power spectral density is the product 
+    of the two ffts and not the fft of p times vn! I'm not sure if this can be done in fenics easily
+
     Parameters
     ----------
     n_start : int, optional
@@ -589,7 +595,6 @@ class F0WeightedTransferPower(Functional):
 
         dft_fluid_power_tukey = np.fft.fft(fluid_power * tukey_window, n=M)
         dft_freq = np.fft.fftfreq(M, d=meas_times[1]-meas_times[0])
-
 
         return res
 
@@ -1008,6 +1013,13 @@ class SampledMeanFlowRate(Functional):
 
     def dp(self):
         return dfn.Function(self.model.scalar_function_space).vector()
+
+def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
+    """
+    Return a 'comb' of gaussians at multiples of f0
+    """
+    harmonic_dft_freq = dft_freq - np.floor(dft_freq/f0) * f0
+    return np.exp(-0.5*((harmonic_dft_freq-f0)/df)^2)
 
 # TODO: Previously had a lagrangian regularization term here but accidentally
 # deleted that code... need to make it again.
