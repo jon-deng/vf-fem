@@ -158,6 +158,8 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         Functional = extra_funcs.AcousticEfficiency
         Functional = extra_funcs.F0WeightedAcousticPower
 
+        functional = Functional(model, **fkwargs)
+
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")
 
@@ -167,7 +169,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
             for n, h in enumerate(hs):
                 f.root_group_name = f'{n}'
                 runtime_start = perf_counter()
-                functionals.append(Functional(model, f, **fkwargs)())
+                functionals.append(functional(f))
                 runtime_end = perf_counter()
                 total_runtime += runtime_end-runtime_start
                 print(runtime_end-runtime_start)
@@ -182,7 +184,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         info = None
         gradient_ad = None
         with sf.StateFile(model, save_path, group='0', mode='r', driver='core') as f:
-            _, gradient_ad, _ = adjoint(model, f, Functional, fkwargs)
+            _, gradient_ad, _ = adjoint(model, f, functional)
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -361,6 +363,8 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         # Functional = funcs.StrainEnergy
         # Functional = extra_funcs.AcousticEfficiency
 
+        functional = Functional(model, **fkwargs)
+
         ## Set the solution parameters
         dt_sample = 1e-4
         # dt_max = 1e-5
@@ -416,7 +420,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 
                 grad = None
                 with sf.StateFile(model, save_path, group=f'{n}', mode='r') as f:
-                    _, grad, _ = adjoint(model, f, Functional, fkwargs)
+                    _, grad, _ = adjoint(model, f, functional)
                 runtime_end = perf_counter()
 
                 with h5py.File(save_path, mode='a') as f:
@@ -445,6 +449,8 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         fkwargs = self.fkwargs
         Functional = self.Functional
 
+        functional = Functional(model, **fkwargs)
+
         run_info = None
         with open(save_path+".pickle", 'rb') as f:
             run_info = pickle.load(f)
@@ -457,7 +463,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         with sf.StateFile(model, save_path, group='0', mode='r') as f:
             for n, h in enumerate(hs):
                 f.root_group_name = f'{n}'
-                functionals.append(Functional(model, f, **fkwargs)())
+                functionals.append(functional(f))
 
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -471,7 +477,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         # info = None
         # gradient_ad = None
         # with sf.StateFile(model, save_path, group='0', mode='r') as f:
-        #     _, gradient_ad, _ = adjoint(model, f, Functional, fkwargs)
+        #     _, gradient_ad, _ = adjoint(model, f, functional)
         # runtime_end = perf_counter()
 
         # print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

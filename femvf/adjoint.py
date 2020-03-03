@@ -106,7 +106,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     return (adj_u1, adj_v1, adj_a1)
 
 # @profile
-def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
+def adjoint(model, f, functional, show_figure=False):
     """
     Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
 
@@ -114,9 +114,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     ----------
     model : forms.ForwardModel
     f : statefile.StateFile
-    Functional : class functionals.GenericFunctional
-    functional_kwargs : dict
-        Options to pass to the functional
+    functional : functionals.Functional
     show_figures : bool
         Whether to display a figure showing the solution or not.
 
@@ -137,8 +135,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     model.set_solid_props(solid_props)
 
     # Initialize the functional instance and run it once to initialize any cached values
-    functional = Functional(model, f, **functional_kwargs)
-    functional_value = functional()
+    functional_value = functional.eval(f)
 
     df1_dparam_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
 
@@ -176,9 +173,9 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
     iter_params2 = {'x0': x1, 'dt': dt2, 'u1': x2[0]}
     iter_params3 = {'x0': x2, 'dt': 0.0, 'u1': None}
 
-    dcost_du2 = functional.du(N-1, iter_params2, iter_params3)
-    dcost_dv2 = functional.dv(N-1, iter_params2, iter_params3)
-    dcost_da2 = functional.da(N-1, iter_params2, iter_params3)
+    dcost_du2 = functional.du(f, N-1, iter_params2, iter_params3)
+    dcost_dv2 = functional.dv(f, N-1, iter_params2, iter_params3)
+    dcost_da2 = functional.da(f, N-1, iter_params2, iter_params3)
 
     model.set_iter_params(**iter_params2)
     df2_du2 = model.assem_df1_du1_adj()
@@ -209,9 +206,9 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
         iter_params1 = {'x0': x0, 'dt': dt1, 'u1': x1[0]}
         iter_params2 = {'x0': x1, 'dt': dt2, 'u1': x2[0]}
 
-        dcost_dx1 = [functional.du(ii, iter_params1, iter_params2),
-                     functional.dv(ii, iter_params1, iter_params2),
-                     functional.da(ii, iter_params1, iter_params2)]
+        dcost_dx1 = [functional.du(f, ii, iter_params1, iter_params2),
+                     functional.dv(f, ii, iter_params1, iter_params2),
+                     functional.da(f, ii, iter_params1, iter_params2)]
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
             model, adj_x2, iter_params1, iter_params2, dcost_dx1)
@@ -225,7 +222,7 @@ def adjoint(model, f, Functional, functional_kwargs, show_figure=False):
 
         gradient += -(df1_dparam*adj_x1[0]) #+ BLAH*adj_x1[1] + BLAH*adj_x1[2]
 
-        dfunc_dparam = functional.dp()
+        dfunc_dparam = functional.dp(f)
         if dfunc_dparam is not None:
             gradient += dfunc_dparam
 

@@ -1,3 +1,7 @@
+"""
+This modules implements tests for functionals
+"""
+
 import sys
 import os
 import os.path as path
@@ -120,6 +124,7 @@ class TestFunctionals(unittest.TestCase):
 
         Functional = functionals.F0WeightedAcousticPower
         gkwargs = {'f0': 100.5, 'df':5}
+        g = Functional(model, **gkwargs)
 
         # Set the direction and step size to test the gradient of the functional
         np.random.seed(123)
@@ -138,19 +143,18 @@ class TestFunctionals(unittest.TestCase):
 
         with sf.StateFile(self.model, self.h5file, mode='a') as f:
             x_0 = f.get_state(n)
-            g = Functional(model, f, **gkwargs)
 
             model.set_ini_state(*x_0)
             alpha_u = alpha * min(x_0[0].max(), model.get_collision_gap())
             alpha_v = alpha * x_0[1].max()
             alpha_a = alpha * x_0[2].max()
 
-            func_0 = g()
+            func_0 = g(f)
 
             iter_params0, iter_params1 = f.get_iter_params(n), f.get_iter_params(n+1)
-            dfunc_du_an = g.du(n, iter_params0, iter_params1)
-            dfunc_dv_an = g.dv(n, iter_params0, iter_params1)
-            dfunc_da_an = g.da(n, iter_params0, iter_params1)
+            dfunc_du_an = g.du(f, n, iter_params0, iter_params1)
+            dfunc_dv_an = g.dv(f, n, iter_params0, iter_params1)
+            dfunc_da_an = g.da(f, n, iter_params0, iter_params1)
 
             dfunc_du_fd = (functional_wrapper(g, x_0[0]+alpha_u*du, f, i=0, n=n)-func_0) / alpha_u
             dfunc_dv_fd = (functional_wrapper(g, x_0[1]+alpha_v*du, f, i=1, n=n)-func_0) / alpha_v
@@ -189,7 +193,7 @@ def functional_wrapper(g, u, f, i=0, n=0):
     out = None
     try:
         f.set_state(n, x_subs)
-        out = g.eval()
+        out = g.eval(f)
     except:
         raise
     finally:
