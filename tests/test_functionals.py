@@ -25,7 +25,7 @@ sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from optvf import functionals
 
 class TestFunctionals(unittest.TestCase):
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
 
     def setUp(self):
         """
@@ -101,7 +101,13 @@ class TestFunctionals(unittest.TestCase):
         # Functional = basic_functionals.DisplacementNorm
         # gkwargs = {}
 
+        # Functional = basic_functionals.FinalDisplacementNorm
+        # gkwargs = {}
+
         # Functional = basic_functionals.VelocityNorm
+        # gkwargs = {}
+
+        # Functional = basic_functionals.FinalVelocityNorm
         # gkwargs = {}
 
         # Functional = functionals.AcousticEfficiency
@@ -109,6 +115,9 @@ class TestFunctionals(unittest.TestCase):
 
         # Functional = functionals.AcousticPower
         # gkwargs = {'tukey_alpha': 0.1}
+
+        Functional = functionals.F0WeightedAcousticPower
+        gkwargs = {'f0': 100.0, 'df': 50, 'tukey_alpha': 0.1}
 
         # Functional = basic_functionals.SubglottalWork
         # gkwargs = {'tukey_alpha': 0.1}
@@ -122,19 +131,22 @@ class TestFunctionals(unittest.TestCase):
         # Functional = basic_functionals.StrainEnergy
         # gkwargs = {}
 
-        Functional = functionals.F0WeightedAcousticPower
-        gkwargs = {'f0': 100.5, 'df':5}
         g = Functional(model, **gkwargs)
 
         # Set the direction and step size to test the gradient of the functional
         np.random.seed(123)
         du = np.random.rand(*self.model.u0.vector()[:].shape)
 
-        alpha = 1e-6
+        alpha = 1e-8
 
         #############################################
+        idx_meas = None
+        with sf.StateFile(self.model, self.h5file, mode='r') as f:
+            idx_meas = f.get_meas_indices()
         n = 125
         n = 15
+        n = idx_meas[26]
+
         x_0 = None
         func_0 = None
 
@@ -144,12 +156,12 @@ class TestFunctionals(unittest.TestCase):
         with sf.StateFile(self.model, self.h5file, mode='a') as f:
             x_0 = f.get_state(n)
 
-            model.set_ini_state(*x_0)
+            model.set_ini_state(x_0[0], x_0[1], x_0[2])
             alpha_u = alpha * min(x_0[0].max(), model.get_collision_gap())
             alpha_v = alpha * x_0[1].max()
             alpha_a = alpha * x_0[2].max()
 
-            func_0 = g(f)
+            func_0 = g.eval(f)
 
             iter_params0, iter_params1 = f.get_iter_params(n), f.get_iter_params(n+1)
             dfunc_du_an = g.du(f, n, iter_params0, iter_params1)
@@ -165,7 +177,7 @@ class TestFunctionals(unittest.TestCase):
         print(np.dot(dfunc_du_an, du), dfunc_du_fd)
         print(np.dot(dfunc_dv_an, du), dfunc_dv_fd)
         print(np.dot(dfunc_da_an, du), dfunc_da_fd)
-        breakpoint()
+        # breakpoint()
 
 # Calculate a functional along a perturbed direction
 def functional_wrapper(g, u, f, i=0, n=0):
@@ -180,7 +192,7 @@ def functional_wrapper(g, u, f, i=0, n=0):
         A tuple of (u, v, a) states to replace the original values
     f : statefile.StateFile
     """
-    # Get the original state and subsitute the values in u to compute the modified functional
+    # Get the original state and substitute the values in u to compute the modified functional
     x_orig = f.get_state(n)
     x_subs = []
     for j, component in enumerate(x_orig):
@@ -203,4 +215,3 @@ def functional_wrapper(g, u, f, i=0, n=0):
 
 if __name__ == '__main__':
     unittest.main()
-
