@@ -32,7 +32,7 @@ from femvf.adjoint import adjoint
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
 from femvf.properties import FluidProperties, SolidProperties#, TimingProperties
-from femvf import functionals as funcs
+from femvf.functionals import basic as funcs
 from femvf import statefile as sf
 
 sys.path.append(path.expanduser('~/lib/vf-optimization'))

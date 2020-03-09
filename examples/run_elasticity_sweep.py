@@ -24,7 +24,7 @@ from femvf import forms
 from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf import properties as props
-from femvf import functionals
+from femvf.functionals import basic
 
 def gradient(model, timing_props, solid_props, fluid_props):
     """

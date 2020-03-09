@@ -17,7 +17,6 @@ from femvf.forward import forward
 from femvf import forms
 from femvf.properties import SolidProperties, FluidProperties#, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
-from femvf import functionals
 
 class TestForward(unittest.TestCase):
     def setUp(self):

@@ -122,6 +122,9 @@ class Functional:
 
     After running a functional over a forward model history, the value is cached in _value.
 
+    To make a new functional, you should set default values for any kwargs in __init__, then call
+    the super method. Afterwords, you can add any needed subfunctionals to 
+
     Parameters
     ----------
     model : forms.ForwardModel
@@ -138,7 +141,7 @@ class Functional:
         The value of the functional. This should be a constant any time it's computed because
         the instance of the functional is always tied to the same file.
     funcs : dict of callable
-        Dictionary of any member functionals which are used in computing the functional.
+        Dictionary of any sub-functionals which are used in computing the functional.
     cache : dict
         A dictionary of cached values. These are specific to the functional and values are likely
         to be cached if they are needed to compute sensitivities and are expensive to compute.
@@ -156,7 +159,7 @@ class Functional:
             self._value = self.eval(f)
 
         return self._value
-
+    
     def eval(self, f):
         """
         Return the value of the functional.
@@ -234,12 +237,16 @@ class Functional:
         """
         return NotImplementedError("You have to implement this")
 
-class Null(Functional):
+class Constant(Functional):
     """
-    The null functional that always returns 0
+    The constant functional that always returns a fixed value
     """
+    def __init__(self, model, **kwargs):
+        kwargs.set_default('value', 0.0)
+        super(Constant, self).__init__(self, model, **kwargs)
+
     def eval(self, f):
-        return 0.0
+        return self.kwargs['value']
 
     def du(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
@@ -265,9 +272,7 @@ class FinalDisplacementNorm(Functional):
 
     def eval(self, f):
         u = dfn.Function(self.model.vector_function_space).vector()
-
         _u, _, _ = f.get_state(f.size-1)
-
         u[:] = _u
         res = u.norm('l2')
 

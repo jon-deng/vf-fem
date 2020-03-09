@@ -19,7 +19,7 @@ from femvf import statefile as sf
 from femvf.properties import SolidProperties, FluidProperties #, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf import functionals as basic_functionals
+from femvf.functionals import basic as basic_functionals
 
 sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from optvf import functionals

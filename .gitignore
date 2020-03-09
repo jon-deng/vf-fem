@@ -8,6 +8,7 @@
 *.pvd
 *.png
 *.txt
+*.code-workspace
 out
 
 # Byte-compiled / optimized / DLL files
