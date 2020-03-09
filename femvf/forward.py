@@ -86,7 +86,6 @@ def forward(model, solid_props, fluid_props, timing_props,
         f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 
-
     ## Loop through solution times and write solution variables to the h5file.
 
     # TODO: Hardcoded the calculation of glottal width here, but it should be an option you

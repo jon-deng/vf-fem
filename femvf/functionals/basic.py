@@ -41,10 +41,10 @@ import ufl
 #         class SumOfFuncs(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
 
 #         return SumOfFuncs
 
@@ -52,37 +52,37 @@ import ufl
 #         class DiffOfFuncs(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
 
 #     def __mul__(self, other):
 #         class ProductOfFuncs(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
 
 #     def __truediv__(self, other):
 #         class QuotientOfFuncs(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
 
 #     def __pow__(self, other):
 #         class PowerOfFuncs(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
 
 #     # Right binary ops
 #     def __radd__(self, other):
@@ -102,19 +102,41 @@ import ufl
 #         class IdentityOfFunc(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
 
 #     def __pos__(self):
 #         class NegationOfFunc(Functional):
 #             def eval(self, f):
 #                 return
-#             def du(self, n, p0, p1):
-#             def dv(n, p0, p1):
-#             def da(n, p0, p1):
-#             def dp(n, p0, p1):
+#             def eval_du(self, n, p0, p1):
+#             def eval_dv(n, p0, p1):
+#             def eval_da(n, p0, p1):
+#             def eval_dp(n, p0, p1):
+
+def new_statefile(self, f):
+    statefile_updated = self._f is None or self._f != f
+
+    if not statefile_updated:
+        assert self._f == f
+
+    return statefile_updated
+
+def update_cache(func):
+    def wrapped_func(self, f, *args, **kwargs):
+        """
+        Reruns the `eval` function if the passed in file instance is different from what was last
+        run and the functional needs caching, as specified by `CACHE`
+        """
+        if self.CACHE and new_statefile(self, f):
+            # Run the functional to calculate the objective function and update any cached values
+            self(f)
+
+        return func(self, f, *args, **kwargs)
+
+    return wrapped_func
 
 class Functional:
     """
@@ -146,32 +168,97 @@ class Functional:
         A dictionary of cached values. These are specific to the functional and values are likely
         to be cached if they are needed to compute sensitivities and are expensive to compute.
     """
+    CACHE = True
     def __init__(self, model, **kwargs):
         self.model = model
         self.kwargs = kwargs
 
         self.funcs = dict()
         self.cache = dict()
+
+        # A cache for the current value of the functional, and the file it was evaluated on
         self._value = None
+        self._f = None
 
     def __call__(self, f):
-        if self._value is None:
+        if new_statefile(self, f):
             self._value = self.eval(f)
 
+        self._f = f
         return self._value
-    
-    def eval(self, f):
+
+    @update_cache
+    def du(self, f, n, iter_params0, iter_params1):
         """
-        Return the value of the functional.
+        Return the sensitivity of the functional to :math:`u^n`
 
         Parameters
         ----------
-        f : femvf.statefile.StateFile
-            A history of states to compute the functional over
-        """
-        raise NotImplementedError("You have to implement this you goofball")
+        n : int
+            Index of state
+        f : statefile.StateFile
+            The history of states to compute it over
+        iter_params0, iter_params1 : dict
+            Dictionary of parameters that specify iteration n. These are parameters fed into
+            `forms.ForwardModel.set_iter_params` with signature:
+            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
-    def du(self, f, n, iter_params0, iter_params1):
+            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
+            at `n+0`.
+        """
+        return self.eval_du(f, n, iter_params0, iter_params1)
+
+    @update_cache
+    def dv(self, f, n, iter_params0, iter_params1):
+        """
+        Return the sensitivity of the functional to :math:`v^n`
+
+        Parameters
+        ----------
+        n : int
+            Index of state
+        f : statefile.StateFile
+            The history of states to compute it over
+        iter_params0, iter_params1 : dict
+            Dictionary of parameters that specify iteration n. These are parameters fed into
+            `forms.ForwardModel.set_iter_params` with signature:
+            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+
+            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
+            at `n+0`.
+        """
+        return self.eval_dv(f, n, iter_params0, iter_params1)
+
+    @update_cache
+    def da(self, f, n, iter_params0, iter_params1):
+        """
+        Return the sensitivity of the functional to :math:`a^n`
+
+        Parameters
+        ----------
+        n : int
+            Index of state
+        f : statefile.StateFile
+            The history of states to compute it over
+        iter_params0, iter_params1 : dict
+            Dictionary of parameters that specify iteration n. These are parameters fed into
+            `forms.ForwardModel.set_iter_params` with signature:
+            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+
+            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
+            at `n+0`.
+        """
+        return self.eval_da(f, n, iter_params0, iter_params1)
+
+    @update_cache
+    def dp(self, f):
+        return self.eval_dp(f)
+
+    # Subclasses should implement the below methods
+    def eval(self, f):
+        raise NotImplementedError("You have to implement this")
+
+    def eval_du(self, f, n, iter_params0, iter_params1):
         """
         Return the sensitivity of the functional to :math:`u^n`
 
@@ -191,7 +278,7 @@ class Functional:
         """
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         """
         Return the sensitivity of the functional to :math:`v^n`
 
@@ -211,7 +298,7 @@ class Functional:
         """
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def da(self, f, n, iter_params0, iter_params1):
+    def eval_da(self, f, n, iter_params0, iter_params1):
         """
         Return the sensitivity of the functional to :math:`a^n`
 
@@ -231,7 +318,7 @@ class Functional:
         """
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dp(self, f):
+    def eval_dp(self, f):
         """
         Return the sensitivity of the functional with respect to the parameters.
         """
@@ -248,16 +335,16 @@ class Constant(Functional):
     def eval(self, f):
         return self.kwargs['value']
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def da(self, f, n, iter_params0, iter_params1):
+    def eval_da(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return dfn.Function(self.model.scalar_function_space).vector()
 
 class FinalDisplacementNorm(Functional):
@@ -278,7 +365,7 @@ class FinalDisplacementNorm(Functional):
 
         return res
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         res = None
 
         if n == f.size-1:
@@ -299,7 +386,7 @@ class FinalDisplacementNorm(Functional):
 
         return res
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return dfn.Function(self.model.scalar_function_space).vector()
 
 class FinalVelocityNorm(Functional):
@@ -320,7 +407,7 @@ class FinalVelocityNorm(Functional):
 
         return v.norm('l2')
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         res = None
 
         if n == f.size-1:
@@ -368,7 +455,7 @@ class DisplacementNorm(Functional):
 
         return res
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         # res = dfn.Function(self.model.vector_function_space)
 
         N_START = self.kwargs['m_start']
@@ -415,7 +502,7 @@ class VelocityNorm(Functional):
 
         return res
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         # res = dfn.Function(self.model.vector_function_space)
 
         _v = iter_params1['x0'][1]
@@ -473,13 +560,13 @@ class StrainWork(Functional):
 
         return res
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         # breakpoint()
         self.model.set_iter_params(**iter_params1)
 
         return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return dfn.assemble(self.ddamping_power_demod) * self.model.dt.values()[0]
 
 class TransferWork(Functional):
@@ -526,7 +613,7 @@ class TransferWork(Functional):
 
         return res
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         out = 0
 
         N_START = self.kwargs['m_start']
@@ -565,13 +652,13 @@ class TransferWork(Functional):
 
         return out
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def da(self, f, n, iter_params0, iter_params1):
+    def eval_da(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return None
 
 class F0WeightedTransferPower(Functional):
@@ -634,7 +721,7 @@ class F0WeightedTransferPower(Functional):
 
         return np.sum(fluid_power)
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         out = 0
 
         N_START = self.kwargs['m_start']
@@ -673,13 +760,13 @@ class F0WeightedTransferPower(Functional):
 
         return out
 
-    def dv(self, f, n, iter_params0, iter_params1):
+    def eval_dv(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def da(self, f, n, iter_params0, iter_params1):
+    def eval_da(self, f, n, iter_params0, iter_params1):
         return dfn.Function(self.model.vector_function_space).vector()
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return None
 
 class VolumeFlow(Functional):
@@ -709,7 +796,7 @@ class VolumeFlow(Functional):
 
         return totalflow
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         dtotalflow_dun = None
         N_START = self.kwargs['m_start']
 
@@ -724,7 +811,7 @@ class VolumeFlow(Functional):
 
         return dtotalflow_dun
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return None
 
 class SubglottalWork(Functional):
@@ -752,7 +839,7 @@ class SubglottalWork(Functional):
 
         return ret
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         ret = dfn.Function(self.model.vector_function_space).vector()
 
         N_START = self.cache['m_start']
@@ -770,7 +857,7 @@ class SubglottalWork(Functional):
 
         return ret
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return None
 
 class TransferEfficiency(Functional):
@@ -797,7 +884,7 @@ class TransferEfficiency(Functional):
         self.cache.update({'totalfluidwork': totalfluidwork, 'totalinputwork': totalinputwork})
         return res
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         # TODO : Is there something slightly wrong with this one? Seems slightly wrong from
         # comparing with FD. The error is small but it is not propto step size?
         N_START = self.kwargs['m_start']
@@ -805,15 +892,15 @@ class TransferEfficiency(Functional):
         tfluidwork = self.cache.get('totalfluidwork', None)
         tinputwork = self.cache.get('totalinputwork', None)
 
-        dtotalfluidwork_dun = self.funcs['FluidWork'].du(f, n, iter_params0, iter_params1)
-        dtotalinputwork_dun = self.funcs['SubglottalWork'].du(f, n, iter_params0, iter_params1)
+        dtotalfluidwork_dun = self.funcs['FluidWork'].eval_du(f, n, iter_params0, iter_params1)
+        dtotalinputwork_dun = self.funcs['SubglottalWork'].eval_du(f, n, iter_params0, iter_params1)
 
         if n < N_START:
             return dfn.Function(self.model.vector_function_space).vector()
         else:
             return dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return None
 
 class MFDR(Functional):
@@ -850,7 +937,7 @@ class MFDR(Functional):
         return res
 
     # TODO: Pretty sure this is wrong so you should fix it if you are going to use it
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         res = None
 
         idx_mfdr = self.cache.get('idx_mfdr', None)
@@ -881,7 +968,7 @@ class MFDR(Functional):
 
         return res
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return None
 
 class WSSGlottalWidth(Functional):
@@ -926,7 +1013,7 @@ class WSSGlottalWidth(Functional):
 
         return wss
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         dwss_du = dfn.Function(self.model.vector_function_space).vector()
 
         weights = self.kwargs['weights']
@@ -968,7 +1055,7 @@ class WSSGlottalWidth(Functional):
 
         return dwss_du
 
-    def dp(self, f):
+    def eval_dp(self, f):
         """
         Returns the sensitivity of the thing wrt to the starting time.
         """
@@ -1024,7 +1111,7 @@ class SampledMeanFlowRate(Functional):
 
         return sum_flow_rate / meas_ind.size
 
-    def du(self, f, n, iter_params0, iter_params1):
+    def eval_du(self, f, n, iter_params0, iter_params1):
         meas_ind = f.get_meas_indices()
         tukey_window = sig.tukey(meas_ind.size, alpha=self.kwargs['tukey_alpha'])
 
@@ -1041,7 +1128,7 @@ class SampledMeanFlowRate(Functional):
 
         return dtotalflow_dun
 
-    def dp(self, f):
+    def eval_dp(self, f):
         return dfn.Function(self.model.scalar_function_space).vector()
 
 def gaussian_f0_comb(dft_freq, f0=1.0, df=1):

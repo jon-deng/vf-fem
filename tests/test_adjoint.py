@@ -149,13 +149,14 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         with open(save_path+".pickle", 'rb') as f:
             run_info = pickle.load(f)
 
-        fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':10}
+        fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':50}
         # Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
-        Functional = extra_funcs.AcousticEfficiency
+        # Functional = extra_funcs.AcousticPower
+        # Functional = extra_funcs.AcousticEfficiency
         Functional = extra_funcs.F0WeightedAcousticPower
 
         functional = Functional(model, **fkwargs)
@@ -165,9 +166,8 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         total_runtime = 0
         functionals = list()
-        with sf.StateFile(model, save_path, group='0', mode='r') as f:
-            for n, h in enumerate(hs):
-                f.root_group_name = f'{n}'
+        for n, h in enumerate(hs):
+            with sf.StateFile(model, save_path, group=f'{n}', mode='r') as f:
                 runtime_start = perf_counter()
                 functionals.append(functional(f))
                 runtime_end = perf_counter()

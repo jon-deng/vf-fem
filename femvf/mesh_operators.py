@@ -24,6 +24,5 @@ def grad_fem_p1(scalar_trial, scalar_test):
     PETSc.Matrix
         Operator
     """
-
     op_form = ufl.dot(ufl.grad(scalar_trial), ufl.grad(scalar_test)) * dfn.dx
     return dfn.assemble(op_form)
