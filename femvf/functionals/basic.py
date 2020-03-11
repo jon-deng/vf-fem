@@ -22,6 +22,8 @@ import scipy.signal as sig
 import dolfin as dfn
 import ufl
 
+from ..fluids import smooth_minimum, dsmooth_minimum_dx
+
 # class TypeFunctional(type):
 #     """
 #     This is a metaclass for the Functional that could (will?) be used to implement special methods.
@@ -329,7 +331,7 @@ class Constant(Functional):
     The constant functional that always returns a fixed value
     """
     def __init__(self, model, **kwargs):
-        kwargs.set_default('value', 0.0)
+        kwargs.setdefault('value', 0.0)
         super(Constant, self).__init__(self, model, **kwargs)
 
     def eval(self, f):
@@ -1130,6 +1132,130 @@ class SampledMeanFlowRate(Functional):
 
     def eval_dp(self, f):
         return dfn.Function(self.model.scalar_function_space).vector()
+
+class GlottalWidthErrorNorm(Functional):
+    """
+    Represents the difference between a measured vs model glottal width
+    """
+    def __init__(self, model, **kwargs):
+        super(GlottalWidthErrorNorm, self).__init__(model, **kwargs)
+        self.kwargs.setdefault('gw_meas', 0)
+        self.kwargs.setdefault('alpha_min', -2000)
+
+    def eval(self, f):
+        model = self.model
+
+        # Get the initial locations of the nodes
+        X_REF = model.get_ref_config()
+        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        X_REF_SURFACE = X_REF[DOF_SURFACE]
+
+        # Calculate the glottal width at every node
+        gw_model = []
+        idx_meas = f.get_meas_indices()
+        for n in idx_meas:
+            u = f.get_state(n)[0]
+            xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
+            y_surf = xy_surf[1::2]
+            gw = smooth_minimum(y_surf, alpha=self.kwargs['alpha_min'])
+            gw_model.append(gw)
+
+        return np.sum((np.array(gw_model) - self.kwargs['gw_meas'])**2)
+
+    def du(self, f, n, iter_params0, iter_params1):
+        model = self.model
+
+        # Get the initial locations of the nodes
+        X_REF = model.get_ref_config()
+        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        Y_DOF = DOF_SURFACE[1::2]
+        X_REF_SURFACE = X_REF[DOF_SURFACE]
+
+        # Set up a map from state index to measured index
+        N = f.size
+        idx_meas = f.get_meas_indices()
+        M = idx_meas.size
+
+        n_to_m = {n: -1 for n in range(N)}
+        for m, n in enumerate(idx_meas):
+            n_to_m[n] = m
+
+        out = dfn.Function(model.vector_function_space).vector()
+        if n_to_m[n] != -1:
+            u = iter_params0['x0'][0]
+            xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
+            y_surf = xy_surf[1::2]
+
+            out = dfn.Function(model.vector_function_space).vector()
+            out[Y_DOF] = dsmooth_minimum_dx(y_surf, alpha=self.kwargs['alpha_min'])
+        
+        return out
+
+class DFTGlottalWidthErrorNorm(Functional):
+    """
+    Represents the difference between a measured vs model glottal width DFT coefficients
+    """
+    def __init__(self, model, **kwargs):
+        super(GlottalWidthErrorNorm, self).__init__(model, **kwargs)
+        self.kwargs.setdefault('gw_meas', 0)
+        self.kwargs.setdefault('tukey_alpha', 0.05)
+        self.kwargs.setdefault('alpha_min', -2000)
+
+    def eval(self, f):
+        model = self.model
+
+        # Get the initial locations of the nodes
+        X_REF = model.get_ref_config()
+        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        X_REF_SURFACE = X_REF[DOF_SURFACE]
+
+        # Calculate the glottal width at every node
+        gw_model = []
+        idx_meas = f.get_meas_indices()
+        for n in idx_meas:
+            u = f.get_state(n)[0]
+            xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
+            y_surf = xy_surf[1::2]
+            gw = smooth_minimum(y_surf, alpha=self.kwargs['alpha_min'])
+            gw_model.append(gw)
+
+        dft_gw_model = np.fft.rfft(gw_model)
+        dft_gw_meas = np.fft.rfft(self.kwargs['gw_meas'])
+
+        err = dft_gw_model - dft_gw_meas
+
+        self.cache['gw_model'] = gw_model
+        self.cache['dft_gw_model'] = dft_gw_model
+        self.cache['dft_gw_meas'] = dft_gw_meas
+        return np.sum(np.abs(err)**2)
+
+    def eval_du(self, f, n, iter_params0, iter_params1):
+        model = self.model
+
+        # Get the initial locations of the nodes
+        X_REF = model.get_ref_config()
+        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        Y_DOF = DOF_SURFACE[1::2]
+        X_REF_SURFACE = X_REF[DOF_SURFACE]
+
+        # Set up a map from state index to measured index
+        N = f.size
+        idx_meas = f.get_meas_indices()
+        M = idx_meas.size
+
+        n_to_m = {n: -1 for n in range(N)}
+        for m, n in enumerate(idx_meas):
+            n_to_m[n] = m
+
+        #
+        gw_model = self.cache['gw_model'] 
+
+        dft_gw_model = self.cache['dft_gw_model'] 
+        m_meas = n_to_m[n]
+        dft_gw_model_dgw_n = np.exp(1j*2*np.pi*m_meas*np.arange(M)/M)
+        
+        dft_gw_meas = self.cache['dft_gw_meas']
+        raise NotImplemented("You need to fix this")
 
 def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
     """
