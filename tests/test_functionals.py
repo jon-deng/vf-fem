@@ -8,6 +8,8 @@ import os.path as path
 from time import perf_counter
 import unittest
 
+from tabulate import tabulate
+
 import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dfn
@@ -19,7 +21,7 @@ from femvf import statefile as sf
 from femvf.properties import SolidProperties, FluidProperties #, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.functionals import basic as basic_functionals
+from femvf.functionals import basic
 
 sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from optvf import functionals
@@ -98,16 +100,16 @@ class TestFunctionals(unittest.TestCase):
     def test_functionals(self):
         model = self.model
         ## Set the functional to test
-        # Functional = basic_functionals.DisplacementNorm
+        # Functional = basic.DisplacementNorm
         # gkwargs = {}
 
-        # Functional = basic_functionals.FinalDisplacementNorm
+        # Functional = basic.FinalDisplacementNorm
         # gkwargs = {}
 
-        # Functional = basic_functionals.VelocityNorm
+        # Functional = basic.VelocityNorm
         # gkwargs = {}
 
-        # Functional = basic_functionals.FinalVelocityNorm
+        # Functional = basic.FinalVelocityNorm
         # gkwargs = {}
 
         # Functional = functionals.AcousticEfficiency
@@ -116,19 +118,22 @@ class TestFunctionals(unittest.TestCase):
         # Functional = functionals.AcousticPower
         # gkwargs = {'tukey_alpha': 0.1}
 
-        Functional = functionals.F0WeightedAcousticPower
-        gkwargs = {'f0': 100.0, 'df': 50, 'tukey_alpha': 0.1}
+        # Functional = functionals.F0WeightedAcousticPower
+        # gkwargs = {'f0': 100.0, 'df': 50, 'tukey_alpha': 0.1}
 
-        # Functional = basic_functionals.SubglottalWork
+        # Functional = basic.SubglottalWork
         # gkwargs = {'tukey_alpha': 0.1}
 
-        # Functional = basic_functionals.FluidtoSolidWork
+        # Functional = basic.FluidtoSolidWork
         # gkwargs = {'tukey_alpha': 0.1}
+
+        Functional = basic.StrainWork
+        gkwargs = {}
 
         # Functional = functionals.T1RegAcousticEfficiency
         # gkwargs = {'tukey_alpha': 0.2, 'lambda': 0}
 
-        # Functional = basic_functionals.StrainEnergy
+        # Functional = basic.StrainEnergy
         # gkwargs = {}
 
         g = Functional(model, **gkwargs)
@@ -172,12 +177,11 @@ class TestFunctionals(unittest.TestCase):
             dfunc_dv_fd = (functional_wrapper(g, x_0[1]+alpha_v*du, f, i=1, n=n)-func_0) / alpha_v
             dfunc_da_fd = (functional_wrapper(g, x_0[2]+alpha_a*du, f, i=2, n=n)-func_0) / alpha_a
 
-        # print(f"dg/du_n [:10] = {dfunc_du_an[:10]}")
-        # print("||dg/du_n|| = " f"{dfunc_du_an.norm('l2')}")
-        print(np.dot(dfunc_du_an, du), dfunc_du_fd)
-        print(np.dot(dfunc_dv_an, du), dfunc_dv_fd)
-        print(np.dot(dfunc_da_an, du), dfunc_da_fd)
-        # breakpoint()
+        header = ["", "dg/dalpha analytical", "dg/dalpha finite difference"]
+        table = [["dg/du", np.dot(dfunc_du_an, du), dfunc_du_fd],
+                 ["dg/dv", np.dot(dfunc_dv_an, du), dfunc_dv_fd],
+                 ["dg/da", np.dot(dfunc_da_an, du), dfunc_da_fd]]
+        print(tabulate(table, headers=header))
 
 # Calculate a functional along a perturbed direction
 def functional_wrapper(g, u, f, i=0, n=0):

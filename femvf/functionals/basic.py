@@ -147,7 +147,7 @@ class Functional:
     After running a functional over a forward model history, the value is cached in _value.
 
     To make a new functional, you should set default values for any kwargs in __init__, then call
-    the super method. Afterwords, you can add any needed subfunctionals to 
+    the super method. Afterwords, you can add any needed subfunctionals to
 
     Parameters
     ----------
@@ -530,7 +530,7 @@ class StrainWork(Functional):
     def __init__(self, model, **kwargs):
         super(StrainWork, self).__init__(model, **kwargs)
 
-        from .forms import biform_m, biform_k
+        from ..forms import biform_m, biform_k
 
         vector_trial = model.forms['trial.vector']
         scalar_trial = model.forms['trial.scalar']
@@ -1188,7 +1188,7 @@ class GlottalWidthErrorNorm(Functional):
 
             out = dfn.Function(model.vector_function_space).vector()
             out[Y_DOF] = dsmooth_minimum_dx(y_surf, alpha=self.kwargs['alpha_min'])
-        
+
         return out
 
 class DFTGlottalWidthErrorNorm(Functional):
@@ -1248,12 +1248,12 @@ class DFTGlottalWidthErrorNorm(Functional):
             n_to_m[n] = m
 
         #
-        gw_model = self.cache['gw_model'] 
+        gw_model = self.cache['gw_model']
 
-        dft_gw_model = self.cache['dft_gw_model'] 
+        dft_gw_model = self.cache['dft_gw_model']
         m_meas = n_to_m[n]
         dft_gw_model_dgw_n = np.exp(1j*2*np.pi*m_meas*np.arange(M)/M)
-        
+
         dft_gw_meas = self.cache['dft_gw_meas']
         raise NotImplemented("You need to fix this")
 
