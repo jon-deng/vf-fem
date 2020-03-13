@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "/home/j8deng/lib/vf-optimization"
+			"path": "../vf-optimization"
 		}
 	],
 	"settings": {}
