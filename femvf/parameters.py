@@ -253,6 +253,43 @@ class NodalElasticModuli(Parameterization):
 
         return 1.0*demod
 
+class KelvinVoigtNodalConstants(Parameterization):
+    """
+    A parameterization consisting of nodal values of elastic moduli and damping constants
+    for the Kelvin-Voigt constitutive model.
+    """
+    PARAM_TYPES = OrderedDict({
+        'elastic_moduli': ('field', ()),
+        'eta': ('field', ())
+        })
+
+    CONSTANT_LABELS = ('default_solid_props',
+                       'default_fluid_props',
+                       'default_timing_props')
+
+    def convert(self):
+        solid_props = props.SolidProperties(self.model, self.constants['default_solid_props'])
+        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
+        timing_props = self.constants['default_timing_props']
+
+        solid_props['elastic_modulus'] = self['elastic_moduli']
+
+        return solid_props, fluid_props, timing_props
+
+    def dconvert(self, demod):
+        """
+        Returns the sensitivity of the elastic modulus with respect to parameters
+
+        # TODO: This should return a dict or something that has the sensitivity
+        # of all properties wrt parameters
+        """
+        # solid_props = props.SolidProperties(model, self.default_solid_props)
+        # fluid_props = props.FluidProperties(model, self.default_fluid_props)
+
+        # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
+
+        return 1.0*demod
+
 class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.

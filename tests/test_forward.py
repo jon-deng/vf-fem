@@ -36,7 +36,7 @@ class TestForward(unittest.TestCase):
 
         # dt = 2.5e-6
         dt = 5e-5
-        times_meas = [0, 0.1]
+        times_meas = [0, 0.2]
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -61,7 +61,8 @@ class TestForward(unittest.TestCase):
         emod[:] = 5.0e3 * PASCAL_TO_CGS
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
-        solid_props['rayleigh_k'] = 3e-4
+        solid_props['rayleigh_k'] = 0
+        solid_props['kv_eta'] = 3
         solid_props['k_collision'] = 1e11
         solid_props['y_collision'] = fluid_props['y_midline'] - y_gap*1/2
 

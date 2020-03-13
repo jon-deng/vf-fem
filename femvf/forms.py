@@ -91,7 +91,7 @@ def newmark_a_da0(dt, gamma=1/2, beta=1/4):
 
 def linear_elasticity(u, emod, nu):
     """
-    Returns the cauchy stress for a small-strain displacement field
+    Returns the Cauchy stress for a small-strain displacement field
 
     Parameters
     ----------
@@ -168,28 +168,31 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
 
     # Initial and final states
     # u: displacement, v: velocity, a: acceleration
+    dt = dfn.Constant(1e-4)
+
     u0 = dfn.Function(vector_fspace)
     v0 = dfn.Function(vector_fspace)
     a0 = dfn.Function(vector_fspace)
 
     u1 = dfn.Function(vector_fspace)
-
-    # Time step
-    dt = dfn.Constant(1e-4)
+    v1 = newmark_v(vector_trial, u0, v0, a0, dt, gamma, beta)
+    a1 = newmark_a(vector_trial, u0, v0, a0, dt, gamma, beta)
 
     # Surface pressures
     pressure = dfn.Function(scalar_fspace)
 
     # Symbolic calculations to get the variational form for a linear-elastic solid
-    trial_v = newmark_v(vector_trial, u0, v0, a0, dt, gamma, beta)
-    trial_a = newmark_a(vector_trial, u0, v0, a0, dt, gamma, beta)
 
-    inertia = biform_m(trial_a, vector_test, rho)
+    inertia = biform_m(a1, vector_test, rho)
 
     stiffness = biform_k(vector_trial, vector_test, emod, nu)
 
-    damping = rayleigh_m * biform_m(trial_v, vector_test, rho) \
-                + rayleigh_k * biform_k(trial_v, vector_test, emod, nu)
+    ra_damping = rayleigh_m * biform_m(v1, vector_test, rho) \
+                 + rayleigh_k * biform_k(v1, vector_test, emod, nu)
+
+    # Kelvin-Voigt type damping term
+    kv_eta = dfn.Function(scalar_fspace)
+    kv_damping = ufl.inner(kv_eta*strain(v1), strain(vector_test)) * ufl.dx
 
     # Compute the pressure loading Neumann boundary condition on the reference configuration
     # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
@@ -215,7 +218,7 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
     penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) \
               * ds(facet_labels['pressure'])
 
-    f1_linear = ufl.action(inertia + stiffness + damping, u1)
+    f1_linear = ufl.action(inertia + stiffness + ra_damping + kv_damping, u1)
     f1_nonlin = -traction - penalty
     f1 = f1_linear + f1_nonlin
 
@@ -271,6 +274,7 @@ def _linear_elastic_forms(mesh, facet_function, facet_labels, cell_function, cel
         'coeff.rho': rho,
         'coeff.rayleigh_m': rayleigh_m,
         'coeff.rayleigh_k': rayleigh_k,
+        'coeff.kv_eta': kv_eta,
         'coeff.y_collision': y_collision,
         'coeff.emod': emod,
         'coeff.nu': nu,
@@ -696,12 +700,15 @@ class ForwardModel:
         # labels = SolidProperties.TYPES.keys()
         forms = self.forms
 
+        # TODO: This should probably be refactored as it must be updated manually when properties
+        # change
         coeff_to_prop_label = {
             'coeff.emod': 'elastic_modulus',
             'coeff.nu': 'poissons_ratio',
             'coeff.rho': 'density',
             'coeff.rayleigh_m': 'rayleigh_m',
             'coeff.rayleigh_k': 'rayleigh_k',
+            'coeff.kv_eta': 'kv_eta',
             'coeff.y_collision': 'y_collision',
             'coeff.k_collision': 'k_collision'}
 
@@ -711,7 +718,9 @@ class ForwardModel:
             coefficient = forms[coeff_label]
             value = solid_props[prop_label]
 
-            if prop_label == 'elastic_modulus':
+            # If the property is a field variable, values have to be assigned to every spot in
+            # the vector
+            if SolidProperties.TYPES[prop_label][0] == 'field':
                 coefficient.vector()[:] = value
             else:
                 coefficient.assign(value)

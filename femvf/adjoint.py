@@ -108,7 +108,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
 # @profile
 def adjoint(model, f, functional, show_figure=False):
     """
-    Returns the gradient of the cost function w.r.t elastic modulus using the adjoint model.
+    Returns the gradient of the cost function using the adjoint model.
 
     Parameters
     ----------
@@ -122,9 +122,11 @@ def adjoint(model, f, functional, show_figure=False):
     -------
     float
         The value of the functional
-    dfn.GenericVector
-        The gradient of the functional wrt parameters
+    dict(str: dfn.Vector)
+        The gradient of the functional wrt parameter labelled by `str`
     """
+    # gradients = model.SolidProperties()
+
     # Assuming that fluid and solid properties are constant in time so set them once
     # and leave them
     # TODO: May want to use time varying fluid/solid props in future
@@ -135,9 +137,10 @@ def adjoint(model, f, functional, show_figure=False):
     model.set_solid_props(solid_props)
 
     # Initialize the functional instance and run it once to initialize any cached values
-    functional_value = functional.eval(f)
+    functional_value = functional(f)
 
     df1_dparam_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
+    # breakpoint()
 
     ## Preallocating vector
     # Temporary variables to shorten code

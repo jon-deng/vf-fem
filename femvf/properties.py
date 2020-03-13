@@ -20,7 +20,7 @@ class Properties:
         # Check that there is a default value for each type
         for key in cls.TYPES:
             if key not in cls.DEFAULTS:
-                raise KeyError(f"Property key `{key}`` does not have a default value")
+                raise KeyError(f"Property key `{key}` does not have a default value")
 
         return super().__new__(cls)
 
@@ -127,6 +127,7 @@ class SolidProperties(Properties):
              'density': ('const', ()),
              'rayleigh_m': ('const', ()),
              'rayleigh_k': ('const', ()),
+             'kv_eta': ('field', ()),
              'y_collision': ('const', ()),
              'k_collision': ('const', ())}
 
@@ -137,6 +138,7 @@ class SolidProperties(Properties):
                 'density': 1000 * SI_DENSITY_TO_CGS,
                 'rayleigh_m': 10,
                 'rayleigh_k': 1e-3,
+                'kv_eta': 3.0,
                 'y_collision': 0.61-0.001,
                 'k_collision': 1e11}
 

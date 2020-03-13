@@ -63,7 +63,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         dt_max = 5e-5
         t_start = 0
         # t_final = (150)*dt_sample
-        t_final = 0.2
+        t_final = 0.1
         times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
 
         ## Set the fluid/solid parameters
@@ -100,6 +100,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
+        solid_props['kv_eta'][:] = 3.0
         solid_props['k_collision'] = k_coll
         solid_props['y_collision'] = fluid_props['y_midline'] - y_coll_offset
 

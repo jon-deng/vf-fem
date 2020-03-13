@@ -237,10 +237,10 @@ class StateFile:
             Dictionary of solid properties to append
         """
         solid_group = self.root_group['solid_properties']
-        for label in SolidProperties.TYPES:
+        for label, shape in SolidProperties.TYPES.items():
             dset = solid_group[label]
 
-            if label == 'elastic_modulus':
+            if shape[0] == 'field':
                 dset[:] = solid_props[label]
             else:
                 dset[()] = solid_props[label]
@@ -366,10 +366,10 @@ class StateFile:
         """
         solid_props = SolidProperties(self.model)
         solid_group = self.root_group['solid_properties']
-        for label in SolidProperties.TYPES:
+        for label, shape in SolidProperties.TYPES.items():
             data = solid_group[label]
 
-            if label == 'elastic_modulus':
+            if shape[0] == 'field':
                 solid_props[label] = data[:]
             else:
                 # have to index differently for scalar datasets
