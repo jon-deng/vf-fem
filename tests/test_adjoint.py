@@ -99,7 +99,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
 
         solid_props = LinearElasticRayleigh(model)
         solid_props['emod'] = emod
-        solid_props['rayleigh_m'] = 0
+        solid_props['rayleigh_m'] = 0.0
         solid_props['rayleigh_k'] = 3e-4
         # solid_props['kv_eta'][:] = 3.0
         solid_props['k_collision'] = k_coll

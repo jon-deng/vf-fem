@@ -231,7 +231,7 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
-        return dfn.assemble(self.forms['lin.f1'])
+        return dfn.assemble(self.forms['forms.un.f1'])
         # M = self.assem_cache['M']
         # K = self.assem_cache['K']
 
@@ -261,7 +261,7 @@ class ForwardModel:
         ----------
         u1 : dfn.cpp.la.Vector
         """
-        return dfn.assemble(self.forms['df1_du1'])
+        return dfn.assemble(self.forms['form.bi.df1_du1'])
 
     def assem_df1_du1_adj(self):
         return self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
