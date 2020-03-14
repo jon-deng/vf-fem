@@ -29,6 +29,7 @@ import dolfin as dfn
 sys.path.append('../')
 from femvf.forward import forward
 from femvf.adjoint import adjoint
+from femvf.model import ForwardModel
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
 from femvf.properties import FluidProperties, LinearElasticRayleigh#, TimingProperties
@@ -55,7 +56,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = model.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
         ## Set the solution parameters
         dt_sample = 1e-4
@@ -97,10 +98,10 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         fluid_props['sigma'] = sigma
 
         solid_props = LinearElasticRayleigh(model)
-        solid_props['elastic_modulus'] = emod
+        solid_props['emod'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
-        solid_props['kv_eta'][:] = 3.0
+        # solid_props['kv_eta'][:] = 3.0
         solid_props['k_collision'] = k_coll
         solid_props['y_collision'] = fluid_props['y_midline'] - y_coll_offset
 
@@ -115,7 +116,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
             for n, h in enumerate(hs):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
-                solid_props['elastic_modulus'] = emod + h*step_dir
+                solid_props['emod'] = emod + h*step_dir
                 info = forward(model, solid_props, fluid_props, timing_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}', show_figure=False)
                 runtime_end = perf_counter()
@@ -151,14 +152,14 @@ class TestAdjointGradientCalculation(unittest.TestCase):
             run_info = pickle.load(f)
 
         fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':50}
-        # Functional = funcs.FinalDisplacementNorm
+        Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
         # Functional = extra_funcs.AcousticPower
         # Functional = extra_funcs.AcousticEfficiency
-        Functional = extra_funcs.F0WeightedAcousticPower
+        # Functional = extra_funcs.F0WeightedAcousticPower
 
         functional = Functional(model, **fkwargs)
 
