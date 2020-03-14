@@ -9,7 +9,7 @@ import dolfin as dfn
 import numpy as np
 
 from . import constants
-from .properties import SolidProperties, FluidProperties
+from .properties import LinearElasticRayleigh, FluidProperties
 
 class StateFile:
     """
@@ -155,7 +155,7 @@ class StateFile:
 
         Parameters
         ----------
-        model : femvf.forms.ForwardModel
+        model : femvf.model.ForwardModel
             Not really needed for this one but left the arg here since it's in solid properties init
         """
         group_fluid = self.root_group.create_group('fluid_properties')
@@ -176,7 +176,7 @@ class StateFile:
 
         """
         solid_group = self.root_group.create_group('solid_properties')
-        for key, prop_desc in SolidProperties.TYPES.items():
+        for key, prop_desc in LinearElasticRayleigh.TYPES.items():
             shape = _property_shape(prop_desc, model)
             solid_group.create_dataset(key, shape)
 
@@ -237,7 +237,7 @@ class StateFile:
             Dictionary of solid properties to append
         """
         solid_group = self.root_group['solid_properties']
-        for label, shape in SolidProperties.TYPES.items():
+        for label, shape in LinearElasticRayleigh.TYPES.items():
             dset = solid_group[label]
 
             if shape[0] == 'field':
@@ -364,9 +364,9 @@ class StateFile:
         """
         Returns the solid properties
         """
-        solid_props = SolidProperties(self.model)
+        solid_props = LinearElasticRayleigh(self.model)
         solid_group = self.root_group['solid_properties']
-        for label, shape in SolidProperties.TYPES.items():
+        for label, shape in LinearElasticRayleigh.TYPES.items():
             data = solid_group[label]
 
             if shape[0] == 'field':

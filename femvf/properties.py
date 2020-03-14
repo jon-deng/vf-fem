@@ -56,7 +56,7 @@ class Properties:
         Raises an errors if the key does not exist.
         """
         if key not in self.TYPES:
-            raise KeyError(f"`{key}` is not a valid property")
+            raise KeyError(f"{key} is not a valid property")
         else:
             return self.data[key]
 
@@ -67,9 +67,12 @@ class Properties:
         Raises an errors if the key does not exist.
         """
         if key not in self.TYPES:
-            raise KeyError(f"`{key}` is not a valid property")
+            raise KeyError(f"{key} is not a valid property")
         else:
             self.data[key] = value
+
+    def __iter__(self):
+        return self.data.__iter__()
 
     def __contains__(self, key):
         return key in self.TYPES
@@ -103,7 +106,7 @@ class Properties:
         """
         return self.data.keys()
 
-class SolidProperties(Properties):
+class LinearElasticRayleigh(Properties):
     """
     Represents a collection of linear-elastic solid properties
 
@@ -122,23 +125,54 @@ class SolidProperties(Properties):
     # `types` indicates if each property is either a field or constant variable
     # and its shape in a tuple. A shape of `None` indicates a scalar value
 
-    TYPES = {'elastic_modulus': ('field', ()),
-             'poissons_ratio': ('const', ()),
-             'density': ('const', ()),
+    TYPES = {'emod': ('field', ()),
+             'nu': ('const', ()),
+             'rho': ('const', ()),
              'rayleigh_m': ('const', ()),
              'rayleigh_k': ('const', ()),
-             'kv_eta': ('field', ()),
              'y_collision': ('const', ()),
              'k_collision': ('const', ())}
 
     # LABELS = tuple(TYPES.keys())
 
-    DEFAULTS = {'elastic_modulus': 10e3 * PASCAL_TO_CGS,
-                'poissons_ratio': 0.49,
-                'density': 1000 * SI_DENSITY_TO_CGS,
+    DEFAULTS = {'emod': 10e3 * PASCAL_TO_CGS,
+                'nu': 0.49,
+                'rho': 1000 * SI_DENSITY_TO_CGS,
                 'rayleigh_m': 10,
                 'rayleigh_k': 1e-3,
-                'kv_eta': 3.0,
+                'y_collision': 0.61-0.001,
+                'k_collision': 1e11}
+
+class KelvinVoigt(Properties):
+    """
+    Represents kelvin-voigt viscoelastic solid properties
+
+    Parameters
+    ----------
+    elastic_modulus :
+    poissons_ratio :
+    density :
+    rayleigh_m, rayleigh_k :
+        Rayleigh damping parameters for the mass and stiffness matrix terms
+    y_collision :
+        The y-coordinate of the collision plane
+    k_collision :
+        The stiffness of the collision penalty spring
+    """
+    # `types` indicates if each property is either a field or constant variable
+    # and its shape in a tuple. A shape of `None` indicates a scalar value
+
+    TYPES = {'emod': ('field', ()),
+             'nu': ('const', ()),
+             'rho': ('const', ()),
+             'eta': ('field', ()),
+             'y_collision': ('const', ()),
+             'k_collision': ('const', ())}
+
+    DEFAULTS = {'emod': 10e3 * PASCAL_TO_CGS,
+                'nu': 0.49,
+                'rho': 1000 * SI_DENSITY_TO_CGS,
+                'eta': 3.0,
                 'y_collision': 0.61-0.001,
                 'k_collision': 1e11}
 

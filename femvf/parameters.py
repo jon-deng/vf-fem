@@ -29,7 +29,7 @@ class Parameterization:
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
     constants : dict
         A dictionary of labelled constants mapping labels to constant values
         used in the parameterization.
@@ -41,7 +41,7 @@ class Parameterization:
 
     Attributes
     ----------
-    model : femvf.forms.ForwardModel
+    model : femvf.model.ForwardModel
     constants : dict({str: value})
         A dictionary of labeled constants to values
     vector : np.ndarray
@@ -231,7 +231,7 @@ class NodalElasticModuli(Parameterization):
                        'default_timing_props')
 
     def convert(self):
-        solid_props = props.SolidProperties(self.model, self.constants['default_solid_props'])
+        solid_props = props.LinearElasticRayleigh(self.model, self.constants['default_solid_props'])
         fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
         timing_props = self.constants['default_timing_props']
 
@@ -268,7 +268,7 @@ class KelvinVoigtNodalConstants(Parameterization):
                        'default_timing_props')
 
     def convert(self):
-        solid_props = props.SolidProperties(self.model, self.constants['default_solid_props'])
+        solid_props = props.LinearElasticRayleigh(self.model, self.constants['default_solid_props'])
         fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
         timing_props = self.constants['default_timing_props']
 

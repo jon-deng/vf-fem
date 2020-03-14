@@ -18,7 +18,7 @@ sys.path.append('../')
 from femvf.forward import forward
 from femvf import forms
 from femvf import statefile as sf
-from femvf.properties import SolidProperties, FluidProperties #, TimingProperties
+from femvf.properties import LinearElasticRayleigh, FluidProperties #, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functionals import basic
@@ -41,7 +41,7 @@ class TestFunctionals(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        model = model.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
         ## Set the solution parameters
         dt_max = 1e-4
@@ -56,7 +56,7 @@ class TestFunctionals(unittest.TestCase):
 
         # Set parameters for the simulation
         timing_props = {'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max}
-        solid_props = SolidProperties(model)
+        solid_props = LinearElasticRayleigh(model)
         fluid_props = FluidProperties(model)
 
         y_gap = 0.01

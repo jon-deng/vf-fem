@@ -14,8 +14,8 @@ import dolfin as dfn
 
 sys.path.append('../')
 from femvf.forward import forward
-from femvf import forms
-from femvf.properties import SolidProperties, FluidProperties#, TimingProperties
+from femvf.model import ForwardModel
+from femvf.properties import LinearElasticRayleigh, FluidProperties#, TimingProperties
 from femvf.constants import PASCAL_TO_CGS
 
 class TestForward(unittest.TestCase):
@@ -32,7 +32,7 @@ class TestForward(unittest.TestCase):
 
     def test_forward(self):
         ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-        model = forms.ForwardModel(self.mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        model = ForwardModel(self.mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
         # dt = 2.5e-6
         dt = 5e-5
@@ -56,13 +56,12 @@ class TestForward(unittest.TestCase):
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
 
-        solid_props = SolidProperties(model)
+        solid_props = LinearElasticRayleigh(model)
         emod = model.emod.vector()[:].copy()
         emod[:] = 5.0e3 * PASCAL_TO_CGS
-        solid_props['elastic_modulus'] = emod
+        solid_props['emod'] = emod
         solid_props['rayleigh_m'] = 0
-        solid_props['rayleigh_k'] = 0
-        solid_props['kv_eta'] = 3
+        solid_props['rayleigh_k'] = 4e-3
         solid_props['k_collision'] = 1e11
         solid_props['y_collision'] = fluid_props['y_midline'] - y_gap*1/2
 

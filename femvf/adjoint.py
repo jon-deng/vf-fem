@@ -36,7 +36,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
     adj_x2 : tuple of dfn.cpp.la.Vector
         A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
     iter_params1, iter_params2 : dict
@@ -67,7 +67,7 @@ def decrement_adjoint(model, adj_x2, iter_params1, iter_params2, dcost_dx1):
     df2_da1 = model.assem_df1_da0_adj()
 
     # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
-    df2_dpressure = dfn.assemble(model.forms['bilin.df1_dpressure_adj'])
+    df2_dpressure = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
     dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
 
     ## Set form coefficients to represent f^{n+1} aka f1(x0, x1) -> x1
@@ -112,7 +112,7 @@ def adjoint(model, f, functional, show_figure=False):
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
     f : statefile.StateFile
     functional : functionals.Functional
     show_figures : bool

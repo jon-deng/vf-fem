@@ -14,7 +14,7 @@ import numpy as np
 sys.path.append('../')
 # from femvf import mesh_operators
 from femvf.forward import forward
-from femvf import forms
+from femvf.model import ForwardModel
 from femvf import constants
 from femvf import properties as props
 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     times_meas = np.linspace(0, 0.1, round(0.1/dt)+1)
 
     # Solid and Fluid properties
-    solid_props = props.SolidProperties(model)
+    solid_props = props.LinearElasticRayleigh(model)
     fluid_props = props.FluidProperties(model)
     timing_props = {'t0': 0.0, 'tmeas': times_meas, 'dt_max': dt}
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     mesh_base_filename = 'geometry2'
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-    model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+    model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
     breakpoint()
 
     h5file = 'forward_example.h5'

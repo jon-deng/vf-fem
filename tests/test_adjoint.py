@@ -31,7 +31,7 @@ from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
-from femvf.properties import FluidProperties, SolidProperties#, TimingProperties
+from femvf.properties import FluidProperties, LinearElasticRayleigh#, TimingProperties
 from femvf.functionals import basic as funcs
 from femvf import statefile as sf
 
@@ -55,7 +55,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        model = model.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
         ## Set the solution parameters
         dt_sample = 1e-4
@@ -96,7 +96,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
 
-        solid_props = SolidProperties(model)
+        solid_props = LinearElasticRayleigh(model)
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
@@ -353,7 +353,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = forms.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        model = model.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
 
         p_sub = 1000
 
@@ -397,7 +397,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
 
-        solid_props = SolidProperties(model)
+        solid_props = LinearElasticRayleigh(model)
         solid_props['elastic_modulus'] = emod
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4

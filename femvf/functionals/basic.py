@@ -151,14 +151,14 @@ class Functional:
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
         The forward model instance
     kwargs : optional
         Additional arguments that specify functional specific options of how it should be computed
 
     Attributes
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
     kwargs : dict
         A dictionary of additional options of how to compute the functional
     value : float
@@ -202,7 +202,7 @@ class Functional:
             The history of states to compute it over
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params` with signature:
+            `model.ForwardModel.set_iter_params` with signature:
             `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
@@ -223,7 +223,7 @@ class Functional:
             The history of states to compute it over
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params` with signature:
+            `model.ForwardModel.set_iter_params` with signature:
             `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
@@ -244,7 +244,7 @@ class Functional:
             The history of states to compute it over
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params` with signature:
+            `model.ForwardModel.set_iter_params` with signature:
             `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
@@ -272,7 +272,7 @@ class Functional:
             The history of states to compute it over
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params` with signature:
+            `model.ForwardModel.set_iter_params` with signature:
             `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
@@ -292,7 +292,7 @@ class Functional:
             The history of states to compute it over
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params` with signature:
+            `model.ForwardModel.set_iter_params` with signature:
             `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
@@ -312,7 +312,7 @@ class Functional:
             The history of states to compute it over
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
-            `forms.ForwardModel.set_iter_params` with signature:
+            `model.ForwardModel.set_iter_params` with signature:
             `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states

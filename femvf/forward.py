@@ -28,7 +28,7 @@ def forward(model, solid_props, fluid_props, timing_props,
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
         An object representing the forward model.
     timing_props : properties.TimingProperties
         A timing properties object
@@ -172,7 +172,7 @@ def increment_forward(model, x0, dt):
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
     x0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model
     dt : float
@@ -228,7 +228,7 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
 
     Parameters
     ----------
-    model : forms.ForwardModel
+    model : model.ForwardModel
     x0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model.
     dt_max : float
@@ -261,7 +261,7 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
         x1, fluid_info = increment_forward(model, x0, dt)
         info['fluid_info'] = fluid_info
 
-        err = newmark_error_estimate(x1[2].vector(), x0[2].vector(), dt, beta=model.forms['coeff.beta'].values()[0])
+        err = newmark_error_estimate(x1[2].vector(), x0[2].vector(), dt, beta=model.forms['coeff.time.beta'].values()[0])
         err_norm = err.norm('l2')
         info['err_norm'] = err_norm
         info['nrefine'] = nrefine
