@@ -235,7 +235,7 @@ class NodalElasticModuli(Parameterization):
         fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
         timing_props = self.constants['default_timing_props']
 
-        solid_props['elastic_modulus'] = self['elastic_moduli']
+        solid_props['emod'] = self['elastic_moduli']
 
         return solid_props, fluid_props, timing_props
 

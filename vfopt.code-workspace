@@ -6,6 +6,9 @@
 		{
 			"path": "../vf-optimization"
 		}
+        {
+			"path": "../vf-experiments"
+		}
 	],
 	"settings": {}
 }

@@ -522,6 +522,42 @@ class CachedBiFormAssembler:
         out = self.tensor.copy()
         return dfn.assemble(self.form, tensor=out)
 
+# def load_xdmf(mesh_path, facet_labels, cell_labels):
+#     """
+#     Return mesh and facet/cell info
+
+#     Parameters
+#     ----------
+#     mesh_path : str
+#         Path to the mesh .xml file
+#     facet_labels, cell_labels : dict(str: int)
+#         Dictionaries providing integer identifiers for given labels
+
+#     Returns
+#     -------
+#     mesh : dfn.Mesh
+#         The mesh object
+#     facet_function, cell_function : dfn.MeshFunction
+#         A mesh function marking facets with integers. Marked elements correspond to the label->int
+#         mapping given in facet_labels/cell_labels.
+#     """
+#     base_path, ext = path.splitext(mesh_path)
+
+#     mesh = dfn.Mesh()
+#     facet_function = dfn.MeshFunction('size_t', mesh, 1)
+#     cell_function = dfn.MeshFunction('size_t', mesh, 2)
+    
+#     with dfn.XDMFFile(mesh_path) as f:
+#         f.read(mesh)
+#         for label in facet_labels():
+#         f.read(facet_mvc)
+#         f.read()
+#     facet_function_path = base_path +  '_facet_region.xml'
+#     cell_function_path = base_path + '_physical_region.xml'
+
+
+#     return mesh, facet_function, cell_function
+
 def load_mesh(mesh_path, facet_labels, cell_labels):
     """
     Return mesh and facet/cell info

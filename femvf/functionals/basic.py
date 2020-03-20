@@ -1146,7 +1146,7 @@ class GlottalWidthErrorNorm(Functional):
         model = self.model
 
         # Get the initial locations of the nodes
-        X_REF = model.get_ref_config()
+        X_REF = model.get_ref_config().reshape(-1)
         DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
@@ -1166,7 +1166,7 @@ class GlottalWidthErrorNorm(Functional):
         model = self.model
 
         # Get the initial locations of the nodes
-        X_REF = model.get_ref_config()
+        X_REF = model.get_ref_config().reshape(-1)
         DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
         Y_DOF = DOF_SURFACE[1::2]
         X_REF_SURFACE = X_REF[DOF_SURFACE]
@@ -1190,6 +1190,9 @@ class GlottalWidthErrorNorm(Functional):
             out[Y_DOF] = dsmooth_minimum_dx(y_surf, alpha=self.kwargs['alpha_min'])
 
         return out
+
+    def eval_dp(self, f):
+        return dfn.Function(self.model.scalar_function_space).vector()
 
 class DFTGlottalWidthErrorNorm(Functional):
     """

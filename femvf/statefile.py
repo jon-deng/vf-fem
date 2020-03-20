@@ -360,13 +360,13 @@ class StateFile:
 
         return fluid_props
 
-    def get_solid_props(self):
+    def get_solid_props(self, SolidType=LinearElasticRayleigh):
         """
         Returns the solid properties
         """
-        solid_props = LinearElasticRayleigh(self.model)
+        solid_props = SolidType(self.model)
         solid_group = self.root_group['solid_properties']
-        for label, shape in LinearElasticRayleigh.TYPES.items():
+        for label, shape in SolidType.TYPES.items():
             data = solid_group[label]
 
             if shape[0] == 'field':

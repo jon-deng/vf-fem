@@ -153,6 +153,9 @@ def forward(model, solid_props, fluid_props, timing_props,
         glottal_width.append(step_info['a_min'])
         flow_rate.append(step_info['flow_rate'])
 
+        # Write them out to the h5file
+        f.file['gaw'] = np.array(glottal_width)
+
         info['meas_ind'] = f.get_meas_indices()
         info['time'] = f.get_solution_times()
         info['glottal_width'] = np.array(glottal_width)
@@ -163,7 +166,7 @@ def forward(model, solid_props, fluid_props, timing_props,
         info['h5file'] = h5file
         info['h5group'] = h5group
 
-        return info
+    return info
 
 # @profile
 def increment_forward(model, x0, dt):
@@ -204,7 +207,7 @@ def increment_forward(model, x0, dt):
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
     # form. During collision the equations are non-linear but in all other cases they are currently
     # linear.
-    newton_prm = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-11}
+    newton_prm = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
     dfn.solve(model.f1 == 0, model.u1, bcs=model.bc_base, J=model.df1_du1,
               solver_parameters={"newton_solver": newton_prm})
     u1.assign(model.u1)
