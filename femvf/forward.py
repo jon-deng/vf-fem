@@ -16,10 +16,13 @@ from . import vis
 
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
+
+DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
+
 # @profile
 def forward(model, solid_props, fluid_props, timing_props,
-            h5file='tmp.h5', h5group='/', abs_tol=1e-5, abs_tol_bounds=(0, 1.2),
-            show_figure=False, figure_path=None):
+            h5file='tmp.h5', h5group='/', 
+            adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
     """
     Solves the forward model over specific time instants.
 
@@ -56,6 +59,9 @@ def forward(model, solid_props, fluid_props, timing_props,
     info : dict
         A dictionary of info about the run.
     """
+    # The default for adaptive time stepping is to not use it. Plus I think I messed up how it works
+    if adaptive_step_prm is None:
+        adaptive_step_prm = {'abs_tol': None, 'abs_tol_bounds': (0.0, 0.0)}
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
     t0, tmeas, dt_max = timing_props['t0'], timing_props['tmeas'], timing_props['dt_max']
@@ -113,8 +119,7 @@ def forward(model, solid_props, fluid_props, timing_props,
                 # If the local error is super low, the refinement time step will be predicted to be
                 # high and so it will go back to the max time step.
                 dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                x1, dt_actual, step_info = adaptive_step(model, x0, dt_target, abs_tol=abs_tol,
-                                                         abs_tol_bounds=abs_tol_bounds)
+                x1, dt_actual, step_info = adaptive_step(model, x0, dt_target, **adaptive_step_prm)
                 n_state += 1
                 t_current += dt_actual
 
@@ -169,7 +174,7 @@ def forward(model, solid_props, fluid_props, timing_props,
     return info
 
 # @profile
-def increment_forward(model, x0, dt):
+def increment_forward(model, x0, dt, newton_solver_prm=None):
     """
     Return the state at the end of `dt` `x1 = (u1, v1, a1)`.
 
@@ -207,9 +212,10 @@ def increment_forward(model, x0, dt):
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
     # form. During collision the equations are non-linear but in all other cases they are currently
     # linear.
-    newton_prm = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
+    if newton_solver_prm is None:
+        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
     dfn.solve(model.f1 == 0, model.u1, bcs=model.bc_base, J=model.df1_du1,
-              solver_parameters={"newton_solver": newton_prm})
+              solver_parameters={"newton_solver": newton_solver_prm})
     u1.assign(model.u1)
 
     # u1.assign(u0)
