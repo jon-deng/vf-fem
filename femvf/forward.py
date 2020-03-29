@@ -43,9 +43,8 @@ def forward(model, solid_props, fluid_props, timing_props,
         Path to an hdf5 file where solution information will be appended.
     h5group : string
         A group in the h5 file to save solution information under.
-    abs_tol : float or None
+    adaptive_step_prm : dict of {'abs_tol': float or None, 'abs_tol_bounds': tuple} 
         A desired tolerance that the norm of the displacement solution should meet
-    abs_tol_bounds : tuple of float
         Bounds on the solution norm tolerance. Time steps are adjusted so that the local error in
         :math:`u_{n+1}` is between `abs_tol_bounds[0]*abs_tol` and `abs_tol_bounds[1]*abs_tol`.
     show_figure : bool
