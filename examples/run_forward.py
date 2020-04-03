@@ -35,7 +35,7 @@ if __name__ == '__main__':
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
-    breakpoint()
+   # breakpoint()
 
     h5file = 'forward_example.h5'
     if os.path.exists(h5file):

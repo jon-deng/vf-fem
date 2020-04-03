@@ -9,8 +9,8 @@ import math
 import dolfin as dfn
 from petsc4py import PETSc
 
-# 1D viscous euler approximation
-def fluid_pressure_vasu(x, x0, xr, fluid_props):
+## 1D Euler model
+def fluid_pressure_vasu(uva, x0, xr, fluid_props):
     """
     Return fluid surface pressures according to a 1D flow model.
 
@@ -35,7 +35,7 @@ def fluid_pressure_vasu(x, x0, xr, fluid_props):
     xy_min, xy_sep: (2,) np.ndarray
         The coordinates of the vertices at minimum and separation areas
     """
-    u, v, a = x
+    u, v, a = uva
 
     area = 2*u[..., 1]
     darea_dt = 2*v[..., 1]
@@ -250,7 +250,7 @@ def bd_df(f, n, dx):
     idxs = [n-1, n]
     vals = [-1/dx, 1/dx]
 
-### 1D Bernoulli approximation codes
+## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
 
 def fluid_pressure(surface_state, fluid_props):
@@ -259,13 +259,15 @@ def fluid_pressure(surface_state, fluid_props):
 
     Parameters
     ----------
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
     fluid_props : properties.FluidProperties
         A dictionary of fluid properties.
 
     Returns
     -------
+    q : float
+        The flow rate
     p : np.ndarray
         An array of pressure vectors for each each vertex
     xy_min, xy_sep: (2,) np.ndarray
@@ -318,33 +320,7 @@ def fluid_pressure(surface_state, fluid_props):
             'a_sep': a_sep,
             'area': area,
             'pressure': p}
-    return p, info
-
-def get_pressure_form(model, x, fluid_props):
-    """
-    Returns the ufl.Coefficient pressure.
-
-    Parameters
-    ----------
-    model : ufl.Coefficient
-        The coefficient representing the pressure
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : properties.FluidProperties
-        A dictionary of fluid property keyword arguments.
-
-    Returns
-    -------
-    xy_min, xy_sep :
-        Locations of the minimum and separation areas, as well as surface pressures.
-    """
-    pressure = dfn.Function(model.scalar_function_space)
-
-    pressure_vector, info = fluid_pressure(x, fluid_props)
-    surface_verts = model.surface_vertices
-    pressure.vector()[model.vert_to_sdof[surface_verts]] = pressure_vector
-
-    return pressure, info
+    return flow_rate, p, info
 
 def flow_sensitivity(surface_state, fluid_props):
     """
@@ -352,7 +328,7 @@ def flow_sensitivity(surface_state, fluid_props):
 
     Parameters
     ----------
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
     fluid_props : properties.FluidProperties
         A dictionary of fluid property keyword arguments.
@@ -418,14 +394,37 @@ def flow_sensitivity(surface_state, fluid_props):
 
     return dp_du, dflow_rate_du
 
-def get_flow_sensitivity(model, x, fluid_props):
+def get_pressure_form(model, surface_state, fluid_props):
+    """
+    Returns the ufl.Coefficient pressure.
+
+    Parameters
+    ----------
+    model : ufl.Coefficient
+        The coefficient representing the pressure
+    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : properties.FluidProperties
+        A dictionary of fluid property keyword arguments.
+
+    Returns
+    -------
+    xy_min, xy_sep :
+        Locations of the minimum and separation areas, as well as surface pressures.
+    """
+    pressure_vector, info = fluid_pressure(surface_state, fluid_props)
+    pressure = pressure_fluidord_to_solidord(pressure_vector, model)
+
+    return pressure, info
+
+def get_flow_sensitivity(model, surface_state, fluid_props):
     """
     Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
     Parameters
     ----------
     model
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
         States of the surface vertices, ordered following the flow (increasing x coordinate).
     fluid_props : properties.FluidProperties
         A dictionary of fluid properties.
@@ -437,7 +436,7 @@ def get_flow_sensitivity(model, x, fluid_props):
     dq_du : PETSc.Vec
         Sensitivity of flow rate with respect to displacement
     """
-    _dp_du, _dq_du = flow_sensitivity(x, fluid_props)
+    _dp_du, _dq_du = flow_sensitivity(surface_state, fluid_props)
 
     dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
     dp_du.setType('aij')
@@ -468,6 +467,28 @@ def get_flow_sensitivity(model, x, fluid_props):
 
     return dp_du, dq_du
 
+def pressure_fluidord_to_solidord(pressure, model):
+    """
+    Converts a pressure vector in surface vert. order to solid DOF order
+
+    Parameters
+    ----------
+    pressure : array_like
+    model : ufl.Coefficient
+        The coefficient representing the pressure
+
+    Returns
+    -------
+    xy_min, xy_sep :
+        Locations of the minimum and separation areas, as well as surface pressures.
+    """
+    pressure_solid = dfn.Function(model.scalar_function_space).vector()
+
+    surface_verts = model.surface_vertices
+    pressure_solid[model.vert_to_sdof[surface_verts]] = pressure
+
+    return pressure_solid
+
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
@@ -483,7 +504,6 @@ def smooth_minimum(x, alpha=-1000):
         Factor that control the sharpness of the minimum. The function approaches the true minimum
         function as `alpha` approachs negative infinity.
     """
-
     # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
     # being too small or too large. This constant factors out from the division.
     const_numerical_stability = np.max(alpha*x)

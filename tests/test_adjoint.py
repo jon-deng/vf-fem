@@ -85,7 +85,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         step_dir = np.random.rand(emod.size) * step_size
         step_dir = np.ones(emod.size) * step_size
 
-        case_postfix = f'quartic_{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
+        case_postfix = f'{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
         save_path = f'out/FiniteDifferenceStates-{case_postfix}.h5'
 
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max}
@@ -117,7 +117,9 @@ class TestAdjointGradientCalculation(unittest.TestCase):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
                 solid_props['emod'] = emod + h*step_dir
-                info = forward(model, solid_props, fluid_props, timing_props, abs_tol=None,
+                # breakpoint()
+                info = forward(model, solid_props, fluid_props, timing_props, 
+                               adaptive_step_prm={'abs_tol': None},
                                h5file=save_path, h5group=f'{n}', show_figure=False)
                 runtime_end = perf_counter()
 
@@ -152,12 +154,12 @@ class TestAdjointGradientCalculation(unittest.TestCase):
             run_info = pickle.load(f)
 
         fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':50}
-        Functional = funcs.FinalDisplacementNorm
+        # Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
-        # Functional = extra_funcs.AcousticPower
+        Functional = extra_funcs.AcousticPower
         # Functional = extra_funcs.AcousticEfficiency
         # Functional = extra_funcs.F0WeightedAcousticPower
 
@@ -185,8 +187,10 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         runtime_start = perf_counter()
         info = None
         gradient_ad = None
-        with sf.StateFile(model, save_path, group='0', mode='r', driver='core') as f:
-            _, gradient_ad, _ = adjoint(model, f, functional)
+        with sf.StateFile(model, save_path, group='0', mode='r') as f:
+            _, gradient, _ = adjoint(model, f, functional)
+
+            gradient_ad = gradient['emod']
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -210,17 +214,7 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         print("dg/dp * step_dir = ", np.dot(gradient_ad, step_dir))
         print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
 
-        # Plot the adjoint gradient and finite difference approximations of the gradient
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
-        ax.plot(hs[1:], (functionals[1:] - functionals[0])/hs[1:],
-                color='C0', marker='o', label='FD Approximations')
-        ax.axhline(np.dot(gradient_ad, step_dir), color='C1', label="Adjoint gradient")
-        # ax.set_xlim(0, None)
-        ax.ticklabel_format(axis='y', style='sci')
-        ax.set_xlabel("Step size")
-        ax.set_ylabel("Gradient of functional")
-        ax.legend()
-
+        fig, ax = self.plot_taylor_test(gradient_ad, step_dir, hs, functionals)
         fig.savefig(f'Convergence_{self.case_postfix}.png')
 
         # Plot the glottal width vs time of the simulation at zero step size
@@ -256,6 +250,18 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         fig.savefig(f'Kinematics_{self.case_postfix}.png')
 
         plt.show()
+
+    def plot_taylor_test(self, grad, step_dir, h, g):
+        # Plot the adjoint gradient and finite difference approximations of the gradient
+        fig, ax = plt.subplots(1, 1, constrained_layout=True)
+        ax.plot(h[1:], (g[1:] - g[0])/h[1:],
+                color='C0', marker='o', label='FD Approximations')
+        ax.axhline(np.dot(grad, step_dir), color='C1', label="Adjoint gradient")
+        ax.ticklabel_format(axis='y', style='sci')
+        ax.set_xlabel("Step size")
+        ax.set_ylabel("Gradient of functional")
+        ax.legend()
+        return fig, ax
 
     def show_solution_info(self):
         model = self.model
@@ -538,7 +544,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 
         # print(run_info['idx_min_area'])
         # print(run_info['idx_separation'])
-        breakpoint()
+        # breakpoint()
 
 if __name__ == '__main__':
     # unittest.main()

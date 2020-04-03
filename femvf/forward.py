@@ -20,7 +20,7 @@ from .misc import get_dynamic_fluid_props
 DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
 
 # @profile
-def forward(model, solid_props, fluid_props, timing_props,
+def forward(model, solid_props, fluid_props, timing_props, uv0=None, 
             h5file='tmp.h5', h5group='/', 
             adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
     """
@@ -61,16 +61,31 @@ def forward(model, solid_props, fluid_props, timing_props,
     # The default for adaptive time stepping is to not use it. Plus I think I messed up how it works
     if adaptive_step_prm is None:
         adaptive_step_prm = {'abs_tol': None, 'abs_tol_bounds': (0.0, 0.0)}
+    info = {}
+
+    t0, tmeas, dt_max = timing_props['t0'], timing_props['tmeas'], timing_props['dt_max']
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
-    t0, tmeas, dt_max = timing_props['t0'], timing_props['tmeas'], timing_props['dt_max']
-
-    info = {}
 
     # Allocate functions for states
     u0 = dfn.Function(model.vector_function_space)
     v0 = dfn.Function(model.vector_function_space)
     a0 = dfn.Function(model.vector_function_space)
+
+    if uv0 is not None:
+        u0.vector()[:] = uv0[0]
+        v0.vector()[:] = uv0[1]
+    model.set_ini_state(u0.vector(), v0.vector(), a0.vector())
+
+    q0, p0, _ = model.get_pressure()
+    model.set_pressure(p0)
+
+    if newton_solver_prm is None:
+        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+    dfn.solve(model.forms['form.un.f0'] == 0, model.a0, 
+              bcs=model.bc_base, J=model.forms['form.bi.df0_da0'],
+              solver_parameters={"newton_solver": newton_solver_prm})
+    a0.vector()[:] = model.a0.vector()
 
     u1 = dfn.Function(model.vector_function_space)
     v1 = dfn.Function(model.vector_function_space)
@@ -88,7 +103,8 @@ def forward(model, solid_props, fluid_props, timing_props,
 
     ## Initialize datasets to save in h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        f.init_layout(model, x0=(u0, v0, a0), fluid_props=fluid_props, solid_props=solid_props)
+        f.init_layout(model, uva0=(u0, v0, a0), qp0=(q0, p0), 
+                      fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 
     ## Loop through solution times and write solution variables to the h5file.
@@ -111,14 +127,16 @@ def forward(model, solid_props, fluid_props, timing_props,
             while not isclose(t_current, t_target, rel_tol=1e-7, abs_tol=10*2**-52):
                 assert t_current < t_target
 
-                x0 = (u0, v0, a0)
+                uva0 = (u0, v0, a0)
+                qp0 = (q0, p0)
 
                 # Increment the state using a target time step. If the previous time step was
                 # refined to be smaller than the max time step, then try using that time step again.
                 # If the local error is super low, the refinement time step will be predicted to be
                 # high and so it will go back to the max time step.
                 dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                x1, dt_actual, step_info = adaptive_step(model, x0, dt_target, **adaptive_step_prm)
+                uva1, qp1, dt_actual, step_info = adaptive_step(model, uva0, qp0, dt_target, 
+                                                                **adaptive_step_prm)
                 n_state += 1
                 t_current += dt_actual
 
@@ -132,16 +150,20 @@ def forward(model, solid_props, fluid_props, timing_props,
 
                 ## Write the solution outputs to a file
                 f.append_time(t_current)
-                f.append_state(x1)
+                f.append_state(uva1)
+                f.append_fluid_state(qp1)
 
                 ## Update initial conditions for the next time step
-                u0.assign(x1[0])
-                v0.assign(x1[1])
-                a0.assign(x1[2])
+                u0.assign(uva1[0])
+                v0.assign(uva1[1])
+                a0.assign(uva1[2])
+                q0 = qp1[0]
+                p0 = qp1[1]
 
                 ## Plot the solution
                 if show_figure:
-                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), step_info['fluid_info'],
+                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), 
+                                                 step_info['fluid_info'],
                                                  solid_props, fluid_props)
                     plt.pause(0.001)
 
@@ -152,13 +174,11 @@ def forward(model, solid_props, fluid_props, timing_props,
             f.append_meas_index(n_state)
 
         # Write the final functionals
-        _x1 = [comp.vector() for comp in x1]
-        step_info = model.set_params(_x1)
-        glottal_width.append(step_info['a_min'])
-        flow_rate.append(step_info['flow_rate'])
+        glottal_width.append(step_info['fluid_info']['a_min'])
+        flow_rate.append(step_info['fluid_info']['flow_rate'])
 
         # Write them out to the h5file
-        f.file['gaw'] = np.array(glottal_width)
+        f.file[f'{h5group}/gaw'] = np.array(glottal_width)
 
         info['meas_ind'] = f.get_meas_indices()
         info['time'] = f.get_solution_times()
@@ -173,14 +193,14 @@ def forward(model, solid_props, fluid_props, timing_props,
     return info
 
 # @profile
-def increment_forward(model, x0, dt, newton_solver_prm=None):
+def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     """
-    Return the state at the end of `dt` `x1 = (u1, v1, a1)`.
+    Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
     Parameters
     ----------
     model : model.ForwardModel
-    x0 : tuple of dfn.Function
+    uva0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
@@ -193,19 +213,21 @@ def increment_forward(model, x0, dt, newton_solver_prm=None):
     -------
     tuple of dfn.Function
         The next state (u1, v1, a1) of the forward model
+    tuple of (float, array_like)
+        The next fluid state (q1, p1) of the forward model
     fluid_info : dict
         A dictionary containing information on the fluid solution. These include the flow rate,
         surface pressure, etc.
     """
-    u0, v0, a0 = x0
+    u0, v0, a0 = uva0
 
     u1 = dfn.Function(model.vector_function_space)
     v1 = dfn.Function(model.vector_function_space)
     a1 = dfn.Function(model.vector_function_space)
 
     # Update form coefficients and initial guess
-    _x0 = [comp.vector() for comp in x0]
-    fluid_info = model.set_iter_params(x0=_x0, dt=dt, u1=u0.vector())
+    uva0_vec = [comp.vector() for comp in uva0]
+    model.set_iter_params(uva0=uva0_vec, qp0=qp0, dt=dt, u1=u0.vector())
 
     # Solve the thing
     # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
@@ -223,12 +245,15 @@ def increment_forward(model, x0, dt, newton_solver_prm=None):
     #                       [model.bc_base], **newton_prm)
     # u1.vector()[:] = _u1
 
-    v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
-    a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), model.dt)
+    v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
+    a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
 
-    return (u1, v1, a1), fluid_info
+    model.set_ini_state(u1.vector(), v1.vector(), a1.vector())
+    q1, p1, fluid_info = model.get_pressure()
 
-def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
+    return (u1, v1, a1), (q1, p1), fluid_info
+
+def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
     """
     Integrate the model over `dt` using a smaller time step if needed.
 
@@ -237,8 +262,10 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
     Parameters
     ----------
     model : model.ForwardModel
-    x0 : tuple of dfn.Function
+    uva0 : tuple of dfn.Function
         Initial states (u0, v0, a0) for the forward model.
+    qp0 : tuple of fluid state variables
+        (float, array_like) for Bernoulli
     dt_max : float
         The maximum time step to increment over.
     solid_props : dict
@@ -258,7 +285,7 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
         A dictionary containing information on the fluid solution. These include the flow rate,
         surface pressure, etc.
     """
-    x1 = None
+    uva1 = None
     dt = dt_max
     info = {}
 
@@ -266,10 +293,10 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
     refine = True
     while refine:
         nrefine += 1
-        x1, fluid_info = increment_forward(model, x0, dt)
+        uva1, qp1, fluid_info = increment_forward(model, uva0, qp0, dt)
         info['fluid_info'] = fluid_info
 
-        err = newmark_error_estimate(x1[2].vector(), x0[2].vector(), dt, beta=model.forms['coeff.time.beta'].values()[0])
+        err = newmark_error_estimate(uva1[2].vector(), uva0[2].vector(), dt, beta=model.forms['coeff.time.beta'].values()[0])
         err_norm = err.norm('l2')
         info['err_norm'] = err_norm
         info['nrefine'] = nrefine
@@ -280,7 +307,7 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
 
         if abs_tol is not None:
             # step control method that prevents crossing the midline in one step near collision
-            refine, dt = refine_initial_collision(model, x0, x1, dt)
+            refine, dt = refine_initial_collision(model, uva0, uva1, dt)
 
             # Step control method from [1]
             if err_norm > abs_tol_bounds[1]*abs_tol or err_norm < abs_tol_bounds[0]*abs_tol:
@@ -289,7 +316,7 @@ def adaptive_step(model, x0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
         else:
             refine = False
 
-    return x1, dt, info
+    return uva1, qp1, dt, info
 
 # @profile
 def newton_solve(u, du, jac, res, bcs, **kwargs):
@@ -348,15 +375,15 @@ def newton_solve(u, du, jac, res, bcs, **kwargs):
     info = {'niter': ii, 'abs_err': abs_err, 'rel_err': rel_err}
     return u, info
 
-def refine_initial_collision(model, x0, x1, dt):
+def refine_initial_collision(model, uva0, uva1, dt):
     """
     Return whether to refine the time step, and a proposed time step to use.
     """
     refine = False
     dt_refine = dt
 
-    u0, v0, a0 = x0
-    u1, v1, a1 = x1
+    u0, v0, a0 = uva0
+    u1, v1, a1 = uva1
 
     # Refine the time step if there is a transition from no-collision to collision
     model.set_ini_state(u0.vector(), v0.vector(), a0.vector())

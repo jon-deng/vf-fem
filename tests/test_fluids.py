@@ -230,7 +230,7 @@ class TestBernoulli(CommonSetup):
         ax.set_xlabel("(x, y) node")
         plt.show()
 
-        breakpoint()
+        # breakpoint()
         self.assertTrue(np.all(close))
 
     def test_gaussian(self):

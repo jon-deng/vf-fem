@@ -62,6 +62,8 @@ class ForwardModel:
     """
     def __init__(self, mesh_path, facet_labels, cell_labels, forms=forms.linear_elastic_rayleigh):
         self.mesh, self.facet_function, self.cell_function = load_mesh(mesh_path, facet_labels, cell_labels)
+        self.facet_labels = facet_labels
+        self.cell_labels = cell_labels
 
         # Create a vertex marker from the boundary marker
         pressure_edges = self.facet_function.where_equal(facet_labels['pressure'])
@@ -181,7 +183,7 @@ class ForwardModel:
 
     def get_pressure(self):
         """
-        Updates pressure coefficient using a bernoulli flow model.
+        Calculate surface pressures using a bernoulli flow model.
 
         Parameters
         ----------
@@ -194,11 +196,21 @@ class ForwardModel:
         # Check that the surface doesn't cross over the midline
         assert np.max(x_surface[0][..., 1]) < self.fluid_props['y_midline']
 
-        pressure, fluid_info = fluids.get_pressure_form(self, x_surface, self.fluid_props)
+        q, pressure, fluid_info = fluids.fluid_pressure(x_surface, self.fluid_props)
 
-        self.forms['coeff.fsi.pressure'].assign(pressure)
+        return q, pressure, fluid_info
 
-        return fluid_info
+    def set_pressure(self, pressure):
+        """
+        Set surface pressures
+
+        Parameters
+        ----------
+        pressure : array_like
+            An array of pressure values in surface vertex/fluid order
+        """
+        pressure_solidord = fluids.pressure_fluidord_to_solidord(pressure, self)
+        self.forms['coeff.fsi.pressure'].vector()[:] = pressure_solidord
 
     def get_flow_sensitivity(self):
         """
@@ -338,11 +350,25 @@ class ForwardModel:
         """
         self.forms['coeff.arg.u1'].vector()[:] = u1
 
+    def set_ini_fluid_state(self, q0, p0):
+        self.set_pressure(p0)
+
+    def set_fin_fluid_state(self, q1, p1):
+        # Not needed for steady Bernoulli model, but keep it here for consistency and maybe future
+        # use
+        raise NotImplementedError(
+            "This method would not be needed unless you have an unsteady fluid model")
+
     def set_time_step(self, dt):
         """
         Sets the time step.
+
+        Parameters
+        ----------
+        dt : float
         """
-        self.forms['coeff.time.dt'].assign(dt)
+        # The coefficient for time is a vector because of a hack; it's needed to take derivatives
+        self.forms['coeff.time.dt'].vector()[:] = dt
 
     def set_solid_props(self, solid_props):
         """
@@ -378,19 +404,23 @@ class ForwardModel:
         """
         self.fluid_props = fluid_props
 
-    def set_params(self, x0=None, solid_props=None, fluid_props=None):
+    # @profile
+    def set_params(self, uva0=None, qp0=None, solid_props=None, fluid_props=None):
         """
         Set all parameters needed to integrate the model.
 
         Parameters
         ----------
-        x0 : array_like
+        uva0 : array_like
         dt : float
         fluid_props : dict
         solid_props : dict
         """
-        if x0 is not None:
-            self.set_ini_state(*x0)
+        if uva0 is not None:
+            self.set_ini_state(*uva0)
+
+        if qp0 is not None:
+            self.set_ini_fluid_state(*qp0)
 
         if fluid_props is not None:
             self.set_fluid_props(fluid_props)
@@ -398,11 +428,8 @@ class ForwardModel:
         if solid_props is not None:
             self.set_solid_props(solid_props)
 
-        fluid_info = self.get_pressure()
-
-        return fluid_info
-
-    def set_iter_params(self, x0=None, dt=None, u1=None, solid_props=None, fluid_props=None):
+    # @profile
+    def set_iter_params(self, uva0=None, qp0=None, dt=None, u1=None, solid_props=None, fluid_props=None):
         """
         Set parameter values needed to integrate the model over a time step.
 
@@ -411,24 +438,20 @@ class ForwardModel:
 
         Parameters
         ----------
-        x0 : tuple of dfn.GenericVector
+        uva0 : tuple of dfn.GenericVector
         dt : float
         u1 : dfn.GenericVector
         fluid_props : FluidProperties
         solid_props : SolidProperties
         u1 : dfn.GenericVector
         """
-        self.set_params(x0=x0, solid_props=solid_props, fluid_props=fluid_props)
+        self.set_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
 
         if dt is not None:
             self.set_time_step(dt)
 
         if u1 is not None:
             self.set_fin_state(u1)
-
-        fluid_info = self.get_pressure()
-
-        return fluid_info
 
     def set_params_fromfile(self, statefile, n, update_props=True):
         """
@@ -451,13 +474,13 @@ class ForwardModel:
             fluid_props = statefile.get_fluid_props(n)
             solid_props = statefile.get_solid_props()
 
-        x0 = statefile.get_state(n)
+        uva0 = statefile.get_state(n)
+        qp0 = statefile.get_fluid_state(n)
 
         # Assign the values to the model
-        fluid_info = self.set_params(x0=x0, solid_props=solid_props, fluid_props=fluid_props)
+        self.set_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
 
-        return fluid_info
-
+    # @profile
     def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=True):
         """
         Set all parameters needed to integrate the model and an initial guess, based on a recorded
@@ -480,7 +503,8 @@ class ForwardModel:
             fluid_props = statefile.get_fluid_props(0)
             solid_props = statefile.get_solid_props()
 
-        x0 = statefile.get_state(n-1)
+        uva0 = statefile.get_state(n-1)
+        qp0 = statefile.get_fluid_state(n-1)
         u1 = None
         if set_final_state:
             u1 = statefile.get_u(n)
@@ -488,10 +512,8 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        fluid_info = self.set_iter_params(x0=x0, dt=dt,
-                                          solid_props=solid_props, fluid_props=fluid_props, u1=u1)
-
-        return fluid_info, fluid_props
+        self.set_iter_params(uva0=uva0, qp0=qp0, dt=dt,
+                             solid_props=solid_props, fluid_props=fluid_props, u1=u1)
 
 class CachedBiFormAssembler:
     """

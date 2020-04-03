@@ -203,7 +203,7 @@ class Functional:
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
             `model.ForwardModel.set_iter_params` with signature:
-            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -224,7 +224,7 @@ class Functional:
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
             `model.ForwardModel.set_iter_params` with signature:
-            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -245,7 +245,7 @@ class Functional:
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
             `model.ForwardModel.set_iter_params` with signature:
-            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -273,7 +273,7 @@ class Functional:
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
             `model.ForwardModel.set_iter_params` with signature:
-            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -293,7 +293,7 @@ class Functional:
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
             `model.ForwardModel.set_iter_params` with signature:
-            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -313,7 +313,7 @@ class Functional:
         iter_params0, iter_params1 : dict
             Dictionary of parameters that specify iteration n. These are parameters fed into
             `model.ForwardModel.set_iter_params` with signature:
-            `(x0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
 
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
@@ -371,7 +371,7 @@ class FinalDisplacementNorm(Functional):
         res = None
 
         if n == f.size-1:
-            _u = iter_params1['x0'][0]
+            _u = iter_params1['uva0'][0]
 
             u = dfn.Function(self.model.vector_function_space).vector()
             u[:] = _u
@@ -413,7 +413,7 @@ class FinalVelocityNorm(Functional):
         res = None
 
         if n == f.size-1:
-            _v = iter_params1['x0'][1]
+            _v = iter_params1['uva0'][1]
 
             v = dfn.Function(self.model.vector_function_space).vector()
             v[:] = _v
@@ -463,7 +463,7 @@ class DisplacementNorm(Functional):
         N_START = self.kwargs['m_start']
         N_FINAL = self.kwargs['m_final']
         if n >= N_START and n < N_FINAL:
-            _u = iter_params1['x0'][0]
+            _u = iter_params1['uva0'][0]
 
             u = dfn.Function(self.model.vector_function_space).vector()
             u[:] = _u
@@ -507,7 +507,7 @@ class VelocityNorm(Functional):
     def eval_dv(self, f, n, iter_params0, iter_params1):
         # res = dfn.Function(self.model.vector_function_space)
 
-        _v = iter_params1['x0'][1]
+        _v = iter_params1['uva0'][1]
         # _u, _v, _ = f.get_state(n)
 
         v = dfn.Function(self.model.vector_function_space).vector()
@@ -584,6 +584,7 @@ class TransferWork(Functional):
         super(TransferWork, self).__init__(model, **kwargs)
 
         self.kwargs.setdefault('m_start', 0)
+        self.kwargs.setdefault('tukey_alpha', 0.0)
 
         # Define the form needed to compute the work transferred from fluid to solid
         mesh = self.model.mesh
@@ -591,10 +592,10 @@ class TransferWork(Functional):
         vector_test = self.model.forms['test.vector']
         scalar_test = self.model.forms['test.scalar']
         facet_labels = self.model.facet_labels
-        pressure = self.model.forms['pressure']
+        pressure = self.model.forms['coeff.fsi.pressure']
 
-        u1 = self.model.forms['u1']
-        u0 = self.model.forms['u0']
+        u1 = self.model.forms['coeff.arg.u1']
+        u0 = self.model.forms['coeff.state.u0']
         deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
@@ -603,15 +604,20 @@ class TransferWork(Functional):
         self.dfluid_work_du1 = ufl.derivative(self.fluid_work, u1, vector_test)
         self.dfluid_work_dpressure = ufl.derivative(self.fluid_work, pressure, scalar_test)
 
+        self.tukey_alpha = self.kwargs['tukey_alpha']
+
+    # @profile
     def eval(self, f):
         N_START = self.kwargs['m_start']
         N_STATE = f.get_num_states()
+
+        tukey_window = sig.tukey(N_STATE-N_START, self.tukey_alpha)
 
         res = 0
         for ii in range(N_START, N_STATE-1):
             # Set parameters for the iteration
             self.model.set_iter_params_fromfile(f, ii+1)
-            res += dfn.assemble(self.model.fluid_work)
+            res += dfn.assemble(self.fluid_work)*tukey_window[ii]
 
         return res
 
@@ -1182,7 +1188,7 @@ class GlottalWidthErrorNorm(Functional):
 
         out = dfn.Function(model.vector_function_space).vector()
         if n_to_m[n] != -1:
-            u = iter_params0['x0'][0]
+            u = iter_params0['uva0'][0]
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
             y_surf = xy_surf[1::2]
 

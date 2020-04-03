@@ -9,7 +9,7 @@ import dolfin as dfn
 import numpy as np
 
 from . import constants
-from .properties import LinearElasticRayleigh, FluidProperties
+from .properties import LinearElasticRayleigh, KelvinVoigt, FluidProperties
 
 class StateFile:
     """
@@ -39,10 +39,15 @@ class StateFile:
         Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, model, name, group='/', mode='r', **kwargs):
+    def __init__(self, model, name, group='/', mode='r', NCHUNK=100,
+                 SolidType=LinearElasticRayleigh, **kwargs):
         self.model = model
         self.file = h5py.File(name, mode=mode, **kwargs)
         self.root_group_name = group
+
+        self.SolidType = SolidType
+
+        self.NCHUNK = NCHUNK
 
         # self.data = self.file[self.group]
 
@@ -92,7 +97,7 @@ class StateFile:
         """
         return self.file[self.root_group_name]
 
-    def init_layout(self, model, x0=None, fluid_props=None, solid_props=None):
+    def init_layout(self, model, uva0=None, qp0=None, fluid_props=None, solid_props=None):
         r"""
         Initializes the layout of the state file.
 
@@ -115,14 +120,14 @@ class StateFile:
             A dictionary of solid properties
         fluid_props : dict
             A dictionary of fluid properties
-        solution_times : array_like
-            Times at which the model will be solved
         """
-        self.root_group.create_dataset('time', (0,), maxshape=(None,), dtype=np.float)
+        self.root_group.create_dataset('time', (0,), maxshape=(None,), chunks=(self.NCHUNK,), 
+                                       dtype=np.float64)
+        self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,), 
+                                       chunks=(self.NCHUNK,), dtype=np.intp)
 
-        self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,), dtype=np.intp)
-
-        self.init_state(model, x0=x0)
+        self.init_state(model, uva0=uva0)
+        self.init_fluid_state(model, qp0=qp0)
 
         # Fluid properties
         if 'fluid_properties' not in self.root_group:
@@ -132,7 +137,7 @@ class StateFile:
         if 'solid_properties' not in self.root_group:
             self.init_solid_props(model, solid_props=solid_props)
 
-    def init_state(self, model, x0=None):
+    def init_state(self, model, uva0=None):
         """
         Initializes the states layout of the file.
 
@@ -143,11 +148,32 @@ class StateFile:
         # Kinematic states
         NDOF = model.vector_function_space.dim()
         for dataset_name in ['u', 'v', 'a']:
-            self.root_group.create_dataset(dataset_name, (0, NDOF),
-                                      maxshape=(None, NDOF), chunks=(1, NDOF), dtype='f8')
+            self.root_group.create_dataset(dataset_name, (0, NDOF), maxshape=(None, NDOF), 
+                                           chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
-        if x0 is not None:
-            self.append_state(x0)
+        if uva0 is not None:
+            self.append_state(uva0)
+
+    def init_fluid_state(self, model, qp0=None):
+        """
+        Initializes the states layout of the file.
+
+        Parameters
+        ----------
+        model : femvf.ForwardModel
+        """
+        # For Bernoulli, there is only 1 flow rate/flow velocity vector
+        NQ = 1
+        self.root_group.create_dataset('q', (0, NQ), maxshape=(None, 1), 
+                                       chunks=(self.NCHUNK, NQ), dtype=np.float64)
+
+        # For Bernoulli, you only have to store pressure at each of the vertices
+        NDOF = model.surface_vertices.size
+        self.root_group.create_dataset('p', (0, NDOF), maxshape=(None, NDOF), 
+                                       chunks=(self.NCHUNK, NDOF), dtype=np.float64)
+
+        if qp0 is not None:
+            self.append_fluid_state(qp0)
 
     def init_fluid_props(self, model, fluid_props=None):
         """
@@ -161,7 +187,8 @@ class StateFile:
         group_fluid = self.root_group.create_group('fluid_properties')
         for key, prop_desc in FluidProperties.TYPES.items():
             shape = _property_shape(prop_desc, model)
-            group_fluid.create_dataset(key, shape=(0,)+shape, maxshape=(None,)+shape)
+            group_fluid.create_dataset(key, shape=(0,)+shape, chunks=(self.NCHUNK,)+shape, 
+                                       maxshape=(None,)+shape, dtype=np.float64)
 
         if fluid_props is not None:
             self.append_fluid_props(fluid_props)
@@ -176,9 +203,9 @@ class StateFile:
 
         """
         solid_group = self.root_group.create_group('solid_properties')
-        for key, prop_desc in LinearElasticRayleigh.TYPES.items():
+        for key, prop_desc in solid_props.TYPES.items():
             shape = _property_shape(prop_desc, model)
-            solid_group.create_dataset(key, shape)
+            solid_group.create_dataset(key, shape, dtype=np.float64)
 
         if solid_props is not None:
             self.append_solid_props(solid_props)
@@ -195,19 +222,33 @@ class StateFile:
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = index
 
-    def append_state(self, x):
+    def append_state(self, uva):
         """
         Append state to the file.
 
         Parameters
         ----------
-        x : tuple of dfn.Function
+        uva : tuple of dfn.Function
             (u, v, a) states to append
         """
-        for dset_name, value in zip(['u', 'v', 'a'], x):
+        for dset_name, value in zip(['u', 'v', 'a'], uva):
             dset = self.root_group[dset_name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value.vector()[:]
+
+    def append_fluid_state(self, qp):
+        """
+        Append state to the file.
+
+        Parameters
+        ----------
+        qp : tuple of dfn.Function or array_like and float
+            (q, p) states to append
+        """
+        for dset_name, value in zip(['q', 'p'], qp):
+            dset = self.root_group[dset_name]
+            dset.resize(dset.shape[0]+1, axis=0)
+            dset[-1, :] = value
 
     def append_fluid_props(self, fluid_props):
         """
@@ -237,7 +278,7 @@ class StateFile:
             Dictionary of solid properties to append
         """
         solid_group = self.root_group['solid_properties']
-        for label, shape in LinearElasticRayleigh.TYPES.items():
+        for label, shape in solid_props.TYPES.items():
             dset = solid_group[label]
 
             if shape[0] == 'field':
@@ -257,7 +298,6 @@ class StateFile:
         dset = self.root_group['time']
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
-
 
     def get_time(self, n):
         """
@@ -328,19 +368,53 @@ class StateFile:
 
         return tuple(ret)
 
-    def set_state(self, n, x):
+    def set_state(self, n, uva):
         """
-        Set form coefficient vectors for states `x=(u, v, a)` at index n.
+        Set form coefficient vectors for states `uva=(u, v, a)` at index n.
 
         Parameters
         ----------
         n : int
             Index to set the functions for.
-        x : tuple of 3 array_like
+        uva : tuple of 3 array_like
             A set of vectors to assign.
         """
-        for label, value in zip(('u', 'v', 'a'), x):
+        for label, value in zip(('u', 'v', 'a'), uva):
             self.root_group[label][n] = value
+
+    def get_fluid_state(self, n, out=None):
+        """
+        Returns fluid states q, p at index n.
+
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        out : tuple of 3 dfn.Function
+            A set of functions to set vector values for.
+        """
+
+        labels = ('q', 'p')
+        q = self.root_group['q'][n, 0]
+        p = self.root_group['p'][n, :]
+
+        return (q, p)
+
+    def set_fluid_state(self, n, qp):
+        """
+        Set form coefficient vectors for states `qp=(q, p)` at index n.
+
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        q : float
+            the flow rates
+        p : array_like 
+            pressures
+        """
+        self.root_group['q'][n, 0] = qp[0]
+        self.root_group['p'][n, :] = qp[1]
 
     def get_fluid_props(self, n):
         """
@@ -360,13 +434,13 @@ class StateFile:
 
         return fluid_props
 
-    def get_solid_props(self, SolidType=LinearElasticRayleigh):
+    def get_solid_props(self):
         """
         Returns the solid properties
         """
-        solid_props = SolidType(self.model)
+        solid_props = self.SolidType(self.model)
         solid_group = self.root_group['solid_properties']
-        for label, shape in SolidType.TYPES.items():
+        for label, shape in self.SolidType.TYPES.items():
             data = solid_group[label]
 
             if shape[0] == 'field':
@@ -387,13 +461,13 @@ class StateFile:
             Index of the iteration.
         """
 
-        x0 = self.get_state(n-1)
+        uva0 = self.get_state(n-1)
         dt = self.get_time(n) - self.get_time(n-1)
         solid_props = self.get_solid_props()
         fluid_props = self.get_fluid_props(n-1)
         u1 = self.get_u(n)
 
-        return {'x0': x0, 'dt': dt, 'u1': u1,
+        return {'uva0': uva0, 'dt': dt, 'u1': u1,
                 'solid_props': solid_props, 'fluid_props': fluid_props}
 
 def _property_shape(property_desc, model):
