@@ -290,6 +290,50 @@ class KelvinVoigtNodalConstants(Parameterization):
 
         return 1.0*demod
 
+class PeriodicKelvinVoigt(Parameterization):
+    """
+    A parameterization defining a periodic Kelvin-Voigt model
+    """
+    PARAM_TYPES = OrderedDict(
+        {'u0': ('field', (2,)),
+         'v0': ('field', (2,)),
+        #  'elastic_moduli': ('field', ()),
+        #  'eta': ('field', ()),
+         'period': ('const', ())})
+
+    CONSTANT_LABELS = ('default_solid_props',
+                       'default_fluid_props',
+                       'NUM_STATES_PER_PERIOD')
+
+    def convert(self):
+        solid_props = props.KelvinVoigt(self.model, self.constants['default_solid_props'])
+        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
+
+        N = self.constants['NUM_STATES_PER_PERIOD']
+        dt = self['period'] / (N-1)
+        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+
+        initial_state = {}
+        initial_state['uv0'] = (self['u0'].reshape(-1), self['v0'].reshape(-1))
+
+        return initial_state, solid_props, fluid_props, timing_props
+
+    def dconvert(self, grad):
+        """
+        Returns the sensitivity of the elastic modulus with respect to parameters
+
+        # TODO: This should return a dict or something that has the sensitivity
+        # of all properties wrt parameters
+        """
+        out = self.copy()
+        out['u0'].flat[:] = 1.0*grad['u0']
+        out['v0'].flat[:] = 1.0*grad['v0']
+
+        N = self.constants['NUM_STATES_PER_PERIOD']
+        out['period'][()] = np.sum(grad['dt'] * 1/(N-1))
+
+        return out.vector
+
 class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
@@ -323,48 +367,3 @@ class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
     #     # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
 
     #     return 1.0
-
-class PeriodicKelvinVoigt(Parameterization):
-    """
-    A parameterization defining a periodic Kelvin-Voigt model
-    """
-    PARAM_TYPES = OrderedDict(
-        {'u0': ('field', (2,)),
-         'v0': ('field', (2,)),
-         'elastic_moduli': ('field', ()),
-        #  'eta': ('field', ()),
-         'period': ('const', ())})
-
-    CONSTANT_LABELS = ('default_solid_props',
-                       'default_fluid_props',
-                       'NUM_STATES_PER_PERIOD')
-
-    def convert(self):
-        solid_props = props.LinearElasticRayleigh(self.model, self.constants['default_solid_props'])
-        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
-
-        N = self.constants['NUM_STATES_PER_PERIOD']
-        dt = self['period'] / (N-1)
-        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
-
-        solid_props['emod'] = self['elastic_moduli']
-
-        return solid_props, fluid_props, timing_props
-
-    def dconvert(self, grad):
-        """
-        Returns the sensitivity of the elastic modulus with respect to parameters
-
-        # TODO: This should return a dict or something that has the sensitivity
-        # of all properties wrt parameters
-        """
-        out = self.copy()
-        out['u0'][:] = 1.0*grad['u0']
-        out['v0'][:] = 1.0*grad['v0']
-
-        out['elastic_moduli'][:] = 1.0*grad['emod']
-
-        N = self.constants['NUM_STATES_PER_PERIOD']
-        out['period'][()] = np.sum(grad['dt'] * 1/(N-1))
-
-        return out.vector

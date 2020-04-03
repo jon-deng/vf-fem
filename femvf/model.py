@@ -4,7 +4,7 @@ Contains the Model class that couples fluid and solid behaviour
 from . import forms
 from . import fluids
 from . import constants as const
-from .properties import FluidProperties, LinearElasticRayleigh
+from .properties import FluidProperties, LinearElasticRayleigh, KelvinVoigt
 
 from os import path
 
@@ -60,10 +60,12 @@ class ForwardModel:
 
     main forms for solving
     """
-    def __init__(self, mesh_path, facet_labels, cell_labels, forms=forms.linear_elastic_rayleigh):
+    def __init__(self, mesh_path, facet_labels, cell_labels, forms=forms.linear_elastic_rayleigh, SolidType=LinearElasticRayleigh):
         self.mesh, self.facet_function, self.cell_function = load_mesh(mesh_path, facet_labels, cell_labels)
         self.facet_labels = facet_labels
         self.cell_labels = cell_labels
+
+        self.SolidType = SolidType
 
         # Create a vertex marker from the boundary marker
         pressure_edges = self.facet_function.where_equal(facet_labels['pressure'])
@@ -194,7 +196,8 @@ class ForwardModel:
         x_surface = self.get_surface_state()
 
         # Check that the surface doesn't cross over the midline
-        assert np.max(x_surface[0][..., 1]) < self.fluid_props['y_midline']
+        if np.max(x_surface[0][..., 1]) > self.fluid_props['y_midline']:
+            raise RuntimeError('Model crossed symmetry line')
 
         q, pressure, fluid_info = fluids.fluid_pressure(x_surface, self.fluid_props)
 

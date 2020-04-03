@@ -40,12 +40,10 @@ class StateFile:
     """
 
     def __init__(self, model, name, group='/', mode='r', NCHUNK=100,
-                 SolidType=LinearElasticRayleigh, **kwargs):
+                 **kwargs):
         self.model = model
         self.file = h5py.File(name, mode=mode, **kwargs)
         self.root_group_name = group
-
-        self.SolidType = SolidType
 
         self.NCHUNK = NCHUNK
 
@@ -438,9 +436,9 @@ class StateFile:
         """
         Returns the solid properties
         """
-        solid_props = self.SolidType(self.model)
+        solid_props = self.model.SolidType(self.model)
         solid_group = self.root_group['solid_properties']
-        for label, shape in self.SolidType.TYPES.items():
+        for label, shape in self.model.SolidType.TYPES.items():
             data = solid_group[label]
 
             if shape[0] == 'field':

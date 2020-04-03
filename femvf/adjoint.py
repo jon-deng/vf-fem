@@ -175,19 +175,24 @@ def adjoint(model, f, functional, show_figure=False):
     # If the functional is sensitive to the parameters, you have to add its component once
     dfunc_dparam = functional.dp(f)
     if dfunc_dparam is not None:
-        grad['emod'] += dfunc_dparam # ['emod']
+        grad['emod'] += dfunc_dparam.get('emod', 0) # ['emod']
 
     # At the end of the `for` loop ii=1, and we can compute the sensitivity w.r.t initial state
     # The model parameters should already be set to compute `F1`, so we can directly assemble below
-    grad_u0_par = -model.assem_df1_du0_adj()*adj_uva1[0]
-    grad_v0_par = -model.assem_df1_dv0_adj()*adj_uva1[1]
-    grad_a0 = -model.assem_df1_da0_adj()*adj_uva1[2]
+    grad_u0_par = -(model.assem_df1_du0_adj()*adj_uva1[0])
+    grad_v0_par = -(model.assem_df1_dv0_adj()*adj_uva1[1])
+    grad_a0 = -(model.assem_df1_da0_adj()*adj_uva1[2])
 
+    df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj']) 
+    df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj']) 
+    df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj']) 
     adj_a0 = dfn.Function(model.vector_function_space).vector()
     dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
-    grad['u0'] = grad_u0_par - df0_du0_adj*adj_a0
-    grad['v0'] = grad_u0_par - df0_dv0_adj*adj_a0
+    grad['u0'] = grad_u0_par - df0_du0_adj*adj_a0 + dfunc_dparam['u0']
+    grad['v0'] = grad_u0_par - df0_dv0_adj*adj_a0 + dfunc_dparam['v0']
 
+    # Change grad_dt to an array
+    grad['dt'] = np.array(grad['dt'])
     return functional_value, grad, functional
 
 def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):

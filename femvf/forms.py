@@ -129,11 +129,11 @@ def linear_elastic_rayleigh(mesh, facet_function, facet_labels, cell_function, c
 
     # Compute the pressure loading Neumann boundary condition on the reference configuration
     # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
+    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
     def traction_1form(u):
         deformation_gradient = ufl.grad(u) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
 
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
 
         traction = ufl.dot(fluid_force, vector_test)*ds(facet_labels['pressure'])
@@ -200,10 +200,13 @@ def linear_elastic_rayleigh(mesh, facet_function, facet_labels, cell_function, c
     f0 = inertia_2form(a0, vector_test) + damping_2form(v0, vector_test) \
          + stiffness_2form(u0, vector_test) - traction_1form(u0) \
          - penalty_1form(u0)
+    df0_du0 = ufl.derivative(f0, u0, vector_trial)
+    df0_dv0 = ufl.derivative(f0, v0, vector_trial)
     df0_da0 = ufl.derivative(f0, a0, vector_trial)
+
+    df0_du0_adj = dfn.adjoint(df0_du0)
+    df0_dv0_adj = dfn.adjoint(df0_dv0)
     df0_da0_adj = dfn.adjoint(df0_da0)
-    df0_du0_adj = dfn.adjoint(ufl.derivative(f0, u0, vector_trial))
-    df0_dv0_adj = dfn.adjoint(ufl.derivative(f0, v0, vector_trial))
 
     forms = {
         'bcs.base': bc_base,
@@ -250,6 +253,8 @@ def linear_elastic_rayleigh(mesh, facet_function, facet_labels, cell_function, c
         'form.bi.df0_du0_adj': df0_du0_adj,
         'form.bi.df0_dv0_adj': df0_dv0_adj,
         'form.bi.df0_da0_adj': df0_da0_adj,
+        'form.bi.df0_du0': df0_du0,
+        'form.bi.df0_dv0': df0_dv0,
         'form.bi.df0_da0': df0_da0}
     return forms
 
@@ -319,11 +324,11 @@ def kelvin_voigt(mesh, facet_function, facet_labels, cell_function, cell_labels)
 
     # Compute the pressure loading Neumann boundary condition on the reference configuration
     # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
+    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
     def traction_1form(u):
         deformation_gradient = ufl.grad(u) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
 
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
 
         traction = ufl.dot(fluid_force, vector_test)*ds(facet_labels['pressure'])
@@ -389,10 +394,13 @@ def kelvin_voigt(mesh, facet_function, facet_labels, cell_function, cell_labels)
     f0 = inertia_2form(a0, vector_test) + damping_2form(v0, vector_test) \
          + stiffness_2form(u0, vector_test) - traction_1form(u0) \
          - penalty_1form(u0)
+    df0_du0 = ufl.derivative(f0, u0, vector_trial)
+    df0_dv0 = ufl.derivative(f0, v0, vector_trial)
     df0_da0 = ufl.derivative(f0, a0, vector_trial)
+
+    df0_du0_adj = dfn.adjoint(df0_du0)
+    df0_dv0_adj = dfn.adjoint(df0_dv0)
     df0_da0_adj = dfn.adjoint(df0_da0)
-    df0_du0_adj = dfn.adjoint(ufl.derivative(f0, u0, vector_trial))
-    df0_dv0_adj = dfn.adjoint(ufl.derivative(f0, v0, vector_trial))
 
     forms = {
         'bcs.base': bc_base,

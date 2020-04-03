@@ -328,7 +328,7 @@ class Functional:
 
 class Constant(Functional):
     """
-    The constant functional that always returns a fixed value
+    Functional that always evaluates to a constant
     """
     def __init__(self, model, **kwargs):
         kwargs.setdefault('value', 0.0)
@@ -349,16 +349,69 @@ class Constant(Functional):
     def eval_dp(self, f):
         return dfn.Function(self.model.scalar_function_space).vector()
 
+class PeriodicError(Functional):
+    """
+    Functional that measures the periodicity of a simulation
+
+    This returns
+    .. math:: ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 ,
+    where :mathm:T is the period.
+    """
+    def eval(self, f):
+        u_0 = dfn.Function(self.model.vector_function_space).vector()
+        u_N = dfn.Function(self.model.vector_function_space).vector()
+        v_0 = dfn.Function(self.model.vector_function_space).vector()
+        v_N = dfn.Function(self.model.vector_function_space).vector()
+
+        u_0[:], v_0[:], _ = f.get_state(0)
+        u_N[:], v_N[:], _ = f.get_state(f.size-1)
+        
+        res = (u_N-u_0).norm('l2')**2 + (v_N-v_0).norm('l2')**2
+
+        self.cache['u_0'] = u_0 
+        self.cache['v_0'] = v_0 
+        self.cache['u_N'] = u_N 
+        self.cache['v_N'] = v_N 
+
+        return res
+
+    def eval_du(self, f, n, iter_params0, iter_params1):
+        u_0 = self.cache['u_0'] 
+        u_N = self.cache['u_N'] 
+
+        du = dfn.Function(self.model.vector_function_space).vector()
+        if n == f.size-1:
+            du[:] = 2*(u_N-u_0)
+
+        return du
+
+    def eval_dv(self, f, n, iter_params0, iter_params1):
+        v_0 = self.cache['v_0']  
+        v_N = self.cache['v_N']  
+
+        dv = dfn.Function(self.model.vector_function_space).vector()
+        if n == f.size-1:
+            dv[:] = 2*(v_N-v_0)
+
+        return dv
+
+    def eval_dp(self, f):
+        u_0 = self.cache['u_0']
+        u_N = self.cache['u_N']
+        v_0 = self.cache['v_0']
+        v_N = self.cache['v_N']
+
+        dp = {}
+        dp['u0'] = -2*(u_N-u_0)
+        dp['v0'] = -2*(v_N-v_0)
+        return dp
+
 class FinalDisplacementNorm(Functional):
     r"""
     Return the l2 norm of displacement at the final time
 
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
-
-    # def __init__(self, model, **kwargs):
-    #     super(FinalDisplacementNorm, self).__init__(model, **kwargs)
-
     def eval(self, f):
         u = dfn.Function(self.model.vector_function_space).vector()
         _u, _, _ = f.get_state(f.size-1)

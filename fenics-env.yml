@@ -1,0 +1,15 @@
+name: fenics
+channels:
+    - defaults
+    - conda-forge
+dependicies:
+    - dolfin
+    - cyipopy
+    - nlopt
+    - numpy
+    - scipy
+    - matplotlib
+    - pandas
+    - h5py
+    - tabulate
+
