@@ -80,12 +80,12 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
     q0, p0, _ = model.get_pressure()
     model.set_pressure(p0)
 
-    if newton_solver_prm is None:
-        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-    dfn.solve(model.forms['form.un.f0'] == 0, model.a0, 
-              bcs=model.bc_base, J=model.forms['form.bi.df0_da0'],
-              solver_parameters={"newton_solver": newton_solver_prm})
-    a0.vector()[:] = model.a0.vector()
+    # if newton_solver_prm is None:
+    #     newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+    # dfn.solve(model.forms['form.un.f0'] == 0, model.a0, 
+    #           bcs=model.bc_base, J=model.forms['form.bi.df0_da0'],
+    #           solver_parameters={"newton_solver": newton_solver_prm})
+    # a0.vector()[:] = model.a0.vector()
 
     u1 = dfn.Function(model.vector_function_space)
     v1 = dfn.Function(model.vector_function_space)
@@ -221,6 +221,7 @@ def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     """
     u0, v0, a0 = uva0
 
+
     u1 = dfn.Function(model.vector_function_space)
     v1 = dfn.Function(model.vector_function_space)
     a1 = dfn.Function(model.vector_function_space)
@@ -235,6 +236,7 @@ def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     # linear.
     if newton_solver_prm is None:
         newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+    # breakpoint()
     dfn.solve(model.f1 == 0, model.u1, bcs=model.bc_base, J=model.df1_du1,
               solver_parameters={"newton_solver": newton_solver_prm})
     u1.assign(model.u1)
@@ -302,8 +304,6 @@ def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1
         info['nrefine'] = nrefine
 
         # coll_verts = model.get_collision_verts()
-        # print(err_norm)
-        # print(coll_verts)
 
         if abs_tol is not None:
             # step control method that prevents crossing the midline in one step near collision

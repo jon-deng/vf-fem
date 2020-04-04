@@ -91,8 +91,8 @@ def adjoint(model, f, functional, show_figure=False):
     qp1 = f.get_fluid_state(N-2)
     dt2 = times[N-1]-times[N-2]
 
-    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'u1': uva2[0]}
     iter_params3 = {'uva0': uva2, 'qp0': qp2, 'dt': 0.0, 'u1': None}
+    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'u1': uva2[0]}
 
     dcost_du2 = functional.du(f, N-1, iter_params2, iter_params3)
     dcost_dv2 = functional.dv(f, N-1, iter_params2, iter_params3)
@@ -103,32 +103,35 @@ def adjoint(model, f, functional, show_figure=False):
 
     # Initializing adjoint states:
     adj_a2_lhs = dcost_da2
+    model.bc_base.apply(adj_a2_lhs)
     adj_uva2[2][:] = adj_a2_lhs
 
     adj_v2_lhs = dcost_dv2
+    model.bc_base.apply(adj_v2_lhs)
     adj_uva2[1][:] = adj_v2_lhs
 
     adj_u2_lhs = dcost_du2 + newmark_v_du1(dt2)*adj_uva2[1] + newmark_a_du1(dt2)*adj_uva2[2]
     model.bc_base_adj.apply(df2_du2, adj_u2_lhs)
     dfn.solve(df2_du2, adj_uva2[0], adj_u2_lhs)
 
+    # the emod parameter only affects the displacement residual, under the 
+    # displacement-based newmark scheme 
     df2_demod = dfn.assemble(df1_demod_form_adj)
-    df2_ddt = dfn.assemble(df1_ddt_form_adj)
     grad['emod'] -= df2_demod*adj_uva2[0]
 
     # The sum is done since the 'dt' at every DOF, must be the same; we can then collapse
     # each sensitivity into one
+    df2_ddt = dfn.assemble(df1_ddt_form_adj)
     grad_dt = - (df2_ddt*adj_uva2[0]).sum() \
-              - newmark_v_dt(uva2[0], *uva1, dt2).inner(adj_uva2[1]) \
-              - newmark_a_dt(uva2[0], *uva1, dt2).inner(adj_uva2[2])
+              + newmark_v_dt(uva2[0], *uva1, dt2).inner(adj_uva2[1]) \
+              + newmark_a_dt(uva2[0], *uva1, dt2).inner(adj_uva2[2])
     grad['dt'].insert(0, grad_dt)
 
     ## Loop through states for adjoint computation
     # Note that ii corresponds to the time index of the adjoint state we are solving for.
     # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
     for ii in range(N-2, 0, -1):
-        # Properties at index 2 through 1 were loaded during initialization, so we only need to
-        # read index 0
+        # Properties at index 2 through 1 were loaded during initialization, so we only need to read index 0
         uva0 = f.get_state(ii-1, out=uva0)
         qp0 = f.get_fluid_state(ii-1)
         dt1 = times[ii] - times[ii-1]
@@ -149,12 +152,12 @@ def adjoint(model, f, functional, show_figure=False):
         # Update gradient using adjoint states
         model.set_iter_params(**iter_params1)
         df1_dparam = dfn.assemble(df1_demod_form_adj)
-        df1_ddt= dfn.assemble(df1_ddt_form_adj)
+        df1_ddt = dfn.assemble(df1_ddt_form_adj)
 
         grad['emod'] -= df1_dparam*adj_uva1[0]
         grad_dt = - (df1_ddt*adj_uva1[0]).sum() \
-                  - newmark_v_dt(uva1[0], *uva0, dt1).inner(adj_uva1[1]) \
-                  - newmark_a_dt(uva1[0], *uva0, dt1).inner(adj_uva1[2])
+                  + newmark_v_dt(uva1[0], *uva0, dt1).inner(adj_uva1[1]) \
+                  + newmark_a_dt(uva1[0], *uva0, dt1).inner(adj_uva1[2])
         grad['dt'].insert(0, grad_dt)
 
         # Set initial states to the previous states for the start of the next iteration
@@ -172,27 +175,46 @@ def adjoint(model, f, functional, show_figure=False):
 
         dt2 = dt1
     
-    # If the functional is sensitive to the parameters, you have to add its component once
-    dfunc_dparam = functional.dp(f)
-    if dfunc_dparam is not None:
-        grad['emod'] += dfunc_dparam.get('emod', 0) # ['emod']
-
     # At the end of the `for` loop ii=1, and we can compute the sensitivity w.r.t initial state
-    # The model parameters should already be set to compute `F1`, so we can directly assemble below
-    grad_u0_par = -(model.assem_df1_du0_adj()*adj_uva1[0])
-    grad_v0_par = -(model.assem_df1_dv0_adj()*adj_uva1[1])
-    grad_a0 = -(model.assem_df1_da0_adj()*adj_uva1[2])
 
-    df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj']) 
-    df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj']) 
-    df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj']) 
-    adj_a0 = dfn.Function(model.vector_function_space).vector()
-    dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
-    grad['u0'] = grad_u0_par - df0_du0_adj*adj_a0 + dfunc_dparam['u0']
-    grad['v0'] = grad_u0_par - df0_dv0_adj*adj_a0 + dfunc_dparam['v0']
+    # The model parameters should already be set to compute `F1`, so we can directly assemble below
+    # model.set_iter_params(**iter_params2)
+
+    # Calculate a correction for df1_du0 due to the pressure loading
+    df1_dpressure = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
+    dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
+    df1_du0_correction = dfn.Function(model.vector_function_space).vector()
+    dpressure_du0.transpmult(df1_dpressure*adj_uva2[0], df1_du0_correction)
+    grad_u0_par = -(model.assem_df1_du0_adj()*adj_uva2[0]) \
+                  + newmark_v_du0(dt2)*adj_uva2[1] \
+                  + newmark_a_du0(dt2)*adj_uva2[2] - df1_du0_correction
+
+    grad_v0_par = -(model.assem_df1_dv0_adj()*adj_uva2[0]) \
+                  + newmark_v_dv0(dt2)*adj_uva2[1] \
+                  + newmark_a_dv0(dt2)*adj_uva2[2]
+    grad['u0'] = grad_u0_par
+    grad['v0'] = grad_v0_par
+    
+    # grad_a0 = -(model.assem_df1_da0_adj()*adj_uva1[2])
+
+    # df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj']) 
+    # df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj']) 
+    # df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj']) 
+    # adj_a0 = dfn.Function(model.vector_function_space).vector()
+    # dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
+    # grad['u0'] = grad_u0_par - df0_du0_adj*adj_a0
+    # grad['v0'] = grad_v0_par - df0_dv0_adj*adj_a0
 
     # Change grad_dt to an array
     grad['dt'] = np.array(grad['dt'])
+
+    # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity components once
+    dfunc_dparam = functional.dp(f)
+    if dfunc_dparam is not None:
+        grad['emod'] += dfunc_dparam.get('emod', 0)
+        grad['u0'] += dfunc_dparam.get('u0', 0)
+        grad['v0'] += dfunc_dparam.get('v0', 0)
+    
     return functional_value, grad, functional
 
 def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
@@ -267,10 +289,12 @@ def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
 
     adj_v1_lhs = dcost_dv1
     adj_v1_lhs -= df2_dv1*adj_u2 - newmark_v_dv0(dt2)*adj_v2 - newmark_a_dv0(dt2)*adj_a2
+    model.bc_base.apply(adj_v1_lhs)
     adj_v1 = adj_v1_lhs
 
     adj_a1_lhs = dcost_da1
     adj_a1_lhs -= df2_da1*adj_u2 - newmark_v_da0(dt2)*adj_v2 - newmark_a_da0(dt2)*adj_a2
+    model.bc_base.apply(adj_a1_lhs)
     adj_a1 = adj_a1_lhs
 
     adj_u1_lhs = dcost_du1 + newmark_v_du1(dt1)*adj_v1 + newmark_a_du1(dt1)*adj_a1

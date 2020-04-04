@@ -442,7 +442,7 @@ class FinalDisplacementNorm(Functional):
         return res
 
     def eval_dp(self, f):
-        return dfn.Function(self.model.scalar_function_space).vector()
+        return None
 
 class FinalVelocityNorm(Functional):
     r"""
@@ -483,6 +483,9 @@ class FinalVelocityNorm(Functional):
 
         return res
 
+    def eval_dp(self, f):
+        return None
+        
 class DisplacementNorm(Functional):
     r"""
     Represents the sum over time of l2 norms of displacements.

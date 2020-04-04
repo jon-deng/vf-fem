@@ -157,7 +157,7 @@ class ForwardModel:
         array_like
             An array of mesh coordinate point ordered with increasing vertices.
         """
-        displacement = self.u0.vector()[self.vert_to_vdof]
+        displacement = self.u0.vector()[self.vert_to_vdof.reshape(-1)].reshape(-1, 2)
         return self.mesh.coordinates() + displacement
 
     def get_surface_state(self):

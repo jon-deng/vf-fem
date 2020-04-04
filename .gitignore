@@ -1,4 +1,5 @@
 # My Rules
+*.pickle
 *.md
 *.h5
 *.vtu

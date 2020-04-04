@@ -32,117 +32,86 @@ from femvf.adjoint import adjoint
 from femvf.model import ForwardModel
 from femvf import forms
 from femvf.constants import PASCAL_TO_CGS
-from femvf.properties import FluidProperties, LinearElasticRayleigh#, TimingProperties
+from femvf.properties import FluidProperties, LinearElasticRayleigh, KelvinVoigt
 from femvf.functionals import basic as funcs
 from femvf import statefile as sf
 
 sys.path.append(path.expanduser('~/lib/vf-optimization'))
 from optvf import functionals as extra_funcs
 
-class TestAdjointGradientCalculation(unittest.TestCase):
-    OVERWRITE_FORWARD_SIMULATIONS = False
+dfn.set_log_level(30)
+np.random.seed(123)
 
-    def setUp(self):
-        """
-        Runs the forward model over several parameters 'steps' and saves their history.
-        """
-        dfn.set_log_level(30)
-        np.random.seed(123)
+# class StartingParameterSetup:
+def get_starting_rayleigh_model():
+    ## Set the mesh to be used and initialize the forward model
+    mesh_dir = '../meshes'
+    mesh_base_filename = 'geometry2'
+    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        ##### Set up parameters as you see fit
+    model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {}, 
+                         forms=forms.linear_elastic_rayleigh, SolidType=LinearElasticRayleigh)
 
-        ## Set the mesh to be used and initialize the forward model
-        mesh_dir = '../meshes'
-        mesh_base_filename = 'geometry2'
-        mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+    ## Set the fluid/solid parameters
+    emod = model.emod.vector()[:].copy()
+    emod[:] = 2.5e3 * PASCAL_TO_CGS
 
-        model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+    k_coll = 1e11
+    y_gap = 0.02
+    y_coll_offset = 0.01
+    alpha, k, sigma = -3000, 50, 0.002
 
-        ## Set the solution parameters
-        dt_sample = 1e-4
-        # dt_max = 1e-5
-        dt_max = 5e-5
-        t_start = 0
-        # t_final = (150)*dt_sample
-        t_final = 0.1
-        times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
+    fluid_props = FluidProperties(model)
+    fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+    fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
+    fluid_props['alpha'] = alpha
+    fluid_props['k'] = k
+    fluid_props['sigma'] = sigma
 
-        ## Set the fluid/solid parameters
-        emod = model.emod.vector()[:].copy()
-        emod[:] = 2.5e3 * PASCAL_TO_CGS
+    solid_props = LinearElasticRayleigh(model)
+    solid_props['emod'] = emod
+    solid_props['rayleigh_m'] = 0.0
+    solid_props['rayleigh_k'] = 3e-4
+    solid_props['k_collision'] = k_coll
+    solid_props['y_collision'] = fluid_props['y_midline'] - y_coll_offset
 
-        k_coll = 1e11
-        y_gap = 0.02
-        y_coll_offset = 0.01
-        # alpha, k, sigma = -1000, 200, 0.0005
-        # alpha, k, sigma = -1000, 100, 0.001
-        alpha, k, sigma = -3000, 50, 0.002
-        # alpha, k, sigma = -1000, 25, 0.004
+    return model, solid_props, fluid_props
 
-        ## Set the stepping direction
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-2)), axis=0)
-        step_size = 0.5e0 * PASCAL_TO_CGS
-        step_dir = np.random.rand(emod.size) * step_size
-        step_dir = np.ones(emod.size) * step_size
+def get_starting_kelvinvoigt_model():
+    ## Set the mesh to be used and initialize the forward model
+    mesh_dir = '../meshes'
+    mesh_base_filename = 'geometry2'
+    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        case_postfix = f'{t_final:.5f}-{k_coll:.2e}-{y_gap:.2e}-{y_coll_offset:.2e}_{alpha}_{k}_{sigma}'
-        save_path = f'out/FiniteDifferenceStates-{case_postfix}.h5'
+    model = ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {}, 
+                         forms=forms.kelvin_voigt, SolidType=KelvinVoigt)
 
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max}
+    ## Set the fluid/solid parameters
+    emod = model.emod.vector()[:].copy()
+    emod[:] = 2.5e3 * PASCAL_TO_CGS
 
-        fluid_props = FluidProperties(model)
-        fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
-        fluid_props['alpha'] = alpha
-        fluid_props['k'] = k
-        fluid_props['sigma'] = sigma
+    k_coll = 1e11
+    y_gap = 0.02
+    y_gap = 0.1
+    y_coll_offset = 0.01
+    alpha, k, sigma = -3000, 50, 0.002
 
-        solid_props = LinearElasticRayleigh(model)
-        solid_props['emod'] = emod
-        solid_props['rayleigh_m'] = 0.0
-        solid_props['rayleigh_k'] = 3e-4
-        # solid_props['kv_eta'][:] = 3.0
-        solid_props['k_collision'] = k_coll
-        solid_props['y_collision'] = fluid_props['y_midline'] - y_coll_offset
+    fluid_props = FluidProperties(model)
+    fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+    fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
+    fluid_props['alpha'] = alpha
+    fluid_props['k'] = k
+    fluid_props['sigma'] = sigma
 
-        # Compute functionals along step direction
-        print(f"Computing {len(hs)} finite difference points")
-        if not self.OVERWRITE_FORWARD_SIMULATIONS and os.path.exists(save_path):
-            print("Using existing files")
-        else:
-            if os.path.exists(save_path):
-                os.remove(save_path)
+    solid_props = KelvinVoigt(model)
+    solid_props['emod'] = emod
+    solid_props['eta'] = 3.0
+    solid_props['k_collision'] = k_coll
+    solid_props['y_collision'] = fluid_props['y_midline'] #- y_coll_offset
 
-            for n, h in enumerate(hs):
-                runtime_start = perf_counter()
-                # _solid_props = solid_props.copy()
-                solid_props['emod'] = emod + h*step_dir
-                # breakpoint()
-                info = forward(model, solid_props, fluid_props, timing_props, 
-                               adaptive_step_prm={'abs_tol': None},
-                               h5file=save_path, h5group=f'{n}', show_figure=False)
-                runtime_end = perf_counter()
+    return model, solid_props, fluid_props
 
-                if h == 0:
-                    # Save the run info to a pickled file
-                    with open(save_path+".pickle", 'wb') as f:
-                        pickle.dump(info, f)
-
-                print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
-
-        self.hs = hs
-        self.step_dir = step_dir
-        self.model = model
-        self.fluid_props = fluid_props
-        self.solid_props = solid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-        # self.times_meas = times_meas
-        # self.dt_max = dt_max
-
-        self.case_postfix = case_postfix
-
+class TaylorTest(unittest.TestCase):
     def test_adjoint(self):
         hs = self.hs
         step_dir = self.step_dir
@@ -153,13 +122,16 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         with open(save_path+".pickle", 'rb') as f:
             run_info = pickle.load(f)
 
-        fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':50}
-        # Functional = funcs.FinalDisplacementNorm
+        fkwargs = {}
+        Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
         # Functional = funcs.StrainEnergy
-        Functional = extra_funcs.AcousticPower
+        # Functional = funcs.PeriodicError
+
+        # fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':50}
+        # Functional = extra_funcs.AcousticPower
         # Functional = extra_funcs.AcousticEfficiency
         # Functional = extra_funcs.F0WeightedAcousticPower
 
@@ -190,7 +162,8 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         with sf.StateFile(model, save_path, group='0', mode='r') as f:
             _, gradient, _ = adjoint(model, f, functional)
 
-            gradient_ad = gradient['emod']
+            gradient_ad = gradient[self.parameter]
+            # breakpoint()
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -263,84 +236,220 @@ class TestAdjointGradientCalculation(unittest.TestCase):
         ax.legend()
         return fig, ax
 
-    def show_solution_info(self):
-        model = self.model
+class TestEmodGradient(TaylorTest):
+    OVERWRITE_FORWARD_SIMULATIONS = False
 
-        solution_file = 'tmp.h5'
-        if path.isfile(solution_file):
-            os.remove(solution_file)
-        run_info = forward(model, self.solid_props, self.fluid_props, self.timing_props,
-                           h5file=solution_file, abs_tol=None)
+    def setUp(self):
+        """
+        Runs the forward model over several parameters 'steps' and saves their history.
+        """
+        save_path = 'out/emodgrad-states'
+        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
 
-        surface_area = []
-        with sf.StateFile(model, solution_file, group='/', mode='r') as f:
-            for n in range(f.get_num_states()):
-                surface_dofs = model.vert_to_vdof[model.surface_vertices].reshape(-1)
-                u = f.get_state(n)[0]
-                xy_deformed_surface = model.surface_coordinates + u[surface_dofs].reshape(-1, 2)
+        # dt_max = 5e-5
+        # t_start, t_final = 0, 0.1
+        # times_meas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max) + 1)
+        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': dt_max}
 
-                area = 2*(self.fluid_props['y_midline'] - xy_deformed_surface[:, 1])
-                # breakpoint()
-                # area[area < 2*0.002] = 2*0.002
-                surface_area.append(area)
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+        
+        ## Set the step direction / step size / number of steps
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-2)), axis=0)
+        step_size = 0.5e0 * PASCAL_TO_CGS
+        step_dir = np.ones(solid_props['emod'].size) * step_size
 
-                ## Test of pressure
-                # pressure_verify = fluid_props['p_sub'] + 0.5*fluid_props['rho']*run_info['flow_rate'][n]**2 *
-                #         (1/fluid_props['a_sub']**2-1/surface_area[:, n]**2))
-        surface_area = np.array(surface_area)
+        print(f"Computing {len(hs)} finite difference points")
+        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
+            if os.path.exists(save_path):
+                os.remove(save_path)
 
-        # Plot the glottal width vs time of the simulation at zero step size
-        fig, axs = plt.subplots(4, 1, constrained_layout=True, sharex=True)
+            for n, h in enumerate(hs):
+                solid_props_step = KelvinVoigt(model, solid_props.data)
+                solid_props_step['emod'] = solid_props['emod'] + h*step_dir
 
-        ax = axs[0]
-        ax.plot(run_info['time'], run_info['glottal_width'])
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Glottal width [cm]")
+                runtime_start = perf_counter()
+                info = forward(model, solid_props_step, fluid_props, timing_props, 
+                               adaptive_step_prm={'abs_tol': None},
+                               h5file=save_path, h5group=f'{n}', show_figure=False)
+                runtime_end = perf_counter()
 
-        ax = axs[0].twinx()
-        ax.plot(run_info['time'], run_info['glottal_width'] == 2*0.002)
-        ax.set_ylabel("Collision")
+                # Save the run info to a pickled file
+                if h == 0:
+                    with open(save_path+".pickle", 'wb') as f:
+                        pickle.dump(info, f)
 
-        ax = axs[1]
-        ax.plot(run_info['time'], run_info['flow_rate'])
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Flow rate [cm^2/s]")
+                print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        else:
+            print("Using existing files")
 
-        ax = axs[2]
-        ax.plot(run_info['time'][1:], run_info['idx_min_area'], label="Minimum area location")
-        ax.plot(run_info['time'][1:], run_info['idx_separation'], label="Separation location")
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Vertex index")
+        self.hs = hs
+        self.step_dir = step_dir
+        self.parameter = 'emod'
 
-        ax = ax.twinx()
-        # for n in np.sort(np.unique(run_info['idx_separation'])):
-        for n in [30, 31, 32]:
-            ax.plot(run_info['time'][:-1], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}")
+        self.model = model
+        self.solid_props = solid_props
+        self.fluid_props = fluid_props
+        self.timing_props = timing_props
 
-            # ax.plot(run_info['time'],
-            #         (fluid_props['p_sub'] + 0.5*fluid_props['rho']*run_info['flow_rate']**2 *
-            #             (1/fluid_props['a_sub']**2-1/surface_area[:, n]**2)) / PASCAL_TO_CGS,
-            #         label=f"Manual calc")
-        ax.legend()
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Pressure [Pa]")
+        self.save_path = save_path
 
-        ax = axs[3]
-        # for n in np.sort(np.unique(run_info['idx_separation'])):
-        for n in [30]:
-            ax.plot(run_info['time'], surface_area[:, n], label=f"Vertex {n:d}")
-        ax.legend()
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Area [cm^2]")
+        self.case_postfix = 'emod'
 
-        ax = ax.twinx()
-        for n in [30]:
-            ax.plot(run_info['time'], -(run_info['flow_rate']/surface_area[:, n])**2, label=f"Vertex {n:d}")
-        ax.legend()
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Q/Area [cm^2/s / cm]")
+class Testu0Gradient(TaylorTest):
+    OVERWRITE_FORWARD_SIMULATIONS = True
+
+    def setUp(self):
+        """
+        Runs the forward model over several parameters 'steps' and saves their history.
+        """
+        save_path = 'out/u0grad-states'
+        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+        
+        ## Set the step direction / step size / number of steps
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-20)), axis=0)
+        print(hs)
+        step_size = 0.1
+
+        # Get y--coordinates in DOF order
+        xy = model.get_ref_config()[dfn.dof_to_vertex_map(model.scalar_function_space)]
+        y = xy[:, 1]
+
+        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
+        step_dir = np.zeros(xy.size)
+        step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+
+        print(f"Computing {len(hs)} finite difference points")
+
+        fig, ax = plt.subplots(1, 1)
+        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
+            if os.path.exists(save_path):
+                os.remove(save_path)
+
+            for n, h in enumerate(hs):
+                u0 = dfn.Function(model.vector_function_space).vector()
+                v0 = dfn.Function(model.vector_function_space).vector()
+                u0[:] = h*step_dir
+                uv0 = (u0, v0)
+
+                runtime_start = perf_counter()
+                info = forward(model, solid_props, fluid_props, timing_props, uv0=uv0,
+                               adaptive_step_prm={'abs_tol': None},
+                               h5file=save_path, h5group=f'{n}', show_figure=False)
+                runtime_end = perf_counter()
+
+                model.set_ini_state(u0, v0, v0)
+                xy = model.get_cur_config()
+                ax.scatter(xy[:, 0], xy[:, 1])
+
+                # Save the run info to a pickled file
+                if h == 0:
+                    with open(save_path+".pickle", 'wb') as f:
+                        pickle.dump(info, f)
+
+                print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        else:
+            print("Using existing files")
 
         plt.show()
+
+        self.hs = hs
+        self.step_dir = step_dir
+        self.parameter = 'u0'
+
+        self.model = model
+        self.solid_props = solid_props
+        self.fluid_props = fluid_props
+        self.timing_props = timing_props
+
+        self.save_path = save_path
+
+        self.case_postfix = 'u0'
+
+class Testv0Gradient(TaylorTest):
+    OVERWRITE_FORWARD_SIMULATIONS = True
+
+    def setUp(self):
+        """
+        Runs the forward model over several parameters 'steps' and saves their history.
+        """
+        save_path = 'out/v0grad-states'
+        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+
+        N = 1
+        t_start, t_final = 0, 0.01/100 * N
+        times_meas = np.linspace(t_start, t_final, N+1)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+        
+        ## Set the step direction / step size / number of steps
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-17)), axis=0)
+        step_size = 0.1
+
+        # Get y--coordinates in DOF order
+        xy = model.get_ref_config()[dfn.dof_to_vertex_map(model.scalar_function_space)]
+        y = xy[:, 1]
+
+        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
+        step_dir = np.zeros(xy.size)
+        step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+
+        print(f"Computing {len(hs)} finite difference points")
+
+        fig, ax = plt.subplots(1, 1)
+        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
+            if os.path.exists(save_path):
+                os.remove(save_path)
+
+            for n, h in enumerate(hs):
+                u0 = dfn.Function(model.vector_function_space).vector()
+                v0 = dfn.Function(model.vector_function_space).vector()
+                v0[:] = h*step_dir
+                uv0 = (u0, v0)
+
+                runtime_start = perf_counter()
+                info = forward(model, solid_props, fluid_props, timing_props, uv0=uv0,
+                               adaptive_step_prm={'abs_tol': None},
+                               h5file=save_path, h5group=f'{n}', show_figure=False)
+                runtime_end = perf_counter()
+
+                model.set_ini_state(u0, v0, u0)
+                xy = model.get_cur_config()
+                ax.scatter(xy[:, 0], xy[:, 1])
+
+                # Save the run info to a pickled file
+                if h == 0:
+                    with open(save_path+".pickle", 'wb') as f:
+                        pickle.dump(info, f)
+
+                print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        else:
+            print("Using existing files")
+
+        plt.show()
+
+        self.hs = hs
+        self.step_dir = step_dir
+        self.parameter = 'v0'
+
+        self.model = model
+        self.solid_props = solid_props
+        self.fluid_props = fluid_props
+        self.timing_props = timing_props
+
+        self.save_path = save_path
+
+        self.case_postfix = 'v0'
 
 class Test2ndOrderDifferentiability(unittest.TestCase):
 
@@ -549,9 +658,17 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    test = TestAdjointGradientCalculation()
+    # test = TestEmodGradient()
+    # test.setUp()
+    # test.test_adjoint()
+
+    test = Testu0Gradient()
     test.setUp()
     test.test_adjoint()
+
+    # test = Testv0Gradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = Test2ndOrderDifferentiability()
     # test.setUp()
