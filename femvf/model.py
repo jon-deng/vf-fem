@@ -1,10 +1,6 @@
 """
 Contains the Model class that couples fluid and solid behaviour
 """
-from . import forms
-from . import fluids
-from . import constants as const
-from .properties import FluidProperties, LinearElasticRayleigh, KelvinVoigt
 
 from os import path
 
@@ -12,6 +8,12 @@ import numpy as np
 import dolfin as dfn
 import ufl
 from petsc4py import PETSc as pc
+
+from . import solids
+from . import fluids
+from . import constants as const
+from . import meshutils
+from .parameters.properties import FluidProperties
 
 class ForwardModel:
     """
@@ -40,80 +42,38 @@ class ForwardModel:
 
     Attributes
     ----------
-    mesh : dfn.Mesh
-    facet_function : dfn.MeshFunction
-    cell_function : dfn.MeshFunction
-
-    fluid_props : .properties.FluidProperties
-    solid_props : .properties.SolidProperties
+    solid : Solid
+        A solid model object
+    fluid : Fluid
+        A fluid model object
 
     surface_vertices : array_like
         A list of vertex numbers on the pressure surface. They are ordered in increasing streamwise
         direction.
 
-    vector_function_space : dfn.VectorFunctionSpace
-    scalar_function_space : dfn.FunctionSpace
-    vertex_to_vdof : array_like
-    vertex_to_sdof : array_like
-
     form coefficients and states
 
     main forms for solving
     """
-    def __init__(self, mesh_path, facet_labels, cell_labels, forms=forms.linear_elastic_rayleigh, SolidType=LinearElasticRayleigh):
-        self.mesh, self.facet_function, self.cell_function = load_mesh(mesh_path, facet_labels, cell_labels)
-        self.facet_labels = facet_labels
-        self.cell_labels = cell_labels
-
-        self.SolidType = SolidType
+    def __init__(self, solid, fluid):
+        self.solid = solid
+        self.fluid = fluid
 
         # Create a vertex marker from the boundary marker
-        pressure_edges = self.facet_function.where_equal(facet_labels['pressure'])
-        fixed_edges = self.facet_function.where_equal(facet_labels['fixed'])
+        pressure_edges = self.solid.facet_function.where_equal(self.solid.facet_labels['pressure'])
+        fixed_edges = self.solid.facet_function.where_equal(self.solid.facet_labels['fixed'])
 
-        pressure_vertices = vertices_from_edges(pressure_edges, self.mesh)
-        fixed_vertices = vertices_from_edges(fixed_edges, self.mesh)
+        pressure_vertices = meshutils.vertices_from_edges(pressure_edges, self.solid.mesh)
+        fixed_vertices = meshutils.vertices_from_edges(fixed_edges, self.solid.mesh)
 
         surface_vertices = pressure_vertices
-        surface_coordinates = self.mesh.coordinates()[surface_vertices]
+        surface_coordinates = self.solid.mesh.coordinates()[surface_vertices]
 
         # Sort the pressure surface vertices from inferior to superior
-        idx_sort = sort_vertices_by_nearest_neighbours(surface_coordinates)
+        idx_sort = meshutils.sort_vertices_by_nearest_neighbours(surface_coordinates)
         self.surface_vertices = surface_vertices[idx_sort]
         self.surface_coordinates = surface_coordinates[idx_sort]
 
-        ## Variational Forms
-        self._forms = forms(self.mesh,
-            self.facet_function, facet_labels, self.cell_function, cell_labels)
-
-        # Add some commonly used things as parameters
-        self.vector_function_space = self.forms['fspace.vector']
-        self.scalar_function_space = self.forms['fspace.scalar']
-        self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector']).reshape(-1, 2)
-        self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
-
-        self.dt = self.forms['coeff.time.dt']
-        self.gamma = self.forms['coeff.time.gamma']
-        self.beta = self.forms['coeff.time.beta']
-
-        self.emod = self.forms['coeff.prop.emod']
-        self.y_collision = self.forms['coeff.prop.y_collision']
-
-        self.u0 = self.forms['coeff.state.u0']
-        self.v0 = self.forms['coeff.state.v0']
-        self.a0 = self.forms['coeff.state.a0']
-        self.u1 = self.forms['coeff.arg.u1']
-
-        self.f1 = self.forms['form.un.f1']
-        self.df1_du1 = self.forms['form.bi.df1_du1']
-
-        self.bc_base_adj = self.forms['bcs.base']
-        self.bc_base = self.forms['bcs.base']
-
-        self.scalar_trial = self.forms['trial.scalar']
-        self.vector_trial = self.forms['trial.vector']
-
-        self.df1_du1_mat = dfn.assemble(self.df1_du1)
         self.cached_form_assemblers = {
             'bilin.df1_du1_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du1_adj']),
             'bilin.df1_du0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du0_adj']),
@@ -121,16 +81,9 @@ class ForwardModel:
             'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_da0_adj'])
         }
 
-        ## Set properties
-        # Default property values are used
-        # TODO: This is a bit weird because fluid_properties only needs the function
-        # space of self to work, as long as that's defined before this then it should be okay
-        self.fluid_props = FluidProperties(self)
-        self.solid_props = LinearElasticRayleigh(self)
-
     @property
     def forms(self):
-        return self._forms
+        return self.solid.forms
 
     # Core solver functions
     def get_ref_config(self):
@@ -144,7 +97,7 @@ class ForwardModel:
         array_like
             An array of mesh coordinate point ordered with increasing vertices.
         """
-        return self.mesh.coordinates()
+        return self.solid.mesh.coordinates()
 
     def get_cur_config(self):
         """
@@ -157,8 +110,8 @@ class ForwardModel:
         array_like
             An array of mesh coordinate point ordered with increasing vertices.
         """
-        displacement = self.u0.vector()[self.vert_to_vdof.reshape(-1)].reshape(-1, 2)
-        return self.mesh.coordinates() + displacement
+        displacement = self.solid.u0.vector()[self.solid.vert_to_vdof].reshape(-1, 2)
+        return self.solid.mesh.coordinates() + displacement
 
     def get_surface_state(self):
         """
@@ -173,11 +126,11 @@ class ForwardModel:
         tuple of array_like
             A tuple of arrays of surface positions, velocities and accelerations.
         """
-        surface_dofs = self.vert_to_vdof[self.surface_vertices].reshape(-1)
+        surface_dofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.surface_vertices].reshape(-1)
 
-        u = self.u0.vector()[surface_dofs].reshape(-1, 2)
-        v = self.v0.vector()[surface_dofs].reshape(-1, 2)
-        a = self.a0.vector()[surface_dofs].reshape(-1, 2)
+        u = self.solid.u0.vector()[surface_dofs].reshape(-1, 2)
+        v = self.solid.v0.vector()[surface_dofs].reshape(-1, 2)
+        a = self.solid.a0.vector()[surface_dofs].reshape(-1, 2)
 
         x_surface = (self.surface_coordinates + u, v, a)
 
@@ -196,10 +149,10 @@ class ForwardModel:
         x_surface = self.get_surface_state()
 
         # Check that the surface doesn't cross over the midline
-        if np.max(x_surface[0][..., 1]) > self.fluid_props['y_midline']:
+        if np.max(x_surface[0][..., 1]) > self.fluid.properties['y_midline']:
             raise RuntimeError('Model crossed symmetry line')
 
-        q, pressure, fluid_info = fluids.fluid_pressure(x_surface, self.fluid_props)
+        q, pressure, fluid_info = self.fluid.fluid_pressure(x_surface)
 
         return q, pressure, fluid_info
 
@@ -212,7 +165,7 @@ class ForwardModel:
         pressure : array_like
             An array of pressure values in surface vertex/fluid order
         """
-        pressure_solidord = fluids.pressure_fluidord_to_solidord(pressure, self)
+        pressure_solidord = self.fluid.pressure_fluidord_to_solidord(pressure, self)
         self.forms['coeff.fsi.pressure'].vector()[:] = pressure_solidord
 
     def get_flow_sensitivity(self):
@@ -233,7 +186,8 @@ class ForwardModel:
         """
         # Calculate sensitivities of fluid quantities based on the deformed surface
         x_surface = self.get_surface_state()
-        dp_du0, dq_du0 = fluids.get_flow_sensitivity(self, x_surface, self.fluid_props)
+
+        dp_du0, dq_du0 = self.fluid.get_flow_sensitivity(self, x_surface)
 
         return dp_du0, dq_du0
 
@@ -305,7 +259,7 @@ class ForwardModel:
         """
         u_surface = self.get_surface_state()[0]
 
-        return self.y_collision.values()[0] - np.max(u_surface[..., 1])
+        return self.solid.forms['coeff.prop.y_collision'].values()[0] - np.max(u_surface[..., 1])
 
     def get_ymax(self):
         """
@@ -333,9 +287,7 @@ class ForwardModel:
         ----------
         u0, v0, a0 : array_like
         """
-        self.forms['coeff.state.u0'].vector()[:] = u0
-        self.forms['coeff.state.v0'].vector()[:] = v0
-        self.forms['coeff.state.a0'].vector()[:] = a0
+        self.solid.set_ini_state(u0, v0, a0)
 
     def set_fin_state(self, u1):
         """
@@ -351,7 +303,7 @@ class ForwardModel:
         ----------
         u1 : array_like
         """
-        self.forms['coeff.arg.u1'].vector()[:] = u1
+        self.solid.set_fin_state(u1)
 
     def set_ini_fluid_state(self, q0, p0):
         self.set_pressure(p0)
@@ -370,8 +322,7 @@ class ForwardModel:
         ----------
         dt : float
         """
-        # The coefficient for time is a vector because of a hack; it's needed to take derivatives
-        self.forms['coeff.time.dt'].vector()[:] = dt
+        self.solid.set_time_step(dt)
 
     def set_solid_props(self, solid_props):
         """
@@ -381,19 +332,7 @@ class ForwardModel:
         ----------
         solid_props : properties.SolidProperties
         """
-        forms = self.forms
-
-        for label, value in solid_props.items():
-            # assert prop_label in solid_props
-
-            coefficient = forms['coeff.prop.'+label]
-
-            # If the property is a field variable, values have to be assigned to every spot in
-            # the vector
-            if isinstance(coefficient, dfn.function.constant.Constant):
-                coefficient.assign(value)
-            else:
-                coefficient.vector()[:] = value
+        self.solid.set_properties(solid_props)
 
     def set_fluid_props(self, fluid_props):
         """
@@ -405,7 +344,7 @@ class ForwardModel:
         ----------
         fluid_props : properties.FluidProperties
         """
-        self.fluid_props = fluid_props
+        self.fluid.set_properties(fluid_props)
 
     # @profile
     def set_params(self, uva0=None, qp0=None, solid_props=None, fluid_props=None):
@@ -582,72 +521,3 @@ class CachedBiFormAssembler:
 
 
 #     return mesh, facet_function, cell_function
-
-def load_mesh(mesh_path, facet_labels, cell_labels):
-    """
-    Return mesh and facet/cell info
-
-    Parameters
-    ----------
-    mesh_path : str
-        Path to the mesh .xml file
-    facet_labels, cell_labels : dict(str: int)
-        Dictionaries providing integer identifiers for given labels
-
-    Returns
-    -------
-    mesh : dfn.Mesh
-        The mesh object
-    facet_function, cell_function : dfn.MeshFunction
-        A mesh function marking facets with integers. Marked elements correspond to the label->int
-        mapping given in facet_labels/cell_labels.
-    """
-    base_path, ext = path.splitext(mesh_path)
-    facet_function_path = base_path +  '_facet_region.xml'
-    cell_function_path = base_path + '_physical_region.xml'
-
-    if ext == '':
-        mesh_path = mesh_path + '.xml'
-
-    mesh = dfn.Mesh(mesh_path)
-    facet_function = dfn.MeshFunction('size_t', mesh, facet_function_path)
-    cell_function = dfn.MeshFunction('size_t', mesh, cell_function_path)
-
-    return mesh, facet_function, cell_function
-
-def vertices_from_edges(edge_indices, mesh):
-    """
-    Return vertices associates with a set of edges
-    """
-    edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
-                                for edge in dfn.edges(mesh)])
-
-    vertices = np.unique(edge_to_vertex[edge_indices].reshape(-1))
-    return vertices
-
-def sort_vertices_by_nearest_neighbours(vertex_coordinates):
-    """
-    Return an index list sorting the vertices based on its nearest neighbours
-
-    For the case of a collection of vertices along the surface of a mesh, this should sort them
-    along an increasing or decreasing surface coordinate.
-
-    This is mainly used to sort the inferior-superior direction is oriented along the positive x axis.
-
-    Parameters
-    ----------
-    vertex_coordinates : (..., 2) array_like
-        An array of surface coordinates, with x and y locations stored in the last dimension.
-    """
-    # Determine the very first coordinate
-    idx_sort = [np.argmin(vertex_coordinates[..., 0])]
-
-    while len(idx_sort) < vertex_coordinates.shape[0]:
-        # Calculate array of distances to every other coordinate
-        vector_distances = vertex_coordinates - vertex_coordinates[idx_sort[-1]]
-        distances = np.sum(vector_distances**2, axis=-1)**0.5
-        distances[idx_sort] = np.nan
-
-        idx_sort.append(np.nanargmin(distances))
-
-    return np.array(idx_sort)

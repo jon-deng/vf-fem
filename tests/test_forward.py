@@ -13,10 +13,14 @@ import matplotlib.pyplot as plt
 import dolfin as dfn
 
 sys.path.append('../')
+from femvf.meshutils import load_fenics_mesh
 from femvf.forward import forward
 from femvf.model import ForwardModel
-from femvf.properties import LinearElasticRayleigh, FluidProperties#, TimingProperties
+from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
+
+from femvf.solids import Rayleigh
+from femvf.fluids import Bernoulli
 
 class TestForward(unittest.TestCase):
     def setUp(self):
@@ -28,15 +32,22 @@ class TestForward(unittest.TestCase):
         mesh_dir = '../meshes'
 
         mesh_base_filename = 'geometry2'
+        self.facet_labels = {'pressure': 1, 'fixed': 3}
+
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+        self.cell_labels = {}
 
     def test_forward(self):
         ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-        model = ForwardModel(self.mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        mesh, facet_func, cell_func = load_fenics_mesh(self.mesh_path, self.facet_labels, self.cell_labels)
+        solid = Rayleigh(mesh, facet_func, self.facet_labels, cell_func, self.cell_labels)
+
+        fluid = Bernoulli()
+        model = ForwardModel(solid, fluid)
 
         # dt = 2.5e-6
         dt = 5e-5
-        times_meas = [0, 0.2]
+        times_meas = [0, 0.02]
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -45,21 +56,21 @@ class TestForward(unittest.TestCase):
         # fluid_props['p_sub'] = [1500*PASCAL_TO_CGS, 1500*PASCAL_TO_CGS, 1, 1]
         # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
         # Constant fluid properties
-        p_sub = 800
+        p_sub = 500
 
         timing_props = {'t0': 0, 'tmeas': times_meas, 'dt_max': dt}
 
-        fluid_props = FluidProperties(model)
-        fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props = FluidProperties(model.fluid)
+        fluid_props['y_midline'] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
         fluid_props['alpha'] = alpha
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
 
-        solid_props = LinearElasticRayleigh(model)
-        emod = model.emod.vector()[:].copy()
-        emod[:] = 5.0e3 * PASCAL_TO_CGS
-        solid_props['emod'] = emod
+        solid_props = SolidProperties(model.solid)
+        # emod = model.emod.vector()[:].copy()
+        # emod[:] = 
+        solid_props['emod'] = 5.0e3 * PASCAL_TO_CGS
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 4e-3
         solid_props['k_collision'] = 1e11
@@ -70,9 +81,11 @@ class TestForward(unittest.TestCase):
             os.remove(save_path)
 
         print("Running forward model")
+        adaptive_step_prm = {'abs_tol': None}
         runtime_start = perf_counter()
-        info = forward(model, solid_props, fluid_props, timing_props,
-                       h5file=save_path, h5group='/', abs_tol=None, show_figure=False)
+        info = forward(model, (0, 0, 0), solid_props, fluid_props, timing_props,
+                       h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
+                       show_figure=False)
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 

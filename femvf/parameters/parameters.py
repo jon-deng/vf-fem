@@ -7,6 +7,7 @@ import math
 from collections import OrderedDict
 from . import properties as props
 from . import constants
+from .forward import DEFAULT_NEWTON_SOLVER_PRM
 
 import dolfin as dfn
 from petsc4py import PETSc
@@ -17,15 +18,12 @@ class Parameterization:
     """
     A parameterization is a mapping from a set of parameters to those of the forward model.
 
-    The parameters are stored in a dictionary mapping `{param_label: param_values}`. The
-    the parameterization can consist of multiple parameters labels, for example,
-    `{'body_elastic_modulus': 2.0,
-      'cover_elastic_modulus': 1.0,
-      'interior_elastic_moduli': np.array([3, 2, 3, ... , 5.2])}`
+    Parameter values are stored in a single array. The slice corresponding to a specific parameter
+    can be accessed through a label based index i.e. `self[param_label]`
 
-    The underlying data is stored in a single vector but can be accessed either using the label or
-    the vector. This is, hopefully, a readable way to store potentially unrelated parameters. Methods are
-    provided to convert this to a single vector which is needed for optimization routines.
+    Each parameterization has to have `convert` and `dconvert` methods. `convert` transforms the 
+    parameterization to a standard parameterization for the forward model and `dconvert` transforms
+    gradients wrt. standard parameters, to gradients wrt. the parameterization.
 
     Parameters
     ----------
@@ -74,7 +72,7 @@ class Parameterization:
         self._PARAM_SHAPES = dict()
         self._PARAM_OFFSETS = dict()
         offset = 0
-        N_DOF = model.scalar_function_space.dim()
+        N_DOF = model.solid.scalar_fspace.dim()
         for key, param_type in self.PARAM_TYPES.items():
             shape = None
             if param_type[0] == 'field':
@@ -218,6 +216,12 @@ class Parameterization:
         """
         return NotImplementedError
 
+class Rayleigh(Parameterization):
+    pass
+
+class KelvinVoigt(Parameterization):
+    pass
+
 class NodalElasticModuli(Parameterization):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
@@ -237,9 +241,9 @@ class NodalElasticModuli(Parameterization):
 
         solid_props['emod'] = self['elastic_moduli']
 
-        return solid_props, fluid_props, timing_props
+        return (0, 0, 0), solid_props, fluid_props, timing_props
 
-    def dconvert(self, demod):
+    def dconvert(self, grad):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -250,8 +254,11 @@ class NodalElasticModuli(Parameterization):
         # fluid_props = props.FluidProperties(model, self.default_fluid_props)
 
         # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
+        out = self.copy()
+        out.vector[:] = 0.0
+        out['elastic_moduli'][:] = grad['emod']
 
-        return 1.0*demod
+        return out
 
 class KelvinVoigtNodalConstants(Parameterization):
     """
@@ -274,7 +281,7 @@ class KelvinVoigtNodalConstants(Parameterization):
 
         solid_props['elastic_modulus'] = self['elastic_moduli']
 
-        return solid_props, fluid_props, timing_props
+        return (0, 0, 0), solid_props, fluid_props, timing_props
 
     def dconvert(self, demod):
         """
@@ -287,8 +294,12 @@ class KelvinVoigtNodalConstants(Parameterization):
         # fluid_props = props.FluidProperties(model, self.default_fluid_props)
 
         # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
-
-        return 1.0*demod
+        out = self.copy()
+        out.vector[:] = 0.0
+        out['elastic_moduli'][:] = 1.0*demod
+        out['eta'][:] = 0.0
+        
+        return out
 
 class PeriodicKelvinVoigt(Parameterization):
     """
@@ -310,60 +321,158 @@ class PeriodicKelvinVoigt(Parameterization):
         fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
 
         N = self.constants['NUM_STATES_PER_PERIOD']
-        dt = self['period'] / (N-1)
+        dt = self['period']/(N-1)
         timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        
+        ## Convert initial states
+        u0 = self['u0'].reshape(-1)
+        v0 = self['v0'].reshape(-1)
+        a0 = dfn.Function(self.model.solid.vector_fspace).vector()
 
-        initial_state = {}
-        initial_state['uv0'] = (self['u0'].reshape(-1), self['v0'].reshape(-1))
+        ## Set parameters for the state
+        self.model.set_params(uva0=(u0, v0, 0), solid_props=solid_props, fluid_props=fluid_props)
 
-        return initial_state, solid_props, fluid_props, timing_props
+        q0, p0, _= self.model.get_pressure()
+        self.model.set_params(qp0=(q0, p0))
+
+        # Solve for the acceleration
+        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+        dfn.solve(self.model.forms['form.un.f0'] == 0, self.model.a0, 
+                  bcs=self.model.bc_base, J=self.model.forms['form.bi.df0_da0'],
+                  solver_parameters={"newton_solver": newton_solver_prm})
+        a0[:] = self.model.a0.vector()
+
+        uva = (u0, v0, a0)
+
+        return uva, solid_props, fluid_props, timing_props
 
     def dconvert(self, grad):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
         # TODO: This should return a dict or something that has the sensitivity
-        # of all properties wrt parameters
+        # of all properties wrt. parameters
         """
         out = self.copy()
-        out['u0'].flat[:] = 1.0*grad['u0']
-        out['v0'].flat[:] = 1.0*grad['v0']
+        out.vector[:] = 0.0
+
+        # Set parameters before assembling to make sure entries are correct
+        uva, solid_props, fluid_props, timing_props = self.convert()
+        self.model.set_params(uva0=uva, solid_props=solid_props, fluid_props=fluid_props)
+
+        q0, p0, _= self.model.get_pressure()
+        self.model.set_params(qp0=(q0, p0))
+
+        # Go through the calculations to convert the acceleration gradient to disp and vel
+        # components
+        grad_u0_part = grad['u0']
+        grad_v0_part = grad['v0']
+        grad_a0 = grad['a0']
+
+        df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj']) 
+        df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj']) 
+        df0_da0_adj = dfn.assemble(self.model.forms['form.bi.df0_da0_adj'])
+        adj_a0 = dfn.Function(self.model.solid.vector_fspace).vector()
+
+        dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
+        grad_u0 = grad_u0_part - df0_du0_adj*adj_a0
+        grad_v0 = grad_v0_part - df0_dv0_adj*adj_a0
+
+        out['u0'].flat[:] = grad['u0']
+        out['v0'].flat[:] = grad['v0']
 
         N = self.constants['NUM_STATES_PER_PERIOD']
-        out['period'][()] = np.sum(grad['dt'] * 1/(N-1))
+        out['period'][()] = np.sum(grad['dt']) * 1/(N-1)
 
-        return out.vector
+        return out
 
-class LagrangeConstrainedNodalElasticModuli(NodalElasticModuli):
+class FixedPeriodKelvinVoigt(PeriodicKelvinVoigt):
     """
-    A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
+    A parameterization defining a periodic Kelvin-Voigt model
     """
     PARAM_TYPES = OrderedDict(
-        {'elastic_moduli': ('field', ()),
-         'lagrange_multiplier': ('const', ())}
-    )
+        {'u0': ('field', (2,)),
+         'v0': ('field', (2,)),
+         'elastic_moduli': ('field', ())
+        })
 
-    # def __init__(self, model, **kwargs):
-    #     super(LagrangeConstrainedNodalElasticModuli, self).__init__(model, **kwargs)
+    CONSTANT_LABELS = ('default_solid_props',
+                       'default_fluid_props',
+                       'NUM_STATES_PER_PERIOD',
+                       'period')
 
-    # def convert(self):
-    #     solid_props = props.SolidProperties(self.default_solid_props)
-    #     fluid_props = props.FluidProperties(self.default_fluid_props)
+    def convert(self):
+        ## Convert solid properties
+        solid_props = props.KelvinVoigt(self.model, self.constants['default_solid_props'])
+        solid_props['emod'][:] = self['elastic_moduli']
+        
+        ## Convert fluid properties
+        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
 
-    #     solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
+        ## Convert timing properties
+        N = self.constants['NUM_STATES_PER_PERIOD']
+        dt = self.constants['period']/(N-1)
+        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        
+        ## Convert initial states
+        u0 = self['u0'].reshape(-1)
+        v0 = self['v0'].reshape(-1)
+        a0 = dfn.Function(self.model.solid.vector_fspace).vector()
 
-    #     return solid_props, fluid_props
+        # Set parameters for the state
+        self.model.set_params(uva0=(u0, v0, 0), solid_props=solid_props, fluid_props=fluid_props)
 
-    # def dconvert(self):
-    #     """
-    #     Returns the sensitivity of the elastic modulus with respect to parameters
+        q0, p0, _= self.model.get_pressure()
+        self.model.set_params(qp0=(q0, p0))
 
-    #     # TODO: This should return a dict or something that has the sensitivity
-    #     # of all properties wrt parameters
-    #     """
-    #     # solid_props = props.SolidProperties(self.default_solid_props)
-    #     # fluid_props = props.FluidProperties(self.default_fluid_props)
+        # Solve for the acceleration
+        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+        dfn.solve(self.model.forms['form.un.f0'] == 0, self.model.a0, 
+                  bcs=self.model.bc_base, J=self.model.forms['form.bi.df0_da0'],
+                  solver_parameters={"newton_solver": newton_solver_prm})
+        a0[:] = self.model.a0.vector()
 
-    #     # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
+        uva = (u0, v0, a0)
 
-    #     return 1.0
+        return uva, solid_props, fluid_props, timing_props
+
+    def dconvert(self, grad):
+        """
+        Returns the sensitivity of the elastic modulus with respect to parameters
+
+        # TODO: This should return a dict or something that has the sensitivity
+        # of all properties wrt. parameters
+        """
+        out = self.copy()
+        out.vector[:] = 0.0
+
+        ## Elastic modulus
+        out['elastic_moduli'][:] = grad['emod']
+
+        ## Initial state
+        # Set parameters before assembling to make sure entries are correct
+        uva, solid_props, fluid_props, timing_props = self.convert()
+        self.model.set_params(uva0=uva, solid_props=solid_props, fluid_props=fluid_props)
+
+        q0, p0, _= self.model.get_pressure()
+        self.model.set_params(qp0=(q0, p0))
+
+        # Go through the calculations to convert the acceleration gradient to disp and vel
+        # components
+        grad_u0_part = grad['u0']
+        grad_v0_part = grad['v0']
+        grad_a0 = grad['a0']
+
+        df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj']) 
+        df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj']) 
+        df0_da0_adj = dfn.assemble(self.model.forms['form.bi.df0_da0_adj'])
+        adj_a0 = dfn.Function(self.model.solid.vector_fspace).vector()
+
+        dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
+        grad_u0 = grad_u0_part - df0_du0_adj*adj_a0
+        grad_v0 = grad_v0_part - df0_dv0_adj*adj_a0
+
+        out['u0'].flat[:] = grad['u0']
+        out['v0'].flat[:] = grad['v0']
+
+        return out

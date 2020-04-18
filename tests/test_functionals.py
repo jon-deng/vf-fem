@@ -15,10 +15,11 @@ import matplotlib.pyplot as plt
 import dolfin as dfn
 
 sys.path.append('../')
+from femvf import statefile as sf, meshutils
 from femvf.forward import forward
-from femvf import forms
-from femvf import statefile as sf
-from femvf.properties import LinearElasticRayleigh, FluidProperties #, TimingProperties
+from femvf.fluids import Bernoulli
+from femvf.solids import KelvinVoigt, Rayleigh
+from femvf.model import ForwardModel
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functionals import basic
@@ -41,7 +42,13 @@ class TestFunctionals(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = model.ForwardModel(mesh_path, {'pressure': 1, 'fixed': 3}, {})
+        facet_labels = {'pressure': 1, 'fixed': 3}
+        cell_labels = {}
+
+        mesh, facet_func, cell_func = meshutils.load_fenics_mesh(mesh_path, facet_labels, cell_labels)
+        solid = Rayleigh(mesh, facet_func, facet_labels, cell_func, cell_labels)
+        fluid = Bernoulli()
+        model = ForwardModel(solid, fluid)
 
         ## Set the solution parameters
         dt_max = 1e-4
@@ -56,20 +63,20 @@ class TestFunctionals(unittest.TestCase):
 
         # Set parameters for the simulation
         timing_props = {'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max}
-        solid_props = LinearElasticRayleigh(model)
-        fluid_props = FluidProperties(model)
+        solid_props = model.solid.get_properties()
+        fluid_props = model.fluid.get_properties()
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
         p_sub = 800
-        fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['y_midline'] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
         fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
         fluid_props['alpha'] = alpha
         fluid_props['k'] = k
         fluid_props['sigma'] = sigma
 
         # Use an elasticity that varies linearly with y coordinate.
-        y = model.mesh.coordinates()[..., 1]
+        y = model.solid.mesh.coordinates()[..., 1]
         y_max = y.max()
         y_min = y.min()
 
@@ -77,8 +84,8 @@ class TestFunctionals(unittest.TestCase):
         emod_at_ymax = 5e3*PASCAL_TO_CGS
         emod = emod_at_ymax*(y-y_min)/(y_max-y_min) + emod_at_ymin*(y-y_max)/(y_min-y_max)
 
-        sdof_to_vert = np.sort(model.vert_to_sdof)
-        solid_props['elastic_modulus'] = emod[sdof_to_vert]
+        vert_to_sdof = np.sort(model.solid.vert_to_sdof)
+        solid_props['emod'] = emod[vert_to_sdof]
         solid_props['rayleigh_m'] = 0
         solid_props['rayleigh_k'] = 3e-4
         solid_props['k_collision'] = 1e11
@@ -91,8 +98,9 @@ class TestFunctionals(unittest.TestCase):
             if path.isfile(h5file):
                 os.remove(h5file)
             print("Running forward model to generate data.")
-            info = forward(model, solid_props, fluid_props, timing_props, h5file=h5file,
-                           abs_tol=None)
+            adaptive_step_prm = {'abs_tol': None}
+            info = forward(model, (0, 0, 0), solid_props, fluid_props, timing_props, 
+                           h5file=h5file, adaptive_step_prm=adaptive_step_prm)
 
         self.h5file = h5file
         self.model = model
@@ -140,7 +148,7 @@ class TestFunctionals(unittest.TestCase):
 
         # Set the direction and step size to test the gradient of the functional
         np.random.seed(123)
-        du = np.random.rand(*self.model.u0.vector()[:].shape)
+        du = np.random.rand(*self.model.solid.u0.vector()[:].shape)
 
         alpha = 1e-8
 

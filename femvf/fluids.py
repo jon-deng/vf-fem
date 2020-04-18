@@ -9,6 +9,9 @@ import math
 import dolfin as dfn
 from petsc4py import PETSc
 
+from .parameters.properties import FluidProperties
+from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+
 ## 1D Euler model
 def fluid_pressure_vasu(uva, x0, xr, fluid_props):
     """
@@ -56,7 +59,7 @@ def res_fluid(n, p_bcs, qp0, qp1, xy_ref, uva0, uva1, fluid_props, dt):
     xy_ref, uva0, uva1 : tuple(array_like, array_like)
         xy coordinates/displacements of the fluid-structure interace at the reference configuration,
         and current and future timesteps
-    fluid_props : femvf.properties.FluidProperties
+    fluid_props : femvf.parameters.properties.FluidProperties
         The fluid properties
     dt : float
         The timestep between the initial and final states of the iteration.
@@ -135,7 +138,7 @@ def res_fluid_quasistatic(n, p_bcs, qp0, xy_ref, uva0, fluid_props):
         The fluid-structure interace displacement, velocity, and acceleration states in a tuple
     xy_ref : array_like[:, 2]
         The fluid-structure interace coordinates in the reference configuration
-    fluid_props : femvf.properties.FluidProperties
+    fluid_props : femvf.parameters.properties.FluidProperties
         The fluid properties
 
     Returns
@@ -253,241 +256,273 @@ def bd_df(f, n, dx):
 ## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
 
-def fluid_pressure(surface_state, fluid_props):
+class Fluid:
     """
-    Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
-
-    Parameters
-    ----------
-    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : properties.FluidProperties
-        A dictionary of fluid properties.
-
-    Returns
-    -------
-    q : float
-        The flow rate
-    p : np.ndarray
-        An array of pressure vectors for each each vertex
-    xy_min, xy_sep: (2,) np.ndarray
-        The coordinates of the vertices at minimum and separation areas
+    This class represents a fluid model
     """
-    y_midline = fluid_props['y_midline']
-    p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
-    rho = fluid_props['rho']
-    a_sub = fluid_props['a_sub']
-    alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
+    def __init__(self):
+        self.properties = FluidProperties(type(self))
 
-    x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+    def set_properties(self, props):
+        for key, value in props.items():
+            if isinstance(self.properties[key], np.ndarray):
+                self.properties[key][:] = value
+            else:
+                self.properties[key] = value
 
-    area = 2 * (y_midline - y)
-    dt_area = -2 * (y)
+    def get_properties(self):
+        return FluidProperties(type(self))
 
-    # Calculate minimum and separation areas/locations
-    a_min = smooth_minimum(area, alpha)
-    dt_a_min = np.sum(dsmooth_minimum_dx(area, alpha) * dt_area)
-    a_sep = SEPARATION_FACTOR * a_min
-    dt_a_sep = SEPARATION_FACTOR * dt_a_min
+    def fluid_pressure(self):
+        raise NotImplementedError("Fluid models have to implement this")
 
-    # 1D Bernoulli approximation of the flow
-    p_sep = p_sup
-    flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
-    dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
+    def flow_sensitivity(self):
+        raise NotImplementedError("Fluid models have to implement this")
 
-    p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
-
-    x_sep = smooth_selection(x, area, a_sep, sigma=sigma)
-    sep_multiplier = smooth_cutoff(x, x_sep, k=k)
-
-    p = sep_multiplier * p_bernoulli
-
-    flow_rate = flow_rate_sqr**0.5
-    dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
-
-    idx_min = 0
-    idx_sep = 0
-    xy_min = surface_state[0][idx_min]
-    xy_sep = surface_state[0][idx_sep]
-    info = {'flow_rate': flow_rate,
-            'dt_flow_rate': dt_flow_rate,
-            'idx_min': idx_min,
-            'idx_sep': idx_sep,
-            'xy_min': xy_min,
-            'xy_sep': xy_sep,
-            'x_sep': x_sep,
-            'a_min': a_min,
-            'a_sep': a_sep,
-            'area': area,
-            'pressure': p}
-    return flow_rate, p, info
-
-def flow_sensitivity(surface_state, fluid_props):
+class Bernoulli(Fluid):
     """
-    Returns the sensitivities of flow properties at a surface state.
+    Represents the Bernoulli fluid model
 
-    Parameters
-    ----------
-    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : properties.FluidProperties
-        A dictionary of fluid property keyword arguments.
+    TODO : Refactor this to behave similar to the Solid model. A mesh should be used, corresponding
+    to the reference configuration of the fluid (conformal with reference configuration of solid?)
+    One of the properties should be the mapping from the reference configuration to the current 
+    configuration that would be used in ALE. 
     """
-    assert surface_state[0].size%2 == 0
+    PROPERTY_TYPES = {
+        'p_sub': ('const', ()),
+        'p_sup': ('const', ()),
+        'a_sub': ('const', ()),
+        'a_sup': ('const', ()),
+        'rho': ('const', ()),
+        'y_midline': ('const', ()),
+        'alpha': ('const', ()),
+        'k': ('const', ()),
+        'sigma': ('const', ())}
 
-    y_midline = fluid_props['y_midline']
-    p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
-    rho = fluid_props['rho']
-    a_sub = fluid_props['a_sub']
-    alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
+    PROPERTY_DEFAULTS = {
+        'p_sub': 800 * PASCAL_TO_CGS,
+        'p_sup': 0 * PASCAL_TO_CGS,
+        'a_sub': 100000,
+        'a_sup': 0.6,
+        'rho': 1.1225 * SI_DENSITY_TO_CGS,
+        'y_midline': 0.61,
+        'alpha': -3000,
+        'k': 50,
+        'sigma': 0.002}
 
-    x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+    def fluid_pressure(self, surface_state):
+        """
+        Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
-    area = 2 * (y_midline - y)
-    darea_dy = -2 # darea_dx = 0
+        Parameters
+        ----------
+        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+            States of the surface vertices, ordered following the flow (increasing x coordinate).
+        fluid_props : properties.FluidProperties
+            A dictionary of fluid properties.
 
-    # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the
-    #  minimum value
-    a_min = smooth_minimum(area, alpha)
-    da_min_darea = dsmooth_minimum_dx(area, alpha)
+        Returns
+        -------
+        q : float
+            The flow rate
+        p : np.ndarray
+            An array of pressure vectors for each each vertex
+        xy_min, xy_sep: (2,) np.ndarray
+            The coordinates of the vertices at minimum and separation areas
+        """
+        fluid_props = self.properties
+        y_midline = fluid_props['y_midline']
+        p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
+        rho = fluid_props['rho']
+        a_sub = fluid_props['a_sub']
+        alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
 
-    a_sep = SEPARATION_FACTOR * a_min
-    da_sep_da_min = SEPARATION_FACTOR
-    da_sep_dy = da_sep_da_min * da_min_darea * darea_dy
+        x, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
-    # Calculate the flow rate using Bernoulli equation
-    p_sep = p_sup
-    coeff = 2*(p_sep - p_sub)/rho
-    flow_rate_sqr = coeff/(a_sub**-2 - a_sep**-2)
-    dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
+        area = 2 * (y_midline - y)
+        dt_area = -2 * (y)
 
-    # Find Bernoulli pressure
-    p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
-    dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area**3)
-    dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area**-2) * dflow_rate_sqr_da_sep
-    dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
+        # Calculate minimum and separation areas/locations
+        a_min = smooth_minimum(area, alpha)
+        dt_a_min = np.sum(dsmooth_minimum_dx(area, alpha) * dt_area)
+        a_sep = SEPARATION_FACTOR * a_min
+        dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
-    # Correct Bernoulli pressure by applying a smooth mask after separation
-    x_sep = smooth_selection(x, area, a_sep, sigma)
-    dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, sigma)
-    dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, sigma)*darea_dy \
-                + dsmooth_selection_dy0(x, area, a_sep, sigma)*da_sep_dy
+        # 1D Bernoulli approximation of the flow
+        p_sep = p_sup
+        flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
+        dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
 
-    sep_multiplier = smooth_cutoff(x, x_sep, k)
-    _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k)
-    _dsep_multiplier_dx_sep = dsmooth_cutoff_dx0(x, x_sep, k)
-    dsep_multiplier_dx = np.diag(_dsep_multiplier_dx) + _dsep_multiplier_dx_sep[:, None]*dx_sep_dx
-    dsep_multiplier_dy = _dsep_multiplier_dx_sep[:, None]*dx_sep_dy
+        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
 
-    # p = sep_multiplier * p_bernoulli
+        x_sep = smooth_selection(x, area, a_sep, sigma=sigma)
+        sep_multiplier = smooth_cutoff(x, x_sep, k=k)
 
-    dp_dy = dsep_multiplier_dy*p_bernoulli[:, None] + sep_multiplier[:, None]*dp_bernoulli_dy
-    dp_dx = dsep_multiplier_dx*p_bernoulli[:, None] #+ sep_multiplier* 0
+        p = sep_multiplier * p_bernoulli
 
-    dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
-    dp_du[:, :-1:2] = dp_dx
-    dp_du[:, 1::2] = dp_dy
+        flow_rate = flow_rate_sqr**0.5
+        dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
 
-    ## Calculate the flow rate sensitivity
-    dflow_rate_du = np.zeros(surface_state[0].size)
-    dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
+        idx_min = 0
+        idx_sep = 0
+        xy_min = surface_state[0][idx_min]
+        xy_sep = surface_state[0][idx_sep]
+        info = {'flow_rate': flow_rate,
+                'dt_flow_rate': dt_flow_rate,
+                'idx_min': idx_min,
+                'idx_sep': idx_sep,
+                'xy_min': xy_min,
+                'xy_sep': xy_sep,
+                'x_sep': x_sep,
+                'a_min': a_min,
+                'a_sep': a_sep,
+                'area': area,
+                'pressure': p}
+        return flow_rate, p, info
 
-    return dp_du, dflow_rate_du
+    def flow_sensitivity(self, surface_state):
+        """
+        Returns the sensitivities of flow properties at a surface state.
 
-def get_pressure_form(model, surface_state, fluid_props):
-    """
-    Returns the ufl.Coefficient pressure.
+        Parameters
+        ----------
+        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+            States of the surface vertices, ordered following the flow (increasing x coordinate).
+        fluid_props : properties.FluidProperties
+            A dictionary of fluid property keyword arguments.
+        """
+        fluid_props = self.properties
+        assert surface_state[0].size%2 == 0
 
-    Parameters
-    ----------
-    model : ufl.Coefficient
-        The coefficient representing the pressure
-    x : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : properties.FluidProperties
-        A dictionary of fluid property keyword arguments.
+        y_midline = fluid_props['y_midline']
+        p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
+        rho = fluid_props['rho']
+        a_sub = fluid_props['a_sub']
+        alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
 
-    Returns
-    -------
-    xy_min, xy_sep :
-        Locations of the minimum and separation areas, as well as surface pressures.
-    """
-    pressure_vector, info = fluid_pressure(surface_state, fluid_props)
-    pressure = pressure_fluidord_to_solidord(pressure_vector, model)
+        x, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
-    return pressure, info
+        area = 2 * (y_midline - y)
+        darea_dy = -2 # darea_dx = 0
 
-def get_flow_sensitivity(model, surface_state, fluid_props):
-    """
-    Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
+        # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the
+        #  minimum value
+        a_min = smooth_minimum(area, alpha)
+        da_min_darea = dsmooth_minimum_dx(area, alpha)
 
-    Parameters
-    ----------
-    model
-    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : properties.FluidProperties
-        A dictionary of fluid properties.
+        a_sep = SEPARATION_FACTOR * a_min
+        da_sep_da_min = SEPARATION_FACTOR
+        da_sep_dy = da_sep_da_min * da_min_darea * darea_dy
 
-    Returns
-    -------
-    dp_du : PETSc.Mat
-        Sensitivity of pressure with respect to displacement
-    dq_du : PETSc.Vec
-        Sensitivity of flow rate with respect to displacement
-    """
-    _dp_du, _dq_du = flow_sensitivity(surface_state, fluid_props)
+        # Calculate the flow rate using Bernoulli equation
+        p_sep = p_sup
+        coeff = 2*(p_sep - p_sub)/rho
+        flow_rate_sqr = coeff/(a_sub**-2 - a_sep**-2)
+        dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
 
-    dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
-    dp_du.setType('aij')
-    dp_du.setSizes([model.vert_to_sdof.size, model.vert_to_vdof.size])
+        # Find Bernoulli pressure
+        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
+        dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area**3)
+        dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area**-2) * dflow_rate_sqr_da_sep
+        dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
 
-    pressure_vertices = model.surface_vertices
-    nnz = np.zeros(model.vert_to_sdof.size, dtype=np.int32)
-    nnz[model.vert_to_sdof[pressure_vertices]] = pressure_vertices.size*2
-    dp_du.setPreallocationNNZ(list(nnz))
+        # Correct Bernoulli pressure by applying a smooth mask after separation
+        x_sep = smooth_selection(x, area, a_sep, sigma)
+        dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, sigma)
+        dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, sigma)*darea_dy \
+                    + dsmooth_selection_dy0(x, area, a_sep, sigma)*da_sep_dy
 
-    dp_du.setValues(model.vert_to_sdof[pressure_vertices],
-                    model.vert_to_vdof[pressure_vertices].reshape(-1), _dp_du)
-    dp_du.assemblyBegin()
-    dp_du.assemblyEnd()
+        sep_multiplier = smooth_cutoff(x, x_sep, k)
+        _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k)
+        _dsep_multiplier_dx_sep = dsmooth_cutoff_dx0(x, x_sep, k)
+        dsep_multiplier_dx = np.diag(_dsep_multiplier_dx) + _dsep_multiplier_dx_sep[:, None]*dx_sep_dx
+        dsep_multiplier_dy = _dsep_multiplier_dx_sep[:, None]*dx_sep_dy
 
-    # You should be able to create your own vector from scratch too but there are a couple of things
-    # you have to set like local to global mapping that need to be there in order to interface with
-    # a particular fenics setup. I just don't know what it needs to use.
-    # TODO: Figure this out, since it also applies to matrices
+        # p = sep_multiplier * p_bernoulli
 
-    # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vert_to_vdof.size)
-    # dq_du.setValues(vert_to_vdof[surface_verts].reshape(-1), _dq_du)
-    # dq_du.assemblyBegin()
-    # dq_du.assemblyEnd()
+        dp_dy = dsep_multiplier_dy*p_bernoulli[:, None] + sep_multiplier[:, None]*dp_bernoulli_dy
+        dp_dx = dsep_multiplier_dx*p_bernoulli[:, None] #+ sep_multiplier* 0
 
-    dq_du = dfn.Function(model.vector_function_space).vector()
-    dq_du[model.vert_to_vdof[pressure_vertices].reshape(-1)] = _dq_du
+        dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
+        dp_du[:, :-1:2] = dp_dx
+        dp_du[:, 1::2] = dp_dy
 
-    return dp_du, dq_du
+        ## Calculate the flow rate sensitivity
+        dflow_rate_du = np.zeros(surface_state[0].size)
+        dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
 
-def pressure_fluidord_to_solidord(pressure, model):
-    """
-    Converts a pressure vector in surface vert. order to solid DOF order
+        return dp_du, dflow_rate_du
 
-    Parameters
-    ----------
-    pressure : array_like
-    model : ufl.Coefficient
-        The coefficient representing the pressure
+    def get_flow_sensitivity(self, model, surface_state):
+        """
+        Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
-    Returns
-    -------
-    xy_min, xy_sep :
-        Locations of the minimum and separation areas, as well as surface pressures.
-    """
-    pressure_solid = dfn.Function(model.scalar_function_space).vector()
+        Parameters
+        ----------
+        model
+        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+            States of the surface vertices, ordered following the flow (increasing x coordinate).
 
-    surface_verts = model.surface_vertices
-    pressure_solid[model.vert_to_sdof[surface_verts]] = pressure
+        Returns
+        -------
+        dp_du : PETSc.Mat
+            Sensitivity of pressure with respect to displacement
+        dq_du : PETSc.Vec
+            Sensitivity of flow rate with respect to displacement
+        """
+        fluid_props = self.properties
+        _dp_du, _dq_du = self.flow_sensitivity(surface_state)
 
-    return pressure_solid
+        dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
+        dp_du.setType('aij')
+        dp_du.setSizes([model.solid.vert_to_sdof.size, model.solid.vert_to_vdof.size])
+
+        pressure_vertices = model.surface_vertices
+        nnz = np.zeros(model.solid.vert_to_sdof.size, dtype=np.int32)
+        nnz[model.solid.vert_to_sdof[pressure_vertices]] = pressure_vertices.size*2
+        dp_du.setPreallocationNNZ(list(nnz))
+
+        dp_du.setValues(model.solid.vert_to_sdof[pressure_vertices],
+                        model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1), _dp_du)
+        dp_du.assemblyBegin()
+        dp_du.assemblyEnd()
+
+        # You should be able to create your own vector from scratch too but there are a couple of things
+        # you have to set like local to global mapping that need to be there in order to interface with
+        # a particular fenics setup. I just don't know what it needs to use.
+        # TODO: Figure this out, since it also applies to matrices
+
+        # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vert_to_vdof.size)
+        # dq_du.setValues(vert_to_vdof[surface_verts].reshape(-1), _dq_du)
+        # dq_du.assemblyBegin()
+        # dq_du.assemblyEnd()
+
+        dq_du = dfn.Function(model.solid.vector_fspace).vector()
+        dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].reshape(-1)] = _dq_du
+
+        return dp_du, dq_du
+
+    def pressure_fluidord_to_solidord(self, pressure, model):
+        """
+        Converts a pressure vector in surface vert. order to solid DOF order
+
+        Parameters
+        ----------
+        pressure : array_like
+        model : ufl.Coefficient
+            The coefficient representing the pressure
+
+        Returns
+        -------
+        xy_min, xy_sep :
+            Locations of the minimum and separation areas, as well as surface pressures.
+        """
+        pressure_solid = dfn.Function(model.solid.scalar_fspace).vector()
+
+        surface_verts = model.surface_vertices
+        pressure_solid[model.solid.vert_to_sdof[surface_verts]] = pressure
+
+        return pressure_solid
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation

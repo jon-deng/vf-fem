@@ -9,7 +9,7 @@ import dolfin as dfn
 import numpy as np
 
 from . import constants
-from .properties import LinearElasticRayleigh, KelvinVoigt, FluidProperties
+from .parameters.properties import FluidProperties
 
 class StateFile:
     """
@@ -144,7 +144,7 @@ class StateFile:
         model : femvf.ForwardModel
         """
         # Kinematic states
-        NDOF = model.vector_function_space.dim()
+        NDOF = model.solid.vector_fspace.dim()
         for dataset_name in ['u', 'v', 'a']:
             self.root_group.create_dataset(dataset_name, (0, NDOF), maxshape=(None, NDOF), 
                                            chunks=(self.NCHUNK, NDOF), dtype=np.float64)
@@ -183,8 +183,8 @@ class StateFile:
             Not really needed for this one but left the arg here since it's in solid properties init
         """
         group_fluid = self.root_group.create_group('fluid_properties')
-        for key, prop_desc in FluidProperties.TYPES.items():
-            shape = _property_shape(prop_desc, model)
+        for key, prop_desc in self.model.fluid.PROPERTY_TYPES.items():
+            shape = solid_property_shape(prop_desc, model.solid)
             group_fluid.create_dataset(key, shape=(0,)+shape, chunks=(self.NCHUNK,)+shape, 
                                        maxshape=(None,)+shape, dtype=np.float64)
 
@@ -201,8 +201,8 @@ class StateFile:
 
         """
         solid_group = self.root_group.create_group('solid_properties')
-        for key, prop_desc in solid_props.TYPES.items():
-            shape = _property_shape(prop_desc, model)
+        for key, prop_desc in self.model.solid.PROPERTY_TYPES.items():
+            shape = solid_property_shape(prop_desc, model.solid)
             solid_group.create_dataset(key, shape, dtype=np.float64)
 
         if solid_props is not None:
@@ -259,7 +259,7 @@ class StateFile:
         """
         fluid_group = self.root_group['fluid_properties']
 
-        for label in FluidProperties.TYPES:
+        for label in self.model.fluid.PROPERTY_TYPES:
             dset = fluid_group[label]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = fluid_props[label]
@@ -276,7 +276,8 @@ class StateFile:
             Dictionary of solid properties to append
         """
         solid_group = self.root_group['solid_properties']
-        for label, shape in solid_props.TYPES.items():
+
+        for label, shape in self.model.solid.PROPERTY_TYPES.items():
             dset = solid_group[label]
 
             if shape[0] == 'field':
@@ -418,7 +419,7 @@ class StateFile:
         """
         Returns the fluid properties dictionary at index n.
         """
-        fluid_props = FluidProperties(self.model)
+        fluid_props = self.model.fluid.get_properties()
         fluid_group = self.root_group['fluid_properties']
 
         # Correct for constant fluid properties in time
@@ -427,7 +428,7 @@ class StateFile:
         if self.root_group['fluid_properties/p_sub'].size == 1:
             m = 0
 
-        for label in FluidProperties.TYPES:
+        for label in fluid_props:
             fluid_props[label] = fluid_group[label][m]
 
         return fluid_props
@@ -436,9 +437,9 @@ class StateFile:
         """
         Returns the solid properties
         """
-        solid_props = self.model.SolidType(self.model)
+        solid_props = self.model.solid.get_properties()
         solid_group = self.root_group['solid_properties']
-        for label, shape in self.model.SolidType.TYPES.items():
+        for label, shape in self.model.solid.PROPERTY_TYPES.items():
             data = solid_group[label]
 
             if shape[0] == 'field':
@@ -468,13 +469,13 @@ class StateFile:
         return {'uva0': uva0, 'dt': dt, 'u1': u1,
                 'solid_props': solid_props, 'fluid_props': fluid_props}
 
-def _property_shape(property_desc, model):
+def solid_property_shape(property_desc, solid):
     const_or_field = property_desc[0]
     data_shape = property_desc[1]
 
     shape = None
     if const_or_field == 'field':
-        shape = (model.mesh.num_vertices(),) + data_shape
+        shape = (solid.mesh.num_vertices(),) + data_shape
     else:
         shape = data_shape
 

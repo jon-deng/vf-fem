@@ -16,7 +16,7 @@ from matplotlib import pyplot as plt
 import dolfin as dfn
 import ufl
 
-from . import forms
+from . import solids
 from .newmark import *
 
 def adjoint(model, f, functional, show_figure=False):
@@ -38,8 +38,6 @@ def adjoint(model, f, functional, show_figure=False):
     dict(str: dfn.Vector)
         The gradient of the functional wrt parameter labelled by `str`
     """
-    # gradients = model.SolidProperties()
-
     # Assuming that fluid and solid properties are constant in time so set them once
     # and leave them
     # TODO: May want to use time varying fluid/solid props in future
@@ -53,13 +51,14 @@ def adjoint(model, f, functional, show_figure=False):
     functional_value = functional(f)
     
     # Make adjoint forms for sensitivity of parameters
-    df1_demod_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.emod, model.scalar_trial))
-    df1_ddt_form_adj = dfn.adjoint(ufl.derivative(model.f1, model.dt, model.scalar_trial))
+    solid = model.solid
+    df1_demod_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.prop.emod'], solid.scalar_trial))
+    df1_ddt_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.time.dt'], solid.scalar_trial))
 
     ## Preallocating vector
     # Temporary variables to shorten code
     def get_block_vec():
-        vspace = model.vector_function_space
+        vspace = solid.vector_fspace
         return (dfn.Function(vspace).vector(),
                 dfn.Function(vspace).vector(),
                 dfn.Function(vspace).vector())
@@ -74,9 +73,9 @@ def adjoint(model, f, functional, show_figure=False):
     uva2 = get_block_vec()
 
     # Allocate space for the gradient
-    grad = {'emod': dfn.Function(model.scalar_function_space).vector(),
+    grad = {'emod': dfn.Function(solid.scalar_fspace).vector(),
             'dt': []}
-    # gradient = dfn.Function(model.scalar_function_space).vector()
+    # gradient = dfn.Function(model.solid.scalar_fspace).vector()
 
     ## Initialize Adjoint states
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
@@ -103,15 +102,15 @@ def adjoint(model, f, functional, show_figure=False):
 
     # Initializing adjoint states:
     adj_a2_lhs = dcost_da2
-    model.bc_base.apply(adj_a2_lhs)
+    model.solid.bc_base.apply(adj_a2_lhs)
     adj_uva2[2][:] = adj_a2_lhs
 
     adj_v2_lhs = dcost_dv2
-    model.bc_base.apply(adj_v2_lhs)
+    model.solid.bc_base.apply(adj_v2_lhs)
     adj_uva2[1][:] = adj_v2_lhs
 
     adj_u2_lhs = dcost_du2 + newmark_v_du1(dt2)*adj_uva2[1] + newmark_a_du1(dt2)*adj_uva2[2]
-    model.bc_base_adj.apply(df2_du2, adj_u2_lhs)
+    model.solid.bc_base.apply(df2_du2, adj_u2_lhs)
     dfn.solve(df2_du2, adj_uva2[0], adj_u2_lhs)
 
     # the emod parameter only affects the displacement residual, under the 
@@ -181,9 +180,9 @@ def adjoint(model, f, functional, show_figure=False):
     # model.set_iter_params(**iter_params2)
 
     # Calculate a correction for df1_du0 due to the pressure loading
-    df1_dpressure = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
+    df1_dpressure = dfn.assemble(solid.forms['form.bi.df1_dpressure_adj'])
     dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
-    df1_du0_correction = dfn.Function(model.vector_function_space).vector()
+    df1_du0_correction = dfn.Function(model.solid.vector_fspace).vector()
     dpressure_du0.transpmult(df1_dpressure*adj_uva2[0], df1_du0_correction)
     grad_u0_par = -(model.assem_df1_du0_adj()*adj_uva2[0]) \
                   + newmark_v_du0(dt2)*adj_uva2[1] \
@@ -192,18 +191,12 @@ def adjoint(model, f, functional, show_figure=False):
     grad_v0_par = -(model.assem_df1_dv0_adj()*adj_uva2[0]) \
                   + newmark_v_dv0(dt2)*adj_uva2[1] \
                   + newmark_a_dv0(dt2)*adj_uva2[2]
+    grad_a0_par = -(model.assem_df1_da0_adj()*adj_uva2[0]) \
+                  + newmark_v_dv0(dt2)*adj_uva2[1] \
+                  + newmark_a_dv0(dt2)*adj_uva2[2]
     grad['u0'] = grad_u0_par
     grad['v0'] = grad_v0_par
-    
-    # grad_a0 = -(model.assem_df1_da0_adj()*adj_uva1[2])
-
-    # df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj']) 
-    # df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj']) 
-    # df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj']) 
-    # adj_a0 = dfn.Function(model.vector_function_space).vector()
-    # dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
-    # grad['u0'] = grad_u0_par - df0_du0_adj*adj_a0
-    # grad['v0'] = grad_v0_par - df0_dv0_adj*adj_a0
+    grad['a0'] = grad_a0_par
 
     # Change grad_dt to an array
     grad['dt'] = np.array(grad['dt'])
@@ -277,31 +270,31 @@ def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
 
     ## Adjoint recurrence relations
     # Allocate adjoint states
-    adj_u1 = dfn.Function(model.vector_function_space).vector()
-    adj_v1 = dfn.Function(model.vector_function_space).vector()
-    adj_a1 = dfn.Function(model.vector_function_space).vector()
+    adj_u1 = dfn.Function(model.solid.vector_fspace).vector()
+    adj_v1 = dfn.Function(model.solid.vector_fspace).vector()
+    adj_a1 = dfn.Function(model.solid.vector_fspace).vector()
 
     # gamma, beta = model.gamma.values()[0], model.beta.values()[0]
 
     # Calculate 'source' terms for the adjoint calculation
-    df2_du1_correction = dfn.Function(model.vector_function_space).vector()
+    df2_du1_correction = dfn.Function(model.solid.vector_fspace).vector()
     dpressure_du1.transpmult(df2_dpressure * adj_u2, df2_du1_correction)
 
     adj_v1_lhs = dcost_dv1
     adj_v1_lhs -= df2_dv1*adj_u2 - newmark_v_dv0(dt2)*adj_v2 - newmark_a_dv0(dt2)*adj_a2
-    model.bc_base.apply(adj_v1_lhs)
+    model.solid.bc_base.apply(adj_v1_lhs)
     adj_v1 = adj_v1_lhs
 
     adj_a1_lhs = dcost_da1
     adj_a1_lhs -= df2_da1*adj_u2 - newmark_v_da0(dt2)*adj_v2 - newmark_a_da0(dt2)*adj_a2
-    model.bc_base.apply(adj_a1_lhs)
+    model.solid.bc_base.apply(adj_a1_lhs)
     adj_a1 = adj_a1_lhs
 
     adj_u1_lhs = dcost_du1 + newmark_v_du1(dt1)*adj_v1 + newmark_a_du1(dt1)*adj_a1
     adj_u1_lhs -= df2_du1*adj_u2 + df2_du1_correction \
                   - newmark_v_du0(dt2)*adj_v2 - newmark_a_du0(dt2)*adj_a2
-    model.bc_base.apply(df1_du1)
-    model.bc_base.apply(adj_u1_lhs)
+    model.solid.bc_base.apply(df1_du1)
+    model.solid.bc_base.apply(adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1, adj_u1_lhs, 'petsc')
 
     return (adj_u1, adj_v1, adj_a1)

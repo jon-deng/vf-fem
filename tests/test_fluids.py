@@ -17,7 +17,8 @@ import petsc4py
 petsc4py.init()
 
 sys.path.append('../')
-from femvf import fluids, transforms, properties, forms
+from femvf import fluids, transforms, forms, meshutils
+from femvf.parameters.properties import FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
 class CommonSetup(unittest.TestCase):
@@ -75,19 +76,20 @@ class CommonSetup(unittest.TestCase):
         """
         mesh_path = '../meshes/geometry2.xml'
         facet_labels, cell_labels = {'pressure': 1, 'fixed': 3}, {}
-        mesh, facet_function, _ = forms.load_mesh(mesh_path, facet_labels, cell_labels)
+        mesh, facet_func, _ = meshutils.load_fenics_mesh(mesh_path, facet_labels, cell_labels)
 
-        surface_edges = facet_function.where_equal(facet_labels['pressure'])
-        surface_vertices = forms.vertices_from_edges(surface_edges, mesh)
+        surface_edges = facet_func.where_equal(facet_labels['pressure'])
+        surface_vertices = meshutils.vertices_from_edges(surface_edges, mesh)
 
         # Get surface coordinates and sort along the flow direction
         surface_coordinates = mesh.coordinates()[surface_vertices]
-        idx_sort = forms.sort_vertices_by_nearest_neighbours(surface_coordinates)
+        idx_sort = meshutils.sort_vertices_by_nearest_neighbours(surface_coordinates)
         surface_vertices = surface_vertices[idx_sort]
         surface_coordinates = surface_coordinates[idx_sort]
 
         self.surface_coordinates = surface_coordinates
-        self.fluid_properties = properties.FluidProperties()
+        self.fluid = fluids.Bernoulli()
+        self.fluid_properties = self.fluid.get_properties()
 
         self.area = 2*(self.fluid_properties['y_midline'] - self.surface_coordinates[..., 1])
         self.p_sub = 800.0*PASCAL_TO_CGS
@@ -146,14 +148,18 @@ class Test1DEuler(CommonSetup):
         print(np.array(sep))
 
 class TestBernoulli(CommonSetup):
-    @unittest.skip("Validated")
+    # @unittest.skip("Validated")
     def test_fluid_pressure(self):
         """
         Tests if bernoulli fluid pressures are calculated correctly
         """
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
+
         surf_state = (xy_surf, np.zeros(xy_surf.shape), np.zeros(xy_surf.shape))
-        p_test, info = fluids.fluid_pressure(surf_state, fluid_props)
+        q_test, p_test, info = fluid.fluid_pressure(surf_state)
 
         area = 2*(fluid_props['y_midline'] - xy_surf[..., 1])
         p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*info['flow_rate']**2*(1/fluid_props['a_sub']**2 - 1/area**2)
@@ -172,6 +178,9 @@ class TestBernoulli(CommonSetup):
 
     # @unittest.skip("...")
     def test_flow_sensitivity(self):
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
         surface_coordinates = self.surface_coordinates
         fluid_props = self.fluid_properties
 
@@ -183,47 +192,45 @@ class TestBernoulli(CommonSetup):
             dy[...] = 0
             dy[ii, 1] += DY
             x = (surface_coordinates+dy, np.zeros(dy.shape), np.zeros(dy.shape))
-            pressure, *_ = fluids.fluid_pressure(x, fluid_props)
+            q, pressure, *_ = fluid.fluid_pressure(x)
 
             dp_du_fd[:, 2*ii+1] = np.array(pressure)
 
         x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
-        pressure, *_ = fluids.fluid_pressure(x, fluid_props)
+        q, pressure, *_ = fluid.fluid_pressure(x)
         dp_du_fd[:, 1::2] -= pressure[..., None]
 
         dp_du_fd /= DY
 
         # Calculate pressure sensitivity with the analytical derivation
         x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
-        dp_du_an = fluids.flow_sensitivity(x, fluid_props)[0]
+        dp_du_an = fluid.flow_sensitivity(x)[0]
 
         close = np.isclose(dp_du_fd, dp_du_an, rtol=1e-3, atol=1e-4)
 
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
         err = np.abs(dp_du_fd - dp_du_an)
-        rel_err = np.where(np.abs(dp_du_fd) == 0, 0, err/np.abs(dp_du_fd))
+        rel_err = err/np.maximum(np.abs(dp_du_fd), 1.0)
+
+        fig, ax = plt.subplots(1, 1, constrained_layout=True)
         mappable = ax.matshow(rel_err)
         fig.colorbar(mappable, ax=ax)
         ax.set_ylabel("pressure node")
         ax.set_xlabel("(x, y) node")
         plt.show()
 
-        # print(dp_du_fd[:, 1])
-        # print(dp_du_an[:, 1])
-
-        print(dp_du_fd[28, 59])
-        print(dp_du_an[28, 59])
+        # print(dp_du_fd[28, 59])
+        # print(dp_du_an[28, 59])
 
         # Calculate pressure sensitivity with auto-differentiation
         def fluid_pressure(x):
             x_ = x.reshape(-1, 2)
-            return fluids.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)), fluid_props)[0]
+            return fluid.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)))[0]
 
         dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
 
         fig, ax = plt.subplots(1, 1, constrained_layout=True)
         err = np.abs(dp_du_ad - dp_du_an)
-        rel_err = np.where(np.abs(dp_du_ad) == 0, 0, err/np.abs(dp_du_ad))
+        rel_err = err/np.maximum(np.abs(dp_du_ad), 1.0)
         mappable = ax.matshow(err)
         fig.colorbar(mappable, ax=ax)
         ax.set_ylabel("pressure node")

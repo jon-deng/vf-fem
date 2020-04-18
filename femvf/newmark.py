@@ -3,17 +3,6 @@ Definitions of newmark, time discretization scheme
 
 Units are in CGS
 """
-# from os import path
-
-# import numpy as np
-
-# import dolfin as dfn
-# import ufl
-# from petsc4py import PETSc as pc
-
-# from . import fluids
-# from . import constants as const
-# from .properties import FluidProperties, LinearElasticRayleigh
 
 def newmark_v(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     """

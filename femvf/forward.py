@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import dolfin as dfn
 
-from . import forms
+from . import solids
 from . import statefile as sf
 from . import vis
 
@@ -20,7 +20,7 @@ from .misc import get_dynamic_fluid_props
 DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
 
 # @profile
-def forward(model, solid_props, fluid_props, timing_props, uv0=None, 
+def forward(model, uva, solid_props, fluid_props, timing_props,
             h5file='tmp.h5', h5group='/', 
             adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
     """
@@ -33,6 +33,10 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
     ----------
     model : model.ForwardModel
         An object representing the forward model.
+    uva : tuple of array_like or float
+        Initial solid state (u, v, a)
+    qp : tuple of array_like or float
+        Initial fluid state (q, p)
     timing_props : properties.TimingProperties
         A timing properties object
     solid_props : properties.SolidProperties
@@ -68,28 +72,30 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
     model.set_solid_props(solid_props)
 
     # Allocate functions for states
-    u0 = dfn.Function(model.vector_function_space)
-    v0 = dfn.Function(model.vector_function_space)
-    a0 = dfn.Function(model.vector_function_space)
+    u0 = dfn.Function(model.solid.vector_fspace)
+    v0 = dfn.Function(model.solid.vector_fspace)
+    a0 = dfn.Function(model.solid.vector_fspace)
+    u0.vector()[:], v0.vector()[:], a0.vector()[:] = uva
 
-    if uv0 is not None:
-        u0.vector()[:] = uv0[0]
-        v0.vector()[:] = uv0[1]
     model.set_ini_state(u0.vector(), v0.vector(), a0.vector())
 
-    q0, p0, _ = model.get_pressure()
+    q0, p0, info = model.get_pressure()
     model.set_pressure(p0)
 
-    # if newton_solver_prm is None:
-    #     newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-    # dfn.solve(model.forms['form.un.f0'] == 0, model.a0, 
-    #           bcs=model.bc_base, J=model.forms['form.bi.df0_da0'],
-    #           solver_parameters={"newton_solver": newton_solver_prm})
-    # a0.vector()[:] = model.a0.vector()
+    # TODO: This should be removed. If you want to calculate a functional to record
+    # during the solution, a parameter should be made available in the function for that
+    ## Record things of interest initial state
+    idx_separation = []
+    idx_min_area = []
+    glottal_width = []
+    flow_rate = []
+    pressure = []
+    glottal_width.append(info['a_min'])
+    flow_rate.append(info['flow_rate'])
 
-    u1 = dfn.Function(model.vector_function_space)
-    v1 = dfn.Function(model.vector_function_space)
-    a1 = dfn.Function(model.vector_function_space)
+    u1 = dfn.Function(model.solid.vector_fspace)
+    v1 = dfn.Function(model.solid.vector_fspace)
+    a1 = dfn.Function(model.solid.vector_fspace)
 
     ## Allocate a figure for plotting
     fig, axs = None, None
@@ -98,8 +104,11 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
 
     # Get the solution times
     tmeas = np.array(tmeas)
-    assert tmeas.size >= 2
-    assert tmeas[-1] > tmeas[0]
+    if tmeas[-1] < tmeas[0]:
+        raise ValueError("The final solution time must be greater than the initial solution time."
+                         f"The input intial/final times were {tmeas[0]}/{tmeas[-1]}")
+    if tmeas.size <= 1:
+        raise ValueError("There must be atleast 2 measured time instances.")
 
     ## Initialize datasets to save in h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
@@ -108,15 +117,8 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
         f.append_time(t0)
 
     ## Loop through solution times and write solution variables to the h5file.
-
     # TODO: Hardcoded the calculation of glottal width here, but it should be an option you
-    # can pass in along with other functionals of interest you may want to calculate a time-history
-    # of
-    idx_separation = []
-    idx_min_area = []
-    glottal_width = []
-    flow_rate = []
-    pressure = []
+    # can pass in along with other functionals of interest
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
         t_current = t0
         n_state = 0
@@ -173,11 +175,7 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
 
             f.append_meas_index(n_state)
 
-        # Write the final functionals
-        glottal_width.append(step_info['fluid_info']['a_min'])
-        flow_rate.append(step_info['fluid_info']['flow_rate'])
-
-        # Write them out to the h5file
+        # Write out the quantities fo interest to the h5file
         f.file[f'{h5group}/gaw'] = np.array(glottal_width)
 
         info['meas_ind'] = f.get_meas_indices()
@@ -189,7 +187,7 @@ def forward(model, solid_props, fluid_props, timing_props, uv0=None,
         info['pressure'] = np.array(pressure)
         info['h5file'] = h5file
         info['h5group'] = h5group
-
+    
     return info
 
 # @profile
@@ -219,12 +217,12 @@ def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
         A dictionary containing information on the fluid solution. These include the flow rate,
         surface pressure, etc.
     """
+    solid = model.solid
     u0, v0, a0 = uva0
 
-
-    u1 = dfn.Function(model.vector_function_space)
-    v1 = dfn.Function(model.vector_function_space)
-    a1 = dfn.Function(model.vector_function_space)
+    u1 = dfn.Function(solid.vector_fspace)
+    v1 = dfn.Function(solid.vector_fspace)
+    a1 = dfn.Function(solid.vector_fspace)
 
     # Update form coefficients and initial guess
     uva0_vec = [comp.vector() for comp in uva0]
@@ -237,18 +235,18 @@ def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     if newton_solver_prm is None:
         newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
     # breakpoint()
-    dfn.solve(model.f1 == 0, model.u1, bcs=model.bc_base, J=model.df1_du1,
+    dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
               solver_parameters={"newton_solver": newton_solver_prm})
-    u1.assign(model.u1)
+    u1.assign(solid.u1)
 
     # u1.assign(u0)
-    # du = dfn.Function(model.vector_function_space)
+    # du = dfn.Function(model.solid.vector_fspace)
     # _u1, _ = newton_solve(u1.vector(), du.vector(), model.assem_df1_du1, model.assem_f1,
     #                       [model.bc_base], **newton_prm)
     # u1.vector()[:] = _u1
 
-    v1.vector()[:] = forms.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
-    a1.vector()[:] = forms.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
+    v1.vector()[:] = solids.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
+    a1.vector()[:] = solids.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
 
     model.set_ini_state(u1.vector(), v1.vector(), a1.vector())
     q1, p1, fluid_info = model.get_pressure()

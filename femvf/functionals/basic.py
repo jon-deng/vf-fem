@@ -278,7 +278,7 @@ class Functional:
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
         """
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_dv(self, f, n, iter_params0, iter_params1):
         """
@@ -298,7 +298,7 @@ class Functional:
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
         """
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_da(self, f, n, iter_params0, iter_params1):
         """
@@ -318,7 +318,7 @@ class Functional:
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
         """
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_dp(self, f):
         """
@@ -338,16 +338,16 @@ class Constant(Functional):
         return self.kwargs['value']
 
     def eval_du(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_dv(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_da(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_dp(self, f):
-        return dfn.Function(self.model.scalar_function_space).vector()
+        return dfn.Function(self.model.solid.scalar_fspace).vector()
 
 class PeriodicError(Functional):
     """
@@ -358,10 +358,10 @@ class PeriodicError(Functional):
     where :mathm:T is the period.
     """
     def eval(self, f):
-        u_0 = dfn.Function(self.model.vector_function_space).vector()
-        u_N = dfn.Function(self.model.vector_function_space).vector()
-        v_0 = dfn.Function(self.model.vector_function_space).vector()
-        v_N = dfn.Function(self.model.vector_function_space).vector()
+        u_0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        u_N = dfn.Function(self.model.solid.vector_fspace).vector()
+        v_0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        v_N = dfn.Function(self.model.solid.vector_fspace).vector()
 
         u_0[:], v_0[:], _ = f.get_state(0)
         u_N[:], v_N[:], _ = f.get_state(f.size-1)
@@ -379,7 +379,7 @@ class PeriodicError(Functional):
         u_0 = self.cache['u_0'] 
         u_N = self.cache['u_N'] 
 
-        du = dfn.Function(self.model.vector_function_space).vector()
+        du = dfn.Function(self.model.solid.vector_fspace).vector()
         if n == f.size-1:
             du[:] = 2*(u_N-u_0)
 
@@ -389,7 +389,68 @@ class PeriodicError(Functional):
         v_0 = self.cache['v_0']  
         v_N = self.cache['v_N']  
 
-        dv = dfn.Function(self.model.vector_function_space).vector()
+        dv = dfn.Function(self.model.solid.vector_fspace).vector()
+        if n == f.size-1:
+            dv[:] = 2*(v_N-v_0)
+
+        return dv
+
+    def eval_dp(self, f):
+        u_0 = self.cache['u_0']
+        u_N = self.cache['u_N']
+        v_0 = self.cache['v_0']
+        v_N = self.cache['v_N']
+
+        dp = {}
+        dp['u0'] = -2*(u_N-u_0)
+        dp['v0'] = -2*(v_N-v_0)
+        return dp
+
+class ScaledPeriodicError(Functional):
+    """
+    Functional that measures the periodicity of a simulation
+
+    This returns
+    .. math:: ||u(T)-u(0)||_2^2 + T^2*||v(T)-v(0)||_2^2 ,
+    where :mathrm:T is the period.
+    """
+    def eval(self, f):
+        u_0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        u_N = dfn.Function(self.model.solid.vector_fspace).vector()
+        v_0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        v_N = dfn.Function(self.model.solid.vector_fspace).vector()
+
+        u_0[:], v_0[:], _ = f.get_state(0)
+        u_N[:], v_N[:], _ = f.get_state(f.size-1)
+
+        t = f.get_times()
+        T = t[-1] - t[0]
+        
+        res = 1/T**2*(u_N-u_0).norm('l2')**2 + (v_N-v_0).norm('l2')**2
+
+        self.cache['u_0'] = u_0
+        self.cache['v_0'] = v_0 
+        self.cache['u_N'] = u_N 
+        self.cache['v_N'] = v_N 
+        self.cache['T'] = T
+
+        return res
+
+    def eval_du(self, f, n, iter_params0, iter_params1):
+        u_0 = self.cache['u_0'] 
+        u_N = self.cache['u_N'] 
+
+        du = dfn.Function(self.model.solid.vector_fspace).vector()
+        if n == f.size-1:
+            du[:] = 2*(u_N-u_0)
+
+        return du
+
+    def eval_dv(self, f, n, iter_params0, iter_params1):
+        v_0 = self.cache['v_0']  
+        v_N = self.cache['v_N']  
+
+        dv = dfn.Function(self.model.solid.vector_fspace).vector()
         if n == f.size-1:
             dv[:] = 2*(v_N-v_0)
 
@@ -413,7 +474,7 @@ class FinalDisplacementNorm(Functional):
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
     def eval(self, f):
-        u = dfn.Function(self.model.vector_function_space).vector()
+        u = dfn.Function(self.model.solid.vector_fspace).vector()
         _u, _, _ = f.get_state(f.size-1)
         u[:] = _u
         res = u.norm('l2')
@@ -426,18 +487,18 @@ class FinalDisplacementNorm(Functional):
         if n == f.size-1:
             _u = iter_params1['uva0'][0]
 
-            u = dfn.Function(self.model.vector_function_space).vector()
+            u = dfn.Function(self.model.solid.vector_fspace).vector()
             u[:] = _u
 
             u_norm = u.norm('l2')
 
             res = None
             if u_norm == 0:
-                res = dfn.Function(self.model.vector_function_space).vector()
+                res = dfn.Function(self.model.solid.vector_fspace).vector()
             else:
                 res = 1/u_norm * u
         else:
-            res = dfn.Function(self.model.vector_function_space).vector()
+            res = dfn.Function(self.model.solid.vector_fspace).vector()
 
         return res
 
@@ -455,7 +516,7 @@ class FinalVelocityNorm(Functional):
     #     super(FinalDisplacementNorm, self).__init__(model, **kwargs)
 
     def eval(self, f):
-        v = dfn.Function(self.model.vector_function_space).vector()
+        v = dfn.Function(self.model.solid.vector_fspace).vector()
 
         _, _v, _ = f.get_state(f.size-1)
         v[:] = _v
@@ -468,18 +529,18 @@ class FinalVelocityNorm(Functional):
         if n == f.size-1:
             _v = iter_params1['uva0'][1]
 
-            v = dfn.Function(self.model.vector_function_space).vector()
+            v = dfn.Function(self.model.solid.vector_fspace).vector()
             v[:] = _v
 
             v_norm = v.norm('l2')
 
             res = None
             if v_norm == 0:
-                res = dfn.Function(self.model.vector_function_space).vector()
+                res = dfn.Function(self.model.solid.vector_fspace).vector()
             else:
                 res = 1/v_norm * v
         else:
-            res = dfn.Function(self.model.vector_function_space).vector()
+            res = dfn.Function(self.model.solid.vector_fspace).vector()
 
         return res
 
@@ -503,7 +564,7 @@ class DisplacementNorm(Functional):
         # N_STATE = f.size
 
         res = 0
-        u = dfn.Function(self.model.vector_function_space).vector()
+        u = dfn.Function(self.model.solid.vector_fspace).vector()
         for ii in range(self.kwargs['m_start'], self.kwargs['m_final']):
             # Set form coefficients to represent the model form index ii -> ii+1
             _u, _, _ = f.get_state(ii)
@@ -514,14 +575,14 @@ class DisplacementNorm(Functional):
         return res
 
     def eval_du(self, f, n, iter_params0, iter_params1):
-        # res = dfn.Function(self.model.vector_function_space)
+        # res = dfn.Function(self.model.solid.vector_fspace)
 
         N_START = self.kwargs['m_start']
         N_FINAL = self.kwargs['m_final']
         if n >= N_START and n < N_FINAL:
             _u = iter_params1['uva0'][0]
 
-            u = dfn.Function(self.model.vector_function_space).vector()
+            u = dfn.Function(self.model.solid.vector_fspace).vector()
             u[:] = _u
 
             u_norm = u.norm('l2')
@@ -548,7 +609,7 @@ class VelocityNorm(Functional):
 
     def eval(self, f):
         N_STATE = f.size
-        v = dfn.Function(self.model.vector_function_space).vector()
+        v = dfn.Function(self.model.solid.vector_fspace).vector()
 
         res = 0
         for ii in range(N_STATE):
@@ -561,12 +622,12 @@ class VelocityNorm(Functional):
         return res
 
     def eval_dv(self, f, n, iter_params0, iter_params1):
-        # res = dfn.Function(self.model.vector_function_space)
+        # res = dfn.Function(self.model.solid.vector_fspace)
 
         _v = iter_params1['uva0'][1]
         # _u, _v, _ = f.get_state(n)
 
-        v = dfn.Function(self.model.vector_function_space).vector()
+        v = dfn.Function(self.model.solid.vector_fspace).vector()
         v[:] = _v
 
         v_norm = v.norm('l2')
@@ -586,17 +647,17 @@ class StrainWork(Functional):
     def __init__(self, model, **kwargs):
         super(StrainWork, self).__init__(model, **kwargs)
 
-        from ..forms import biform_m, biform_k
+        from ..solids import biform_m, biform_k
 
-        vector_trial = model.forms['trial.vector']
-        scalar_trial = model.forms['trial.scalar']
-        ray_m = model.forms['coeff.rayleigh_m']
-        ray_k = model.forms['coeff.rayleigh_k']
-        rho = model.forms['coeff.rho']
-        emod = model.forms['coeff.emod']
-        nu = model.forms['coeff.nu']
+        vector_trial = model.solid.forms['trial.vector']
+        scalar_trial = model.solid.forms['trial.scalar']
+        ray_m = model.solid.forms['coeff.prop.rayleigh_m']
+        ray_k = model.solid.forms['coeff.prop.rayleigh_k']
+        rho = model.solid.forms['coeff.prop.rho']
+        emod = model.solid.forms['coeff.prop.emod']
+        nu = model.solid.forms['coeff.prop.nu']
 
-        v0 = model.forms['coeff.v0']
+        v0 = model.solid.forms['coeff.state.v0']
 
         self.damping_power = ray_m*biform_m(v0, v0, rho) + ray_k*biform_k(v0, v0, emod, nu)
 
@@ -614,7 +675,7 @@ class StrainWork(Functional):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_iter_params_fromfile(f, ii+1)
 
-            res += dfn.assemble(self.damping_power) * self.model.dt.values()[0]
+            res += dfn.assemble(self.damping_power) * self.model.solid.dt.vector()[0]
 
         return res
 
@@ -622,10 +683,10 @@ class StrainWork(Functional):
         # breakpoint()
         self.model.set_iter_params(**iter_params1)
 
-        return dfn.assemble(self.ddamping_power_dv) * self.model.dt.values()[0]
+        return dfn.assemble(self.ddamping_power_dv) * self.model.solid.dt.vector()[0]
 
     def eval_dp(self, f):
-        return dfn.assemble(self.ddamping_power_demod) * self.model.dt.values()[0]
+        return dfn.assemble(self.ddamping_power_demod) * self.model.solid.dt.vector()[0]
 
 class TransferWork(Functional):
     """
@@ -645,13 +706,13 @@ class TransferWork(Functional):
         # Define the form needed to compute the work transferred from fluid to solid
         mesh = self.model.mesh
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=self.model.facet_function)
-        vector_test = self.model.forms['test.vector']
-        scalar_test = self.model.forms['test.scalar']
+        vector_test = self.model.solid.forms['test.vector']
+        scalar_test = self.model.solid.forms['test.scalar']
         facet_labels = self.model.facet_labels
-        pressure = self.model.forms['coeff.fsi.pressure']
+        pressure = self.model.solid.forms['coeff.fsi.pressure']
 
-        u1 = self.model.forms['coeff.arg.u1']
-        u0 = self.model.forms['coeff.state.u0']
+        u1 = self.model.solid.forms['coeff.state.u1']
+        u0 = self.model.solid.forms['coeff.state.u0']
         deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
@@ -684,7 +745,7 @@ class TransferWork(Functional):
         N_STATE = f.get_num_states()
 
         if n < N_START:
-            out += dfn.Function(self.model.vector_function_space).vector()
+            out += dfn.Function(self.model.solid.vector_fspace).vector()
         else:
             # The sensitivity of the functional to state [n] generally contains two components
             # since the work is summed as
@@ -717,10 +778,10 @@ class TransferWork(Functional):
         return out
 
     def eval_dv(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_da(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_dp(self, f):
         return None
@@ -748,13 +809,13 @@ class F0WeightedTransferPower(Functional):
         # Define the form needed to compute the work transferred from fluid to solid
         mesh = self.model.mesh
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=self.model.facet_function)
-        vector_test = self.model.forms['test.vector']
-        scalar_test = self.model.forms['test.scalar']
+        vector_test = self.model.solid.forms['test.vector']
+        scalar_test = self.model.solid.forms['test.scalar']
         facet_labels = self.model.facet_labels
-        pressure = self.model.forms['pressure']
+        pressure = self.model.solid.forms['pressure']
 
-        u0 = self.model.forms['u0']
-        v0 = self.model.forms['v0']
+        u0 = self.model.solid.forms['u0']
+        v0 = self.model.solid.forms['v0']
         deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
@@ -792,7 +853,7 @@ class F0WeightedTransferPower(Functional):
         N_STATE = f.get_num_states()
 
         if n < N_START:
-            out += dfn.Function(self.model.vector_function_space).vector()
+            out += dfn.Function(self.model.solid.vector_fspace).vector()
         else:
             # The sensitivity of the functional to state [n] generally contains two components
             # since the work is summed as
@@ -825,10 +886,10 @@ class F0WeightedTransferPower(Functional):
         return out
 
     def eval_dv(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_da(self, f, n, iter_params0, iter_params1):
-        return dfn.Function(self.model.vector_function_space).vector()
+        return dfn.Function(self.model.solid.vector_fspace).vector()
 
     def eval_dp(self, f):
         return None
@@ -866,7 +927,7 @@ class VolumeFlow(Functional):
 
         num_states = f.get_num_states()
         if n < N_START or n == num_states-1:
-            dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
+            dtotalflow_dun = dfn.Function(self.model.solid.vector_fspace).vector()
         else:
             # self.model.set_iter_params_fromfile(f, n+1)
             self.model.set_iter_params(**iter_params1)
@@ -904,7 +965,7 @@ class SubglottalWork(Functional):
         return ret
 
     def eval_du(self, f, n, iter_params0, iter_params1):
-        ret = dfn.Function(self.model.vector_function_space).vector()
+        ret = dfn.Function(self.model.solid.vector_fspace).vector()
 
         N_START = self.cache['m_start']
         N_STATE = self.cache['N_STATE']
@@ -960,7 +1021,7 @@ class TransferEfficiency(Functional):
         dtotalinputwork_dun = self.funcs['SubglottalWork'].eval_du(f, n, iter_params0, iter_params1)
 
         if n < N_START:
-            return dfn.Function(self.model.vector_function_space).vector()
+            return dfn.Function(self.model.solid.vector_fspace).vector()
         else:
             return dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
 
@@ -1028,7 +1089,7 @@ class MFDR(Functional):
             elif n == idx_mfdr+1:
                 res = dfdr_du1
         else:
-            res = dfn.Function(self.model.vector_function_space).vector()
+            res = dfn.Function(self.model.solid.vector_fspace).vector()
 
         return res
 
@@ -1051,9 +1112,9 @@ class WSSGlottalWidth(Functional):
     def eval(self, f):
         wss = 0
 
-        u = dfn.Function(self.model.vector_function_space)
-        v = dfn.Function(self.model.vector_function_space)
-        a = dfn.Function(self.model.vector_function_space)
+        u = dfn.Function(self.model.solid.vector_fspace)
+        v = dfn.Function(self.model.solid.vector_fspace)
+        a = dfn.Function(self.model.solid.vector_fspace)
 
         weights = self.kwargs['weights']
         meas_indices = self.kwargs['meas_indices']
@@ -1062,7 +1123,7 @@ class WSSGlottalWidth(Functional):
         # Loop through every state
         for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
 
-            u, v, a = f.get_state(ii, self.model.vector_function_space)
+            u, v, a = f.get_state(ii, self.model.solid.vector_fspace)
             self.model.set_initial_state(u, v, a)
 
             # Find the maximum y coordinate on the surface
@@ -1078,7 +1139,7 @@ class WSSGlottalWidth(Functional):
         return wss
 
     def eval_du(self, f, n, iter_params0, iter_params1):
-        dwss_du = dfn.Function(self.model.vector_function_space).vector()
+        dwss_du = dfn.Function(self.model.solid.vector_fspace).vector()
 
         weights = self.kwargs['weights']
         meas_indices = self.kwargs['meas_indices']
@@ -1091,7 +1152,7 @@ class WSSGlottalWidth(Functional):
 
             self.model.set_iter_params(**iter_params1)
 
-            # u, v, a = f.get_state(n, self.model.vector_function_space)
+            # u, v, a = f.get_state(n, self.model.solid.vector_fspace)
             # self.model.set_initial_state(u, v, a)
 
             # Find the surface vertex corresponding to where the glottal width is measured
@@ -1109,7 +1170,7 @@ class WSSGlottalWidth(Functional):
             global_idx_surface = self.model.surface_vertices[idx_surface]
 
             # Finally convert it to the u-DOF number that actually influences glottal width
-            dof_width = self.model.vert_to_vdof[global_idx_surface, 1]
+            dof_width = self.model.solid.vert_to_vdof[global_idx_surface, 1]
 
             # wss = weight * (gw_modl - gw_meas)**2
             dwss_du[dof_width] = 2*weight*(gw_modl - gw_meas)*dgw_modl_du_width
@@ -1133,7 +1194,7 @@ class WSSGlottalWidth(Functional):
 
         # Loop through every state
         for ii, gw_meas, weight in zip(meas_indices, meas_glottal_widths, weights):
-            u, v, a = f.get_state(ii, self.model.vector_function_space)
+            u, v, a = f.get_state(ii, self.model.solid.vector_fspace)
             self.model.set_initial_state(u, v, a)
 
             cur_surface = self.model.get_surface_state()[0]
@@ -1145,7 +1206,7 @@ class WSSGlottalWidth(Functional):
             idx_body = self.model.surface_vertices[idx_surface]
 
             # Finally convert it to the u-DOF number that actually influences glottal width
-            dof_width = self.model.vert_to_vdof[idx_body, 1]
+            dof_width = self.model.solid.vert_to_vdof[idx_body, 1]
 
             # Find the maximum y coordinate on the surface
             gw_modl = 2 * (self.model.y_midline - cur_surface[idx_surface, 1])
@@ -1188,12 +1249,12 @@ class SampledMeanFlowRate(Functional):
             _, dq_dun = self.model.get_flow_sensitivity()
             dtotalflow_dun = dq_dun * tukey_window[m] / meas_ind.size
         else:
-            dtotalflow_dun = dfn.Function(self.model.vector_function_space).vector()
+            dtotalflow_dun = dfn.Function(self.model.solid.vector_fspace).vector()
 
         return dtotalflow_dun
 
     def eval_dp(self, f):
-        return dfn.Function(self.model.scalar_function_space).vector()
+        return dfn.Function(self.model.solid.scalar_fspace).vector()
 
 class GlottalWidthErrorNorm(Functional):
     """
@@ -1209,7 +1270,7 @@ class GlottalWidthErrorNorm(Functional):
 
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config().reshape(-1)
-        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
         # Calculate the glottal width at every node
@@ -1229,7 +1290,7 @@ class GlottalWidthErrorNorm(Functional):
 
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config().reshape(-1)
-        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
         Y_DOF = DOF_SURFACE[1::2]
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
@@ -1242,19 +1303,19 @@ class GlottalWidthErrorNorm(Functional):
         for m, n in enumerate(idx_meas):
             n_to_m[n] = m
 
-        out = dfn.Function(model.vector_function_space).vector()
+        out = dfn.Function(model.solid.vector_fspace).vector()
         if n_to_m[n] != -1:
             u = iter_params0['uva0'][0]
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
             y_surf = xy_surf[1::2]
 
-            out = dfn.Function(model.vector_function_space).vector()
+            out = dfn.Function(model.solid.vector_fspace).vector()
             out[Y_DOF] = dsmooth_minimum_dx(y_surf, alpha=self.kwargs['alpha_min'])
 
         return out
 
     def eval_dp(self, f):
-        return dfn.Function(self.model.scalar_function_space).vector()
+        return dfn.Function(self.model.solid.scalar_fspace).vector()
 
 class DFTGlottalWidthErrorNorm(Functional):
     """
@@ -1271,7 +1332,7 @@ class DFTGlottalWidthErrorNorm(Functional):
 
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config()
-        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
         # Calculate the glottal width at every node
@@ -1299,7 +1360,7 @@ class DFTGlottalWidthErrorNorm(Functional):
 
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config()
-        DOF_SURFACE = model.vert_to_vdof[model.surface_vertices].reshape(-1)
+        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
         Y_DOF = DOF_SURFACE[1::2]
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
