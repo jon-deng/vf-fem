@@ -141,6 +141,9 @@ class Solid:
 
         self.bc_base = self.forms['bcs.base']
 
+        # Set property values to defaults
+        self.set_properties(SolidProperties(self))
+
     @property
     def forms(self):
         return self._forms
@@ -197,16 +200,16 @@ class Solid:
         ----------
         props : Property / dict-like
         """
-        for label, value in props.items():
+        for key in props:
             # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = self.forms['coeff.prop.'+label]
+            coefficient = self.forms['coeff.prop.'+key]
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
             if isinstance(coefficient, dfn.function.constant.Constant):
-                coefficient.assign(value)
+                coefficient.assign(props[key][()])
             else:
-                coefficient.vector()[:] = value
+                coefficient.vector()[:] = props[key]
     
     def set_iter_params(self, u1, uva0, dt, props):
         """
@@ -241,7 +244,26 @@ class Solid:
         -------
         properties : Properties
         """
-        return SolidProperties(self)
+        properties = SolidProperties(self)
+
+        for key in properties:
+            # TODO: Check types to make sure the input property is compatible with the solid type
+            coefficient = self.forms['coeff.prop.'+key]
+
+            if properties[key].shape == ():
+                if isinstance(coefficient, dfn.function.constant.Constant):
+                    # If the coefficient is a constant, then the property must be a float
+                    properties[key][()] = coefficient.values()[0]
+                else:
+                    # If a vector, it's possible it's the 'hacky' version for a time step, where the 
+                    # actual property is a float but the coefficient is assigned to be a vector 
+                    # (which is done so you can differentiate it)
+                    assert coefficient.vector().max() == coefficient.vector().min()
+                    properties[key][()] = coefficient.vector().max()
+            else:
+                coefficient.vector()[:] = properties[key]
+
+        return properties
 
 class Rayleigh(Solid):
     """

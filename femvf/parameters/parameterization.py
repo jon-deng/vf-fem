@@ -3,11 +3,13 @@ Contains definitions of parametrizations. These objects should provide a mapping
 """
 
 import math
-# from functools import reduce
+
 from collections import OrderedDict
+
+from .base import KeyIndexedArray
 from . import properties as props
-from . import constants
-from .forward import DEFAULT_NEWTON_SOLVER_PRM
+from .. import constants
+from ..forward import DEFAULT_NEWTON_SOLVER_PRM
 
 import dolfin as dfn
 from petsc4py import PETSc
@@ -16,7 +18,8 @@ import numpy as np
 
 class Parameterization:
     """
-    A parameterization is a mapping from a set of parameters to those of the forward model.
+    A parameterization is a mapping from a set of parameters to the set of basic parameters for the 
+    forward model.
 
     Parameter values are stored in a single array. The slice corresponding to a specific parameter
     can be accessed through a label based index i.e. `self[param_label]`
@@ -46,8 +49,6 @@ class Parameterization:
         The parameter vector
     PARAM_TYPES : OrderedDict(tuple( 'field'|'const' , tuple), ...)
         A dictionary storing the shape of each labeled parameter in the parameterization
-    _PARAM_SHAPES : dict({param_label: shape_of_param_array})
-    _PARAM_OFFSETS : dict({param_label: idx_offset_in_vector})
     """
 
     PARAM_TYPES = OrderedDict(
@@ -65,13 +66,11 @@ class Parameterization:
         return super().__new__(cls)
 
     def __init__(self, model, constants, parameters=None):
-        self._constants = constants
         self.model = model
+        self._constants = constants
 
-        # Calculate the shape of the array for each labeled parameter and its offset in the vector
-        self._PARAM_SHAPES = dict()
-        self._PARAM_OFFSETS = dict()
-        offset = 0
+        # Calculate the array shape for each labeled parameter
+        shapes = OrderedDict()
         N_DOF = model.solid.scalar_fspace.dim()
         for key, param_type in self.PARAM_TYPES.items():
             shape = None
@@ -80,82 +79,16 @@ class Parameterization:
             elif param_type[0] == 'const':
                 shape = (*param_type[1], )
             else:
-                raise ValueError("I haven't though about what to do here yet.")
-            self._PARAM_SHAPES[key] = shape
-            self._PARAM_OFFSETS[key] = offset
-            offset += np.prod(shape, dtype=int, initial=1)
+                raise ValueError("Parameter type must be one of 'field' or 'const'")
+            shapes[key] = shape
 
-        # Initialize the size of the containing vector (the final calculated offset)
-        self._vector = np.zeros(offset, dtype=float)
-
-        # Assign the parameter values supplied in the initialization
-        if parameters is None:
-            parameters = {}
-
-        for label in self:
-            offset = self._PARAM_OFFSETS[label]
-            size = np.prod(self._PARAM_SHAPES[label])
-
-            if label in parameters:
-                self._vector[offset:offset+size] = parameters[label]
-
-    def __contains__(self, key):
-        return key in self.PARAM_TYPES
-
-    def __getitem__(self, key):
-        """
-        Returns the slice corresponding to the labelled parameter
-
-        Parameters
-        ----------
-        key : str
-            A parameter label
-        """
-        label = key
-
-        if label not in self:
-            raise KeyError(f"`{label}` is not a valid parameter label")
-        else:
-            # Get the parameter label from the key
-
-            offset = self._PARAM_OFFSETS[label]
-            shape = self._PARAM_SHAPES[label]
-            size = np.prod(shape, dtype=int, initial=1)
-
-            return self.vector[offset:offset+size].reshape(shape)
-
-    # def __setitem__(self, key, value):
-    #     """
-    #     Sets the slice corresponding to the labelled parameter in the parameter vector
-
-    #     Parameters
-    #     ----------
-    #     key : str
-    #         A parameter label
-    #     """
-    #     # Get the parameter label from the key
-    #     label = key
-
-    #     offset = self._PARAM_OFFSETS[label]
-    #     shape = self._PARAM_SHAPES[label]
-    #     size = np.prod(shape, dtype=int, initial=1)
-
-    #     if key not in self:
-    #         raise KeyError(f"`{key}` is not a valid parameter label")
-    #     else:
-    #         self.vector[offset:offset+size].reshape(shape)[:]
-
-    def __iter__(self):
-        """
-        Copy dictionary iter behaviour
-        """
-        return self.PARAM_TYPES.__iter__()
+        self._data = KeyIndexedArray(shapes)
 
     def __str__(self):
         return self.PARAM_TYPES.__str__()
 
     def __repr__(self):
-        return self.PARAM_TYPES.__repr__()
+        return f"{type(self).__name__}(model, {self.constants})"
 
     def copy(self):
         out = type(self)(self.model, self.constants)
@@ -169,30 +102,49 @@ class Parameterization:
         """
         return self._constants
 
+    ## Implement the dict-like interface coming from the KeyIndexedArray
+    @property
+    def data(self):
+        """
+        Return the KeyIndexedArray instance containing the data
+        """
+        return self._data
+
+    def __contains__(self, key):
+        return key in self.data
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __iter__(self):
+        return self.data.__iter__()
+    
+    def keys(self):
+        return self.data.keys()
+
+    ## Implement the array-like interface coming from the KeyIndexedArray
     @property
     def vector(self):
-        """
-        Return the flattened parameter vector
-        """
-        return self._vector
+        return self.data.vector
 
     @property
     def size(self):
-        """
-        Return the size of the parameter vector
-        """
         return self.vector.size
 
+    ## Subclasses must implement these two methods
     def convert(self):
         """
         Return the solid/fluid properties for the forward model.
 
         Returns
         -------
+        uva : tuple
+            Initial state
         solid_props : properties.SolidProperties
             A collection of solid properties
         fluid_props : properties.FluidProperties
             A collection of fluid properties
+        timing_props :
         """
         return NotImplementedError
 
@@ -202,7 +154,6 @@ class Parameterization:
 
         Parameters
         ----------
-        demod : array_like
             The sensitivity of a functional wrt. the elastic moduli
         dg_solid_props : dict
             The sensitivity of a functional with respect each property in solid_props
@@ -235,11 +186,11 @@ class NodalElasticModuli(Parameterization):
                        'default_timing_props')
 
     def convert(self):
-        solid_props = props.LinearElasticRayleigh(self.model, self.constants['default_solid_props'])
-        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
-        timing_props = self.constants['default_timing_props']
+        solid_props = self.constants['default_solid_props'].copy()
+        fluid_props = self.constants['default_fluid_props'].copy()
+        timing_props = self.constants['default_timing_props'].copy()
 
-        solid_props['emod'] = self['elastic_moduli']
+        solid_props['emod'][:] = self['elastic_moduli']
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
 
@@ -250,10 +201,6 @@ class NodalElasticModuli(Parameterization):
         # TODO: This should return a dict or something that has the sensitivity
         # of all properties wrt parameters
         """
-        # solid_props = props.SolidProperties(model, self.default_solid_props)
-        # fluid_props = props.FluidProperties(model, self.default_fluid_props)
-
-        # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
         out = self.copy()
         out.vector[:] = 0.0
         out['elastic_moduli'][:] = grad['emod']
@@ -275,11 +222,11 @@ class KelvinVoigtNodalConstants(Parameterization):
                        'default_timing_props')
 
     def convert(self):
-        solid_props = props.LinearElasticRayleigh(self.model, self.constants['default_solid_props'])
-        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
-        timing_props = self.constants['default_timing_props']
+        solid_props = self.constants['default_solid_props'].copy()
+        fluid_props = self.constants['default_fluid_props'].copy()
+        timing_props = self.constants['default_timing_props'].copy()
 
-        solid_props['elastic_modulus'] = self['elastic_moduli']
+        solid_props['emod'][:] = self['elastic_moduli']
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
 
@@ -290,10 +237,6 @@ class KelvinVoigtNodalConstants(Parameterization):
         # TODO: This should return a dict or something that has the sensitivity
         # of all properties wrt parameters
         """
-        # solid_props = props.SolidProperties(model, self.default_solid_props)
-        # fluid_props = props.FluidProperties(model, self.default_fluid_props)
-
-        # solid_props['elastic_modulus'] = self.parameters['elastic_moduli']
         out = self.copy()
         out.vector[:] = 0.0
         out['elastic_moduli'][:] = 1.0*demod
@@ -317,8 +260,8 @@ class PeriodicKelvinVoigt(Parameterization):
                        'NUM_STATES_PER_PERIOD')
 
     def convert(self):
-        solid_props = props.KelvinVoigt(self.model, self.constants['default_solid_props'])
-        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
+        solid_props = self.constants['default_solid_props'].copy()
+        fluid_props = self.constants['default_fluid_props'].copy()
 
         N = self.constants['NUM_STATES_PER_PERIOD']
         dt = self['period']/(N-1)
@@ -403,11 +346,11 @@ class FixedPeriodKelvinVoigt(PeriodicKelvinVoigt):
 
     def convert(self):
         ## Convert solid properties
-        solid_props = props.KelvinVoigt(self.model, self.constants['default_solid_props'])
+        solid_props = self.constants['default_solid_props'].copy()
         solid_props['emod'][:] = self['elastic_moduli']
         
         ## Convert fluid properties
-        fluid_props = props.FluidProperties(self.model, self.constants['default_fluid_props'])
+        fluid_props = self.constants['default_fluid_props'].copy()
 
         ## Convert timing properties
         N = self.constants['NUM_STATES_PER_PERIOD']

@@ -117,12 +117,12 @@ class Test1DEuler(CommonSetup):
     def test_res_fluid_quasistatic(self):
         xy_ref = self.surface_coordinates
         fluid_props = self.fluid_properties
-        fluid_props['p_sub'] = self.p_sub
-        fluid_props['p_sup'] = self.p_sup
+        fluid_props['p_sub'][()] = self.p_sub
+        fluid_props['p_sup'][()] = self.p_sup
 
         # Calculate an initial guess based on the bernoulli fluid law
         x = (xy_ref, np.zeros(xy_ref.shape), np.zeros(xy_ref.shape))
-        fluid_props['a_sub'] = self.area[0] # This is because I didn't set the subglottal area conditions for 1d euler version
+        fluid_props['a_sub'][()] = self.area[0] # This is because I didn't set the subglottal area conditions for 1d euler version
         p_guess, info = fluids.fluid_pressure(x, fluid_props)
         q_guess = info['flow_rate']/self.area
 

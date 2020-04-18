@@ -69,11 +69,11 @@ class TestFunctionals(unittest.TestCase):
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
         p_sub = 800
-        fluid_props['y_midline'] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
-        fluid_props['alpha'] = alpha
-        fluid_props['k'] = k
-        fluid_props['sigma'] = sigma
+        fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['p_sub'][()] = p_sub * PASCAL_TO_CGS
+        fluid_props['alpha'][()] = alpha
+        fluid_props['k'][()] = k
+        fluid_props['sigma'][()] = sigma
 
         # Use an elasticity that varies linearly with y coordinate.
         y = model.solid.mesh.coordinates()[..., 1]
@@ -85,11 +85,11 @@ class TestFunctionals(unittest.TestCase):
         emod = emod_at_ymax*(y-y_min)/(y_max-y_min) + emod_at_ymin*(y-y_max)/(y_min-y_max)
 
         vert_to_sdof = np.sort(model.solid.vert_to_sdof)
-        solid_props['emod'] = emod[vert_to_sdof]
-        solid_props['rayleigh_m'] = 0
-        solid_props['rayleigh_k'] = 3e-4
-        solid_props['k_collision'] = 1e11
-        solid_props['y_collision'] = fluid_props['y_midline'] - y_gap*1/2
+        solid_props['emod'][:] = emod[vert_to_sdof]
+        solid_props['rayleigh_m'][()] = 0
+        solid_props['rayleigh_k'][()] = 3e-4
+        solid_props['k_collision'][()] = 1e11
+        solid_props['y_collision'][()] = fluid_props['y_midline'] - y_gap*1/2
 
         h5file = 'out/test_functionals.h5'
         if path.isfile(h5file) and not self.OVERWRITE_FORWARD_SIMULATIONS:

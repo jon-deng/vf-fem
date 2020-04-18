@@ -53,28 +53,30 @@ class TestForward(unittest.TestCase):
         alpha, k, sigma = -3000, 50, 0.002
         # Time varying fluid properties
         # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-        # fluid_props['p_sub'] = [1500*PASCAL_TO_CGS, 1500*PASCAL_TO_CGS, 1, 1]
-        # fluid_props['p_sub_time'] = [0, 3e-3, 3e-3, 0.02]
+        # fluid_props['p_sub'][()] = [1500*PASCAL_TO_CGS, 1500*PASCAL_TO_CGS, 1, 1]
+        # fluid_props['p_sub_time'][()] = [0, 3e-3, 3e-3, 0.02]
         # Constant fluid properties
         p_sub = 500
 
         timing_props = {'t0': 0, 'tmeas': times_meas, 'dt_max': dt}
 
-        fluid_props = FluidProperties(model.fluid)
-        fluid_props['y_midline'] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
-        fluid_props['alpha'] = alpha
-        fluid_props['k'] = k
-        fluid_props['sigma'] = sigma
+        fluid_props = model.fluid.get_properties()
+        fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['p_sub'][()] = p_sub * PASCAL_TO_CGS
+        fluid_props['alpha'][()] = alpha
+        fluid_props['k'][()] = k
+        fluid_props['sigma'][()] = sigma
 
-        solid_props = SolidProperties(model.solid)
-        # emod = model.emod.vector()[:].copy()
-        # emod[:] = 
-        solid_props['emod'] = 5.0e3 * PASCAL_TO_CGS
-        solid_props['rayleigh_m'] = 0
-        solid_props['rayleigh_k'] = 4e-3
-        solid_props['k_collision'] = 1e11
-        solid_props['y_collision'] = fluid_props['y_midline'] - y_gap*1/2
+        solid_props = model.solid.get_properties()
+        breakpoint()
+        solid_props['emod'][:] = 5.0e3 * PASCAL_TO_CGS
+        solid_props['rayleigh_m'][()] = 0
+        solid_props['rayleigh_k'][()] = 4e-3
+        solid_props['k_collision'][()] = 1e11
+        solid_props['y_collision'][()] = fluid_props['y_midline'] - y_gap*1/2
+
+        # breakpoint()
+        # model.set_solid_props(solid_props)
 
         save_path = 'out/test_forward.h5'
         if os.path.isfile(save_path):
@@ -83,6 +85,7 @@ class TestForward(unittest.TestCase):
         print("Running forward model")
         adaptive_step_prm = {'abs_tol': None}
         runtime_start = perf_counter()
+        breakpoint()
         info = forward(model, (0, 0, 0), solid_props, fluid_props, timing_props,
                        h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
                        show_figure=False)

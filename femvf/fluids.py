@@ -261,17 +261,17 @@ class Fluid:
     This class represents a fluid model
     """
     def __init__(self):
-        self.properties = FluidProperties(type(self))
+        self.properties = FluidProperties(self)
 
     def set_properties(self, props):
-        for key, value in props.items():
-            if isinstance(self.properties[key], np.ndarray):
-                self.properties[key][:] = value
+        for key in props:
+            if self.properties[key].shape == ():
+                self.properties[key][()] = props[key]
             else:
-                self.properties[key] = value
+                self.properties[key][:] = props[key]
 
     def get_properties(self):
-        return FluidProperties(type(self))
+        return self.properties.copy()
 
     def fluid_pressure(self):
         raise NotImplementedError("Fluid models have to implement this")

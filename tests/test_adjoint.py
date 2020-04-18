@@ -66,18 +66,18 @@ def get_starting_rayleigh_model():
     alpha, k, sigma = -3000, 50, 0.002
 
     fluid_props = model.fluid.get_properties()
-    fluid_props['y_midline'] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-    fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
-    fluid_props['alpha'] = alpha
-    fluid_props['k'] = k
-    fluid_props['sigma'] = sigma
+    fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    fluid_props['p_sub'][()] = 1000 * PASCAL_TO_CGS
+    fluid_props['alpha'][()] = alpha
+    fluid_props['k'][()] = k
+    fluid_props['sigma'][()] = sigma
 
     solid_props = model.solid.get_properties()
     solid_props['emod'][:] = emod
-    solid_props['rayleigh_m'] = 0.0
-    solid_props['rayleigh_k'] = 3e-4
-    solid_props['k_collision'] = k_coll
-    solid_props['y_collision'] = fluid_props['y_midline'] - y_coll_offset
+    solid_props['rayleigh_m'][()] = 0.0
+    solid_props['rayleigh_k'][()] = 3e-4
+    solid_props['k_collision'][()] = k_coll
+    solid_props['y_collision'][()] = fluid_props['y_midline'] - y_coll_offset
 
     return model, solid_props, fluid_props
 
@@ -104,17 +104,17 @@ def get_starting_kelvinvoigt_model():
     alpha, k, sigma = -3000, 50, 0.002
 
     fluid_props = fluid.get_properties()
-    fluid_props['y_midline'] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-    fluid_props['p_sub'] = 1000 * PASCAL_TO_CGS
-    fluid_props['alpha'] = alpha
-    fluid_props['k'] = k
-    fluid_props['sigma'] = sigma
+    fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    fluid_props['p_sub'][()] = 1000 * PASCAL_TO_CGS
+    fluid_props['alpha'][()] = alpha
+    fluid_props['k'][()] = k
+    fluid_props['sigma'][()] = sigma
 
     solid_props = solid.get_properties()
     solid_props['emod'][:] = emod
-    solid_props['eta'] = 3.0
-    solid_props['k_collision'] = k_coll
-    solid_props['y_collision'] = fluid_props['y_midline'] #- y_coll_offset
+    solid_props['eta'][()] = 3.0
+    solid_props['k_collision'][()] = k_coll
+    solid_props['y_collision'][()] = fluid_props['y_midline'] #- y_coll_offset
 
     return model, solid_props, fluid_props
 
@@ -275,7 +275,7 @@ class TestEmodGradient(TaylorTest):
 
             for n, h in enumerate(hs):
                 solid_props_step = model.solid.get_properties()
-                solid_props_step['emod'] = solid_props['emod'] + h*step_dir
+                solid_props_step['emod'][:] = solid_props['emod'] + h*step_dir
 
                 runtime_start = perf_counter()
                 info = forward(model, (0, 0, 0), solid_props_step, fluid_props, timing_props, 
@@ -573,15 +573,15 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
 
         y_gap = 0.005
         fluid_props = FluidProperties(model)
-        fluid_props['y_midline'] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'] = p_sub * PASCAL_TO_CGS
+        fluid_props['y_midline'][()] = np.max(model.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['p_sub'][()] = p_sub * PASCAL_TO_CGS
 
         solid_props = LinearElasticRayleigh(model)
-        solid_props['elastic_modulus'] = emod
-        solid_props['rayleigh_m'] = 0
-        solid_props['rayleigh_k'] = 3e-4
-        solid_props['k_collision'] = 1e12
-        solid_props['y_collision'] = fluid_props['y_midline'] - 0.002
+        solid_props['elastic_modulus'][:] = emod
+        solid_props['rayleigh_m'][()] = 0
+        solid_props['rayleigh_k'][()] = 3e-4
+        solid_props['k_collision'][()] = 1e12
+        solid_props['y_collision'][()] = fluid_props['y_midline'] - 0.002
 
         # Compute functionals along step direction
         print(f"Computing {len(hs)} finite difference points")
@@ -594,7 +594,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
             for n, h in enumerate(hs):
                 runtime_start = perf_counter()
                 # _solid_props = solid_props.copy()
-                solid_props['elastic_modulus'] = emod + h*step_dir
+                solid_props['elastic_modulus'][:] = emod + h*step_dir
                 info = forward(model, (0, 0, 0), solid_props, fluid_props, timing_props, abs_tol=None,
                                h5file=save_path, h5group=f'{n}')
 

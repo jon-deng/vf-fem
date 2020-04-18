@@ -429,7 +429,10 @@ class StateFile:
             m = 0
 
         for label in fluid_props:
-            fluid_props[label] = fluid_group[label][m]
+            if fluid_props[label].shape == ():
+                fluid_props[label][()] = fluid_group[label][m]
+            else:
+                fluid_props[label][:] = fluid_group[label][m]
 
         return fluid_props
 
@@ -442,11 +445,11 @@ class StateFile:
         for label, shape in self.model.solid.PROPERTY_TYPES.items():
             data = solid_group[label]
 
-            if shape[0] == 'field':
-                solid_props[label] = data[:]
-            else:
+            if solid_props[label].shape == ():
                 # have to index differently for scalar datasets
-                solid_props[label] = data[()]
+                solid_props[label][()] = data[()]
+            else:
+                solid_props[label][:] = data[:]
 
         return solid_props
 

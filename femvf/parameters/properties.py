@@ -1,43 +1,74 @@
 """
 Classes for definining property values
 """
+from collections import OrderedDict
 
-from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 import numpy as np
+
+from .base import KeyIndexedArray
+from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 class Properties:
     """
-    Represents a collection of properties defining a particular Model
+    Represents a collection of properties defining a particular `model` (fluid or solid)
 
-    The `Model' must define class variables PROPERTY_TYPES and PROPERTY_DEFAULTS
+    The `model' must define class variables `PROPERTY_TYPES` and `PROPERTY_DEFAULTS`. This class
+    builds an object containing values for each of the defined properties in `PROPERTY_TYPES` with
+    the correct shapes.
+
+    Currently this is made more for the solid models since the dimensions of parameters can
+    be found from the function spaces/mesh. The 1D bernoulli fluid model doesn't have a mesh yet.
     """
-    def __init__(self, Model, data_dict=None):
-        for key in Model.PROPERTY_TYPES:
-            if key not in Model.PROPERTY_DEFAULTS:
+    def __init__(self, model):
+        # TODO: Move this check this to the actual model class?
+        for key in model.PROPERTY_TYPES:
+            if key not in model.PROPERTY_DEFAULTS:
                 raise KeyError(f"Property `{key}` does not have a default value")
         
-        self.Model = Model
-        self.data = dict()
+        self._model = model
 
-        if data_dict is None:
-            data_dict = dict()
+        # Calculate shapes of each parameter
+        shapes = OrderedDict()
+        for key, property_type in model.PROPERTY_TYPES.items():
+            field_or_const, data_shape = property_type
 
-        # Initialize the data
-        for key in self.TYPES.keys():
-            data_type, data_shape = self.TYPES[key]
-
-            vector_shape = None
-            if data_type == 'field':
-                vector_shape = (Model.scalar_fspace.dim(), *data_shape)
+            shape = None
+            if field_or_const == 'field':
+                shape = (model.scalar_fspace.dim(), *data_shape)
+            elif field_or_const == 'const':
+                shape = (*data_shape, )
             else:
-                vector_shape = (*data_shape, )
+                raise ValueError("uh oh")
 
-            # Store scalar data directly as a float
-            if vector_shape == ():
-                self.data[key] = data_dict.get(key, self.DEFAULTS[key])
-            else:
-                self.data[key] = np.zeros(vector_shape)
-                self.data[key][:] = data_dict.get(key, self.DEFAULTS[key])
+            shapes[key] = shape
+
+        self._data = KeyIndexedArray(shapes, data=model.PROPERTY_DEFAULTS)
+
+    def __str__(self):
+        return self.data.__str__()
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.model.__repr__()})"
+
+    def copy(self):
+        out = type(self)(self.model)
+        out.vector[:] = self.vector[:]
+        return out
+
+    @property
+    def model(self):
+        return self._model
+    
+    ## Implement the dict-like interface coming from the KeyIndexedArray
+    @property
+    def data(self):
+        """
+        Returns the `KeyIndexedArray` storing the parameter values
+        """
+        return self._data
+
+    def __contains__(self, key):
+        return key in self.data
 
     def __getitem__(self, key):
         """
@@ -45,56 +76,26 @@ class Properties:
 
         Raises an errors if the key does not exist.
         """
-        if key not in self.TYPES:
-            raise KeyError(f"{key} is not a valid property")
-        else:
-            return self.data[key]
-
-    def __setitem__(self, key, value):
-        """
-        Gives dictionary like behaviour.
-
-        Raises an errors if the key does not exist.
-        """
-        if key not in self.TYPES:
-            raise KeyError(f"{key} is not a valid property")
-        else:
-            self.data[key] = value
-
+        return self.data[key]
+    
     def __iter__(self):
         return self.data.__iter__()
-
-    def __contains__(self, key):
-        return key in self.TYPES
-
-    def __str__(self):
-        return self.data.__str__()
-
-    def __repr__(self):
-        return self.data.__repr__()
-
-    def get(self, key, default):
-        if key in self:
-            return self[key]
-        else:
-            return default
-
-    def update(self, new_dict):
-        for key in self.TYPES.keys():
-            if key in new_dict:
-                self[key] = new_dict[key]
-
-    def items(self):
-        """
-        Return underlying property dict's iterms
-        """
-        return self.data.items()
 
     def keys(self):
         """
         Return underlying property dict's keys
         """
         return self.data.keys()
+    
+    ## Implement the array-like interface coming from the KeyIndexedArray
+    @property
+    def vector(self):
+        return self.data.vector
+
+    @property
+    def size(self):
+        return self.vector.size
+
 
     @property
     def TYPES(self):
