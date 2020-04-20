@@ -100,13 +100,19 @@ class StateFile:
         Initializes the layout of the state file.
 
         This creates groups and/or datasets in the hdf5 file:
+        \mesh\solid\coordinates
+        \mesh\solid\connectivity
+        \dofmap\scalar
+        \dofmap\vector
         \u : dataset, (None, N_VECTOR_DOF)
         \v : dataset, (None, N_VECTOR_DOF)
         \a : dataset, (None, N_VECTOR_DOF)
-        \fluid_properties
-            \fluid_property_label : dataset, (None,)
+        \q : dataset, (None, N_VECTOR_DOF)
+        \p : dataset, (None, N_VECTOR_DOF)
         \solid_properties
             \solid_property_label : dataset, ()
+        \fluid_properties
+            \fluid_property_label : dataset, (None,)
         \meas_indices : dataset, (None,)
         \time : dataset, (None,)
 
@@ -124,6 +130,8 @@ class StateFile:
         self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,), 
                                        chunks=(self.NCHUNK,), dtype=np.intp)
 
+        self.init_mesh()
+        self.init_dofmap()
         self.init_state(model, uva0=uva0)
         self.init_fluid_state(model, qp0=qp0)
 
@@ -134,6 +142,39 @@ class StateFile:
         # Solid properties (assumed to not be time-varying)
         if 'solid_properties' not in self.root_group:
             self.init_solid_props(model, solid_props=solid_props)
+
+    def init_dofmap(self):
+        """
+        Writes the dofmaps for scalar and vector data
+        """
+        solid = self.model.solid
+        scalar_dofmap_processor = solid.scalar_fspace.dofmap()
+        vector_dofmap_processor = solid.vector_fspace.dofmap()
+
+        scalar_dofmap = np.array([scalar_dofmap_processor.cell_dofs(cell.index()) 
+                                  for cell in dfn.cells(solid.mesh)])
+        vector_dofmap = np.array([vector_dofmap_processor.cell_dofs(cell.index()) 
+                                  for cell in dfn.cells(solid.mesh)])
+        self.root_group.create_dataset('dofmap/vector', data=vector_dofmap, 
+                                       dtype=np.intp) 
+        self.root_group.create_dataset('dofmap/scalar', data=scalar_dofmap, 
+                                       dtype=np.intp)
+
+    def init_mesh(self):
+        """
+        Writes the mesh information to the h5 file
+        """
+        solid = self.model.solid
+        self.root_group.create_dataset('mesh/solid/coordinates', data=solid.mesh.coordinates(), 
+                                       dtype=np.float64) 
+        self.root_group.create_dataset('mesh/solid/connectivity', data=solid.mesh.cells(), 
+                                       dtype=np.intp) 
+
+        # TODO: Write facet/cell labels, mapping string identifiers to the integer mesh functions
+        self.root_group.create_dataset('mesh/solid/facet_func', data=np.inf, 
+                                       dtype=np.intp)
+        self.root_group.create_dataset('mesh/solid/cell_func', data=np.inf, 
+                                       dtype=np.intp)
 
     def init_state(self, model, uva0=None):
         """

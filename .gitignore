@@ -1,6 +1,8 @@
 # My Rules
 *.pickle
 *.md
+*.xdmf
+*.xmf
 *.h5
 *.vtu
 *.json

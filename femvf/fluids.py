@@ -502,28 +502,6 @@ class Bernoulli(Fluid):
 
         return dp_du, dq_du
 
-    def pressure_fluidord_to_solidord(self, pressure, model):
-        """
-        Converts a pressure vector in surface vert. order to solid DOF order
-
-        Parameters
-        ----------
-        pressure : array_like
-        model : ufl.Coefficient
-            The coefficient representing the pressure
-
-        Returns
-        -------
-        xy_min, xy_sep :
-            Locations of the minimum and separation areas, as well as surface pressures.
-        """
-        pressure_solid = dfn.Function(model.solid.scalar_fspace).vector()
-
-        surface_verts = model.surface_vertices
-        pressure_solid[model.solid.vert_to_sdof[surface_verts]] = pressure
-
-        return pressure_solid
-
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 

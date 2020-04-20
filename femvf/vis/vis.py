@@ -139,3 +139,5 @@ def plot_grad(model):
     fig.colorbar(mappable, ax=ax)
 
     plt.show()
+
+# def write_vertex_values(function):

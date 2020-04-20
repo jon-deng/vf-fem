@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import dolfin as dfn
+import h5py
 
 sys.path.append('../')
 from femvf.meshutils import load_fenics_mesh
@@ -45,9 +46,10 @@ class TestForward(unittest.TestCase):
         fluid = Bernoulli()
         model = ForwardModel(solid, fluid)
 
+        # breakpoint()
         # dt = 2.5e-6
         dt = 5e-5
-        times_meas = [0, 0.02]
+        times_meas = [0, 0.005]
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -68,29 +70,39 @@ class TestForward(unittest.TestCase):
         fluid_props['sigma'][()] = sigma
 
         solid_props = model.solid.get_properties()
-        breakpoint()
-        solid_props['emod'][:] = 5.0e3 * PASCAL_TO_CGS
+        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
+        x = xy[:, 0]
+        y = xy[:, 1]
+        x_min, x_max = x.min(), x.max()
+        y_min, y_max = y.min(), y.max()
+        solid_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         solid_props['rayleigh_m'][()] = 0
         solid_props['rayleigh_k'][()] = 4e-3
         solid_props['k_collision'][()] = 1e11
         solid_props['y_collision'][()] = fluid_props['y_midline'] - y_gap*1/2
 
-        # breakpoint()
-        # model.set_solid_props(solid_props)
+        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
+        x = xy[:, 0]
+        y = xy[:, 1]
+        u0 = dfn.Function(solid.vector_fspace).vector()
 
-        save_path = 'out/test_forward.h5'
+        save_path = 'test_forward.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
         print("Running forward model")
         adaptive_step_prm = {'abs_tol': None}
         runtime_start = perf_counter()
-        breakpoint()
-        info = forward(model, (0, 0, 0), solid_props, fluid_props, timing_props,
+        info = forward(model, (u0, 0, 0), solid_props, fluid_props, timing_props,
                        h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
                        show_figure=False)
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+        ### Write a single vector data set out to see if it work with paraview
+        with h5py.File(save_path, mode='a') as f:
+            f.create_dataset('u0', data=f['u'][15, :], dtype=np.float64)
+            f.create_dataset('v0', data=f['v'][15, :], dtype=np.float64)
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(info['time'], info['glottal_width'])

@@ -165,7 +165,7 @@ class ForwardModel:
         pressure : array_like
             An array of pressure values in surface vertex/fluid order
         """
-        pressure_solidord = self.fluid.pressure_fluidord_to_solidord(pressure, self)
+        pressure_solidord = self.pressure_fluidord_to_solidord(pressure)
         self.forms['coeff.fsi.pressure'].vector()[:] = pressure_solidord
 
     def get_flow_sensitivity(self):
@@ -190,6 +190,28 @@ class ForwardModel:
         dp_du0, dq_du0 = self.fluid.get_flow_sensitivity(self, x_surface)
 
         return dp_du0, dq_du0
+
+    def pressure_fluidord_to_solidord(self, pressure):
+        """
+        Converts a pressure vector in surface vert. order to solid DOF order
+
+        Parameters
+        ----------
+        pressure : array_like
+        model : ufl.Coefficient
+            The coefficient representing the pressure
+
+        Returns
+        -------
+        xy_min, xy_sep :
+            Locations of the minimum and separation areas, as well as surface pressures.
+        """
+        pressure_solid = dfn.Function(self.solid.scalar_fspace).vector()
+
+        surface_verts = self.surface_vertices
+        pressure_solid[self.solid.vert_to_sdof[surface_verts]] = pressure
+
+        return pressure_solid
 
     # @profile
     def assem_f1(self, u1=None):
