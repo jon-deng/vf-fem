@@ -50,6 +50,18 @@ class Properties:
     def __repr__(self):
         return f"{type(self).__name__}({self.model.__repr__()})"
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            try:
+                return np.all(self.vector == other.vector)
+            except:
+                raise
+        else:
+            raise TypeError(f"Cannot compare type {type(self)} <-- {type(other)}")
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def copy(self):
         out = type(self)(self.model)
         out.vector[:] = self.vector[:]

@@ -3,6 +3,7 @@ Functionality related to fluids
 """
 
 import numpy as np
+import autograd
 import autograd.numpy as np
 import math
 
@@ -256,12 +257,30 @@ def bd_df(f, n, dx):
 ## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
 
-class Fluid:
+class Fluid1D:
     """
     This class represents a fluid model
     """
-    def __init__(self):
+    def __init__(self, x_vertices, y_surface):
+        """
+        
+        Parameters
+        ----------
+        x_vertices: np.ndarray
+            Array of x vertex locations numbered in steamwise increasing order.
+        y_surface: np.ndarray
+            Array of y surface locations numbered in steamwise increasing order.
+        """
+        self.x_vertices = x_vertices
+        self.y_surface = y_surface
         self.properties = FluidProperties(self)
+        # breakpoint()
+
+        # Calculate surface coordinates which is needed for surface integrals
+        dx = self.x_vertices[1:] - self.x_vertices[:-1]
+        dy = self.y_surface[1:] - self.y_surface[:-1]
+        ds = (dx**2+dy**2)**0.5
+        self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
 
     def set_properties(self, props):
         for key in props:
@@ -279,7 +298,7 @@ class Fluid:
     def flow_sensitivity(self):
         raise NotImplementedError("Fluid models have to implement this")
 
-class Bernoulli(Fluid):
+class Bernoulli(Fluid1D):
     """
     Represents the Bernoulli fluid model
 
@@ -287,6 +306,17 @@ class Bernoulli(Fluid):
     to the reference configuration of the fluid (conformal with reference configuration of solid?)
     One of the properties should be the mapping from the reference configuration to the current 
     configuration that would be used in ALE. 
+
+    Properties
+    ----------
+    alpha : 
+        Factor controlling the smoothness of the approximation of minimum area.
+        A value of 0 weights areas of all nodes evenly, while a value of -inf
+        returns the exact minimum area. Large negative values return an
+        average of the smallest areas.
+    k : 
+        Controls the sharpness of the cutoff that models separation. as k approaches inf,
+        the sharpness will approach an instantaneous jump from 1 to 0
     """
     PROPERTY_TYPES = {
         'p_sub': ('const', ()),
@@ -343,8 +373,8 @@ class Bernoulli(Fluid):
         dt_area = -2 * (y)
 
         # Calculate minimum and separation areas/locations
-        a_min = smooth_minimum(area, alpha)
-        dt_a_min = np.sum(dsmooth_minimum_dx(area, alpha) * dt_area)
+        a_min = smooth_minimum(area, self.s_vertices, alpha)
+        dt_a_min = np.sum(dsmooth_minimum_df(area, self.s_vertices, alpha) * dt_area)
         a_sep = SEPARATION_FACTOR * a_min
         dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
@@ -355,8 +385,10 @@ class Bernoulli(Fluid):
 
         p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
 
-        x_sep = smooth_selection(x, area, a_sep, sigma=sigma)
-        sep_multiplier = smooth_cutoff(x, x_sep, k=k)
+        # Calculate x_sep for plotting/information purposes
+        x_sep = smooth_selection(x, area, a_sep, self.s_vertices, sigma)
+        s_sep = smooth_selection(self.s_vertices, area, a_sep, self.s_vertices, sigma=sigma)
+        sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
 
         p = sep_multiplier * p_bernoulli
 
@@ -407,8 +439,8 @@ class Bernoulli(Fluid):
 
         # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the
         #  minimum value
-        a_min = smooth_minimum(area, alpha)
-        da_min_darea = dsmooth_minimum_dx(area, alpha)
+        a_min = smooth_minimum(area, self.s_vertices, alpha)
+        da_min_darea = dsmooth_minimum_df(area, self.s_vertices, alpha)
 
         a_sep = SEPARATION_FACTOR * a_min
         da_sep_da_min = SEPARATION_FACTOR
@@ -427,24 +459,24 @@ class Bernoulli(Fluid):
         dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
-        x_sep = smooth_selection(x, area, a_sep, sigma)
-        dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, sigma)
-        dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, sigma)*darea_dy \
-                    + dsmooth_selection_dy0(x, area, a_sep, sigma)*da_sep_dy
+        # x_sep = smooth_selection(x, area, a_sep, self.s_vertices, sigma)
+        # dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, self.s_vertices, sigma)
+        # dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, self.s_vertices, sigma)*darea_dy \
+        #             + dsmooth_selection_dy0(x, area, a_sep, self.s_vertices, sigma)*da_sep_dy
 
-        sep_multiplier = smooth_cutoff(x, x_sep, k)
-        _dsep_multiplier_dx = dsmooth_cutoff_dx(x, x_sep, k)
-        _dsep_multiplier_dx_sep = dsmooth_cutoff_dx0(x, x_sep, k)
-        dsep_multiplier_dx = np.diag(_dsep_multiplier_dx) + _dsep_multiplier_dx_sep[:, None]*dx_sep_dx
-        dsep_multiplier_dy = _dsep_multiplier_dx_sep[:, None]*dx_sep_dy
+        s_sep = smooth_selection(self.s_vertices, area, a_sep, self.s_vertices, sigma=sigma)
+        ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area, a_sep, self.s_vertices, sigma)*darea_dy \
+                    + dsmooth_selection_dy0(self.s_vertices, area, a_sep, self.s_vertices, sigma)*da_sep_dy
+
+        sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
+        dsep_multiplier_dy = dsmooth_cutoff_dx0(self.s_vertices, s_sep, k=k)[:, None] * ds_sep_dy
 
         # p = sep_multiplier * p_bernoulli
-
-        dp_dy = dsep_multiplier_dy*p_bernoulli[:, None] + sep_multiplier[:, None]*dp_bernoulli_dy
-        dp_dx = dsep_multiplier_dx*p_bernoulli[:, None] #+ sep_multiplier* 0
+        # breakpoint()
+        dp_dy = sep_multiplier[:, None]*dp_bernoulli_dy + dsep_multiplier_dy*p_bernoulli[:, None]
 
         dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
-        dp_du[:, :-1:2] = dp_dx
+        dp_du[:, :-1:2] = 0
         dp_du[:, 1::2] = dp_dy
 
         ## Calculate the flow rate sensitivity
@@ -505,39 +537,64 @@ class Bernoulli(Fluid):
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
-def smooth_minimum(x, alpha=-1000):
+def smooth_minimum(f, s, alpha=-1000):
     """
-    Return the smooth approximation to the minimum element of x.
+    Return the smooth approximation to the minimum element of f integrated over s.
 
     Parameters
     ----------
-    x : array_like
+    f : array_like
         Array of values to compute the minimum of
+    s : array_like
+        surface coordinates of each value
     alpha : float
         Factor that control the sharpness of the minimum. The function approaches the true minimum
-        function as `alpha` approachs negative infinity.
+        as `alpha` approachs negative infinity.
     """
     # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
     # being too small or too large. This constant factors out from the division.
-    const_numerical_stability = np.max(alpha*x)
-    w = np.exp(alpha*x - const_numerical_stability)
-    return np.sum(x*w) / np.sum(w)
+    K_STABILITY = np.max(alpha*f)
+    w = np.exp(alpha*f - K_STABILITY)
 
-def dsmooth_minimum_dx(x, alpha=-1000):
+    return trapz(f*w, s) / trapz(w, s)
+
+# dsmooth_minimum_df = autograd.grad(smooth_minimum, 0)
+
+def dsmooth_minimum_df(f, s, alpha=-1000):
     """
     Return the derivative of the smooth minimum with respect to x.
 
     Parameters
     ----------
-    x : array_like
+    f : array_like
         Array of values to compute the minimum of
     alpha : float
         Factor that control the sharpness of the minimum. The function approaches the true minimum
         function as `alpha` approachs negative infinity.
     """
-    const_numerical_stability = np.max(alpha*x)
-    w = np.exp(alpha*x - const_numerical_stability)
-    return (w/np.sum(w)) * (1+alpha*(x - smooth_minimum(x, alpha)))
+    K_STABILITY = np.max(alpha*f)
+    w = np.exp(alpha*f - K_STABILITY)
+    dw_df = alpha*np.exp(alpha*f - K_STABILITY)
+
+    num = trapz(f*w, s) 
+    den = trapz(w, s) 
+
+    dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)
+    dden_df = dtrapz_df(w, s)*dw_df
+
+    return dnum_df/den - num/den**2 * dden_df
+
+def trapz(f, s):
+    assert len(f.shape) == 1
+    assert len(s.shape) == 1
+    
+    return np.sum( (s[1:]-s[:-1])*(f[1:]+f[:-1])/2 )
+
+def dtrapz_df(f, s):
+    out = np.zeros(f.size)
+    out[:-1] += (s[1:]-s[:-1]) / 2
+    out[1:] += (s[1:]-s[:-1]) / 2
+    return out
 
 def sigmoid(x):
     return 1/(1+np.exp(-x))
@@ -590,7 +647,7 @@ def dgaussian_dx(x, x0, sigma=1.0):
 def dgaussian_dx0(x, x0, sigma=1.0):
     return gaussian(x, x0, sigma) * (x-x0)/sigma**2
 
-def smooth_selection(x, y, y0, sigma=1.0):
+def smooth_selection(x, y, y0, s, sigma=1.0):
     """
     Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
 
@@ -609,9 +666,12 @@ def smooth_selection(x, y, y0, sigma=1.0):
     log_w = log_gaussian(y, y0, sigma)
     w = np.exp(log_w - np.max(log_w))
 
-    return np.sum(x*w) / np.sum(w)
+    return trapz(x*w, s) / trapz(w, s)
 
-def dsmooth_selection_dx(x, y, y0, sigma=1.0):
+# dsmooth_selection_dx = autograd.grad(smooth_selection, 0)
+# dsmooth_selection_dy = autograd.grad(smooth_selection, 1)
+# dsmooth_selection_dy0 = autograd.grad(smooth_selection, 2)
+def dsmooth_selection_dx(x, y, y0, s, sigma=1.0):
     """
     Return the derivative of `gaussian_selection` w.r.t `x`.
 
@@ -631,9 +691,9 @@ def dsmooth_selection_dx(x, y, y0, sigma=1.0):
     # The returned value would be
     # return np.sum(x*weights) / np.sum(weights)
     # so the derivative is given by
-    return w / np.sum(w)
+    return dtrapz_df(x*w, s) / trapz(w, s) * w
 
-def dsmooth_selection_dy(x, y, y0, sigma=1.0):
+def dsmooth_selection_dy(x, y, y0, s, sigma=1.0):
     """
     Return the derivative of `gaussian_selection` w.r.t `y`.
 
@@ -651,18 +711,18 @@ def dsmooth_selection_dy(x, y, y0, sigma=1.0):
     w = gaussian(y, y0, sigma)
     dw_dy = dgaussian_dx(y, y0, sigma)
 
-    norm = np.sum(w)
-    dnorm_dw = 1
+    num = trapz(x*w, s)
+    dnum_dy = dtrapz_df(x*w, s) * x*dw_dy
 
-    weighted_vals = np.sum(x*w)
-    dweighted_vals_dw = x
+    den = trapz(w, s)
+    dden_dy = dtrapz_df(w, s) * dw_dy
 
-    # out = weighted_vals/norm
+    # out = num/den
+    dout_dy = dnum_dy/den - num/den**2*dden_dy
 
-    dout_dw = dweighted_vals_dw/norm + weighted_vals*-norm**(-2)*dnorm_dw
-    return dout_dw * dw_dy
+    return dout_dy
 
-def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
+def dsmooth_selection_dy0(x, y, y0, s, sigma=1.0):
     """
     Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
 
@@ -680,13 +740,13 @@ def dsmooth_selection_dy0(x, y, y0, sigma=1.0):
     w = gaussian(y, y0, sigma)
     dw_dy0 = dgaussian_dx0(y, y0, sigma)
 
-    norm = np.sum(w)
-    dnorm_dw = 1
+    num = trapz(x*w, s)
+    dnum_dy0 = np.dot(dtrapz_df(x*w, s), x*dw_dy0)
 
-    weighted_vals = np.sum(x*w)
-    dweighted_vals_dw = x
+    den = trapz(w, s)
+    dden_dy0 = np.dot(dtrapz_df(w, s), dw_dy0)
 
-    # out = weighted_vals/norm
+    # out = num/den
+    dout_dy0 = dnum_dy0/den - num/den**2*dden_dy0
 
-    dout_dw = dweighted_vals_dw/norm + -weighted_vals*norm**-2*dnorm_dw
-    return np.sum(dout_dw * dw_dy0)
+    return dout_dy0

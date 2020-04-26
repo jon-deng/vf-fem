@@ -17,7 +17,7 @@ import petsc4py
 petsc4py.init()
 
 sys.path.append('../')
-from femvf import fluids, transforms, forms, meshutils
+from femvf import fluids, transforms, meshutils
 from femvf.parameters.properties import FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
@@ -88,7 +88,10 @@ class CommonSetup(unittest.TestCase):
         surface_coordinates = surface_coordinates[idx_sort]
 
         self.surface_coordinates = surface_coordinates
-        self.fluid = fluids.Bernoulli()
+
+        # breakpoint()
+        xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
+        self.fluid = fluids.Bernoulli(xfluid, yfluid)
         self.fluid_properties = self.fluid.get_properties()
 
         self.area = 2*(self.fluid_properties['y_midline'] - self.surface_coordinates[..., 1])
@@ -270,17 +273,18 @@ class TestBernoulli(CommonSetup):
         x, y, y0, sigma = 1.0, 2.0, 2.1, 0.1
 
         x, y, y0, sigma = np.array([1.0, 2.0]), np.array([2.1, 2.2]), 2.1, 0.1
+        s = np.array([0.0, 1.0])
 
-        a = dsmooth_selection_dx_ad(x, y, y0, sigma)
-        b = fluids.dsmooth_selection_dx(x, y, y0, sigma)
+        a = dsmooth_selection_dx_ad(x, y, y0, s, sigma)
+        b = fluids.dsmooth_selection_dx(x, y, y0, s, sigma)
         self.assertTrue(np.all(np.isclose(a, b)))
 
-        a = dsmooth_selection_dy_ad(x, y, y0, sigma)
-        b = fluids.dsmooth_selection_dy(x, y, y0, sigma)
+        a = dsmooth_selection_dy_ad(x, y, y0, s, sigma)
+        b = fluids.dsmooth_selection_dy(x, y, y0, s, sigma)
         self.assertTrue(np.all(np.isclose(a, b)))
 
-        a = dsmooth_selection_dy0_ad(x, y, y0, sigma)
-        b = fluids.dsmooth_selection_dy0(x, y, y0, sigma)
+        a = dsmooth_selection_dy0_ad(x, y, y0, s, sigma)
+        b = fluids.dsmooth_selection_dy0(x, y, y0, s, sigma)
         self.assertTrue(np.all(np.isclose(a, b)))
 
 if __name__ == '__main__':

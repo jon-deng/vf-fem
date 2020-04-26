@@ -88,7 +88,19 @@ class Parameterization:
         return self.PARAM_TYPES.__str__()
 
     def __repr__(self):
-        return f"{type(self).__name__}(model, {self.constants})"
+        return f"{type(self).__name__}({self.model.__repr__()}, {self.constants})"
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            try:
+                return np.all(self.vector == other.vector)
+            except:
+                raise
+        else:
+            raise TypeError(f"Cannot compare type {type(self)} <-- {type(other)}")
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def copy(self):
         out = type(self)(self.model, self.constants)
@@ -280,10 +292,11 @@ class PeriodicKelvinVoigt(Parameterization):
 
         # Solve for the acceleration
         newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        dfn.solve(self.model.forms['form.un.f0'] == 0, self.model.a0, 
-                  bcs=self.model.bc_base, J=self.model.forms['form.bi.df0_da0'],
+        solid = self.model.solid
+        dfn.solve(solid.forms['form.un.f0'] == 0, solid.a0, 
+                  bcs=solid.bc_base, J=solid.forms['form.bi.df0_da0'],
                   solver_parameters={"newton_solver": newton_solver_prm})
-        a0[:] = self.model.a0.vector()
+        a0[:] = solid.a0.vector()[:]
 
         uva = (u0, v0, a0)
 
@@ -312,9 +325,15 @@ class PeriodicKelvinVoigt(Parameterization):
         grad_v0_part = grad['v0']
         grad_a0 = grad['a0']
 
-        df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj']) 
-        df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj']) 
+        df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj'])
+        df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj'])
         df0_da0_adj = dfn.assemble(self.model.forms['form.bi.df0_da0_adj'])
+
+        # TODO: I'm not sure if this really has an important effect or not?
+        self.model.solid.bc_base.apply(df0_du0_adj)
+        self.model.solid.bc_base.apply(df0_dv0_adj)
+        self.model.solid.bc_base.apply(df0_da0_adj)
+
         adj_a0 = dfn.Function(self.model.solid.vector_fspace).vector()
 
         dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
@@ -329,7 +348,7 @@ class PeriodicKelvinVoigt(Parameterization):
 
         return out
 
-class FixedPeriodKelvinVoigt(PeriodicKelvinVoigt):
+class FixedPeriodKelvinVoigt(Parameterization):
     """
     A parameterization defining a periodic Kelvin-Voigt model
     """
@@ -370,10 +389,11 @@ class FixedPeriodKelvinVoigt(PeriodicKelvinVoigt):
 
         # Solve for the acceleration
         newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        dfn.solve(self.model.forms['form.un.f0'] == 0, self.model.a0, 
-                  bcs=self.model.bc_base, J=self.model.forms['form.bi.df0_da0'],
+        solid = self.model.solid
+        dfn.solve(solid.forms['form.un.f0'] == 0, solid.a0, 
+                  bcs=solid.bc_base, J=solid.forms['form.bi.df0_da0'],
                   solver_parameters={"newton_solver": newton_solver_prm})
-        a0[:] = self.model.a0.vector()
+        a0[:] = solid.a0.vector()
 
         uva = (u0, v0, a0)
 
@@ -409,6 +429,11 @@ class FixedPeriodKelvinVoigt(PeriodicKelvinVoigt):
         df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj']) 
         df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj']) 
         df0_da0_adj = dfn.assemble(self.model.forms['form.bi.df0_da0_adj'])
+        
+        self.model.solid.bc_base.apply(df0_du0_adj)
+        self.model.solid.bc_base.apply(df0_dv0_adj)
+        self.model.solid.bc_base.apply(df0_da0_adj)
+
         adj_a0 = dfn.Function(self.model.solid.vector_fspace).vector()
 
         dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')

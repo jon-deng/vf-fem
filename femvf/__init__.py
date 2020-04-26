@@ -1,3 +1,3 @@
 """
-A package to simulate a 2D vocal fold.
+A package for simulating vocal folds.
 """

@@ -22,7 +22,7 @@ import scipy.signal as sig
 import dolfin as dfn
 import ufl
 
-from ..fluids import smooth_minimum, dsmooth_minimum_dx
+from ..fluids import smooth_minimum, dsmooth_minimum_df
 
 # class TypeFunctional(type):
 #     """
@@ -324,7 +324,7 @@ class Functional:
         """
         Return the sensitivity of the functional with respect to the parameters.
         """
-        return NotImplementedError("You have to implement this")
+        raise NotImplementedError("You have to implement this")
 
 class Constant(Functional):
     """
@@ -354,57 +354,68 @@ class PeriodicError(Functional):
     Functional that measures the periodicity of a simulation
 
     This returns
-    .. math:: ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 ,
-    where :mathm:T is the period.
+    .. math:: \int_\Omega ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 \, dx ,
+    where :math:T is the period.
     """
+    def __init__(self, model, **kwargs):
+        super().__init__(model, **kwargs)
+        self.u_0 = dfn.Function(model.solid.vector_fspace)
+        self.u_N = dfn.Function(model.solid.vector_fspace)
+        self.v_0 = dfn.Function(model.solid.vector_fspace)
+        self.v_N = dfn.Function(model.solid.vector_fspace)
+
+        res_u = self.u_N-self.u_0
+        res_v = self.v_N-self.v_0
+        self.res = (ufl.inner(res_u, res_u) + ufl.inner(res_v, res_v)) * ufl.dx
+
+        self.dres_du_0 = ufl.derivative(self.res, self.u_0, model.solid.vector_trial)
+        self.dres_dv_0 = ufl.derivative(self.res, self.v_0, model.solid.vector_trial)
+
+        self.dres_du_N = ufl.derivative(self.res, self.u_N, model.solid.vector_trial)
+        self.dres_dv_N = ufl.derivative(self.res, self.v_N, model.solid.vector_trial)
+
     def eval(self, f):
-        u_0 = dfn.Function(self.model.solid.vector_fspace).vector()
-        u_N = dfn.Function(self.model.solid.vector_fspace).vector()
-        v_0 = dfn.Function(self.model.solid.vector_fspace).vector()
-        v_N = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        u_0[:], v_0[:], _ = f.get_state(0)
-        u_N[:], v_N[:], _ = f.get_state(f.size-1)
+        self.u_0.vector()[:], self.v_0.vector()[:], _ = f.get_state(0)
+        self.u_N.vector()[:], self.v_N.vector()[:], _ = f.get_state(f.size-1)
         
-        res = (u_N-u_0).norm('l2')**2 + (v_N-v_0).norm('l2')**2
+        # TODO: Values should be cached in self.u_..... anyway so don't have to cahce anything
+        # self.cache['u_0'] = self.u_0.vector() 
+        # self.cache['v_0'] = self.v_0.vector() 
+        # self.cache['u_N'] = self.u_N.vector() 
+        # self.cache['v_N'] = self.v_N.vector() 
 
-        self.cache['u_0'] = u_0 
-        self.cache['v_0'] = v_0 
-        self.cache['u_N'] = u_N 
-        self.cache['v_N'] = v_N 
-
-        return res
+        return dfn.assemble(self.res)
 
     def eval_du(self, f, n, iter_params0, iter_params1):
-        u_0 = self.cache['u_0'] 
-        u_N = self.cache['u_N'] 
 
         du = dfn.Function(self.model.solid.vector_fspace).vector()
-        if n == f.size-1:
-            du[:] = 2*(u_N-u_0)
-
+        if n == 0:
+            du[:] = dfn.assemble(self.dres_du_0)
+        elif n == f.size-1:
+            du[:] = dfn.assemble(self.dres_du_N)
         return du
 
     def eval_dv(self, f, n, iter_params0, iter_params1):
-        v_0 = self.cache['v_0']  
-        v_N = self.cache['v_N']  
-
         dv = dfn.Function(self.model.solid.vector_fspace).vector()
-        if n == f.size-1:
-            dv[:] = 2*(v_N-v_0)
-
+        if n == 0:
+            dv[:] = dfn.assemble(self.dres_dv_0)
+        elif n == f.size-1:
+            dv[:] = dfn.assemble(self.dres_dv_N)
         return dv
-
+    
     def eval_dp(self, f):
-        u_0 = self.cache['u_0']
-        u_N = self.cache['u_N']
-        v_0 = self.cache['v_0']
-        v_N = self.cache['v_N']
+        return None
 
-        dp = {}
-        dp['u0'] = -2*(u_N-u_0)
-        dp['v0'] = -2*(v_N-v_0)
-        return dp
+    # def eval_dp(self, f):
+    #     u_0 = self.cache['u_0']
+    #     u_N = self.cache['u_N']
+    #     v_0 = self.cache['v_0']
+    #     v_N = self.cache['v_N']
+
+    #     dp = {}
+    #     dp['u0'] = -2*(u_N-u_0)
+    #     dp['v0'] = -2*(v_N-v_0)
+    #     return dp
 
 class ScaledPeriodicError(Functional):
     """
@@ -704,11 +715,11 @@ class TransferWork(Functional):
         self.kwargs.setdefault('tukey_alpha', 0.0)
 
         # Define the form needed to compute the work transferred from fluid to solid
-        mesh = self.model.mesh
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=self.model.facet_function)
+        mesh = self.model.solid.mesh
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=self.model.solid.facet_function)
         vector_test = self.model.solid.forms['test.vector']
         scalar_test = self.model.solid.forms['test.scalar']
-        facet_labels = self.model.facet_labels
+        facet_labels = self.model.solid.facet_labels
         pressure = self.model.solid.forms['coeff.fsi.pressure']
 
         u1 = self.model.solid.forms['coeff.state.u1']
@@ -1310,7 +1321,7 @@ class GlottalWidthErrorNorm(Functional):
             y_surf = xy_surf[1::2]
 
             out = dfn.Function(model.solid.vector_fspace).vector()
-            out[Y_DOF] = dsmooth_minimum_dx(y_surf, alpha=self.kwargs['alpha_min'])
+            out[Y_DOF] = dsmooth_minimum_df(y_surf, self.model.fluid.s_vertices, alpha=self.kwargs['alpha_min'])
 
         return out
 

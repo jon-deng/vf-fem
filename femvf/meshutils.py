@@ -39,6 +39,23 @@ def load_fenics_mesh(mesh_path, facet_labels, cell_labels):
 
     return mesh, facet_function, cell_function
 
+def streamwise1dmesh_from_edges(mesh, edge_function, n):
+    """
+    Returns a list of x, y coordinates of the surface corresponding to edges numbered 'n'.
+
+    It is assumed that the beginning of the stream is at the leftmost x-coordinate
+    """
+    edges = edge_function.where_equal(n)
+
+    vertices = vertices_from_edges(edges, mesh)
+
+    surface_coordinates = mesh.coordinates()[vertices]
+
+    idx_sort = sort_vertices_by_nearest_neighbours(surface_coordinates)
+    surface_coordinates = surface_coordinates[idx_sort]
+
+    return surface_coordinates[:, 0], surface_coordinates[:, 1]
+
 def vertices_from_edges(edge_indices, mesh):
     """
     Return vertices associates with a set of edges

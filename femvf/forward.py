@@ -112,7 +112,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
 
     ## Initialize datasets to save in h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        f.init_layout(model, uva0=(u0, v0, a0), qp0=(q0, p0), 
+        f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0), 
                       fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 

@@ -49,11 +49,21 @@ class StateFile:
 
         # self.data = self.file[self.group]
 
+    ## Implement an h5 group interface to the underlying root group
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
         self.file.close()
+
+    def keys(self):
+        return self.root_group.keys()
+
+    def __getitem__(self, name):
+        return self.root_group[name]
+
+    def __setitem__(self, name, value):
+        self.root_group[name] = value
 
     def __len__(self):
         return self.size
@@ -95,7 +105,7 @@ class StateFile:
         """
         return self.file[self.root_group_name]
 
-    def init_layout(self, model, uva0=None, qp0=None, fluid_props=None, solid_props=None):
+    def init_layout(self, uva0=None, qp0=None, fluid_props=None, solid_props=None):
         r"""
         Initializes the layout of the state file.
 
@@ -132,16 +142,16 @@ class StateFile:
 
         self.init_mesh()
         self.init_dofmap()
-        self.init_state(model, uva0=uva0)
-        self.init_fluid_state(model, qp0=qp0)
+        self.init_state(uva0=uva0)
+        self.init_fluid_state(qp0=qp0)
 
         # Fluid properties
         if 'fluid_properties' not in self.root_group:
-            self.init_fluid_props(model, fluid_props=fluid_props)
+            self.init_fluid_props(fluid_props=fluid_props)
 
         # Solid properties (assumed to not be time-varying)
         if 'solid_properties' not in self.root_group:
-            self.init_solid_props(model, solid_props=solid_props)
+            self.init_solid_props(solid_props=solid_props)
 
     def init_dofmap(self):
         """
@@ -176,7 +186,7 @@ class StateFile:
         self.root_group.create_dataset('mesh/solid/cell_func', data=np.inf, 
                                        dtype=np.intp)
 
-    def init_state(self, model, uva0=None):
+    def init_state(self, uva0=None):
         """
         Initializes the states layout of the file.
 
@@ -185,7 +195,7 @@ class StateFile:
         model : femvf.ForwardModel
         """
         # Kinematic states
-        NDOF = model.solid.vector_fspace.dim()
+        NDOF = self.model.solid.vector_fspace.dim()
         for dataset_name in ['u', 'v', 'a']:
             self.root_group.create_dataset(dataset_name, (0, NDOF), maxshape=(None, NDOF), 
                                            chunks=(self.NCHUNK, NDOF), dtype=np.float64)
@@ -193,7 +203,7 @@ class StateFile:
         if uva0 is not None:
             self.append_state(uva0)
 
-    def init_fluid_state(self, model, qp0=None):
+    def init_fluid_state(self, qp0=None):
         """
         Initializes the states layout of the file.
 
@@ -207,14 +217,14 @@ class StateFile:
                                        chunks=(self.NCHUNK, NQ), dtype=np.float64)
 
         # For Bernoulli, you only have to store pressure at each of the vertices
-        NDOF = model.surface_vertices.size
+        NDOF = self.model.surface_vertices.size
         self.root_group.create_dataset('p', (0, NDOF), maxshape=(None, NDOF), 
                                        chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
         if qp0 is not None:
             self.append_fluid_state(qp0)
 
-    def init_fluid_props(self, model, fluid_props=None):
+    def init_fluid_props(self, fluid_props=None):
         """
         Initializes the fluid properties layout of the file.
 
@@ -225,25 +235,23 @@ class StateFile:
         """
         group_fluid = self.root_group.create_group('fluid_properties')
         for key, prop_desc in self.model.fluid.PROPERTY_TYPES.items():
-            shape = solid_property_shape(prop_desc, model.solid)
+            shape = solid_property_shape(prop_desc, self.model.solid)
             group_fluid.create_dataset(key, shape=(0,)+shape, chunks=(self.NCHUNK,)+shape, 
                                        maxshape=(None,)+shape, dtype=np.float64)
 
         if fluid_props is not None:
             self.append_fluid_props(fluid_props)
 
-    def init_solid_props(self, model, solid_props=None):
+    def init_solid_props(self, solid_props=None):
         """
         Initializes the solid properties layout of the file.
 
         Parameters
         ----------
-        model :
-
         """
         solid_group = self.root_group.create_group('solid_properties')
         for key, prop_desc in self.model.solid.PROPERTY_TYPES.items():
-            shape = solid_property_shape(prop_desc, model.solid)
+            shape = solid_property_shape(prop_desc, self.model.solid)
             solid_group.create_dataset(key, shape, dtype=np.float64)
 
         if solid_props is not None:

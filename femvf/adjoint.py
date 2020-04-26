@@ -135,8 +135,8 @@ def adjoint(model, f, functional, show_figure=False):
         qp0 = f.get_fluid_state(ii-1)
         dt1 = times[ii] - times[ii-1]
 
-        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'u1': uva1[0]}
         iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'u1': uva2[0]}
+        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'u1': uva1[0]}
 
         dcost_duva1 = [functional.du(f, ii, iter_params1, iter_params2),
                        functional.dv(f, ii, iter_params1, iter_params2),
@@ -147,6 +147,12 @@ def adjoint(model, f, functional, show_figure=False):
 
         for comp, val in zip(adj_uva1, [adj_u1, adj_v1, adj_a1]):
             comp[:] = val
+
+        #### TODO: REMOVE THIS CHECK
+        # bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()))
+        # print("\nadj_u", adj_u1[bc_dofs])
+        # print("adj_v", adj_v1[bc_dofs])
+        # print("adj_a", adj_a1[bc_dofs])
 
         # Update gradient using adjoint states
         model.set_iter_params(**iter_params1)
@@ -173,27 +179,40 @@ def adjoint(model, f, functional, show_figure=False):
         qp1 = qp0
 
         dt2 = dt1
-    
-    # At the end of the `for` loop ii=1, and we can compute the sensitivity w.r.t initial state
 
     # The model parameters should already be set to compute `F1`, so we can directly assemble below
-    # model.set_iter_params(**iter_params2)
+    iter_params1 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'u1': uva2[0]}
+    # iter_params0 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'u1': uva1[0]}
+    # model.set_iter_params(**iter_params1)
+
+    ## Calculate sensitivities wrt initial states
+    df1_du0 = model.assem_df1_du0_adj()
+    df1_dv0 = model.assem_df1_dv0_adj()
+    df1_da0 = model.assem_df1_dv0_adj()
 
     # Calculate a correction for df1_du0 due to the pressure loading
     df1_dpressure = dfn.assemble(solid.forms['form.bi.df1_dpressure_adj'])
     dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
     df1_du0_correction = dfn.Function(model.solid.vector_fspace).vector()
     dpressure_du0.transpmult(df1_dpressure*adj_uva2[0], df1_du0_correction)
-    grad_u0_par = -(model.assem_df1_du0_adj()*adj_uva2[0]) \
+
+    # the `None` pass in is because there is no time step before solving time step 1
+    # corresponding to iter_params1
+    grad_u0_par = -(df1_du0*adj_uva2[0]) + functional.du(f, 0, None, iter_params1) \
                   + newmark_v_du0(dt2)*adj_uva2[1] \
                   + newmark_a_du0(dt2)*adj_uva2[2] - df1_du0_correction
+    model.solid.bc_base.apply(grad_u0_par)
 
-    grad_v0_par = -(model.assem_df1_dv0_adj()*adj_uva2[0]) \
+    grad_v0_par = -(df1_dv0*adj_uva2[0]) + functional.dv(f, 0, None, iter_params1) \
                   + newmark_v_dv0(dt2)*adj_uva2[1] \
                   + newmark_a_dv0(dt2)*adj_uva2[2]
-    grad_a0_par = -(model.assem_df1_da0_adj()*adj_uva2[0]) \
+    model.solid.bc_base.apply(grad_v0_par)
+
+    grad_a0_par = -(df1_da0*adj_uva2[0]) + functional.da(f, 0, None, iter_params1) \
                   + newmark_v_dv0(dt2)*adj_uva2[1] \
                   + newmark_a_dv0(dt2)*adj_uva2[2]
+    model.solid.bc_base.apply(grad_a0_par)
+
     grad['u0'] = grad_u0_par
     grad['v0'] = grad_v0_par
     grad['a0'] = grad_a0_par
@@ -201,12 +220,11 @@ def adjoint(model, f, functional, show_figure=False):
     # Change grad_dt to an array
     grad['dt'] = np.array(grad['dt'])
 
-    # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity components once
+    # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity 
+    # components once
     dfunc_dparam = functional.dp(f)
     if dfunc_dparam is not None:
         grad['emod'] += dfunc_dparam.get('emod', 0)
-        grad['u0'] += dfunc_dparam.get('u0', 0)
-        grad['v0'] += dfunc_dparam.get('v0', 0)
     
     return functional_value, grad, functional
 
@@ -293,8 +311,7 @@ def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
     adj_u1_lhs = dcost_du1 + newmark_v_du1(dt1)*adj_v1 + newmark_a_du1(dt1)*adj_a1
     adj_u1_lhs -= df2_du1*adj_u2 + df2_du1_correction \
                   - newmark_v_du0(dt2)*adj_v2 - newmark_a_du0(dt2)*adj_a2
-    model.solid.bc_base.apply(df1_du1)
-    model.solid.bc_base.apply(adj_u1_lhs)
+    model.solid.bc_base.apply(df1_du1, adj_u1_lhs)
     dfn.solve(df1_du1, adj_u1, adj_u1_lhs, 'petsc')
 
     return (adj_u1, adj_v1, adj_a1)
