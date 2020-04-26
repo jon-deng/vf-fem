@@ -1,8 +1,6 @@
 # My Rules
 *.pickle
 *.md
-*.xdmf
-*.xmf
 *.h5
 *.vtu
 *.json
@@ -11,8 +9,11 @@
 *.pvd
 *.png
 *.txt
-*.code-workspace
-out
+*.pdf
+*.out
+*.xml
+*.msh
+*.xdmf
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
