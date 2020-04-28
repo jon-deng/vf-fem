@@ -109,33 +109,16 @@ class TestFunctionals(unittest.TestCase):
         model = self.model
         ## Set the functional to test
         # Functional = basic.DisplacementNorm
-        # gkwargs = {}
-
         # Functional = basic.FinalDisplacementNorm
-        # gkwargs = {}
-
         # Functional = basic.VelocityNorm
-        # gkwargs = {}
-
         # Functional = basic.FinalVelocityNorm
-        # gkwargs = {}
-
         # Functional = functionals.AcousticEfficiency
-        # gkwargs = {'tukey_alpha': 0.1}
-
         # Functional = functionals.AcousticPower
-        # gkwargs = {'tukey_alpha': 0.1}
-
         # Functional = functionals.F0WeightedAcousticPower
-        # gkwargs = {'f0': 100.0, 'df': 50, 'tukey_alpha': 0.1}
-
         # Functional = basic.SubglottalWork
-        # gkwargs = {'tukey_alpha': 0.1}
-
         # Functional = basic.FluidtoSolidWork
-        # gkwargs = {'tukey_alpha': 0.1}
-
         Functional = basic.StrainWork
+
         gkwargs = {}
 
         # Functional = functionals.T1RegAcousticEfficiency
@@ -144,7 +127,8 @@ class TestFunctionals(unittest.TestCase):
         # Functional = basic.StrainEnergy
         # gkwargs = {}
 
-        g = Functional(model, **gkwargs)
+        g = Functional(model)
+        g.constants.update(gkwargs)
 
         # Set the direction and step size to test the gradient of the functional
         np.random.seed(123)
@@ -177,9 +161,7 @@ class TestFunctionals(unittest.TestCase):
             func_0 = g.eval(f)
 
             iter_params0, iter_params1 = f.get_iter_params(n), f.get_iter_params(n+1)
-            dfunc_du_an = g.du(f, n, iter_params0, iter_params1)
-            dfunc_dv_an = g.dv(f, n, iter_params0, iter_params1)
-            dfunc_da_an = g.da(f, n, iter_params0, iter_params1)
+            dfunc_du_an, dfunc_dv_an, dfunc_da_an = g.duva(f, n, iter_params0, iter_params1)
 
             dfunc_du_fd = (functional_wrapper(g, x_0[0]+alpha_u*du, f, i=0, n=n)-func_0) / alpha_u
             dfunc_dv_fd = (functional_wrapper(g, x_0[1]+alpha_v*du, f, i=1, n=n)-func_0) / alpha_v

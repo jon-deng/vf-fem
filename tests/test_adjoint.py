@@ -37,8 +37,8 @@ from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.functionals import basic as funcs
 
-sys.path.append(path.expanduser('~/lib/vf-optimization'))
-from optvf import functionals as extra_funcs
+# sys.path.append(path.expanduser('~/lib/vf-optimization'))
+# from optvf import functionals as extra_funcs
 
 dfn.set_log_level(30)
 np.random.seed(123)
@@ -154,7 +154,7 @@ class TaylorTest(unittest.TestCase):
         # Functional = extra_funcs.AcousticEfficiency
         # Functional = extra_funcs.F0WeightedAcousticPower
 
-        functional = Functional(model, **fkwargs)
+        functional = Functional(model)
 
         # Calculate functional values at each step
         print(f"\nComputing functional for each point")
@@ -571,7 +571,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         # Functional = funcs.StrainEnergy
         # Functional = extra_funcs.AcousticEfficiency
 
-        functional = Functional(model, **fkwargs)
+        functional = Functional(model)
 
         ## Set the solution parameters
         dt_sample = 1e-4
@@ -657,7 +657,7 @@ class Test2ndOrderDifferentiability(unittest.TestCase):
         fkwargs = self.fkwargs
         Functional = self.Functional
 
-        functional = Functional(model, **fkwargs)
+        functional = Functional(model)
 
         run_info = None
         with open(save_path+".pickle", 'rb') as f:

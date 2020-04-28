@@ -93,9 +93,7 @@ def adjoint(model, f, functional, show_figure=False):
     iter_params3 = {'uva0': uva2, 'qp0': qp2, 'dt': 0.0, 'u1': None}
     iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'u1': uva2[0]}
 
-    dcost_du2 = functional.du(f, N-1, iter_params2, iter_params3)
-    dcost_dv2 = functional.dv(f, N-1, iter_params2, iter_params3)
-    dcost_da2 = functional.da(f, N-1, iter_params2, iter_params3)
+    dcost_du2, dcost_dv2, dcost_da2 = functional.duva(f, N-1, iter_params2, iter_params3)
 
     model.set_iter_params(**iter_params2)
     df2_du2 = model.assem_df1_du1_adj()
@@ -138,9 +136,7 @@ def adjoint(model, f, functional, show_figure=False):
         iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'u1': uva2[0]}
         iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'u1': uva1[0]}
 
-        dcost_duva1 = [functional.du(f, ii, iter_params1, iter_params2),
-                       functional.dv(f, ii, iter_params1, iter_params2),
-                       functional.da(f, ii, iter_params1, iter_params2)]
+        dcost_duva1 = functional.duva(f, ii, iter_params1, iter_params2)
 
         (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
             model, adj_uva2, iter_params1, iter_params2, dcost_duva1)
@@ -198,17 +194,18 @@ def adjoint(model, f, functional, show_figure=False):
 
     # the `None` pass in is because there is no time step before solving time step 1
     # corresponding to iter_params1
-    grad_u0_par = -(df1_du0*adj_uva2[0]) + functional.du(f, 0, None, iter_params1) \
+    dcost_duva0 = functional.duva(f, 0, None, iter_params1)
+    grad_u0_par = -(df1_du0*adj_uva2[0]) + dcost_duva0[0] \
                   + newmark_v_du0(dt2)*adj_uva2[1] \
                   + newmark_a_du0(dt2)*adj_uva2[2] - df1_du0_correction
     model.solid.bc_base.apply(grad_u0_par)
 
-    grad_v0_par = -(df1_dv0*adj_uva2[0]) + functional.dv(f, 0, None, iter_params1) \
+    grad_v0_par = -(df1_dv0*adj_uva2[0]) + dcost_duva0[1] \
                   + newmark_v_dv0(dt2)*adj_uva2[1] \
                   + newmark_a_dv0(dt2)*adj_uva2[2]
     model.solid.bc_base.apply(grad_v0_par)
 
-    grad_a0_par = -(df1_da0*adj_uva2[0]) + functional.da(f, 0, None, iter_params1) \
+    grad_a0_par = -(df1_da0*adj_uva2[0]) + dcost_duva0[2] \
                   + newmark_v_dv0(dt2)*adj_uva2[1] \
                   + newmark_a_dv0(dt2)*adj_uva2[2]
     model.solid.bc_base.apply(grad_a0_par)

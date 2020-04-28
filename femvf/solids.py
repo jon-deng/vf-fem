@@ -149,7 +149,7 @@ class Solid:
         return self._forms
 
     @staticmethod
-    def generate_forms(mesh, facet_function, facet_labels, cell_function, cell_labels):
+    def form_definitions(mesh, facet_function, facet_labels, cell_function, cell_labels):
         """
         Return a dictionary of ufl forms representing the solid in Fenics.
 
