@@ -118,8 +118,7 @@ class ForwardModel:
         Returns the state (u, v, a) of surface vertices of the model.
 
         The displacement, u, returned is the actual position rather than the displacement relative
-        to the reference configuration. Also, states are ordered according to
-        `self.surface_vertices`.
+        to the reference configuration. Also, states are ordered in streamwise increasing order.
 
         Returns
         -------
@@ -268,6 +267,14 @@ class ForwardModel:
 
     # Convenience functions
     def get_glottal_width(self):
+        """
+        Return glottal width
+        """
+        x_surface = self.get_surface_state()
+
+        return self.fluid.get_glottal_width(x_surface)
+
+    def get_exact_glottal_width(self):
         """
         Return glottal width
         """
@@ -443,8 +450,8 @@ class ForwardModel:
 
         # Assign the values to the model
         self.set_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
+        return {'uva0': uva0, 'qp0': qp0, 'solid_props': solid_props, 'fluid_props': fluid_props}
 
-    # @profile
     def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=True):
         """
         Set all parameters needed to integrate the model and an initial guess, based on a recorded
@@ -478,6 +485,7 @@ class ForwardModel:
         # Assign the values to the model
         self.set_iter_params(uva0=uva0, qp0=qp0, dt=dt,
                              solid_props=solid_props, fluid_props=fluid_props, u1=u1)
+        return {'uva0': uva0, 'qp0': qp0, 'dt': dt, 'solid_props': solid_props, 'fluid_props': fluid_props, 'u1': u1}
 
 class CachedBiFormAssembler:
     """

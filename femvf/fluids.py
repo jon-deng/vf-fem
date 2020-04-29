@@ -534,6 +534,13 @@ class Bernoulli(Fluid1D):
 
         return dp_du, dq_du
 
+    def get_glottal_width(self, surface_state):
+        x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+
+        area = 2 * (self.properties['y_midline'] - y)
+        a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
+        return a_min
+        
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
@@ -577,6 +584,21 @@ def dsmooth_minimum_df(f, s, alpha=-1000):
     dw_df = alpha*np.exp(alpha*f - K_STABILITY)
 
     num = trapz(f*w, s) 
+    den = trapz(w, s) 
+
+    dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)
+    dden_df = dtrapz_df(w, s)*dw_df
+
+    return dnum_df/den - num/den**2 * dden_df
+
+def d2smooth_minimum_df2(f, s, alpha=-1000):
+    # TODO: Need to to implement this
+    K_STABILITY = np.max(alpha*f)
+    w = np.exp(alpha*f - K_STABILITY)
+    dw_df = alpha*np.exp(alpha*f - K_STABILITY)
+    d2w_df2 = alpha**2*np.exp(alpha*f - K_STABILITY)
+
+    num = trapz(f*w, s)
     den = trapz(w, s) 
 
     dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)

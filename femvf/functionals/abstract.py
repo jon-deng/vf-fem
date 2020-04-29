@@ -174,7 +174,6 @@ class AbstractFunctional:
 
     # def __pow__(self, other):
 
-    # # Right binary ops
     # def __radd__(self, other):
     #     return NotImplementedError("")
 
@@ -187,17 +186,22 @@ class AbstractFunctional:
     # def __rtruediv__(self, other):
     #     return NotImplementedError("")
 
-    # # Unary ops
     # def __neg__(self):
 
     # def __pos__(self):
 
-    
-# class SumOfFuncs(AbstractFunctional):
+
+# class ScalarMultiple(AbstractFunctional):
+
+# class Sum(AbstractFunctional):
 #     def eval(self, f):
-#         return
+#         return self.funcs[0](f) + self.funcs[1](f)
+
 #     def eval_duva(self, n, p0, p1):
+#         return self.funcs[0].duva(f, n, p0, p1) + self.funcs[1].duva(f, n, p0, p1)
+
 #     def eval_dp(n, p0, p1):
+#         return self.funcs[0].duva(f, n, p0, p1) + self.funcs[1].duva(f, n, p0, p1)
 
 # class ProductOfFuncs(AbstractFunctional):
 #     def eval(self, f):

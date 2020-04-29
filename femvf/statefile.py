@@ -347,6 +347,7 @@ class StateFile:
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
 
+    ## Read property functions
     def get_time(self, n):
         """
         Returns the time at state n.

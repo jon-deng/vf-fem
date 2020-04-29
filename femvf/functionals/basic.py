@@ -706,6 +706,104 @@ class DFTGlottalWidthErrorNorm(Functional):
     def eval_dp(self, f):
         return None
 
+class InitialGlottalWidth(Functional):
+    default_constants = {}
+    func_types = ()
+
+    def eval(self, f):
+        model = self.model
+        params = model.set_iter_params_fromfile(f, 0)
+        fluid_props = params['fluid_props']
+
+        x, v, a = self.model.get_surface_state()
+        y = x[:, 1]
+
+        area = 2 * (fluid_props['y_midline'] - y)
+
+        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
+
+        return amin
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        model = self.model
+
+        params = model.set_iter_params_fromfile(f, 0)
+        fluid_props = params['fluid_props']
+
+        x, v, a = self.model.get_surface_state()
+        y, dy_dt = x[:, 1], v[:, 1]
+
+        dy_du = np.zeros(x.shape); dy_du[:, 1] = 1.0
+
+        area = 2 * (fluid_props['y_midline'] - y)
+        darea_du = 2 * -dy_du
+
+        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
+        damin_darea = dsmooth_minimum_df(area, model.fluid.s_vertices, fluid_props['alpha'])
+        damin_du = damin_darea[:, None] * darea_du
+
+        ## Map the sensitivity to the solid DOFS
+        # Get a list of pressure DOFS
+        du = dfn.Function(self.model.solid.vector_fspace).vector()
+
+        pressure_vertices = model.surface_vertices
+        pressure_dofs = model.solid.vert_to_sdof[pressure_vertices]
+        vector_dofs = np.stack([pressure_dofs, pressure_dofs+1], axis=-1)
+        du[vector_dofs.reshape(-1)] = damin_du.reshape(-1)
+
+        return du, 0.0, 0.0
+    
+    def dp(self, f):
+        return None
+
+class InitialGlottalWidthVelocity(Functional):
+    def eval(self, f):
+        model = self.model
+        params = model.set_iter_params_fromfile(f, 0)
+        fluid_props = params['fluid_props']
+
+        x, v, a = self.model.get_surface_state()
+        y, dy_dt = x[1::2], v[1::2]
+
+        area = 2 * (fluid_props['y_midline'] - y)
+        darea_dt = 2 * -dy_dt
+
+        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
+        damin_darea = dsmooth_minimum_df(area, model.fluid.s_vertices, fluid_props['alpha'])
+        
+        damin_dt = np.dot(damin_darea, darea_dt)
+
+        return damin_dt
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        model = self.model
+        params = model.set_iter_params_fromfile(f, 0)
+        fluid_props = params['fluid_props']
+
+        x, v, a = self.model.get_surface_state()
+        y, dy_dt = x[1::2], v[1::2]
+
+        dy_du = np.zeros(x.size); dy_du[1::2] = 1.0
+        ddy_dt_dv = np.zeros(x.size); ddy_dt_dv[1::2] = 1.0
+
+        area = 2 * (fluid_props['y_midline'] - y)
+        darea_dt = 2 * -dy_dt
+
+        darea_du = 2 * -dy_du
+        ddarea_dt_dv = 2*-ddy_dt_dv
+
+        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
+        damin_darea = dsmooth_minimum_df(area, model.fluid.s_vertices, fluid_props['alpha'])
+
+        damin_darea
+        
+        damin_dt = np.dot(damin_darea, darea_dt)
+
+        return damin_dt
+    
+    def dp(self, f):
+        return None
+
 def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
     """
     Return a 'comb' of gaussians at multiples of f0
