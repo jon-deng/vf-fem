@@ -3,13 +3,17 @@ channels:
     - defaults
     - conda-forge
 dependicies:
-    - dolfin
-    - cyipopy
-    - nlopt
     - numpy
     - scipy
-    - matplotlib
     - pandas
     - h5py
+    - matplotlib
+    - ipython
+    - jupyter
     - tabulate
+    - tqdm
+    - autograd
+    - cyipopt
+    - nlopt
+    - fenics
 

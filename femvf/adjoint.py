@@ -40,7 +40,10 @@ def adjoint(model, f, functional, show_figure=False):
     """
     # Assuming that fluid and solid properties are constant in time so set them once
     # and leave them
-    # TODO: May want to use time varying fluid/solid props in future
+    # TODO: Only gradient wrt. solid properties are included right now
+    # grad = model.solid.get_properties()
+    # grad.vector[:] = 0
+
     fluid_props = f.get_fluid_props(0)
     solid_props = f.get_solid_props()
 
@@ -49,11 +52,13 @@ def adjoint(model, f, functional, show_figure=False):
 
     # Initialize the functional instance and run it once to initialize any cached values
     functional_value = functional(f)
-    
+
     # Make adjoint forms for sensitivity of parameters
     solid = model.solid
-    df1_demod_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.prop.emod'], solid.scalar_trial))
     df1_ddt_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.time.dt'], solid.scalar_trial))
+    df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
+
+    df1_demod_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.prop.emod'], solid.scalar_trial))
 
     ## Preallocating vector
     # Temporary variables to shorten code
@@ -72,10 +77,17 @@ def adjoint(model, f, functional, show_figure=False):
     uva1 = get_block_vec()
     uva2 = get_block_vec()
 
-    # Allocate space for the gradient
-    grad = {'emod': dfn.Function(solid.scalar_fspace).vector(),
-            'dt': []}
-    # gradient = dfn.Function(model.solid.scalar_fspace).vector()
+    ## Allocate space for the adjoints of all the parameters
+    adj_dt = []
+    adj_solid = {}
+    for key in solid_props:
+        field_or_const, value_shape = solid_props.TYPES[key]
+        if field_or_const == 'const':
+            adj_solid[key] = None
+        elif value_shape == ():
+            adj_solid[key] = dfn.Function(solid.scalar_fspace).vector()
+        else:
+            adj_solid[key] = dfn.Function(solid.vector_fspace).vector()
 
     ## Initialize Adjoint states
     # Set form coefficients to represent f^{N-1} (the final forward increment model that solves
@@ -111,18 +123,25 @@ def adjoint(model, f, functional, show_figure=False):
     model.solid.bc_base.apply(df2_du2, adj_u2_lhs)
     dfn.solve(df2_du2, adj_uva2[0], adj_u2_lhs)
 
-    # the emod parameter only affects the displacement residual, under the 
-    # displacement-based newmark scheme 
-    df2_demod = dfn.assemble(df1_demod_form_adj)
-    grad['emod'] -= df2_demod*adj_uva2[0]
 
-    # The sum is done since the 'dt' at every DOF, must be the same; we can then collapse
-    # each sensitivity into one
+    # Update the adjoint w.r.t. solid parameters
+    for key, vector in adj_solid.items():
+        if vector is not None:
+            # the solid parameters only affect the displacement residual, under the
+            # displacement-based newmark scheme, hence why there is only mult. by
+            # adj_uva2[0]
+            df2_dkey = dfn.assemble(df1_dsolid_form_adj[key])
+            vector[:] -= df2_dkey*adj_uva2[0]
+    # grad['emod'] -= df2_demod*adj_uva2[0]
+
+    # The sum is done since the 'dt' at every spatial DOF, must be the same;
+    # we can collapse each sensitivity into one
     df2_ddt = dfn.assemble(df1_ddt_form_adj)
-    grad_dt = - (df2_ddt*adj_uva2[0]).sum() \
+    adj_dt2 = - (df2_ddt*adj_uva2[0]).sum() \
               + newmark_v_dt(uva2[0], *uva1, dt2).inner(adj_uva2[1]) \
               + newmark_a_dt(uva2[0], *uva1, dt2).inner(adj_uva2[2])
-    grad['dt'].insert(0, grad_dt)
+    adj_dt.insert(0, adj_dt2)
+    # grad['dt'].insert(0, grad_dt)
 
     ## Loop through states for adjoint computation
     # Note that ii corresponds to the time index of the adjoint state we are solving for.
@@ -144,22 +163,22 @@ def adjoint(model, f, functional, show_figure=False):
         for comp, val in zip(adj_uva1, [adj_u1, adj_v1, adj_a1]):
             comp[:] = val
 
-        #### TODO: REMOVE THIS CHECK
-        # bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()))
-        # print("\nadj_u", adj_u1[bc_dofs])
-        # print("adj_v", adj_v1[bc_dofs])
-        # print("adj_a", adj_a1[bc_dofs])
-
-        # Update gradient using adjoint states
+        # Update adjoint w.r.t parameters
         model.set_iter_params(**iter_params1)
-        df1_dparam = dfn.assemble(df1_demod_form_adj)
-        df1_ddt = dfn.assemble(df1_ddt_form_adj)
+        # df1_dparam = dfn.assemble(df1_demod_form_adj)
 
-        grad['emod'] -= df1_dparam*adj_uva1[0]
-        grad_dt = - (df1_ddt*adj_uva1[0]).sum() \
+        # grad['emod'] -= df1_dparam*adj_uva1[0]
+        # grad['dt'].insert(0, grad_dt)
+        for key, vector in adj_solid.items():
+            if vector is not None:
+                df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
+                vector -= df1_dkey*adj_uva1[0]
+
+        df1_ddt = dfn.assemble(df1_ddt_form_adj)
+        adj_dt1 = - (df1_ddt*adj_uva1[0]).sum() \
                   + newmark_v_dt(uva1[0], *uva0, dt1).inner(adj_uva1[1]) \
                   + newmark_a_dt(uva1[0], *uva0, dt1).inner(adj_uva1[2])
-        grad['dt'].insert(0, grad_dt)
+        adj_dt.insert(0, adj_dt1)
 
         # Set initial states to the previous states for the start of the next iteration
         for comp1, comp2 in zip(uva1, uva2):
@@ -184,7 +203,7 @@ def adjoint(model, f, functional, show_figure=False):
     ## Calculate sensitivities wrt initial states
     df1_du0 = model.assem_df1_du0_adj()
     df1_dv0 = model.assem_df1_dv0_adj()
-    df1_da0 = model.assem_df1_dv0_adj()
+    df1_da0 = model.assem_df1_da0_adj()
 
     # Calculate a correction for df1_du0 due to the pressure loading
     df1_dpressure = dfn.assemble(solid.forms['form.bi.df1_dpressure_adj'])
@@ -206,23 +225,34 @@ def adjoint(model, f, functional, show_figure=False):
     model.solid.bc_base.apply(grad_v0_par)
 
     grad_a0_par = -(df1_da0*adj_uva2[0]) + dcost_duva0[2] \
-                  + newmark_v_dv0(dt2)*adj_uva2[1] \
-                  + newmark_a_dv0(dt2)*adj_uva2[2]
+                  + newmark_v_da0(dt2)*adj_uva2[1] \
+                  + newmark_a_da0(dt2)*adj_uva2[2]
     model.solid.bc_base.apply(grad_a0_par)
 
+    # Since we've integrated over the whole time in reverse, the adjoint are not gradients
+    grad = {}
     grad['u0'] = grad_u0_par
     grad['v0'] = grad_v0_par
     grad['a0'] = grad_a0_par
 
     # Change grad_dt to an array
-    grad['dt'] = np.array(grad['dt'])
+    grad['dt'] = np.array(adj_dt)
 
-    # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity 
+    for key, vector in adj_solid.items():
+        if vector is not None:
+            grad[key] = vector
+
+    # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
     dfunc_dparam = functional.dp(f)
     if dfunc_dparam is not None:
-        grad['emod'] += dfunc_dparam.get('emod', 0)
-    
+        for key, vector in adj_solid.items():
+            if vector is not None:
+                grad[key] += dfunc_dparam.get(key, 0)
+
+    # if dfunc_dparam is not None:
+    #     grad['emod'] += dfunc_dparam.get('emod', 0)
+
     return functional_value, grad, functional
 
 def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
@@ -313,3 +343,17 @@ def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
 
     return (adj_u1, adj_v1, adj_a1)
 
+def get_df1_dsolid_forms(solid):
+    df1_dsolid = {}
+    for key in solid.PROPERTY_TYPES:
+        try:
+            df1_dsolid[key] = dfn.adjoint(ufl.derivative(solid.f1, solid.forms[f'coeff.prop.{key}'], solid.scalar_trial))
+        except RuntimeError:
+            df1_dsolid[key] = None
+
+        if df1_dsolid[key] is not None:
+            try:
+                dfn.assemble(df1_dsolid[key])
+            except RuntimeError:
+                df1_dsolid[key] = None
+    return df1_dsolid

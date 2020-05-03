@@ -63,7 +63,7 @@ def biform_m(trial, test, rho):
     Integrates a with b
     """
     return rho*ufl.dot(trial, test) * ufl.dx
-        
+
 def inertia_2form(trial, test, rho):
     return biform_m(trial, test, rho)
 
@@ -80,21 +80,6 @@ def traction_1form(trial, test, pressure, facet_normal, traction_ds):
         traction = ufl.dot(fluid_force, test)*traction_ds
         return traction
 
-# def penalty_1form(u):
-#         collision_normal = dfn.Constant([0.0, 1.0])
-#         x_reference = dfn.Function(vector_fspace)
-
-#         vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
-#         x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
-
-#         gap = ufl.dot(x_reference+u, collision_normal) - y_collision
-#         positive_gap = (gap + abs(gap)) / 2
-
-#         # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-#         penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
-#                   * ds(facet_labels['pressure'])
-#         return penalty    
-
 class Solid:
     """
     Class representing the discretized governing equations of a solid
@@ -104,14 +89,14 @@ class Solid:
     DEFAULTS = None
 
     def __init__(self, mesh, facet_function, facet_labels, cell_function, cell_labels):
-        
+
         self._forms = self.form_definitions(mesh, facet_function, facet_labels,
                                             cell_function, cell_labels)
 
         ## Store mesh related quantities
         self.mesh = mesh
         self.facet_function = facet_function
-        self.cell_function = cell_function 
+        self.cell_function = cell_function
         self.facet_labels = facet_labels
         self.cell_labels = cell_labels
 
@@ -123,6 +108,10 @@ class Solid:
         self.vector_trial = self.forms['trial.vector']
         self.scalar_test = self.forms['test.scalar']
         self.vector_test = self.forms['test.vector']
+
+        ## Measures
+        self.dx = self.forms['measure.dx']
+        self.ds = self.forms['measure.ds']
 
         self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
         self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
@@ -190,10 +179,10 @@ class Solid:
 
     def set_properties(self, props):
         """
-        Sets the properties of the solid 
+        Sets the properties of the solid
 
-        Properties are essentially all settable values that are not states. In UFL, all things that 
-        can have set values are `coefficients`, but this ditinguishes between state coefficients, 
+        Properties are essentially all settable values that are not states. In UFL, all things that
+        can have set values are `coefficients`, but this ditinguishes between state coefficients,
         and other property coefficients.
 
         Parameters
@@ -210,7 +199,7 @@ class Solid:
                 coefficient.assign(props[key][()])
             else:
                 coefficient.vector()[:] = props[key]
-    
+
     def set_iter_params(self, u1, uva0, dt, props):
         """
         Sets all coefficient values to solve the model
@@ -224,6 +213,7 @@ class Solid:
         self.set_ini_state(*uva0)
         self.set_fin_state(u1)
         self.set_properties(props)
+        self.set_time_step(dt)
 
     def assem(self, form_name):
         """
@@ -235,7 +225,7 @@ class Solid:
             return dfn.assemble(self.forms[form_key])
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
-    
+
     def get_properties(self):
         """
         Returns the current values of the properties
@@ -255,8 +245,8 @@ class Solid:
                     # If the coefficient is a constant, then the property must be a float
                     properties[key][()] = coefficient.values()[0]
                 else:
-                    # If a vector, it's possible it's the 'hacky' version for a time step, where the 
-                    # actual property is a float but the coefficient is assigned to be a vector 
+                    # If a vector, it's possible it's the 'hacky' version for a time step, where the
+                    # actual property is a float but the coefficient is assigned to be a vector
                     # (which is done so you can differentiate it)
                     assert coefficient.vector().max() == coefficient.vector().min()
                     properties[key][()] = coefficient.vector().max()
@@ -289,6 +279,9 @@ class Rayleigh(Solid):
 
     @staticmethod
     def form_definitions(mesh, facet_function, facet_labels, cell_function, cell_labels):
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_function)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+
         scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
         vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
 
@@ -313,7 +306,7 @@ class Rayleigh(Solid):
 
         emod.vector()[:] = 1.0
 
-        # NOTE: Fenics doesn't support form derivatives w.r.t Constant. This is a hack making time step 
+        # NOTE: Fenics doesn't support form derivatives w.r.t Constant. This is a hack making time step
         # vary in space so you can take derivative. You *must* set the time step equal at every DOF
         # dt = dfn.Constant(1e-4)
         dt = dfn.Function(scalar_fspace)
@@ -420,6 +413,8 @@ class Rayleigh(Solid):
         df0_da0_adj = dfn.adjoint(df0_da0)
 
         forms = {
+            'measure.dx': dx,
+            'measure.ds': ds,
             'bcs.base': bc_base,
 
             'fspace.vector': vector_fspace,
@@ -434,7 +429,7 @@ class Rayleigh(Solid):
             'coeff.time.dt': dt,
             'coeff.time.gamma': gamma,
             'coeff.time.beta': beta,
-            
+
             'coeff.state.u0': u0,
             'coeff.state.v0': v0,
             'coeff.state.a0': a0,
@@ -460,7 +455,7 @@ class Rayleigh(Solid):
             'form.bi.df1_da0_adj': df1_da0_adj,
             'form.bi.df1_dpressure_adj': df1_dpressure_adj,
             'form.bi.df1_demod': df1_demod,
-            
+
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
             'form.bi.df0_da0_adj': df0_da0_adj,
@@ -491,6 +486,9 @@ class KelvinVoigt(Solid):
 
     @staticmethod
     def form_definitions(mesh, facet_function, facet_labels, cell_function, cell_labels):
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_function)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+
         scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
         vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
 
@@ -509,8 +507,6 @@ class KelvinVoigt(Solid):
         k_collision = dfn.Constant(1.0)
         rho = dfn.Constant(1.0)
         nu = dfn.Constant(1.0)
-        rayleigh_m = dfn.Constant(1.0)
-        rayleigh_k = dfn.Constant(1.0)
         emod = dfn.Function(scalar_fspace)
 
         emod.vector()[:] = 1.0
@@ -543,7 +539,6 @@ class KelvinVoigt(Solid):
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
         def traction_1form(u):
             deformation_gradient = ufl.grad(u) + ufl.Identity(2)
             deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
@@ -585,7 +580,7 @@ class KelvinVoigt(Solid):
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                facet_function, facet_labels['fixed'])
+                                  facet_function, facet_labels['fixed'])
 
         ## Adjoint forms
         # Note: For an externally calculated pressure, you have to correct the derivative based on
@@ -622,6 +617,8 @@ class KelvinVoigt(Solid):
         df0_da0_adj = dfn.adjoint(df0_da0)
 
         forms = {
+            'measure.dx': dx,
+            'measure.ds': ds,
             'bcs.base': bc_base,
 
             'fspace.vector': vector_fspace,
@@ -659,10 +656,11 @@ class KelvinVoigt(Solid):
             'form.bi.df1_da0_adj': df1_da0_adj,
             'form.bi.df1_dpressure_adj': df1_dpressure_adj,
             'form.bi.df1_demod': df1_demod,
-            
+
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
             'form.bi.df0_da0_adj': df0_da0_adj,
+            'form.bi.df0_du0': df0_du0,
+            'form.bi.df0_dv0': df0_dv0,
             'form.bi.df0_da0': df0_da0}
         return forms
-    

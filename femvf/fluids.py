@@ -263,7 +263,7 @@ class Fluid1D:
     """
     def __init__(self, x_vertices, y_surface):
         """
-        
+
         Parameters
         ----------
         x_vertices: np.ndarray
@@ -304,17 +304,17 @@ class Bernoulli(Fluid1D):
 
     TODO : Refactor this to behave similar to the Solid model. A mesh should be used, corresponding
     to the reference configuration of the fluid (conformal with reference configuration of solid?)
-    One of the properties should be the mapping from the reference configuration to the current 
-    configuration that would be used in ALE. 
+    One of the properties should be the mapping from the reference configuration to the current
+    configuration that would be used in ALE.
 
     Properties
     ----------
-    alpha : 
+    alpha :
         Factor controlling the smoothness of the approximation of minimum area.
         A value of 0 weights areas of all nodes evenly, while a value of -inf
         returns the exact minimum area. Large negative values return an
         average of the smallest areas.
-    k : 
+    k :
         Controls the sharpness of the cutoff that models separation. as k approaches inf,
         the sharpness will approach an instantaneous jump from 1 to 0
     """
@@ -502,7 +502,6 @@ class Bernoulli(Fluid1D):
         dq_du : PETSc.Vec
             Sensitivity of flow rate with respect to displacement
         """
-        fluid_props = self.properties
         _dp_du, _dq_du = self.flow_sensitivity(surface_state)
 
         dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
@@ -514,8 +513,9 @@ class Bernoulli(Fluid1D):
         nnz[model.solid.vert_to_sdof[pressure_vertices]] = pressure_vertices.size*2
         dp_du.setPreallocationNNZ(list(nnz))
 
-        dp_du.setValues(model.solid.vert_to_sdof[pressure_vertices],
-                        model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1), _dp_du)
+        rows = model.solid.vert_to_sdof[pressure_vertices]
+        cols = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
+        dp_du.setValues(rows, cols, _dp_du)
         dp_du.assemblyBegin()
         dp_du.assemblyEnd()
 
@@ -530,7 +530,7 @@ class Bernoulli(Fluid1D):
         # dq_du.assemblyEnd()
 
         dq_du = dfn.Function(model.solid.vector_fspace).vector()
-        dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].reshape(-1)] = _dq_du
+        dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].flat] = _dq_du
 
         return dp_du, dq_du
 
@@ -540,7 +540,7 @@ class Bernoulli(Fluid1D):
         area = 2 * (self.properties['y_midline'] - y)
         a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
         return a_min
-        
+
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
@@ -583,8 +583,8 @@ def dsmooth_minimum_df(f, s, alpha=-1000):
     w = np.exp(alpha*f - K_STABILITY)
     dw_df = alpha*np.exp(alpha*f - K_STABILITY)
 
-    num = trapz(f*w, s) 
-    den = trapz(w, s) 
+    num = trapz(f*w, s)
+    den = trapz(w, s)
 
     dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)
     dden_df = dtrapz_df(w, s)*dw_df
@@ -599,7 +599,7 @@ def d2smooth_minimum_df2(f, s, alpha=-1000):
     d2w_df2 = alpha**2*np.exp(alpha*f - K_STABILITY)
 
     num = trapz(f*w, s)
-    den = trapz(w, s) 
+    den = trapz(w, s)
 
     dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)
     dden_df = dtrapz_df(w, s)*dw_df
@@ -609,7 +609,7 @@ def d2smooth_minimum_df2(f, s, alpha=-1000):
 def trapz(f, s):
     assert len(f.shape) == 1
     assert len(s.shape) == 1
-    
+
     return np.sum( (s[1:]-s[:-1])*(f[1:]+f[:-1])/2 )
 
 def dtrapz_df(f, s):

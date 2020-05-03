@@ -21,7 +21,7 @@ DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-
 
 # @profile
 def forward(model, uva, solid_props, fluid_props, timing_props,
-            h5file='tmp.h5', h5group='/', 
+            h5file='tmp.h5', h5group='/',
             adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
     """
     Solves the forward model over specific time instants.
@@ -47,7 +47,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
         Path to an hdf5 file where solution information will be appended.
     h5group : string
         A group in the h5 file to save solution information under.
-    adaptive_step_prm : dict of {'abs_tol': float or None, 'abs_tol_bounds': tuple} 
+    adaptive_step_prm : dict of {'abs_tol': float or None, 'abs_tol_bounds': tuple}
         A desired tolerance that the norm of the displacement solution should meet
         Bounds on the solution norm tolerance. Time steps are adjusted so that the local error in
         :math:`u_{n+1}` is between `abs_tol_bounds[0]*abs_tol` and `abs_tol_bounds[1]*abs_tol`.
@@ -112,7 +112,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
 
     ## Initialize datasets to save in h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0), 
+        f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0),
                       fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(t0)
 
@@ -137,7 +137,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
                 # If the local error is super low, the refinement time step will be predicted to be
                 # high and so it will go back to the max time step.
                 dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                uva1, qp1, dt_actual, step_info = adaptive_step(model, uva0, qp0, dt_target, 
+                uva1, qp1, dt_actual, step_info = adaptive_step(model, uva0, qp0, dt_target,
                                                                 **adaptive_step_prm)
                 n_state += 1
                 t_current += dt_actual
@@ -164,7 +164,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
 
                 ## Plot the solution
                 if show_figure:
-                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0), 
+                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0),
                                                  step_info['fluid_info'],
                                                  solid_props, fluid_props)
                     plt.pause(0.001)
@@ -187,7 +187,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
         info['pressure'] = np.array(pressure)
         info['h5file'] = h5file
         info['h5group'] = h5group
-    
+
     return info
 
 # @profile

@@ -125,11 +125,14 @@ class ForwardModel:
         tuple of array_like
             A tuple of arrays of surface positions, velocities and accelerations.
         """
-        surface_dofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.surface_vertices].reshape(-1)
+        vert_to_vdof = self.solid.vert_to_vdof
+        surface_dofs = vert_to_vdof.reshape(-1, 2)[self.surface_vertices].flat
 
         u = self.solid.u0.vector()[surface_dofs].reshape(-1, 2)
         v = self.solid.v0.vector()[surface_dofs].reshape(-1, 2)
         a = self.solid.a0.vector()[surface_dofs].reshape(-1, 2)
+        # import matplotlib.pyplot as plt
+        # breakpoint()
 
         x_surface = (self.surface_coordinates + u, v, a)
 
@@ -266,6 +269,12 @@ class ForwardModel:
         return self.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
 
     # Convenience functions
+    def get_triangulation(self):
+        from matplotlib.tri import Triangulation
+        coords = self.get_cur_config()
+        cells = self.solid.mesh.cells()
+        return Triangulation(coords[:, 0], coords[:, 1], triangles=cells)
+
     def get_glottal_width(self):
         """
         Return glottal width
@@ -540,7 +549,7 @@ class CachedBiFormAssembler:
 #     mesh = dfn.Mesh()
 #     facet_function = dfn.MeshFunction('size_t', mesh, 1)
 #     cell_function = dfn.MeshFunction('size_t', mesh, 2)
-    
+
 #     with dfn.XDMFFile(mesh_path) as f:
 #         f.read(mesh)
 #         for label in facet_labels():

@@ -135,9 +135,9 @@ class StateFile:
         fluid_props : dict
             A dictionary of fluid properties
         """
-        self.root_group.create_dataset('time', (0,), maxshape=(None,), chunks=(self.NCHUNK,), 
+        self.root_group.create_dataset('time', (0,), maxshape=(None,), chunks=(self.NCHUNK,),
                                        dtype=np.float64)
-        self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,), 
+        self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,),
                                        chunks=(self.NCHUNK,), dtype=np.intp)
 
         self.init_mesh()
@@ -161,13 +161,13 @@ class StateFile:
         scalar_dofmap_processor = solid.scalar_fspace.dofmap()
         vector_dofmap_processor = solid.vector_fspace.dofmap()
 
-        scalar_dofmap = np.array([scalar_dofmap_processor.cell_dofs(cell.index()) 
+        scalar_dofmap = np.array([scalar_dofmap_processor.cell_dofs(cell.index())
                                   for cell in dfn.cells(solid.mesh)])
-        vector_dofmap = np.array([vector_dofmap_processor.cell_dofs(cell.index()) 
+        vector_dofmap = np.array([vector_dofmap_processor.cell_dofs(cell.index())
                                   for cell in dfn.cells(solid.mesh)])
-        self.root_group.create_dataset('dofmap/vector', data=vector_dofmap, 
-                                       dtype=np.intp) 
-        self.root_group.create_dataset('dofmap/scalar', data=scalar_dofmap, 
+        self.root_group.create_dataset('dofmap/vector', data=vector_dofmap,
+                                       dtype=np.intp)
+        self.root_group.create_dataset('dofmap/scalar', data=scalar_dofmap,
                                        dtype=np.intp)
 
     def init_mesh(self):
@@ -175,15 +175,15 @@ class StateFile:
         Writes the mesh information to the h5 file
         """
         solid = self.model.solid
-        self.root_group.create_dataset('mesh/solid/coordinates', data=solid.mesh.coordinates(), 
-                                       dtype=np.float64) 
-        self.root_group.create_dataset('mesh/solid/connectivity', data=solid.mesh.cells(), 
-                                       dtype=np.intp) 
+        self.root_group.create_dataset('mesh/solid/coordinates', data=solid.mesh.coordinates(),
+                                       dtype=np.float64)
+        self.root_group.create_dataset('mesh/solid/connectivity', data=solid.mesh.cells(),
+                                       dtype=np.intp)
 
         # TODO: Write facet/cell labels, mapping string identifiers to the integer mesh functions
-        self.root_group.create_dataset('mesh/solid/facet_func', data=np.inf, 
+        self.root_group.create_dataset('mesh/solid/facet_func', data=np.inf,
                                        dtype=np.intp)
-        self.root_group.create_dataset('mesh/solid/cell_func', data=np.inf, 
+        self.root_group.create_dataset('mesh/solid/cell_func', data=np.inf,
                                        dtype=np.intp)
 
     def init_state(self, uva0=None):
@@ -197,7 +197,7 @@ class StateFile:
         # Kinematic states
         NDOF = self.model.solid.vector_fspace.dim()
         for dataset_name in ['u', 'v', 'a']:
-            self.root_group.create_dataset(dataset_name, (0, NDOF), maxshape=(None, NDOF), 
+            self.root_group.create_dataset(dataset_name, (0, NDOF), maxshape=(None, NDOF),
                                            chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
         if uva0 is not None:
@@ -213,12 +213,12 @@ class StateFile:
         """
         # For Bernoulli, there is only 1 flow rate/flow velocity vector
         NQ = 1
-        self.root_group.create_dataset('q', (0, NQ), maxshape=(None, 1), 
+        self.root_group.create_dataset('q', (0, NQ), maxshape=(None, 1),
                                        chunks=(self.NCHUNK, NQ), dtype=np.float64)
 
         # For Bernoulli, you only have to store pressure at each of the vertices
         NDOF = self.model.surface_vertices.size
-        self.root_group.create_dataset('p', (0, NDOF), maxshape=(None, NDOF), 
+        self.root_group.create_dataset('p', (0, NDOF), maxshape=(None, NDOF),
                                        chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
         if qp0 is not None:
@@ -236,7 +236,7 @@ class StateFile:
         group_fluid = self.root_group.create_group('fluid_properties')
         for key, prop_desc in self.model.fluid.PROPERTY_TYPES.items():
             shape = solid_property_shape(prop_desc, self.model.solid)
-            group_fluid.create_dataset(key, shape=(0,)+shape, chunks=(self.NCHUNK,)+shape, 
+            group_fluid.create_dataset(key, shape=(0,)+shape, chunks=(self.NCHUNK,)+shape,
                                        maxshape=(None,)+shape, dtype=np.float64)
 
         if fluid_props is not None:
@@ -459,7 +459,7 @@ class StateFile:
             Index to set the functions for.
         q : float
             the flow rates
-        p : array_like 
+        p : array_like
             pressures
         """
         self.root_group['q'][n, 0] = qp[0]

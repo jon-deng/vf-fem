@@ -39,7 +39,7 @@ class AbstractFunctional:
     ----------
     model : model.ForwardModel
         The forward model instance
-    funcs : tuple 
+    funcs : tuple
         A tuple of other functionals, that are computed as part of the given functional
 
     Attributes
@@ -163,7 +163,13 @@ class AbstractFunctional:
         Return the sensitivity of the functional with respect to the parameters.
         """
         raise NotImplementedError("`eval_dp` must be implemented")
-    
+
+    def eval_dt(self, f, n):
+        """
+        Return the sensitivity of the functional with respect to the time step.
+        """
+        raise NotImplementedError("`eval_dt` must be implemented")
+
     # def __add__(self, other):
 
     # def __sub__(self, other):

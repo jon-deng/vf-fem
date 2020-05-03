@@ -16,15 +16,15 @@ from petsc4py import PETSc
 
 import numpy as np
 
-class Parameterization:
+class FullParameterization:
     """
-    A parameterization is a mapping from a set of parameters to the set of basic parameters for the 
+    A parameterization is a mapping from a set of parameters to the set of basic parameters for the
     forward model.
 
     Parameter values are stored in a single array. The slice corresponding to a specific parameter
     can be accessed through a label based index i.e. `self[param_label]`
 
-    Each parameterization has to have `convert` and `dconvert` methods. `convert` transforms the 
+    Each parameterization has to have `convert` and `dconvert` methods. `convert` transforms the
     parameterization to a standard parameterization for the forward model and `dconvert` transforms
     gradients wrt. standard parameters, to gradients wrt. the parameterization.
 
@@ -130,7 +130,7 @@ class Parameterization:
 
     def __iter__(self):
         return self.data.__iter__()
-    
+
     def keys(self):
         return self.data.keys()
 
@@ -160,7 +160,7 @@ class Parameterization:
         """
         return NotImplementedError
 
-    def dconvert(self, demod):
+    def dconvert(self, grad):
         """
         Return the sensitivity of the solid/fluid properties to the parameter vector.
 
@@ -179,13 +179,7 @@ class Parameterization:
         """
         return NotImplementedError
 
-class Rayleigh(Parameterization):
-    pass
-
-class KelvinVoigt(Parameterization):
-    pass
-
-class NodalElasticModuli(Parameterization):
+class NodalElasticModuli(FullParameterization):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
@@ -219,7 +213,7 @@ class NodalElasticModuli(Parameterization):
 
         return out
 
-class KelvinVoigtNodalConstants(Parameterization):
+class KelvinVoigtNodalConstants(FullParameterization):
     """
     A parameterization consisting of nodal values of elastic moduli and damping constants
     for the Kelvin-Voigt constitutive model.
@@ -242,7 +236,7 @@ class KelvinVoigtNodalConstants(Parameterization):
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
 
-    def dconvert(self, demod):
+    def dconvert(self, grad):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -251,12 +245,12 @@ class KelvinVoigtNodalConstants(Parameterization):
         """
         out = self.copy()
         out.vector[:] = 0.0
-        out['elastic_moduli'][:] = 1.0*demod
+        out['elastic_moduli'][:] = 1.0*grad['emod']
         out['eta'][:] = 0.0
-        
+
         return out
 
-class PeriodicKelvinVoigt(Parameterization):
+class PeriodicKelvinVoigt(FullParameterization):
     """
     A parameterization defining a periodic Kelvin-Voigt model
     """
@@ -278,28 +272,12 @@ class PeriodicKelvinVoigt(Parameterization):
         N = self.constants['NUM_STATES_PER_PERIOD']
         dt = self['period']/(N-1)
         timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
-        
+
         ## Convert initial states
-        u0 = self['u0'].reshape(-1)
-        v0 = self['v0'].reshape(-1)
-        a0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        u0, v0 = self['u0'].reshape(-1), self['v0'].reshape(-1)
+        uva = convert_uv0(self.model, (u0, v0), solid_props, fluid_props)
 
-        ## Set parameters for the state
-        self.model.set_params(uva0=(u0, v0, 0), solid_props=solid_props, fluid_props=fluid_props)
-
-        q0, p0, _= self.model.get_pressure()
-        self.model.set_params(qp0=(q0, p0))
-
-        # Solve for the acceleration
-        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        solid = self.model.solid
-        dfn.solve(solid.forms['form.un.f0'] == 0, solid.a0, 
-                  bcs=solid.bc_base, J=solid.forms['form.bi.df0_da0'],
-                  solver_parameters={"newton_solver": newton_solver_prm})
-        a0[:] = solid.a0.vector()[:]
-
-        uva = (u0, v0, a0)
-
+        # print(uva[0].norm('l2'), uva[1].norm('l2'), uva[2].norm('l2'))
         return uva, solid_props, fluid_props, timing_props
 
     def dconvert(self, grad):
@@ -312,43 +290,24 @@ class PeriodicKelvinVoigt(Parameterization):
         out = self.copy()
         out.vector[:] = 0.0
 
-        # Set parameters before assembling to make sure entries are correct
-        uva, solid_props, fluid_props, timing_props = self.convert()
-        self.model.set_params(uva0=uva, solid_props=solid_props, fluid_props=fluid_props)
+        ## Convert gradients of u,v,a to u,v
+        uva0, solid_props, fluid_props, _ = self.convert()
+        grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
+        grad_u0, grad_v0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
 
-        q0, p0, _= self.model.get_pressure()
-        self.model.set_params(qp0=(q0, p0))
+        out['u0'].flat[:] = grad_u0
+        out['v0'].flat[:] = grad_v0
+        # out['u0'].flat[:] = grad['u0']
+        # out['v0'].flat[:] = grad['v0']
+        # breakpoint()
 
-        # Go through the calculations to convert the acceleration gradient to disp and vel
-        # components
-        grad_u0_part = grad['u0']
-        grad_v0_part = grad['v0']
-        grad_a0 = grad['a0']
-
-        df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj'])
-        df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj'])
-        df0_da0_adj = dfn.assemble(self.model.forms['form.bi.df0_da0_adj'])
-
-        # TODO: I'm not sure if this really has an important effect or not?
-        self.model.solid.bc_base.apply(df0_du0_adj)
-        self.model.solid.bc_base.apply(df0_dv0_adj)
-        self.model.solid.bc_base.apply(df0_da0_adj)
-
-        adj_a0 = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
-        grad_u0 = grad_u0_part - df0_du0_adj*adj_a0
-        grad_v0 = grad_v0_part - df0_dv0_adj*adj_a0
-
-        out['u0'].flat[:] = grad['u0']
-        out['v0'].flat[:] = grad['v0']
-
+        ## Convert gradients of dt to T (period)
         N = self.constants['NUM_STATES_PER_PERIOD']
         out['period'][()] = np.sum(grad['dt']) * 1/(N-1)
 
         return out
 
-class FixedPeriodKelvinVoigt(Parameterization):
+class FixedPeriodKelvinVoigt(FullParameterization):
     """
     A parameterization defining a periodic Kelvin-Voigt model
     """
@@ -367,7 +326,7 @@ class FixedPeriodKelvinVoigt(Parameterization):
         ## Convert solid properties
         solid_props = self.constants['default_solid_props'].copy()
         solid_props['emod'][:] = self['elastic_moduli']
-        
+
         ## Convert fluid properties
         fluid_props = self.constants['default_fluid_props'].copy()
 
@@ -375,27 +334,11 @@ class FixedPeriodKelvinVoigt(Parameterization):
         N = self.constants['NUM_STATES_PER_PERIOD']
         dt = self.constants['period']/(N-1)
         timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
-        
+
         ## Convert initial states
         u0 = self['u0'].reshape(-1)
         v0 = self['v0'].reshape(-1)
-        a0 = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        # Set parameters for the state
-        self.model.set_params(uva0=(u0, v0, 0), solid_props=solid_props, fluid_props=fluid_props)
-
-        q0, p0, _= self.model.get_pressure()
-        self.model.set_params(qp0=(q0, p0))
-
-        # Solve for the acceleration
-        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        solid = self.model.solid
-        dfn.solve(solid.forms['form.un.f0'] == 0, solid.a0, 
-                  bcs=solid.bc_base, J=solid.forms['form.bi.df0_da0'],
-                  solver_parameters={"newton_solver": newton_solver_prm})
-        a0[:] = solid.a0.vector()
-
-        uva = (u0, v0, a0)
+        uva = convert_uv0(self.model, (u0, v0), solid_props, fluid_props)
 
         return uva, solid_props, fluid_props, timing_props
 
@@ -409,38 +352,141 @@ class FixedPeriodKelvinVoigt(Parameterization):
         out = self.copy()
         out.vector[:] = 0.0
 
-        ## Elastic modulus
+        ## Convert elastic moduli
         out['elastic_moduli'][:] = grad['emod']
 
-        ## Initial state
-        # Set parameters before assembling to make sure entries are correct
-        uva, solid_props, fluid_props, timing_props = self.convert()
-        self.model.set_params(uva0=uva, solid_props=solid_props, fluid_props=fluid_props)
+        ## Convert initial states
+        uva0, solid_props, fluid_props, _ = self.convert()
+        grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
+        grad_u0, grad_v0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
 
-        q0, p0, _= self.model.get_pressure()
-        self.model.set_params(qp0=(q0, p0))
-
-        # Go through the calculations to convert the acceleration gradient to disp and vel
-        # components
-        grad_u0_part = grad['u0']
-        grad_v0_part = grad['v0']
-        grad_a0 = grad['a0']
-
-        df0_du0_adj = dfn.assemble(self.model.forms['form.bi.df0_du0_adj']) 
-        df0_dv0_adj = dfn.assemble(self.model.forms['form.bi.df0_dv0_adj']) 
-        df0_da0_adj = dfn.assemble(self.model.forms['form.bi.df0_da0_adj'])
-        
-        self.model.solid.bc_base.apply(df0_du0_adj)
-        self.model.solid.bc_base.apply(df0_dv0_adj)
-        self.model.solid.bc_base.apply(df0_da0_adj)
-
-        adj_a0 = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        dfn.solve(df0_da0_adj, adj_a0, grad_a0, 'petsc')
-        grad_u0 = grad_u0_part - df0_du0_adj*adj_a0
-        grad_v0 = grad_v0_part - df0_dv0_adj*adj_a0
-
-        out['u0'].flat[:] = grad['u0']
-        out['v0'].flat[:] = grad['v0']
+        out['u0'].flat[:] = grad_u0
+        out['v0'].flat[:] = grad_v0
 
         return out
+
+class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
+    """
+    A parameterization defining a periodic Kelvin-Voigt model
+    """
+    PARAM_TYPES = OrderedDict({
+        'u0': ('field', (2,)),
+        'v0': ('field', (2,)),
+        'elastic_moduli': ('field', ()),
+        'eta': ('field', ())
+        })
+
+    CONSTANT_LABELS = ('default_solid_props',
+                       'default_fluid_props',
+                       'NUM_STATES_PER_PERIOD',
+                       'period')
+
+    def convert(self):
+        ## Convert solid properties
+        solid_props = self.constants['default_solid_props'].copy()
+        solid_props['emod'][:] = self['elastic_moduli']
+        solid_props['eta'][:] = self['eta']
+
+        ## Convert fluid properties
+        fluid_props = self.constants['default_fluid_props'].copy()
+
+        ## Convert timing properties
+        N = self.constants['NUM_STATES_PER_PERIOD']
+        dt = self.constants['period']/(N-1)
+        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+
+        ## Convert initial states
+        u0 = self['u0'].reshape(-1)
+        v0 = self['v0'].reshape(-1)
+        uva = convert_uv0(self.model, (u0, v0), solid_props, fluid_props)
+
+        return uva, solid_props, fluid_props, timing_props
+
+    def dconvert(self, grad):
+        """
+        Returns the sensitivity of the elastic modulus with respect to parameters
+
+        # TODO: This should return a dict or something that has the sensitivity
+        # of all properties wrt. parameters
+        """
+        out = self.copy()
+        out.vector[:] = 0.0
+
+        ## Convert elastic moduli and damping
+        out['elastic_moduli'][:] = grad['emod']
+        out['eta'][:] = grad['eta']
+
+        ## Convert initial state
+        uva0, solid_props, fluid_props, _ = self.convert()
+        grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
+        grad_u0, grad_v0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+
+        out['u0'].flat[:] = grad_u0
+        out['v0'].flat[:] = grad_v0
+
+        return out
+
+def convert_uv0(model, uv0, solid_props, fluid_props):
+    """
+    Convert a dis/vel to dis/vel/acc.
+
+    This is needed because the displacement form newmark scheme approximates time derivatives using
+    dis/vel/acc at an initial time, however, given any two of those you can find the third from
+    the governing equations of motion at the initial time.
+
+    Parameters
+    ----------
+
+    """
+    ## Set parameters for the state
+    model.set_params(uva0=(*uv0, 0), solid_props=solid_props, fluid_props=fluid_props)
+    q0, p0, _ = model.get_pressure()
+    model.set_params(qp0=(q0, p0))
+
+    ## Solve for the acceleration
+    newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+    dfn.solve(model.solid.forms['form.un.f0'] == 0, model.solid.a0, bcs=model.solid.bc_base,
+              J=model.solid.forms['form.bi.df0_da0'],
+              solver_parameters={"newton_solver": newton_solver_prm})
+
+    u0 = model.solid.u0.vector().copy()
+    v0 = model.solid.v0.vector().copy()
+    a0 = model.solid.a0.vector().copy()
+
+    uva0 = (u0, v0, a0)
+    return uva0
+
+def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
+    """
+    Convert sensitivities df/d(u,v,a)0 -> df/d(u,v)0
+
+    This assumes that you parameterize the intiial dis/vel/acc by an initial dis/vel.
+    """
+    ## Set the model parameters to correctly assemble needed matrices
+    model.set_params(uva0=uva0, solid_props=solid_props, fluid_props=fluid_props)
+    q0, p0, _ = model.get_pressure()
+    model.set_params(qp0=(q0, p0))
+
+    grad_u0_in = grad_uva0[0]
+    grad_v0_in = grad_uva0[1]
+    grad_a0_in = grad_uva0[2]
+
+    ## Assemble needed adjoint matrices
+    df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj'])
+    df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj'])
+    df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj'])
+
+    # TODO: I think this should be right to do? (It might not have an apparent effect if the BC is
+    # zero)
+    model.solid.bc_base.apply(df0_du0_adj)
+    model.solid.bc_base.apply(df0_dv0_adj)
+    model.solid.bc_base.apply(df0_da0_adj)
+
+    ## Convert `grad_a0_in` to its effect on `grad_u0` and `grad_v0`
+    adj_a0 = dfn.Function(model.solid.vector_fspace).vector()
+    dfn.solve(df0_da0_adj, adj_a0, grad_a0_in, 'petsc')
+
+    grad_u0 = grad_u0_in - df0_du0_adj*adj_a0
+    grad_v0 = grad_v0_in - df0_dv0_adj*adj_a0
+
+    return grad_u0, grad_v0

@@ -24,7 +24,7 @@ class Properties:
         for key in model.PROPERTY_TYPES:
             if key not in model.PROPERTY_DEFAULTS:
                 raise KeyError(f"Property `{key}` does not have a default value")
-        
+
         self._model = model
 
         # Calculate shapes of each parameter
@@ -70,7 +70,7 @@ class Properties:
     @property
     def model(self):
         return self._model
-    
+
     ## Implement the dict-like interface coming from the KeyIndexedArray
     @property
     def data(self):
@@ -89,7 +89,7 @@ class Properties:
         Raises an errors if the key does not exist.
         """
         return self.data[key]
-    
+
     def __iter__(self):
         return self.data.__iter__()
 
@@ -98,7 +98,7 @@ class Properties:
         Return underlying property dict's keys
         """
         return self.data.keys()
-    
+
     ## Implement the array-like interface coming from the KeyIndexedArray
     @property
     def vector(self):
@@ -111,11 +111,11 @@ class Properties:
 
     @property
     def TYPES(self):
-        return self.Model.PROPERTY_TYPES
+        return self.model.PROPERTY_TYPES
 
     @property
     def DEFAULTS(self):
-        return self.Model.PROPERTY_DEFAULTS
+        return self.model.PROPERTY_DEFAULTS
 
 class SolidProperties(Properties):
     """
@@ -141,26 +141,3 @@ class FluidProperties(Properties):
     alpha, k, sigma :
         Smoothing parameters that control the smoothness of approximations used in separation.
     """
-
-# def timing_props():
-
-#     class TimingProperties(Properties):
-#         """
-#         A class storing timing parameters for a forward simulation.
-
-#         Parameters
-#         ----------
-#         dt_max :
-#             The maximum time step to integrate over
-#         tmeas :
-#             Times at which to record the solution
-#         t0 :
-#             Starting time of simulation
-#         """
-#         TYPES = {'dt_max': ('const', ()),
-#                 'tmeas': ('const', (None,)),
-#                 't0': ('const', ())}
-
-#         DEFAULTS = {'dt_max': 1e-4,
-#                     'tmeas': np.array([0, 1e-4]),
-#                     't0': 0.0}

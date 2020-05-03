@@ -148,7 +148,7 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                     'Dimensions': shape_to_xdmf(f[label][ii:ii+1, ...].shape)})
 
                 slice_sel = SubElement(slice, 'DataItem', {
-                    'Dimensions': '3 3', 
+                    'Dimensions': '3 3',
                     'Format': 'XML'})
                 slice_sel.text = f"{ii} 0 0\n 1 1 1\n 1 {shape_to_xdmf(f[label].shape[-2:])}"
 
@@ -172,7 +172,7 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                     'Dimensions': shape_to_xdmf(f[label][ii:ii+1, ...].shape)})
 
                 slice_sel = SubElement(slice, 'DataItem', {
-                    'Dimensions': '3 2', 
+                    'Dimensions': '3 2',
                     'Format': 'XML'})
                 slice_sel.text = f"{ii} 0\n1 1\n1 {shape_to_xdmf(f[label].shape[-1:])}"
 
@@ -191,3 +191,9 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
 
     with open(xdmf_path, 'wb') as fxml:
         fxml.write(pretty_xml)
+
+
+# def dataset_to_xdmf(path, shape, ):
+#     """
+#     """
+
