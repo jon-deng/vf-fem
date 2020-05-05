@@ -607,6 +607,9 @@ def d2smooth_minimum_df2(f, s, alpha=-1000):
     return dnum_df/den - num/den**2 * dden_df
 
 def trapz(f, s):
+    """
+    Return the integral of `f` over `s` using the trapezoidal rule
+    """
     assert len(f.shape) == 1
     assert len(s.shape) == 1
 

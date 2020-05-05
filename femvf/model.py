@@ -15,6 +15,20 @@ from . import constants as const
 from . import meshutils
 from .parameters.properties import FluidProperties
 
+def load_1dfluidfsi_model(solid_mesh_path, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli):
+    """
+    Returns a ForwardModel loaded from `solid_mesh`
+    """
+    mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh_path)
+    solid = Solid(mesh, facet_func, facet_labels, cell_func, cell_labels)
+
+    xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
+    fluid = Fluid(xfluid, yfluid)
+    model = ForwardModel(solid, fluid)
+
+    return model
+
+
 class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.

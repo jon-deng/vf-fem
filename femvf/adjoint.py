@@ -58,8 +58,6 @@ def adjoint(model, f, functional, show_figure=False):
     df1_ddt_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.time.dt'], solid.scalar_trial))
     df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
 
-    df1_demod_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.prop.emod'], solid.scalar_trial))
-
     ## Preallocating vector
     # Temporary variables to shorten code
     def get_block_vec():
@@ -250,9 +248,6 @@ def adjoint(model, f, functional, show_figure=False):
             if vector is not None:
                 grad[key] += dfunc_dparam.get(key, 0)
 
-    # if dfunc_dparam is not None:
-    #     grad['emod'] += dfunc_dparam.get('emod', 0)
-
     return functional_value, grad, functional
 
 def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
@@ -357,3 +352,4 @@ def get_df1_dsolid_forms(solid):
             except RuntimeError:
                 df1_dsolid[key] = None
     return df1_dsolid
+

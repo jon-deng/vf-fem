@@ -30,11 +30,12 @@ sys.path.append('../')
 from femvf import meshutils, statefile as sf
 from femvf.forward import forward
 from femvf.adjoint import adjoint
-from femvf.model import ForwardModel
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
+from femvf.model import ForwardModel, load_1dfluidfsi_model
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters.properties import SolidProperties, FluidProperties
+from femvf.parameters import parameterization
 from femvf.functionals import basic as funcs
 
 # sys.path.append(path.expanduser('~/lib/vf-optimization'))
@@ -47,20 +48,10 @@ def get_starting_rayleigh_model():
     ## Set the mesh to be used and initialize the forward model
     mesh_dir = '../meshes'
     mesh_base_filename = 'geometry2'
-    facet_labels = {'pressure': 1, 'fixed': 3}
-
     mesh_base_filename = 'M5-3layers-refined'
-    facet_labels = {'pressure': 5, 'fixed': 4}
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    cell_labels = {}
-
-    mesh, facet_func, cell_func = meshutils.load_fenics_mesh(mesh_path)
-    solid = Rayleigh(mesh, facet_func, facet_labels, cell_func, cell_labels)
-
-    xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
-    fluid = Bernoulli(xfluid, yfluid)
-    model = ForwardModel(solid, fluid)
+    model = load_1dfluidfsi_model(mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -90,21 +81,10 @@ def get_starting_kelvinvoigt_model():
     ## Set the mesh to be used and initialize the forward model
     mesh_dir = '../meshes'
     mesh_base_filename = 'geometry2'
-    facet_labels = {'pressure': 1, 'fixed': 3}
-
-    # mesh_base_filename = 'M5-3layers'
     mesh_base_filename = 'M5-3layers-medial-surface-refinement'
-    facet_labels = {'pressure': 5, 'fixed': 4}
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    cell_labels = {}
-
-    mesh, facet_func, cell_func = meshutils.load_fenics_mesh(mesh_path, facet_labels, cell_labels)
-    solid = KelvinVoigt(mesh, facet_func, facet_labels, cell_func, cell_labels)
-
-    xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
-    fluid = Bernoulli(xfluid, yfluid)
-    model = ForwardModel(solid, fluid)
+    model = load_1dfluidfsi_model(mesh_path, Solid=KelvinVoigt, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 6e3 * PASCAL_TO_CGS
@@ -118,14 +98,14 @@ def get_starting_kelvinvoigt_model():
     y_coll_offset = 0.0025
     alpha, k, sigma = -3000, 50, 0.002
 
-    fluid_props = fluid.get_properties()
+    fluid_props = model.fluid.get_properties()
     fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
     fluid_props['p_sub'][()] = 800 * PASCAL_TO_CGS
     fluid_props['alpha'][()] = alpha
     fluid_props['k'][()] = k
     fluid_props['sigma'][()] = sigma
 
-    solid_props = solid.get_properties()
+    solid_props = model.solid.get_properties()
     solid_props['emod'][:] = emod
     solid_props['eta'][()] = 3.0
     solid_props['k_collision'][()] = k_coll
@@ -189,21 +169,29 @@ class TaylorTest(unittest.TestCase):
         ## Calculate the gradient using via the adjoint equations at the 0th point
         print("\nComputing Gradient via adjoint calculation")
 
-        runtime_start = perf_counter()
         info = None
-        gradient_ad = None
+        grad = None
+        runtime_start = perf_counter()
         with sf.StateFile(model, save_path, group='0', mode='r') as f:
-            _, gradient, _ = adjoint(model, f, functional)
-
-            gradient_ad = gradient[self.parameter]
-            # breakpoint()
+            _, grad, _ = adjoint(model, f, functional)
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
+        # Find the component of the gradient along the step direction
+        grad_vector = None
+        grad_on_step_dir = None
+        if isinstance(self.step_dir, parameterization.FullParameterization):
+            grad_vector = self.p.dconvert(grad).vector
+            grad_on_step_dir = np.dot(grad_vector, self.step_dir.vector)
+        else:
+            grad_vector = grad[self.parameter]
+            grad_on_step_dir = np.dot(grad_vector, step_dir)
+
+
         ## Compare the adjoint and finite difference projected gradients
         taylor_remainder_1 = np.abs(functionals[1:] - functionals[0])
-        taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*np.dot(gradient_ad, step_dir))
+        taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*grad_on_step_dir)
 
         order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
         order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
@@ -216,11 +204,11 @@ class TaylorTest(unittest.TestCase):
         print("\n2nd order taylor remainders: \n", taylor_remainder_2)
         print("Numerical order: \n", order_2)
 
-        print("\n||dg/dp|| = ", np.linalg.norm(gradient_ad, ord=2))
-        print("dg/dp * step_dir = ", np.dot(gradient_ad, step_dir))
+        print("\n||dg/dp|| = ", np.linalg.norm(grad_vector, ord=2))
+        print("dg/dp * step_dir = ", grad_on_step_dir)
         print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
 
-        fig, ax = self.plot_taylor_test(gradient_ad, step_dir, hs, functionals)
+        fig, ax = self.plot_taylor_test(grad_on_step_dir, hs, functionals)
         fig.savefig(f'Convergence_{self.case_postfix}.png')
 
         # Plot the glottal width vs time of the simulation at zero step size
@@ -257,27 +245,23 @@ class TaylorTest(unittest.TestCase):
 
         # Visualize the computed gradient
         # plot the u, v, a gradient components
-        from matplotlib.tri import Triangulation
-        solid = model.solid
-        xy = solid.mesh.coordinates()
-        tri = Triangulation(xy[:, 0], xy[:, 1], triangles=solid.mesh.cells())
+        tri = model.get_triangulation()
         fig, axs = plt.subplots(3, 2)
         for ii, comp in enumerate(['u0', 'v0', 'a0']):
             for jj in range(2):
-                grad_comp = gradient[comp][:].reshape(-1, 2)[:, jj]
-                # breakpoint()
-                mapble = axs[ii, jj].tripcolor(tri, grad_comp[solid.vert_to_sdof])
+                grad_comp = grad[comp][:].reshape(-1, 2)[:, jj]
+                mappable = axs[ii, jj].tripcolor(tri, grad_comp[model.solid.vert_to_sdof])
 
-                fig.colorbar(mapble, ax=axs[ii, jj])
+                fig.colorbar(mappable, ax=axs[ii, jj])
 
         plt.show()
 
-    def plot_taylor_test(self, grad, step_dir, h, g):
+    def plot_taylor_test(self, grad_on_step_dir, h, g):
         # Plot the adjoint gradient and finite difference approximations of the gradient
         fig, ax = plt.subplots(1, 1, constrained_layout=True)
         ax.plot(h[1:], (g[1:] - g[0])/h[1:],
                 color='C0', marker='o', label='FD Approximations')
-        ax.axhline(np.dot(grad, step_dir), color='C1', label="Adjoint gradient")
+        ax.axhline(grad_on_step_dir, color='C1', label="Adjoint gradient")
         ax.ticklabel_format(axis='y', style='sci')
         ax.set_xlabel("Step size")
         ax.set_ylabel("Gradient of functional")
@@ -316,7 +300,8 @@ class TestEmodGradient(TaylorTest):
             print("Using existing files")
 
         self.hs = hs
-        self.step_dir = np.array(dsolid['emod'])
+        # self.step_dir = dsolid
+        self.step_dir = dsolid['emod']
         self.parameter = 'emod'
 
         self.model = model
@@ -346,7 +331,7 @@ class Testu0Gradient(TaylorTest):
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-20)), axis=0)
 
         # Get y--coordinates in DOF order
-        xy = model.get_ref_config()[dfn.dof_to_vertex_map(model.solid.scalar_fspace)]
+        xy = model.get_ref_config()[model.solid.dof_to_vertex]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
@@ -396,7 +381,7 @@ class Testu0FSIGradient(TaylorTest):
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': 100000000000000.0}
 
         ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, -3)-10)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 0)-15)), axis=0)
 
         # Get y--coordinates in DOF order
         xy = model.get_ref_config()
@@ -603,7 +588,7 @@ class TestdtGradient(TaylorTest):
 
         self.hs = hs
         self.step_dir = step_dir
-        self.parameter = 'dt'
+        # self.parameter = 'dt'
 
         self.model = model
         self.solid_props = solid_props
@@ -613,6 +598,64 @@ class TestdtGradient(TaylorTest):
         self.save_path = save_path
 
         self.case_postfix = 'dt'
+
+class TestParameterizationGradient(TaylorTest):
+    OVERWRITE_FORWARD_SIMULATIONS = True
+
+    def setUp(self):
+        save_path = 'out/parameterizationgrad-states.h5'
+        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+
+        xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
+        y = xy[:, 1]
+
+        t_start, t_final = 0.0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+
+        ## Set the step direction / step size / number of steps
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-10)), axis=0)
+
+        constants = {
+            'default_solid_props': solid_props,
+            'default_fluid_props': fluid_props,
+            'NUM_STATES_PER_PERIOD': 128,
+            'period': t_final-t_start}
+        p = parameterization.FixedPeriodKelvinVoigt(model, constants)
+        p['elastic_moduli'][:] = solid_props['emod']
+        p['u0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e-2
+        # p['v0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e1
+
+        dp = p.copy()
+        dp['elastic_moduli'][:] = 1.0
+        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
+        # dp['u0'][:, 0] = -(y-y.min()) / (y.max()-y.min())*1e-4
+        # dp['u0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e-4
+
+        print(f"Computing {len(hs)} finite difference points")
+        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
+            if os.path.exists(save_path):
+                os.remove(save_path)
+
+            line_search_p(hs, model, p, dp, filepath=save_path)
+        else:
+            print("Using existing files")
+
+        plt.show()
+
+        self.hs = hs
+        self.p = p
+        self.step_dir = dp
+        self.parameter = 'dp'
+
+        self.model = model
+        self.solid_props = solid_props
+        self.fluid_props = fluid_props
+        self.timing_props = timing_props
+
+        self.save_path = save_path
+
+        self.case_postfix = 'dp'
 
 def line_search(hs, model, uva, solid_props, fluid_props, times,
                 duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
@@ -655,6 +698,36 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
 
     return filepath
 
+def line_search_p(hs, model, p, dp, filepath='temp.h5'):
+    """
+    Returns a parameterized line search for parameterization `p` in direction `dp`.
+    """
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+    p_n = p.copy()
+    for n, h in enumerate(hs):
+        # Increment all the properties along the search direction
+        p_n.vector[:] = p.vector + h*dp.vector
+
+        uva_n, solid_props_n, fluid_props_n, timing_props_n = p_n.convert()
+        # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
+
+        runtime_start = perf_counter()
+        info = forward(model, uva_n, solid_props_n, fluid_props_n, timing_props_n,
+                       adaptive_step_prm={'abs_tol': None},
+                       h5file=filepath, h5group=f'{n}', show_figure=False)
+        runtime_end = perf_counter()
+
+        print(runtime_end-runtime_start)
+
+        # Save the run info to a pickled file
+        if h == 0:
+            with open(path.splitext(filepath)[0] + ".pickle", 'wb') as f:
+                pickle.dump(info, f)
+
+    return filepath
+
 if __name__ == '__main__':
     # unittest.main()
 
@@ -674,13 +747,17 @@ if __name__ == '__main__':
     # test.setUp()
     # test.test_adjoint()
 
-    test = Testa0Gradient()
-    test.setUp()
-    test.test_adjoint()
+    # test = Testa0Gradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = TestdtGradient()
     # test.setUp()
     # test.test_adjoint()
+
+    test = TestParameterizationGradient()
+    test.setUp()
+    test.test_adjoint()
 
     # test = Test2ndOrderDifferentiability()
     # test.setUp()

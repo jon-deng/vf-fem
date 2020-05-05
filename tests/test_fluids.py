@@ -75,8 +75,8 @@ class CommonSetup(unittest.TestCase):
         This setup produces a smooth concave interface mesh
         """
         mesh_path = '../meshes/geometry2.xml'
-        facet_labels, cell_labels = {'pressure': 1, 'fixed': 3}, {}
-        mesh, facet_func, _ = meshutils.load_fenics_mesh(mesh_path, facet_labels, cell_labels)
+        # facet_labels, cell_labels = {'pressure': 1, 'fixed': 3}, {}
+        mesh, facet_func, _, facet_labels, _ = meshutils.load_fenics_xmlmesh(mesh_path)
 
         surface_edges = facet_func.where_equal(facet_labels['pressure'])
         surface_vertices = meshutils.vertices_from_edges(surface_edges, mesh)

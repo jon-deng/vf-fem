@@ -7,7 +7,7 @@ from os import path
 import numpy as np
 import dolfin as dfn
 
-def load_fenics_mesh(mesh_path, facet_labels, cell_labels):
+def load_fenics_xmlmesh(mesh_path):
     """
     Return mesh and facet/cell info
 
@@ -29,6 +29,7 @@ def load_fenics_mesh(mesh_path, facet_labels, cell_labels):
     base_path, ext = path.splitext(mesh_path)
     facet_function_path = base_path +  '_facet_region.xml'
     cell_function_path = base_path + '_physical_region.xml'
+    msh_function_path = base_path + '.msh'
 
     if ext == '':
         mesh_path = mesh_path + '.xml'
@@ -37,7 +38,48 @@ def load_fenics_mesh(mesh_path, facet_labels, cell_labels):
     facet_function = dfn.MeshFunction('size_t', mesh, facet_function_path)
     cell_function = dfn.MeshFunction('size_t', mesh, cell_function_path)
 
-    return mesh, facet_function, cell_function
+    facet_labels, cell_labels = parse_2d_msh(msh_function_path)
+
+    return mesh, facet_function, cell_function, facet_labels, cell_labels
+
+def parse_2d_msh(mesh_path):
+    """
+    Parameters
+    ----------
+    mesh_path : str
+        Path to a .msh file from gmsh. The gmsh file should be of format msh2.
+
+    Returns
+    -------
+    facet_labels
+    cell_labels
+    """
+    with open(mesh_path, 'r') as f:
+
+        current_line = 'NONE'
+        while '$PhysicalNames' not in current_line:
+            current_line = f.readline()
+
+        num_physical_regions = int(f.readline().rstrip())
+
+        physical_regions = []
+        for ii in range(num_physical_regions):
+            current_line = f.readline()
+            physical_regions.append(current_line.rstrip().split(' '))
+
+        cell_labels = {}
+        facet_labels = {}
+        for physical_region in physical_regions:
+            dim, val, name = physical_region
+
+            # Convert the strings to int, int, and a string without surrounding quotes
+            dim, val, name = int(dim), int(val), name[1:-1]
+
+            if dim == 1:
+                facet_labels[name] = val
+            elif dim == 2:
+                cell_labels[name] = val
+    return facet_labels, cell_labels
 
 def streamwise1dmesh_from_edges(mesh, edge_function, n):
     """
@@ -92,4 +134,3 @@ def sort_vertices_by_nearest_neighbours(vertex_coordinates):
         idx_sort.append(np.nanargmin(distances))
 
     return np.array(idx_sort)
-    

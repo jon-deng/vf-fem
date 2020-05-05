@@ -12,6 +12,7 @@ from .. import constants
 from ..forward import DEFAULT_NEWTON_SOLVER_PRM
 
 import dolfin as dfn
+import ufl
 from petsc4py import PETSc
 
 import numpy as np
@@ -293,7 +294,7 @@ class PeriodicKelvinVoigt(FullParameterization):
         ## Convert gradients of u,v,a to u,v
         uva0, solid_props, fluid_props, _ = self.convert()
         grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
-        grad_u0, grad_v0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
 
         out['u0'].flat[:] = grad_u0
         out['v0'].flat[:] = grad_v0
@@ -352,16 +353,23 @@ class FixedPeriodKelvinVoigt(FullParameterization):
         out = self.copy()
         out.vector[:] = 0.0
 
-        ## Convert elastic moduli
-        out['elastic_moduli'][:] = grad['emod']
-
         ## Convert initial states
         uva0, solid_props, fluid_props, _ = self.convert()
         grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
-        grad_u0, grad_v0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
 
         out['u0'].flat[:] = grad_u0
         out['v0'].flat[:] = grad_v0
+
+        ## Convert elastic moduli
+        scalar_trial = self.model.solid.scalar_trial
+        forms = self.model.solid.forms
+        df0_demod_adj_frm = dfn.adjoint(ufl.derivative(forms['form.un.f0'], forms['coeff.prop.emod'], scalar_trial))
+        # df0_deta_adj_frm = dfn.adjoint(ufl.derivative(forms['form.un.f0'], forms['coeff.prop.eta'], scalar_trial))
+        # df0_deta_adj = dfn.assemble(df0_deta_adj_frm)
+
+        df0_demod_adj = dfn.assemble(df0_demod_adj_frm)
+        out['elastic_moduli'][:] = grad['emod'] - df0_demod_adj*adj_a0
 
         return out
 
@@ -412,17 +420,24 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
         out = self.copy()
         out.vector[:] = 0.0
 
-        ## Convert elastic moduli and damping
-        out['elastic_moduli'][:] = grad['emod']
-        out['eta'][:] = grad['eta']
-
         ## Convert initial state
         uva0, solid_props, fluid_props, _ = self.convert()
         grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
-        grad_u0, grad_v0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
 
         out['u0'].flat[:] = grad_u0
         out['v0'].flat[:] = grad_v0
+
+        ## Convert elastic moduli and damping
+        forms = self.model.solid.forms
+        scalar_trial = self.model.solid.scalar_trial
+        df0_demod_adj_frm = dfn.adjoint(ufl.derivative(forms['form.un.f0'], forms['coeff.prop.emod'], scalar_trial))
+        df0_deta_adj_frm = dfn.adjoint(ufl.derivative(forms['form.un.f0'], forms['coeff.prop.eta'], scalar_trial))
+
+        df0_demod_adj = dfn.assemble(df0_demod_adj_frm)
+        df0_deta_adj = dfn.assemble(df0_deta_adj_frm)
+        out['elastic_moduli'][:] = grad['emod'] - df0_demod_adj*adj_a0
+        out['eta'][:] = grad['eta'] - df0_deta_adj*adj_a0
 
         return out
 
@@ -489,4 +504,4 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     grad_u0 = grad_u0_in - df0_du0_adj*adj_a0
     grad_v0 = grad_v0_in - df0_dv0_adj*adj_a0
 
-    return grad_u0, grad_v0
+    return grad_u0, grad_v0, adj_a0

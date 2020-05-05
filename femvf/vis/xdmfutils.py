@@ -15,14 +15,7 @@ import dolfin as dfn
 # import xml
 
 sys.path.append('../')
-from femvf.meshutils import load_fenics_mesh
 from femvf import statefile as sf
-from femvf.model import ForwardModel
-from femvf.constants import PASCAL_TO_CGS
-
-from femvf.solids import Rayleigh
-from femvf.fluids import Bernoulli
-
 
 def export_vertex_values(model, statefile_path, export_path):
     """

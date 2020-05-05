@@ -14,9 +14,8 @@ import dolfin as dfn
 import h5py
 
 sys.path.append('../')
-from femvf.meshutils import load_fenics_mesh
 from femvf.forward import forward
-from femvf.model import ForwardModel
+from femvf.model import ForwardModel, load_1dfluidfsi_model
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
@@ -33,21 +32,12 @@ class TestForward(unittest.TestCase):
         mesh_dir = '../meshes'
 
         mesh_base_filename = 'geometry2'
-        self.facet_labels = {'pressure': 1, 'fixed': 3}
-
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-        self.cell_labels = {}
 
     def test_forward(self):
         ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-        mesh, facet_func, cell_func = load_fenics_mesh(self.mesh_path, self.facet_labels, self.cell_labels)
-        solid = Rayleigh(mesh, facet_func, self.facet_labels, cell_func, self.cell_labels)
+        model = load_1dfluidfsi_model(self.mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
 
-        fluid = Bernoulli()
-        model = ForwardModel(solid, fluid)
-
-        # breakpoint()
-        # dt = 2.5e-6
         dt = 5e-5
         times_meas = [0, 0.005]
 

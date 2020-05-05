@@ -13,11 +13,7 @@ import dolfin as dfn
 # import xml
 
 sys.path.append('../')
-from femvf.meshutils import load_fenics_mesh
-from femvf import statefile as sf
-from femvf.model import ForwardModel
-from femvf.constants import PASCAL_TO_CGS
-
+from femvf.model import load_1dfluidfsi_model
 from femvf.solids import Rayleigh
 from femvf.fluids import Bernoulli
 
@@ -28,15 +24,8 @@ mesh_dir = '../meshes'
 mesh_base_filename = 'geometry2'
 mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
-facet_labels = {'pressure': 1, 'fixed': 3}
-cell_labels = {}
-
 ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-mesh, facet_func, cell_func = load_fenics_mesh(mesh_path, facet_labels, cell_labels)
-solid = Rayleigh(mesh, facet_func, facet_labels, cell_func, cell_labels)
-
-fluid = Bernoulli()
-model = ForwardModel(solid, fluid)
+model = load_1dfluidfsi_model(mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
 
 statefile_path = './test_forward.h5'
 visfile_path = './test_forward-vis.h5'
