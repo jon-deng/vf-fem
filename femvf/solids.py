@@ -2,6 +2,10 @@
 Module for definitions of weak forms.
 
 Units are in CGS
+
+TODO: The form definitions have a lot of repeated code. Many of the form operations are copy-pasted.
+You should think about what forms should be custom made for different solid governing equations
+and what types of forms are always generated the same way, and refactor accordingly.
 """
 from os import path
 
@@ -407,10 +411,12 @@ class Rayleigh(Solid):
         df0_du0 = ufl.derivative(f0, u0, vector_trial)
         df0_dv0 = ufl.derivative(f0, v0, vector_trial)
         df0_da0 = ufl.derivative(f0, a0, vector_trial)
+        df0_dpressure = ufl.derivative(f0, pressure, scalar_trial)
 
         df0_du0_adj = dfn.adjoint(df0_du0)
         df0_dv0_adj = dfn.adjoint(df0_dv0)
         df0_da0_adj = dfn.adjoint(df0_da0)
+        df0_dpressure_adj = dfn.adjoint(df0_dpressure)
 
         forms = {
             'measure.dx': dx,
@@ -459,9 +465,11 @@ class Rayleigh(Solid):
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
             'form.bi.df0_da0_adj': df0_da0_adj,
+            'form.bi.df0_dpressure_adj': df0_dpressure_adj,
             'form.bi.df0_du0': df0_du0,
             'form.bi.df0_dv0': df0_dv0,
-            'form.bi.df0_da0': df0_da0}
+            'form.bi.df0_da0': df0_da0,
+            'form.bi.df0_dpressure': df0_dpressure}
         return forms
 
 class KelvinVoigt(Solid):
@@ -611,10 +619,12 @@ class KelvinVoigt(Solid):
         df0_du0 = ufl.derivative(f0, u0, vector_trial)
         df0_dv0 = ufl.derivative(f0, v0, vector_trial)
         df0_da0 = ufl.derivative(f0, a0, vector_trial)
+        df0_dpressure = ufl.derivative(f0, pressure, scalar_trial)
 
         df0_du0_adj = dfn.adjoint(df0_du0)
         df0_dv0_adj = dfn.adjoint(df0_dv0)
         df0_da0_adj = dfn.adjoint(df0_da0)
+        df0_dpressure_adj = dfn.adjoint(df0_dpressure)
 
         forms = {
             'measure.dx': dx,
@@ -660,7 +670,9 @@ class KelvinVoigt(Solid):
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
             'form.bi.df0_da0_adj': df0_da0_adj,
+            'form.bi.df0_dpressure_adj': df0_dpressure_adj,
             'form.bi.df0_du0': df0_du0,
             'form.bi.df0_dv0': df0_dv0,
-            'form.bi.df0_da0': df0_da0}
+            'form.bi.df0_da0': df0_da0,
+            'form.bi.df0_dpressure': df0_dpressure}
         return forms

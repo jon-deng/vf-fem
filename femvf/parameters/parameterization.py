@@ -477,19 +477,22 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
 
     This assumes that you parameterize the intiial dis/vel/acc by an initial dis/vel.
     """
-    ## Set the model parameters to correctly assemble needed matrices
-    model.set_params(uva0=uva0, solid_props=solid_props, fluid_props=fluid_props)
-    q0, p0, _ = model.get_pressure()
-    model.set_params(qp0=(q0, p0))
-
     grad_u0_in = grad_uva0[0]
     grad_v0_in = grad_uva0[1]
     grad_a0_in = grad_uva0[2]
+
+    ## Set the model parameters to correctly assemble needed matrices
+    model.set_params(uva0=uva0, solid_props=solid_props, fluid_props=fluid_props)
+
+    q0, p0, _ = model.get_pressure()
+    dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
+    model.set_params(qp0=(q0, p0))
 
     ## Assemble needed adjoint matrices
     df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj'])
     df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj'])
     df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj'])
+    df0_dpressure_adj = dfn.assemble(model.forms['form.bi.df0_dpressure_adj'])
 
     # TODO: I think this should be right to do? (It might not have an apparent effect if the BC is
     # zero)
@@ -504,4 +507,8 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     grad_u0 = grad_u0_in - df0_du0_adj*adj_a0
     grad_v0 = grad_v0_in - df0_dv0_adj*adj_a0
 
+    ## Correct for the gradient of u0, since f is sensitive to pressure, and pressure depends on u0
+    grad_u0_correction = dfn.Function(model.solid.vector_fspace).vector()
+    dpressure_du0.transpmult(df0_dpressure_adj*adj_a0, grad_u0_correction)
+    grad_u0 = grad_u0 - grad_u0_correction
     return grad_u0, grad_v0, adj_a0

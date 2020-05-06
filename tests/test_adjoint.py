@@ -246,11 +246,13 @@ class TaylorTest(unittest.TestCase):
         # Visualize the computed gradient
         # plot the u, v, a gradient components
         tri = model.get_triangulation()
-        fig, axs = plt.subplots(3, 2)
+        fig, axs = plt.subplots(3, 2, constrained_layout=True)
         for ii, comp in enumerate(['u0', 'v0', 'a0']):
             for jj in range(2):
                 grad_comp = grad[comp][:].reshape(-1, 2)[:, jj]
                 mappable = axs[ii, jj].tripcolor(tri, grad_comp[model.solid.vert_to_sdof])
+
+                axs[ii, jj].set_title(f"$\\nabla_{{{comp}}} f$")
 
                 fig.colorbar(mappable, ax=axs[ii, jj])
 
@@ -331,7 +333,7 @@ class Testu0Gradient(TaylorTest):
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-20)), axis=0)
 
         # Get y--coordinates in DOF order
-        xy = model.get_ref_config()[model.solid.dof_to_vertex]
+        xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
@@ -340,13 +342,18 @@ class Testu0Gradient(TaylorTest):
         step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         duva = (step_dir, 0.0, 0.0)
 
+        u0 = dfn.Function(model.solid.vector_fspace).vector()
+        u0_y = -1e-2 * (y-y.min()) / (y.max()-y.min())
+        u0_x = np.zeros(y.shape)
+        u0[:] = np.stack([u0_x, u0_y], axis=-1).flat
+
         print(f"Computing {len(hs)} finite difference points")
 
         fig, ax = plt.subplots(1, 1)
         if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
             if os.path.exists(save_path):
                 os.remove(save_path)
-            line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
+            line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
                         duva=duva, filepath=save_path)
         else:
             print("Using existing files")
@@ -524,13 +531,18 @@ class Testa0Gradient(TaylorTest):
         step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         duva = (0.0, 0.0, step_dir)
 
+        u0 = dfn.Function(model.solid.vector_fspace).vector()
+        u0_y = -1e-2*(y-y.min())/(y.max()-y.min())
+        u0_x = np.zeros(y.shape)
+        u0[:] = np.stack([u0_x, u0_y], axis=-1).flat
+
         print(f"Computing {len(hs)} finite difference points")
 
         if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
             if os.path.exists(save_path):
                 os.remove(save_path)
 
-            line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
+            line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
                         duva=duva, filepath=save_path)
         else:
             print("Using existing files")
@@ -600,7 +612,7 @@ class TestdtGradient(TaylorTest):
         self.case_postfix = 'dt'
 
 class TestParameterizationGradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
 
     def setUp(self):
         save_path = 'out/parameterizationgrad-states.h5'
@@ -614,7 +626,7 @@ class TestParameterizationGradient(TaylorTest):
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-10)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-15)), axis=0)
 
         constants = {
             'default_solid_props': solid_props,
@@ -623,13 +635,13 @@ class TestParameterizationGradient(TaylorTest):
             'period': t_final-t_start}
         p = parameterization.FixedPeriodKelvinVoigt(model, constants)
         p['elastic_moduli'][:] = solid_props['emod']
-        p['u0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e-2
+        p['u0'][:, 1] = -1e-1 * (y-y.min()) / (y.max()-y.min())
         # p['v0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e1
 
         dp = p.copy()
-        dp['elastic_moduli'][:] = 1.0
+        dp['elastic_moduli'][:] = 1.0e3
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
-        # dp['u0'][:, 0] = -(y-y.min()) / (y.max()-y.min())*1e-4
+        dp['u0'][:, 0] = -(y-y.min()) / (y.max()-y.min())*1e-4
         # dp['u0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e-4
 
         print(f"Computing {len(hs)} finite difference points")
