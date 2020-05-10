@@ -354,8 +354,88 @@ class FinalSurfacePower(Functional):
     def eval_dp(self, f):
         return None
 
+class KVDampingWork(Functional):
+    """
+    Returns the work dissipated in the tissue due to damping
+    """
+    func_types = ()
+    default_constants = {}
 
-class StrainWork(Functional):
+    @staticmethod
+    def form_definitions(model):
+        solid = model.solid
+
+        # Load some ufl forms from the solid model
+        vector_trial = solid.forms['trial.vector']
+        scalar_trial = solid.forms['trial.scalar']
+        v0 = solid.forms['coeff.state.v0']
+        eta = solid.forms['coeff.prop.eta']
+
+        v0 = solid.forms['coeff.state.v0']
+
+        forms = {}
+        from solids import strain
+        forms['damping_power'] = ufl.inner(eta*strain(v0), strain(v0)) * ufl.dx
+
+        forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
+        forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
+        return forms
+
+    def eval(self, f):
+        N_START = 0
+        N_STATE = f.get_num_states()
+
+        res = 0
+        # Calculate total damped work by the trapezoidal rule
+        time = f.get_times()
+        self.model.set_params_fromfile(f, 0)
+        power_left = dfn.assemble(self.forms['damping_power'])
+        for ii in range(N_START+1, N_STATE):
+            # Set form coefficients to represent the equation from state ii to ii+1
+            self.model.set_params_fromfile(f, ii)
+            power_right = dfn.assemble(self.forms['damping_power'])
+            res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
+
+        return res
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        N_START = 0
+        N_STATE = f.get_num_states()
+        time = f.get_times()
+
+        dv = dfn.Function(self.model.solid.vector_fspace)
+        if n >= N_START:
+            self.model.set_params_fromfile(f, n)
+            dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
+
+            if n > N_START:
+                # Add the sensitivity to `v` from the left intervals right integration point
+                dv += 0.5*dpower_dvn*(time[n] - time[n-1])
+            if n < N_STATE-1:
+                # Add the sensitivity to `v` from the right intervals left integration point
+                dv += 0.5*dpower_dvn*(time[n+1] - time[n])
+
+        return 0.0, dv, 0.0
+
+    def eval_dp(self, f):
+        N_START = 0
+        N_STATE = f.get_num_states()
+
+        dwork_deta = dfn.Function(self.model.solid.scalar_fspace)
+        # Calculate total damped work by the trapezoidal rule
+        time = f.get_times()
+        self.model.set_params_fromfile(f, 0)
+        dpower_left_deta = dfn.assemble(self.forms['ddamping_power_demod'])
+        for ii in range(N_START+1, N_STATE):
+            # Set form coefficients to represent the equation from state ii to ii+1
+            self.model.set_params_fromfile(f, ii)
+            dpower_right_deta = dfn.assemble(self.forms['ddamping_power_demod'])
+            dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
+
+        return dwork_deta
+
+# TODO: Pretty sure this one below does not work
+class RayleighDampingWork(Functional):
     """
     Represent the strain work dissipated in the tissue due to damping
     """

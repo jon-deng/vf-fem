@@ -93,9 +93,6 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
         temporal_grid = SubElement(domain, 'Grid', {'GridType': 'Collection',
                                                     'CollectionType': 'Temporal'})
 
-        def shape_to_xdmf(shape):
-            return r' '.join(str(dim) for dim in shape)
-
         for ii in range(N_TIME):
             ## Make the grid (they always reference the same h5 dataset)
             grid = SubElement(temporal_grid, 'Grid', {'GridType': 'Uniform'})
@@ -111,7 +108,7 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                 'ItemType': 'Uniform',
                 'NumberType': 'Int',
                 'Format': 'HDF',
-                'Dimensions': shape_to_xdmf(f['mesh/solid/connectivity'].shape)})
+                'Dimensions': tuple_shape_to_xdmf(f['mesh/solid/connectivity'].shape)})
             conn.text = f'{h5file_path}:/mesh/solid/connectivity'
 
             geom = SubElement(grid, 'Geometry', {'GeometryType': 'XY'})
@@ -122,7 +119,7 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                 'NumberType': 'Float',
                 'Precision': '8',
                 'Format': 'HDF',
-                'Dimensions': shape_to_xdmf(f['mesh/solid/coordinates'].shape)
+                'Dimensions': tuple_shape_to_xdmf(f['mesh/solid/coordinates'].shape)
             })
             coords.text = f'{h5file_path}:/mesh/solid/coordinates'
 
@@ -138,15 +135,15 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                     'NumberType': 'Float',
                     'Precision': '8',
                     'Format': 'HDF',
-                    'Dimensions': shape_to_xdmf(f[label][ii:ii+1, ...].shape)})
+                    'Dimensions': tuple_shape_to_xdmf(f[label][ii:ii+1, ...].shape)})
 
                 slice_sel = SubElement(slice, 'DataItem', {
                     'Dimensions': '3 3',
                     'Format': 'XML'})
-                slice_sel.text = f"{ii} 0 0\n 1 1 1\n 1 {shape_to_xdmf(f[label].shape[-2:])}"
+                slice_sel.text = f"{ii} 0 0\n 1 1 1\n 1 {tuple_shape_to_xdmf(f[label].shape[-2:])}"
 
                 slice_data = SubElement(slice, 'DataItem', {
-                    'Dimensions': shape_to_xdmf(f[label].shape),
+                    'Dimensions': tuple_shape_to_xdmf(f[label].shape),
                     'Format': 'HDF'})
                 slice_data.text = f'{h5file_path}:{label}'
 
@@ -162,15 +159,15 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                     'NumberType': 'Float',
                     'Precision': '8',
                     'Format': 'HDF',
-                    'Dimensions': shape_to_xdmf(f[label][ii:ii+1, ...].shape)})
+                    'Dimensions': tuple_shape_to_xdmf(f[label][ii:ii+1, ...].shape)})
 
                 slice_sel = SubElement(slice, 'DataItem', {
                     'Dimensions': '3 2',
                     'Format': 'XML'})
-                slice_sel.text = f"{ii} 0\n1 1\n1 {shape_to_xdmf(f[label].shape[-1:])}"
+                slice_sel.text = f"{ii} 0\n1 1\n1 {tuple_shape_to_xdmf(f[label].shape[-1:])}"
 
                 slice_data = SubElement(slice, 'DataItem', {
-                    'Dimensions': shape_to_xdmf(f[label].shape),
+                    'Dimensions': tuple_shape_to_xdmf(f[label].shape),
                     'Format': 'HDF'})
                 slice_data.text = f'{h5file_path}:{label}'
 
@@ -185,8 +182,62 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
     with open(xdmf_path, 'wb') as fxml:
         fxml.write(pretty_xml)
 
+# def export_vertex_values_from_opt(model, p, opt_path, export_path):
+#     r"""
+#     Every optimization file is organized as
 
-# def dataset_to_xdmf(path, shape, ):
-#     """
+#     /iter0/p : The parameterization vector. All values under `iter0` are calculated with p
+#     /iter0/obj : The value of the objective function
+#     /iter0/grad_obj : The gradient of the objective function
+#     /iter0/constraints : The vector of constraints
+#     /iter0/jac_constraints : The jacobian of constraints
 #     """
 
+#     with h5py.File(opt_path, mode='r') as fi:
+#         with h5py.File(export_path, mode='w') as fo:
+#             n = 10
+#             for ii in range(n):
+#                 ## Write the parameterization
+#                 p.vector = fi[f'iter{n}/p'][:]
+#                 uva, solid_props, fluid_props, timing_props = p.convert()
+
+#                 ## Write datasets for the parameterization
+#                 for key in p:
+#                     if p.TYPE[key][0] == 'field':
+
+# # def dataset_to_xdmf(path, shape, ):
+# #     """
+# #     """
+
+
+# def xdmf_h5_slice(group, slice):
+#     """
+#     Parameters
+#     ----------
+#     f : h5py.File
+#         h5py File object
+#     name : str
+#         Name of the data set
+#     slice :
+#         A slice object to extract from the data set
+#     """
+#     data_shape = group[ii:ii+1, ...].shape
+#     data_item = Element('DataItem', {
+#                     'ItemType': 'HyperSlab',
+#                     'NumberType': 'Float',
+#                     'Precision': '8',
+#                     'Format': 'HDF',
+#                     'Dimensions': tuple_shape_to_xdmf()})
+
+#     slice_sel = SubElement(slice, 'DataItem', {
+#         'Dimensions': '3 3',
+#         'Format': 'XML'})
+#     slice_sel.text = f"{ii} 0 0\n 1 1 1\n 1 {tuple_shape_to_xdmf(group.shape[-2:])}"
+
+#     slice_data = SubElement(slice, 'DataItem', {
+#         'Dimensions': tuple_shape_to_xdmf(f[label].shape),
+#         'Format': 'HDF'})
+#     slice_data.text = f'{h5file_path}:{label}'
+
+# def tuple_shape_to_xdmf(shape):
+#             return r' '.join(str(dim) for dim in shape)

@@ -32,7 +32,7 @@ from femvf.forward import forward
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
-from femvf.model import ForwardModel, load_1dfluidfsi_model
+from femvf.model import ForwardModel, load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.parameters import parameterization
@@ -51,7 +51,7 @@ def get_starting_rayleigh_model():
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_1dfluidfsi_model(mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
+    model = load_fsi_model(mesh_path, None,Solid=Rayleigh, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -84,7 +84,7 @@ def get_starting_kelvinvoigt_model():
     mesh_base_filename = 'M5-3layers-medial-surface-refinement'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_1dfluidfsi_model(mesh_path, Solid=KelvinVoigt, Fluid=Bernoulli)
+    model = load_fsi_model(mesh_path, None, Solid=KelvinVoigt, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 6e3 * PASCAL_TO_CGS

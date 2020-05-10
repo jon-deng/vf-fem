@@ -13,7 +13,7 @@ import dolfin as dfn
 # import xml
 
 sys.path.append('../')
-from femvf.model import load_1dfluidfsi_model
+from femvf.model import load_fsi_model
 from femvf.solids import Rayleigh
 from femvf.fluids import Bernoulli
 
@@ -25,7 +25,7 @@ mesh_base_filename = 'geometry2'
 mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
 ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-model = load_1dfluidfsi_model(mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
+model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
 statefile_path = './test_forward.h5'
 visfile_path = './test_forward-vis.h5'

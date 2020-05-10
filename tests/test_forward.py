@@ -15,7 +15,7 @@ import h5py
 
 sys.path.append('../')
 from femvf.forward import forward
-from femvf.model import ForwardModel, load_1dfluidfsi_model
+from femvf.model import ForwardModel, load_fsi_model
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
@@ -36,7 +36,7 @@ class TestForward(unittest.TestCase):
 
     def test_forward(self):
         ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-        model = load_1dfluidfsi_model(self.mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
+        model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
         dt = 5e-5
         times_meas = [0, 0.005]

@@ -15,15 +15,36 @@ from . import constants as const
 from . import meshutils
 from .parameters.properties import FluidProperties
 
-def load_1dfluidfsi_model(solid_mesh_path, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli):
+def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluids.Bernoulli):
     """
-    Returns a ForwardModel loaded from `solid_mesh`
+    Factory function that loads a model based on input solid/fluid meshes.
+
+    The function will delegate to specific loading routines depending on how the mesh
+    is input etc.
+
+    Parameters
+    ----------
     """
-    mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh_path)
+    # Load the solid
+    mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
+    if isinstance(solid_mesh, str):
+        ext = path.splitext(solid_mesh)[1]
+        if ext.lower() == '.xml':
+            # The solid mesh is an xml file
+            mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
+        else:
+            raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
     solid = Solid(mesh, facet_func, facet_labels, cell_func, cell_labels)
 
-    xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
-    fluid = Fluid(xfluid, yfluid)
+    # Load the fluid
+    fluid = None
+    if fluid_mesh is None:
+        assert isinstance(Fluid, fluids.Fluid1D)
+        xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
+        fluid = Fluid(xfluid, yfluid)
+    else:
+        raise ValueError(f"This function only supports loading 1D fluid models currently.")
+
     model = ForwardModel(solid, fluid)
 
     return model

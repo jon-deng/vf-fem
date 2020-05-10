@@ -19,7 +19,7 @@ from femvf import statefile as sf, meshutils
 from femvf.forward import forward
 from femvf.fluids import Bernoulli
 from femvf.solids import KelvinVoigt, Rayleigh
-from femvf.model import ForwardModel, load_1dfluidfsi_model
+from femvf.model import ForwardModel, load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functionals import basic
@@ -42,7 +42,7 @@ class TestFunctionals(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = load_1dfluidfsi_model(mesh_path, Solid=Rayleigh, Fluid=Bernoulli)
+        model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
         ## Set the solution parameters
         dt_max = 1e-4
