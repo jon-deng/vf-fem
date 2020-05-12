@@ -81,7 +81,7 @@ def get_starting_kelvinvoigt_model():
     ## Set the mesh to be used and initialize the forward model
     mesh_dir = '../meshes'
     mesh_base_filename = 'geometry2'
-    mesh_base_filename = 'M5-3layers-medial-surface-refinement'
+    mesh_base_filename = 'M5-3layers-pressure-surface-refinement'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
     model = load_fsi_model(mesh_path, None, Solid=KelvinVoigt, Fluid=Bernoulli)
@@ -129,6 +129,7 @@ class TaylorTest(unittest.TestCase):
         # fkwargs = {}
         Functional = funcs.TransferWorkbyDisplacementIncrement
         # Functional = funcs.TransferWorkbyVelocity
+        # Functional = funcs.KVDampingWork
 
         # Functional = funcs.FinalSurfacePower
         # Functional = funcs.FinalSurfaceDisplacementIncrementNorm
@@ -147,7 +148,7 @@ class TaylorTest(unittest.TestCase):
         # Functional = extra_funcs.F0WeightedAcousticPower
 
         functional = Functional(model)
-        functional.constants['n_start'] = 1
+        # functional.constants['n_start'] = 1
 
         ## Solve the model for each point along the 'direction' of parameter changes
         print(f"\nSolving models along parameter search direction")
@@ -182,7 +183,9 @@ class TaylorTest(unittest.TestCase):
         grad_vector = None
         grad_on_step_dir = None
         if isinstance(self.step_dir, parameterization.FullParameterization):
-            grad_vector = self.p.dconvert(grad).vector
+            grad_p = self.p.dconvert(grad)
+            # breakpoint()
+            grad_vector = grad_p.vector
             grad_on_step_dir = np.dot(grad_vector, self.step_dir.vector)
         else:
             grad_vector = grad[self.parameter]
@@ -330,105 +333,59 @@ class Testu0Gradient(TaylorTest):
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-20)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-25)), axis=0)
 
         # Get y--coordinates in DOF order
         xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
         y = xy[:, 1]
 
-        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
-        step_dir = np.zeros(xy.size)
-        step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
-        duva = (step_dir, 0.0, 0.0)
+        ## Pick a step direction
+        # Increment `u` linearly as a function of x and y in the y direction
+        # step_dir = np.zeros(xy.size)
+        # step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
 
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
-        u0_y = -1e-2 * (y-y.min()) / (y.max()-y.min())
-        u0_x = np.zeros(y.shape)
-        u0[:] = np.stack([u0_x, u0_y], axis=-1).flat
-
-        print(f"Computing {len(hs)} finite difference points")
-
-        fig, ax = plt.subplots(1, 1)
-        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
-            if os.path.exists(save_path):
-                os.remove(save_path)
-            line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path)
-        else:
-            print("Using existing files")
-
-        plt.show()
-
-        self.hs = hs
-        self.step_dir = step_dir
-        self.parameter = 'u0'
-
-        self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-
-        self.case_postfix = 'u0'
-
-class Testu0FSIGradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
-
-    def setUp(self):
-        """
-        Runs the forward model over several parameter 'steps' and saves their history.
-        """
-        save_path = 'out/u0grad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
-
-        t_start, t_final = 0, 1/150
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': 100000000000000.0}
-
-        ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 0)-15)), axis=0)
-
-        # Get y--coordinates in DOF order
-        xy = model.get_ref_config()
-        y_surface = xy[model.surface_vertices, 1]
-
-        # Set the step direction to only move the FSI (pressure nodes) surfaces
-        # Set the x/y surface step direction
+        # Increment `u` only along the pressure surface
         surface_dofs = model.solid.vert_to_vdof.reshape(-1, 2)[model.surface_vertices]
+        xy_surface = model.solid.mesh.coordinates()[model.surface_vertices, :]
+        x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
         step_dir = dfn.Function(model.solid.vector_fspace).vector()
 
-        # step only in surface
-        step_dir[:] = 0.0
-        # breakpoint()
-        step_dir[np.array(surface_dofs[:, 0])] = (y_surface/y_surface.max())**2
-        step_dir[np.array(surface_dofs[:, 1])] = 0.0
+        x_frac = (x_surf-x_surf.min())/(x_surf.max()-x_surf.min())
+        step_dir[np.array(surface_dofs[:, 0])] = 1*(1.0-x_frac) + 0.25*x_frac
+        step_dir[np.array(surface_dofs[:, 1])] = -1*(1.0-x_frac) + 0.25*x_frac
+        # step_dir[np.array(surface_dofs[:, 0])] = (y_surf/y_surf.max())**2
+        # step_dir[np.array(surface_dofs[:, 1])] = (y_surf/y_surf.max())**2
 
-        # step only in interior
+        # Increment `u` only in the interior of the body
         # step_dir[:] = 1.0
         # step_dir[surface_dofs[:, 0].flat] = 0.0
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
-        # zero the BC along the base
         model.solid.bc_base.apply(step_dir)
-
 
         duva = (step_dir, 0.0, 0.0)
 
-        # fig, ax = plt.subplots(1, 1)
-        # xy = model.get_ref_config()
-        # ax.scatter(xy[:, 0], xy[:, 1])
-        # ax.plot(xy[model.surface_vertices, 0], xy[model.surface_vertices, 1])
-        # ax.scatter(xy[model.surface_vertices[0], 0], xy[model.surface_vertices[0], 1], color='k')
-        # plt.show()
+        u0 = dfn.Function(model.solid.vector_fspace).vector()
+        # u0_y = -1e-2 * (y-y.min()) / (y.max()-y.min())
+        # u0_x = np.zeros(y.shape)
+        # u0[:] = np.stack([u0_x, u0_y], axis=-1).flat
 
-        # print(f"Computing {len(hs)} finite difference points")
+        print(f"Computing {len(hs)} finite difference points")
+
+        tri = model.get_triangulation()
+        model.set_ini_state((u0[0]+duva[0])*1e-2, 0, 0)
+        tri_def = model.get_triangulation(config='cur')
+
+        fig, ax = plt.subplots(1, 1)
+        ax.triplot(tri)
+        ax.triplot(tri_def)
+        plt.show()
 
         if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
             if os.path.exists(save_path):
                 os.remove(save_path)
-            line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
+            line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
                         duva=duva, filepath=save_path)
         else:
             print("Using existing files")
@@ -612,7 +569,7 @@ class TestdtGradient(TaylorTest):
         self.case_postfix = 'dt'
 
 class TestParameterizationGradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
 
     def setUp(self):
         save_path = 'out/parameterizationgrad-states.h5'
@@ -748,10 +705,6 @@ if __name__ == '__main__':
     # test.test_adjoint()
 
     # test = Testu0Gradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = Testu0FSIGradient()
     # test.setUp()
     # test.test_adjoint()
 

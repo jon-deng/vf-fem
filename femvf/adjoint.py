@@ -92,7 +92,7 @@ def adjoint(model, f, functional, show_figure=False):
     # for the final state)
     # To initialize, we need to solve for \lambda^{N-1} i.e. `adj_u2`, `adj_v2`, `adj_a2` etc.
     N = f.size
-    times = f.get_solution_times()
+    times = f.get_times()
 
     f.get_state(N-1, out=uva2)
     f.get_state(N-2, out=uva1)

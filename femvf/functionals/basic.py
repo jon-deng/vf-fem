@@ -27,9 +27,9 @@ import scipy.signal as sig
 import dolfin as dfn
 import ufl
 
-from ..fluids import smooth_minimum, dsmooth_minimum_df
-
 from .abstract import AbstractFunctional
+from ..fluids import smooth_minimum, dsmooth_minimum_df
+from ..solids import strain
 
 class Functional(AbstractFunctional):
     """
@@ -371,10 +371,7 @@ class KVDampingWork(Functional):
         v0 = solid.forms['coeff.state.v0']
         eta = solid.forms['coeff.prop.eta']
 
-        v0 = solid.forms['coeff.state.v0']
-
         forms = {}
-        from solids import strain
         forms['damping_power'] = ufl.inner(eta*strain(v0), strain(v0)) * ufl.dx
 
         forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
@@ -395,6 +392,7 @@ class KVDampingWork(Functional):
             self.model.set_params_fromfile(f, ii)
             power_right = dfn.assemble(self.forms['damping_power'])
             res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
+            power_left = power_right
 
         return res
 
@@ -403,7 +401,7 @@ class KVDampingWork(Functional):
         N_STATE = f.get_num_states()
         time = f.get_times()
 
-        dv = dfn.Function(self.model.solid.vector_fspace)
+        dv = dfn.Function(self.model.solid.vector_fspace).vector()
         if n >= N_START:
             self.model.set_params_fromfile(f, n)
             dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
@@ -421,18 +419,18 @@ class KVDampingWork(Functional):
         N_START = 0
         N_STATE = f.get_num_states()
 
-        dwork_deta = dfn.Function(self.model.solid.scalar_fspace)
+        dwork_deta = dfn.Function(self.model.solid.scalar_fspace).vector()
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
         self.model.set_params_fromfile(f, 0)
-        dpower_left_deta = dfn.assemble(self.forms['ddamping_power_demod'])
+        dpower_left_deta = dfn.assemble(self.forms['ddamping_power_deta'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_params_fromfile(f, ii)
-            dpower_right_deta = dfn.assemble(self.forms['ddamping_power_demod'])
+            dpower_right_deta = dfn.assemble(self.forms['ddamping_power_deta'])
             dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
 
-        return dwork_deta
+        return {'eta': dwork_deta}
 
 # TODO: Pretty sure this one below does not work
 class RayleighDampingWork(Functional):

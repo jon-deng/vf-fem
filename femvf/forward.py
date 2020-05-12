@@ -179,7 +179,7 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
         f.file[f'{h5group}/gaw'] = np.array(glottal_width)
 
         info['meas_ind'] = f.get_meas_indices()
-        info['time'] = f.get_solution_times()
+        info['time'] = f.get_times()
         info['glottal_width'] = np.array(glottal_width)
         info['flow_rate'] = np.array(flow_rate)
         info['idx_separation'] = np.array(idx_separation)

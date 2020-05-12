@@ -9,13 +9,12 @@ import dolfin as dfn
 import ufl
 from petsc4py import PETSc as pc
 
-from . import solids
-from . import fluids
+from . import solids, fluids
 from . import constants as const
 from . import meshutils
 from .parameters.properties import FluidProperties
 
-def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluids.Bernoulli):
+def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli):
     """
     Factory function that loads a model based on input solid/fluid meshes.
 
@@ -38,12 +37,13 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluids
 
     # Load the fluid
     fluid = None
-    if fluid_mesh is None:
-        assert isinstance(Fluid, fluids.Fluid1D)
+    if fluid_mesh is None and issubclass(Fluid, fluids.Fluid1D):
         xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
         fluid = Fluid(xfluid, yfluid)
+    elif fluid_mesh is None and not issubclass(Fluid, fluids.Fluid1D):
+        raise ValueError(f"`fluid_mesh` cannot be `None` if the fluid is not 1D")
     else:
-        raise ValueError(f"This function only supports loading 1D fluid models currently.")
+        raise ValueError(f"This function does not yet support input fluid meshes.")
 
     model = ForwardModel(solid, fluid)
 
@@ -304,9 +304,16 @@ class ForwardModel:
         return self.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
 
     # Convenience functions
-    def get_triangulation(self):
+    def get_triangulation(self, config='ref'):
         from matplotlib.tri import Triangulation
-        coords = self.get_cur_config()
+        coords = None
+        if config == 'ref':
+            coords = self.get_ref_config()
+        elif config == 'cur':
+            coords = self.get_cur_config()
+        else:
+            raise ValueError(f"`config` must be one of 'ref' or 'cur'.")
+
         cells = self.solid.mesh.cells()
         return Triangulation(coords[:, 0], coords[:, 1], triangles=cells)
 

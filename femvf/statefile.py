@@ -354,7 +354,7 @@ class StateFile:
         """
         return self.root_group['time'][n]
 
-    def get_solution_times(self):
+    def get_times(self):
         """
         Returns the time vector.
         """
