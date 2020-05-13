@@ -14,7 +14,7 @@ import dolfin as dfn
 import h5py
 
 sys.path.append('../')
-from femvf.forward import forward
+from femvf.forward import forward, integrate_forward
 from femvf.model import ForwardModel, load_fsi_model
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
@@ -31,7 +31,7 @@ class TestForward(unittest.TestCase):
 
         mesh_dir = '../meshes'
 
-        mesh_base_filename = 'geometry2'
+        mesh_base_filename = 'M5-3layers'
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     def test_forward(self):
@@ -39,18 +39,14 @@ class TestForward(unittest.TestCase):
         model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
         dt = 5e-5
-        times_meas = [0, 0.005]
+        times_meas = [0, 0.01]
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
-        # Time varying fluid properties
-        # fluid_props = constants.DEFAULT_FLUID_PROPERTIES
-        # fluid_props['p_sub'][()] = [1500*PASCAL_TO_CGS, 1500*PASCAL_TO_CGS, 1, 1]
-        # fluid_props['p_sub_time'][()] = [0, 3e-3, 3e-3, 0.02]
-        # Constant fluid properties
         p_sub = 500
 
         timing_props = {'t0': 0, 'tmeas': times_meas, 'dt_max': dt}
+        times = np.linspace(0, 0.01, 100)
 
         fluid_props = model.fluid.get_properties()
         fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
@@ -74,25 +70,25 @@ class TestForward(unittest.TestCase):
         xy = model.solid.vector_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(solid.vector_fspace).vector()
+        u0 = dfn.Function(model.solid.vector_fspace).vector()
 
         save_path = 'test_forward.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
         print("Running forward model")
-        adaptive_step_prm = {'abs_tol': None}
+        # adaptive_step_prm = {'abs_tol': None}
+        # runtime_start = perf_counter()
+        # info = forward(model, (u0, 0, 0), solid_props, fluid_props, timing_props,
+        #                h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
+        #                show_figure=False)
+        # runtime_end = perf_counter()
+
         runtime_start = perf_counter()
-        info = forward(model, (u0, 0, 0), solid_props, fluid_props, timing_props,
-                       h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
-                       show_figure=False)
+        info = integrate_forward(model, (u0, 0, 0), solid_props, fluid_props, times,
+                                 h5file=save_path, h5group='/')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
-
-        ### Write a single vector data set out to see if it work with paraview
-        with h5py.File(save_path, mode='a') as f:
-            f.create_dataset('u0', data=f['u'][15, :], dtype=np.float64)
-            f.create_dataset('v0', data=f['v'][15, :], dtype=np.float64)
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(info['time'], info['glottal_width'])

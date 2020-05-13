@@ -281,7 +281,7 @@ class StateFile:
         for dset_name, value in zip(['u', 'v', 'a'], uva):
             dset = self.root_group[dset_name]
             dset.resize(dset.shape[0]+1, axis=0)
-            dset[-1] = value.vector()[:]
+            dset[-1] = value[:]
 
     def append_fluid_state(self, qp):
         """

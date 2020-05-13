@@ -386,13 +386,14 @@ class ForwardModel:
         self.solid.set_fin_state(u1)
 
     def set_ini_fluid_state(self, q0, p0):
-        self.set_pressure(p0)
+        self.fluid.set_ini_state(q0, p0)
+        # self.set_pressure(p0)
 
     def set_fin_fluid_state(self, q1, p1):
         # Not needed for steady Bernoulli model, but keep it here for consistency and maybe future
         # use
-        raise NotImplementedError(
-            "This method would not be needed unless you have an unsteady fluid model")
+        self.fluid.set_fin_state(q1, p1)
+        self.set_pressure(p1)
 
     def set_time_step(self, dt):
         """
@@ -451,7 +452,7 @@ class ForwardModel:
             self.set_solid_props(solid_props)
 
     # @profile
-    def set_iter_params(self, uva0=None, qp0=None, dt=None, u1=None, solid_props=None, fluid_props=None):
+    def set_iter_params(self, uva0=None, qp0=None, dt=None, u1=None, qp1=None, solid_props=None, fluid_props=None):
         """
         Set parameter values needed to integrate the model over a time step.
 
@@ -474,6 +475,9 @@ class ForwardModel:
 
         if u1 is not None:
             self.set_fin_state(u1)
+
+        if qp1 is not None:
+            self.set_fin_fluid_state(*qp1)
 
     def set_params_fromfile(self, statefile, n, update_props=True):
         """

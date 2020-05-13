@@ -282,6 +282,12 @@ class Fluid1D:
         ds = (dx**2+dy**2)**0.5
         self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
 
+    def set_ini_state(self, q0, p0):
+        pass
+
+    def set_fin_state(self, q1, p1):
+        pass
+
     def set_properties(self, props):
         for key in props:
             if self.properties[key].shape == ():

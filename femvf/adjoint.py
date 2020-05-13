@@ -155,7 +155,7 @@ def adjoint(model, f, functional, show_figure=False):
 
         dcost_duva1 = functional.duva(f, ii, iter_params1, iter_params2)
 
-        (adj_u1, adj_v1, adj_a1) = decrement_adjoint(
+        (adj_u1, adj_v1, adj_a1) = explicit_decrement_adjoint(
             model, adj_uva2, iter_params1, iter_params2, dcost_duva1)
 
         for comp, val in zip(adj_uva1, [adj_u1, adj_v1, adj_a1]):
@@ -250,7 +250,7 @@ def adjoint(model, f, functional, show_figure=False):
 
     return functional_value, grad, functional
 
-def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
+def explicit_decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
     """
     Returns the adjoint at the previous time step.
 
@@ -319,6 +319,94 @@ def decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
     # Calculate 'source' terms for the adjoint calculation
     df2_du1_correction = dfn.Function(model.solid.vector_fspace).vector()
     dpressure_du1.transpmult(df2_dpressure * adj_u2, df2_du1_correction)
+
+    adj_v1_lhs = dcost_dv1
+    adj_v1_lhs -= df2_dv1*adj_u2 - newmark_v_dv0(dt2)*adj_v2 - newmark_a_dv0(dt2)*adj_a2
+    model.solid.bc_base.apply(adj_v1_lhs)
+    adj_v1 = adj_v1_lhs
+
+    adj_a1_lhs = dcost_da1
+    adj_a1_lhs -= df2_da1*adj_u2 - newmark_v_da0(dt2)*adj_v2 - newmark_a_da0(dt2)*adj_a2
+    model.solid.bc_base.apply(adj_a1_lhs)
+    adj_a1 = adj_a1_lhs
+
+    adj_u1_lhs = dcost_du1 + newmark_v_du1(dt1)*adj_v1 + newmark_a_du1(dt1)*adj_a1
+    adj_u1_lhs -= df2_du1*adj_u2 + df2_du1_correction \
+                  - newmark_v_du0(dt2)*adj_v2 - newmark_a_du0(dt2)*adj_a2
+    model.solid.bc_base.apply(df1_du1, adj_u1_lhs)
+    dfn.solve(df1_du1, adj_u1, adj_u1_lhs, 'petsc')
+
+    return (adj_u1, adj_v1, adj_a1)
+
+def implicit_decrement_adjoint(model, adj_uva2, iter_params1, iter_params2, dcost_duva1):
+    """
+    Returns the adjoint at the previous time step.
+
+    Each adjoint step is based on an indexing scheme where the postfix on a variable represents that
+    variable at time index n + postfix. For example, variables uva0, uva1, and uva2 correspond to states
+    at n, n+1, and n+2.
+
+    This is done because the adjoint calculation to solve for :math:`lambda_{n+1}` given
+    :math:`lambda_{n+2}` requires the forward equations :math:`f^{n+2}=0`, and :math:`f^{n+1}=0`,
+    which in turn requires states :math:`x^{n}`, :math:`x^{n+1}`, and :math:`x^{n+2}` to be defined.
+
+    Note that :math:`f^{n+1} = f^{n+1}([u, v, a]^{n+1}, [u, v, a]^{n}) = 0` involves the FEM
+    approximation and time stepping scheme that defines the state :math`x^{n+1} = (u, v, a)^{n+1}`
+    implicitly, which could be linear or non-linear.
+
+    Parameters
+    ----------
+    model : model.ForwardModel
+    adj_uva2 : tuple of dfn.cpp.la.Vector
+        A tuple (adj_u2, adj_v2, adj_a2) of 'initial' (time index 2) states for the adjoint model.
+    iter_params1, iter_params2 : dict
+        Dictionaries representing the parameters of ForwardModel.set_iter_params
+    h5path : string
+        Path to an hdf5 file containing states from a forward run of the model.
+    h5group : string
+        The group where states are stored in the hdf5 file.
+
+    Returns
+    -------
+    adj_uva1 : tuple of dfn.Function
+        The 'next' state (adj_u1, adj_v1, adj_a1) of the adjoint model.
+    info : dict
+        Additional info computed during the solve that might be useful.
+    """
+    adj_u2, adj_v2, adj_a2 = adj_uva2
+    dcost_du1, dcost_dv1, dcost_da1 = dcost_duva1
+
+    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
+    dt1 = iter_params1['dt']
+    dt2 = iter_params2['dt']
+    model.set_iter_params(**iter_params2)
+
+    # Assemble needed forms
+    df2_du1 = model.assem_df1_du0_adj()
+    df2_dv1 = model.assem_df1_dv0_adj()
+    df2_da1 = model.assem_df1_da0_adj()
+
+    # Correct df2_du1 since pressure depends on u1 for explicit FSI forcing
+    df2_dp = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
+    dpressure_du1 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
+
+    ## Set form coefficients to represent f^{n+1} aka f1(uva0, uva1) -> uva1
+    model.set_iter_params(**iter_params1)
+
+    # Assemble needed forms
+    df1_du1 = model.assem_df1_du1_adj()
+
+    ## Adjoint recurrence relations
+    # Allocate adjoint states
+    adj_u1 = dfn.Function(model.solid.vector_fspace).vector()
+    adj_v1 = dfn.Function(model.solid.vector_fspace).vector()
+    adj_a1 = dfn.Function(model.solid.vector_fspace).vector()
+
+    # gamma, beta = model.gamma.values()[0], model.beta.values()[0]
+
+    # Calculate 'source' terms for the adjoint calculation
+    df2_du1_correction = dfn.Function(model.solid.vector_fspace).vector()
+    dpressure_du1.transpmult(df2_dp * adj_u2, df2_du1_correction)
 
     adj_v1_lhs = dcost_dv1
     adj_v1_lhs -= df2_dv1*adj_u2 - newmark_v_dv0(dt2)*adj_v2 - newmark_a_dv0(dt2)*adj_a2

@@ -18,8 +18,9 @@ from . import vis
 from .misc import get_dynamic_fluid_props
 
 DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
+FIXEDPOINT_SOLVER_PRM = {'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
 
-# @profile
+# TODO: Make sure you change this to an adaptive time step integrator and stop using it when calculating gradients
 def forward(model, uva, solid_props, fluid_props, timing_props,
             h5file='tmp.h5', h5group='/',
             adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
@@ -72,12 +73,12 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
     model.set_solid_props(solid_props)
 
     # Allocate functions for states
-    u0 = dfn.Function(model.solid.vector_fspace)
-    v0 = dfn.Function(model.solid.vector_fspace)
-    a0 = dfn.Function(model.solid.vector_fspace)
-    u0.vector()[:], v0.vector()[:], a0.vector()[:] = uva
+    u0 = dfn.Function(model.solid.vector_fspace).vector()
+    v0 = dfn.Function(model.solid.vector_fspace).vector()
+    a0 = dfn.Function(model.solid.vector_fspace).vector()
+    u0[:], v0[:], a0[:] = uva
 
-    model.set_ini_state(u0.vector(), v0.vector(), a0.vector())
+    model.set_ini_state(u0, v0, a0)
 
     q0, p0, info = model.get_pressure()
     model.set_pressure(p0)
@@ -92,10 +93,6 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
     pressure = []
     glottal_width.append(info['a_min'])
     flow_rate.append(info['flow_rate'])
-
-    u1 = dfn.Function(model.solid.vector_fspace)
-    v1 = dfn.Function(model.solid.vector_fspace)
-    a1 = dfn.Function(model.solid.vector_fspace)
 
     ## Allocate a figure for plotting
     fig, axs = None, None
@@ -156,9 +153,9 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
                 f.append_fluid_state(qp1)
 
                 ## Update initial conditions for the next time step
-                u0.assign(uva1[0])
-                v0.assign(uva1[1])
-                a0.assign(uva1[2])
+                u0[:] = uva1[0]
+                v0[:] = uva1[1]
+                a0[:] = uva1[2]
                 q0 = qp1[0]
                 p0 = qp1[1]
 
@@ -190,8 +187,107 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
 
     return info
 
-# @profile
-def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
+def integrate_forward(model, uva, solid_props, fluid_props, times, idx_meas=None,
+                      h5file='tmp.h5', h5group='/', newton_solver_prm=None, coupling='implicit'):
+    if idx_meas is None:
+        idx_meas = np.array([])
+
+    increment_forward = None
+    if coupling == 'implicit':
+        increment_forward = implicit_increment_forward
+    elif coupling == 'explicit':
+        increment_forward = explicit_increment_forward
+    else:
+        raise ValueError("`coupling` must be one of 'explicit' of 'implicit'")
+
+    model.set_fluid_props(fluid_props)
+    model.set_solid_props(solid_props)
+
+    # Allocate functions to store states
+    u0 = dfn.Function(model.solid.vector_fspace).vector()
+    v0 = dfn.Function(model.solid.vector_fspace).vector()
+    a0 = dfn.Function(model.solid.vector_fspace).vector()
+    u0[:], v0[:], a0[:] = uva
+
+    model.set_ini_state(u0, v0, a0)
+    q0, p0, info = model.get_pressure()
+
+    ## Record things of interest
+    # TODO: This should be removed. If you want to calculate a functional to record
+    # during the solution, a parameter should be made available in the function for that
+    idx_separation = []
+    idx_min_area = []
+    glottal_width = []
+    flow_rate = []
+    pressure = []
+    glottal_width.append(info['a_min'])
+    flow_rate.append(info['flow_rate'])
+
+    # Get the solution times
+    if times[-1] < times[0]:
+        raise ValueError("The final time point must be greater than the initial one."
+                         f"The input intial/final times were {tmeas[0]}/{tmeas[-1]}")
+    if times.size <= 1:
+        raise ValueError("There must be atleast 2 time integration points.")
+
+    ## Initialize datasets to save in h5 file
+    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
+        f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0), fluid_props=fluid_props, solid_props=solid_props)
+        f.append_time(times[0])
+        if 0 in idx_meas:
+            f.append_meas_index(0)
+
+    ## Loop through solution times and write solution variables to the h5file.
+    # TODO: Hardcoded the calculation of glottal width here, but it should be an option you
+    # can pass in along with other functionals of interest
+    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
+        for n in range(times.size-1):
+            dt = times[n+1] - times[n]
+            uva0 = (u0, v0, a0)
+            qp0 = (q0, p0)
+
+            # Increment the state
+            uva1, qp1, step_info = None, None, None
+
+            uva1, qp1, step_info = increment_forward(model, uva0, qp0, dt,
+                                                     newton_solver_prm=newton_solver_prm)
+
+            idx_separation.append(step_info['fluid_info']['idx_sep'])
+            idx_min_area.append(step_info['fluid_info']['idx_min'])
+            glottal_width.append(step_info['fluid_info']['a_min'])
+            flow_rate.append(step_info['fluid_info']['flow_rate'])
+            pressure.append(step_info['fluid_info']['pressure'])
+
+            ## Write the solution outputs to a file
+            f.append_state(uva1)
+            f.append_fluid_state(qp1)
+            f.append_time(times[n+1])
+            if n+1 in idx_meas:
+                f.append_meas_index(n+1)
+
+            ## Update initial conditions for the next time step
+            u0[:] = uva1[0]
+            v0[:] = uva1[1]
+            a0[:] = uva1[2]
+            q0 = qp1[0]
+            p0 = qp1[1]
+
+        # Write out the quantities fo interest to the h5file
+        f.file[f'{h5group}/gaw'] = np.array(glottal_width)
+
+        info['meas_ind'] = f.get_meas_indices()
+        info['time'] = f.get_times()
+        info['glottal_width'] = np.array(glottal_width)
+        info['flow_rate'] = np.array(flow_rate)
+        info['idx_separation'] = np.array(idx_separation)
+        info['idx_min_area'] = np.array(idx_min_area)
+        info['pressure'] = np.array(pressure)
+        info['h5file'] = h5file
+        info['h5group'] = h5group
+
+    return info
+
+def explicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -220,24 +316,19 @@ def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     solid = model.solid
     u0, v0, a0 = uva0
 
-    u1 = dfn.Function(solid.vector_fspace)
-    v1 = dfn.Function(solid.vector_fspace)
-    a1 = dfn.Function(solid.vector_fspace)
+    u1 = dfn.Function(solid.vector_fspace).vector()
+    v1 = dfn.Function(solid.vector_fspace).vector()
+    a1 = dfn.Function(solid.vector_fspace).vector()
 
     # Update form coefficients and initial guess
-    uva0_vec = [comp.vector() for comp in uva0]
-    model.set_iter_params(uva0=uva0_vec, qp0=qp0, dt=dt, u1=u0.vector())
+    model.set_iter_params(uva0=uva0, dt=dt, u1=u0, qp1=qp0)
 
-    # Solve the thing
-    # TODO: Implement this manually so that linear/nonlinear solver is switched according to the
-    # form. During collision the equations are non-linear but in all other cases they are currently
-    # linear.
+    # TODO: You could implement this to use the non-linear solver only when collision is happening
     if newton_solver_prm is None:
         newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-    # breakpoint()
+
     dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
               solver_parameters={"newton_solver": newton_solver_prm})
-    u1.assign(solid.u1)
 
     # u1.assign(u0)
     # du = dfn.Function(model.solid.vector_fspace)
@@ -245,13 +336,84 @@ def increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     #                       [model.bc_base], **newton_prm)
     # u1.vector()[:] = _u1
 
-    v1.vector()[:] = solids.newmark_v(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
-    a1.vector()[:] = solids.newmark_a(u1.vector(), u0.vector(), v0.vector(), a0.vector(), dt)
+    u1[:] = solid.u1.vector()
+    v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
+    a1[:] = solids.newmark_a(u1, u0, v0, a0, dt)
 
-    model.set_ini_state(u1.vector(), v1.vector(), a1.vector())
+    model.set_ini_state(u1, v1, a1)
     q1, p1, fluid_info = model.get_pressure()
 
     return (u1, v1, a1), (q1, p1), fluid_info
+
+def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None, rel_fp_tol=1e-10):
+    """
+    Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
+
+    Parameters
+    ----------
+    model : model.ForwardModel
+    uva0 : tuple of dfn.Function
+        Initial states (u0, v0, a0) for the forward model
+    dt : float
+        The time step to increment over
+    solid_props : properties.SolidProperties, optional
+        A dictionary of solid properties
+    fluid_props : properties.FluidProperties, optional
+        A dictionary of fluid properties.
+
+    Returns
+    -------
+    tuple of dfn.Function
+        The next state (u1, v1, a1) of the forward model
+    tuple of (float, array_like)
+        The next fluid state (q1, p1) of the forward model
+    fluid_info : dict
+        A dictionary containing information on the fluid solution. These include the flow rate,
+        surface pressure, etc.
+    """
+    solid = model.solid
+    u0, v0, a0 = uva0
+
+    # Set initial guesses for the states at the next time
+    u1 = dfn.Function(solid.vector_fspace).vector()
+    v1 = dfn.Function(solid.vector_fspace).vector()
+    a1 = dfn.Function(solid.vector_fspace).vector()
+
+    u1[:] = u0
+    q1, p1 = qp0
+
+    # Solve the coupled problem using fixed point iterations between the fluid and solid
+    if newton_solver_prm is None:
+        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+
+    # Set tolerances for the fixed point iterations
+    nit = 0
+    abs_fp_err, rel_fp_err = np.inf, np.inf
+    model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=None, qp1=None)
+    while rel_fp_err > rel_fp_tol:
+        model.set_iter_params(uva0=uva0, u1=u1, qp1=(q1, p1))
+        dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
+                  solver_parameters={"newton_solver": newton_solver_prm})
+
+        abs_fp_err = (solid.u1.vector()-u1).norm('l2')
+        rel_fp_err = abs_fp_err/solid.u1.vector().norm('l2')
+
+        u1[:] = solid.u1.vector()
+        v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
+        a1[:] = solids.newmark_a(u1, u0, v0, a0, dt)
+
+        # Set the state to calculate the pressure, but you have to set it back after
+        model.set_ini_state(u1, v1, a1)
+        q1, p1, fluid_info = model.get_pressure()
+        nit += 1
+
+    # print(nit, rel_fp_err)
+    # breakpoint()
+    step_info = {'fluid_info': fluid_info,
+                 'nit': nit,
+                 'abs_u_err': abs_fp_err, 'rel_u_err': rel_fp_err}
+
+    return (u1, v1, a1), (q1, p1), step_info
 
 def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
     """
@@ -293,10 +455,10 @@ def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1
     refine = True
     while refine:
         nrefine += 1
-        uva1, qp1, fluid_info = increment_forward(model, uva0, qp0, dt)
+        uva1, qp1, fluid_info = explicit_increment_forward(model, uva0, qp0, dt)
         info['fluid_info'] = fluid_info
 
-        err = newmark_error_estimate(uva1[2].vector(), uva0[2].vector(), dt, beta=model.forms['coeff.time.beta'].values()[0])
+        err = newmark_error_estimate(uva1[2], uva0[2], dt, beta=model.forms['coeff.time.beta'].values()[0])
         err_norm = err.norm('l2')
         info['err_norm'] = err_norm
         info['nrefine'] = nrefine
@@ -305,6 +467,7 @@ def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1
 
         if abs_tol is not None:
             # step control method that prevents crossing the midline in one step near collision
+            # TODO: I think i deleted this so you'll have to got to and old commit to find it....
             refine, dt = refine_initial_collision(model, uva0, uva1, dt)
 
             # Step control method from [1]
@@ -316,7 +479,7 @@ def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1
 
     return uva1, qp1, dt, info
 
-# @profile
+
 def newton_solve(u, du, jac, res, bcs, **kwargs):
     """
     Solves the system using a newton method.
@@ -372,42 +535,6 @@ def newton_solve(u, du, jac, res, bcs, **kwargs):
 
     info = {'niter': ii, 'abs_err': abs_err, 'rel_err': rel_err}
     return u, info
-
-def refine_initial_collision(model, uva0, uva1, dt):
-    """
-    Return whether to refine the time step, and a proposed time step to use.
-    """
-    refine = False
-    dt_refine = dt
-
-    u0, v0, a0 = uva0
-    u1, v1, a1 = uva1
-
-    # Refine the time step if there is a transition from no-collision to collision
-    model.set_ini_state(u0.vector(), v0.vector(), a0.vector())
-    ymax0 = model.get_ymax()
-
-    y_collision = model.y_collision.values()[0]
-    y_midline = model.fluid_props['y_midline']
-    gap0 = y_collision - ymax0
-
-    model.set_ini_state(u1.vector(), v1.vector(), a1.vector())
-    ymax1 = model.get_ymax()
-    gap1 = y_collision - ymax1
-
-    # Refinement condition is based on initial collision penetration tolerance
-    tol = 1/50 * (y_midline - y_collision)
-    if gap0 >= 0 and gap1 < 0:
-        if -gap1 > tol:
-            refine = True
-            dt_refine = 0.5 * dt
-
-    return refine, dt_refine
-
-# def local_refinement(err, dt, tol=1e-5):
-#     """
-#     Return an estimate of the time step needed to achieve a certain error level.
-#     """
 
 def newmark_error_estimate(a1, a0, dt, beta=1/4):
     """
