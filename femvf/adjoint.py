@@ -123,9 +123,9 @@ def adjoint(model, f, functional, show_figure=False):
         iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp0, 'u1': uva1[0]}
         iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp_n1, 'u1': uva0[0]}
 
-        print(adj_state1_rhs[0].norm('l2'), np.linalg.norm(adj_state1_rhs[3]), np.linalg.norm(adj_state1_rhs[4]))
+        # print([adj.norm('l2') for adj in adj_state1_rhs[:3]])
         adj_state1 = solve_adjoint_exp(model, adj_state1_rhs, iter_params1)
-        print(adj_state1[0].norm('l2'), np.linalg.norm(adj_state1[3]), np.linalg.norm(adj_state1[4]))
+        print('Adjoint state', [adj.norm('l2') for adj in adj_state1[:3]])
 
         # Update adjoint w.r.t parameters
         model.set_iter_params(**iter_params1)
@@ -147,6 +147,7 @@ def adjoint(model, f, functional, show_figure=False):
         # print(dcost_dstate0[0].norm('l2'))
         adj_state0_rhs = solve_adjrhs_recurrence_exp(model, adj_state1, dcost_dstate0, iter_params1)
 
+        print('Adjoint state rhs', [adj.norm('l2') for adj in adj_state0_rhs[:3]])
         # Set initial states to the previous states for the start of the next iteration
         adj_state1_rhs = adj_state0_rhs
 
@@ -204,6 +205,9 @@ def solve_adjoint_exp(model, adj_rhs, it_params, out=None):
     """
     model.set_iter_params(**it_params)
     df2_du2 = model.assem_df1_du1_adj()
+
+    model.set_ini_state(it_params['u1'], 0, 0)
+    dq_du, dp_du = model.get_flow_sensitivity()
     dt = it_params['dt']
 
     if out is None:
@@ -223,18 +227,22 @@ def solve_adjoint_exp(model, adj_rhs, it_params, out=None):
     # Below, I know there's subglottal pressure at 0 applied so I set that to be 0
     adj_q[:] = adj_q_rhs
 
-    adj_p_rhs[0] = 0 # Sets subglottal pressure boundary condition
+    # adj_p_rhs[0] = 0 # Sets subglottal pressure boundary condition
     adj_p[:] = adj_p_rhs
 
-    dq_du, dp_du = model.get_flow_sensitivity()
     dpres_du = dfn.Function(model.solid.vector_fspace).vector()
     dqres_du = dfn.Function(model.solid.vector_fspace).vector()
     solid_dofs, fluid_dofs = model.get_fsi_vector_dofs()
 
+    print('dp_du', dp_du.max())
+
     dqres_du[solid_dofs] = (dq_du * adj_q)
     dpres_du[solid_dofs] = (dp_du.T @ adj_p)[fluid_dofs]
 
+    print('correction', dpres_du[:].max(), dpres_du[:].min())
+
     adj_u_rhs += newmark_v_du1(dt)*adj_v + newmark_a_du1(dt)*adj_a + dqres_du + dpres_du
+    print('correction', dpres_du.norm('l2'))
 
     model.solid.bc_base.apply(df2_du2, adj_u_rhs)
     dfn.solve(df2_du2, adj_u, adj_u_rhs)
@@ -264,10 +272,15 @@ def solve_adjrhs_recurrence_exp(model, adj_state2, dcost_dstate1, it_params2, ou
     df2_da1 = model.assem_df1_da0_adj()
     df2_dp1 = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
 
+    print('df_dpressure', df2_dp1.array().max())
+
     # Allocate a vector the for fluid side mat-vec multiplication
     _, matvec_adj_p_rhs = model.fluid.get_state_vecs()
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
     matvec_adj_p_rhs[fluid_dofs] = (df2_dp1 * adj_u2)[solid_dofs]
+    matvec_adj_p_rhs[:] = (df2_dp1 * adj_u2)[solid_dofs]
+
+    print('partial correction', matvec_adj_p_rhs.max(), matvec_adj_p_rhs.min())
 
     adj_u1_rhs = dcost_du1 - (df2_du1*adj_u2 - newmark_v_du0(dt2)*adj_v2 - newmark_a_du0(dt2)*adj_a2)
     adj_v1_rhs = dcost_dv1 - (df2_dv1*adj_u2 - newmark_v_dv0(dt2)*adj_v2 - newmark_a_dv0(dt2)*adj_a2)
