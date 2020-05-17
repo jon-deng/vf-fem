@@ -337,7 +337,7 @@ class Testu0Gradient(TaylorTest):
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         t_start, t_final = 0, 0.001
-        times_meas = np.linspace(t_start, t_final, 2)
+        times_meas = np.linspace(t_start, t_final, 3)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step sizes
