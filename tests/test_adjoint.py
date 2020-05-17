@@ -287,9 +287,9 @@ class TestEmodGradient(TaylorTest):
         times_meas = np.linspace(t_start, t_final, 128)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
-        t_start, t_final = 0, 0.001
-        times_meas = np.linspace(t_start, t_final, 3)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+        # t_start, t_final = 0, 0.001
+        # times_meas = np.linspace(t_start, t_final, 3)
+        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step size / number of steps
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 6)-5)), axis=0)
@@ -712,9 +712,9 @@ if __name__ == '__main__':
     test.setUp()
     test.test_adjoint()
 
-    # test = Testu0Gradient()
-    # test.setUp()
-    # test.test_adjoint()
+    test = Testu0Gradient()
+    test.setUp()
+    test.test_adjoint()
 
     # test = Testv0Gradient()
     # test.setUp()
