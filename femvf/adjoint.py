@@ -243,6 +243,7 @@ def solve_adjoint_exp(model, adj_rhs, it_params, out=None):
 
     adj_u_rhs += newmark_v_du1(dt)*adj_v + newmark_a_du1(dt)*adj_a + dqres_du + dpres_du
     print('correction', dpres_du.norm('l2'))
+    print('adj_u_rhs', adj_u_rhs.norm('l2'))
 
     model.solid.bc_base.apply(df2_du2, adj_u_rhs)
     dfn.solve(df2_du2, adj_u, adj_u_rhs)
