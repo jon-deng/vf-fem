@@ -163,6 +163,10 @@ class FinalDisplacementNorm(Functional):
 
         return du, 0.0, 0.0
 
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        return dq, dp
+
     def eval_dp(self, f):
         return None
 

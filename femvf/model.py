@@ -49,7 +49,6 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluid
 
     return model
 
-
 class ForwardModel:
     """
     Stores all the things related to the vocal fold forward model solved thru fenics.
@@ -104,10 +103,15 @@ class ForwardModel:
         surface_vertices = pressure_vertices
         surface_coordinates = self.solid.mesh.coordinates()[surface_vertices]
 
+        # TODO: This will only work if you use a 1D fluid mesh where the mesh is aligned along the
+        # surface
         # Sort the pressure surface vertices from inferior to superior
         idx_sort = meshutils.sort_vertices_by_nearest_neighbours(surface_coordinates)
         self.surface_vertices = surface_vertices[idx_sort]
         self.surface_coordinates = surface_coordinates[idx_sort]
+
+        self.fixed_vertices = fixed_vertices
+        self.fixed_corodinates = self.solid.mesh.coordinates()[fixed_vertices]
 
         self.cached_form_assemblers = {
             'bilin.df1_du1_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du1_adj']),
@@ -119,6 +123,33 @@ class ForwardModel:
     @property
     def forms(self):
         return self.solid.forms
+
+    # solid/fluid interfacing functions
+    def get_fsi_scalar_dofs(self):
+        """
+        Return dofs of the FSI interface on the solid and fluid
+
+        This is needed to pass information between the two domains using conformal interfaces
+        between them. Currently this is specifically made to work for the 1D fluid, so if you want
+        to do something else, you'll have to think of how to generalized it.
+        """
+        sdof_solid = self.solid.vert_to_sdof[self.surface_vertices]
+        sdof_fluid = np.arange(self.surface_vertices.size)
+
+        return sdof_solid, sdof_fluid
+
+    def get_fsi_vector_dofs(self):
+        """
+        Return dofs of the FSI interface on the solid and fluid
+
+        This is needed to pass information between the two domains using conformal interfaces
+        between them. Currently this is specifically made to work for the 1D fluid, so if you want
+        to do something else, you'll have to think of how to generalized it.
+        """
+        vdof_solid = self.solid.vert_to_vdof.reshape(-1, 2)[self.surface_vertices].reshape(-1).copy()
+        vdof_fluid = np.arange(vdof_solid.size)
+
+        return vdof_solid, vdof_fluid
 
     # Core solver functions
     def get_ref_config(self):
@@ -224,9 +255,9 @@ class ForwardModel:
         # Calculate sensitivities of fluid quantities based on the deformed surface
         x_surface = self.get_surface_state()
 
-        dp_du0, dq_du0 = self.fluid.get_flow_sensitivity(self, x_surface)
+        dq_du, dp_du = self.fluid.get_flow_sensitivity(x_surface)
 
-        return dp_du0, dq_du0
+        return dq_du, dp_du
 
     def pressure_fluidord_to_solidord(self, pressure):
         """

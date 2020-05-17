@@ -479,7 +479,6 @@ def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1
 
     return uva1, qp1, dt, info
 
-
 def newton_solve(u, du, jac, res, bcs, **kwargs):
     """
     Solves the system using a newton method.

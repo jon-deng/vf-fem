@@ -81,7 +81,7 @@ def get_starting_kelvinvoigt_model():
     ## Set the mesh to be used and initialize the forward model
     mesh_dir = '../meshes'
     mesh_base_filename = 'geometry2'
-    mesh_base_filename = 'M5-3layers-pressure-surface-refinement'
+    mesh_base_filename = 'M5-3layers-medial-surface-refinement'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
     model = load_fsi_model(mesh_path, None, Solid=KelvinVoigt, Fluid=Bernoulli)
@@ -127,7 +127,7 @@ class TaylorTest(unittest.TestCase):
 
         ## Select the functional you want to test
         # fkwargs = {}
-        Functional = funcs.TransferWorkbyDisplacementIncrement
+        # Functional = funcs.TransferWorkbyDisplacementIncrement
         # Functional = funcs.TransferWorkbyVelocity
         # Functional = funcs.KVDampingWork
 
@@ -136,7 +136,7 @@ class TaylorTest(unittest.TestCase):
         # Functional = funcs.FinalSurfaceDisplacementNorm
         # Functional = funcs.FinalSurfacePressureNorm
         # Functional = funcs.PeriodicError
-        # Functional = funcs.FinalDisplacementNorm
+        Functional = funcs.FinalDisplacementNorm
         # Functional = funcs.FinalVelocityNorm
         # Functional = funcs.DisplacementNorm
         # Functional = funcs.VelocityNorm
@@ -319,7 +319,7 @@ class TestEmodGradient(TaylorTest):
         self.case_postfix = 'emod'
 
 class Testu0Gradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
 
     def setUp(self):
         """
@@ -328,12 +328,12 @@ class Testu0Gradient(TaylorTest):
         save_path = 'out/u0grad-states.h5'
         model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
 
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
+        t_start, t_final = 0, 0.005
+        times_meas = np.linspace(t_start, t_final, 32)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-25)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-15)), axis=0)
 
         # Get y--coordinates in DOF order
         xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
@@ -373,14 +373,14 @@ class Testu0Gradient(TaylorTest):
 
         print(f"Computing {len(hs)} finite difference points")
 
-        tri = model.get_triangulation()
-        model.set_ini_state((u0[0]+duva[0])*1e-2, 0, 0)
-        tri_def = model.get_triangulation(config='cur')
+        # tri = model.get_triangulation()
+        # model.set_ini_state((u0[0]+duva[0])*1e-2, 0, 0)
+        # tri_def = model.get_triangulation(config='cur')
 
-        fig, ax = plt.subplots(1, 1)
-        ax.triplot(tri)
-        ax.triplot(tri_def)
-        plt.show()
+        # fig, ax = plt.subplots(1, 1)
+        # ax.triplot(tri)
+        # ax.triplot(tri_def)
+        # plt.show()
 
         if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
             if os.path.exists(save_path):
@@ -700,9 +700,9 @@ def line_search_p(hs, model, p, dp, filepath='temp.h5'):
 if __name__ == '__main__':
     # unittest.main()
 
-    # test = TestEmodGradient()
-    # test.setUp()
-    # test.test_adjoint()
+    test = TestEmodGradient()
+    test.setUp()
+    test.test_adjoint()
 
     # test = Testu0Gradient()
     # test.setUp()
@@ -720,9 +720,9 @@ if __name__ == '__main__':
     # test.setUp()
     # test.test_adjoint()
 
-    test = TestParameterizationGradient()
-    test.setUp()
-    test.test_adjoint()
+    # test = TestParameterizationGradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = Test2ndOrderDifferentiability()
     # test.setUp()

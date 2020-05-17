@@ -119,6 +119,10 @@ class AbstractFunctional:
         return tuple(ret_duva)
 
     @update_cache
+    def dqp(self, f, n, iter_params0, iter_params1):
+        return self.eval_dqp(f, n, iter_params0, iter_params1)
+
+    @update_cache
     def dp(self, f):
         return self.eval_dp(f)
 
@@ -157,6 +161,9 @@ class AbstractFunctional:
             at `n+0`.
         """
         raise NotImplementedError("`eval_duva` must be implemented")
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        raise NotImplementedError("You have to implement this")
 
     def eval_dp(self, f):
         """

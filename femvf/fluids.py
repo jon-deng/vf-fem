@@ -304,6 +304,9 @@ class Fluid1D:
     def flow_sensitivity(self):
         raise NotImplementedError("Fluid models have to implement this")
 
+    def get_state_vecs(self):
+        raise NotImplementedError("Fluid models have to implement this")
+
 class Bernoulli(Fluid1D):
     """
     Represents the Bernoulli fluid model
@@ -489,9 +492,12 @@ class Bernoulli(Fluid1D):
         dflow_rate_du = np.zeros(surface_state[0].size)
         dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
 
-        return dp_du, dflow_rate_du
+        return dflow_rate_du, dp_du
 
-    def get_flow_sensitivity(self, model, surface_state):
+    def get_flow_sensitivity(self, surface_state):
+        return self.flow_sensitivity(surface_state)
+
+    def get_flow_sensitivity_solid(self, model, surface_state):
         """
         Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
@@ -538,7 +544,7 @@ class Bernoulli(Fluid1D):
         dq_du = dfn.Function(model.solid.vector_fspace).vector()
         dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].flat] = _dq_du
 
-        return dp_du, dq_du
+        return dq_du, dp_du
 
     def get_glottal_width(self, surface_state):
         x, y = surface_state[0][:, 0], surface_state[0][:, 1]
@@ -546,6 +552,9 @@ class Bernoulli(Fluid1D):
         area = 2 * (self.properties['y_midline'] - y)
         a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
         return a_min
+
+    def get_state_vecs(self):
+        return np.zeros((1,)), np.zeros(self.x_vertices.size)
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
