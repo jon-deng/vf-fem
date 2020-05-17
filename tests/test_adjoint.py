@@ -287,8 +287,12 @@ class TestEmodGradient(TaylorTest):
         times_meas = np.linspace(t_start, t_final, 128)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
+        t_start, t_final = 0, 0.001
+        times_meas = np.linspace(t_start, t_final, 3)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+
         ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-2)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 6)-5)), axis=0)
 
         step_size = 0.5e0 * PASCAL_TO_CGS
         dsolid = solid_props.copy()
@@ -319,7 +323,7 @@ class TestEmodGradient(TaylorTest):
         self.case_postfix = 'emod'
 
 class Testu0Gradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
 
     def setUp(self):
         """
@@ -332,8 +336,12 @@ class Testu0Gradient(TaylorTest):
         times_meas = np.linspace(t_start, t_final, 32)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
+        t_start, t_final = 0, 0.001
+        times_meas = np.linspace(t_start, t_final, 2)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+
         ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-15)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-25)), axis=0)
 
         # Get y--coordinates in DOF order
         xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
