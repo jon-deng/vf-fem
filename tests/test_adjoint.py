@@ -292,7 +292,7 @@ class TestEmodGradient(TaylorTest):
         # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 6)-5)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 6)-9)), axis=0)
 
         step_size = 0.5e0 * PASCAL_TO_CGS
         dsolid = solid_props.copy()

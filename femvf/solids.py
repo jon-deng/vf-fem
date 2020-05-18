@@ -402,6 +402,7 @@ class Rayleigh(Solid):
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
         df1_dpressure_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
+        df1_dt = ufl.derivative(f1, dt, scalar_trial)
 
         # Also define an 'f0' form that solves for a0, given u0 and v0
         # This is needed to solve for the first 'a0' given u0, v0 initial states
@@ -461,6 +462,7 @@ class Rayleigh(Solid):
             'form.bi.df1_da0_adj': df1_da0_adj,
             'form.bi.df1_dpressure_adj': df1_dpressure_adj,
             'form.bi.df1_demod': df1_demod,
+            'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
@@ -612,6 +614,7 @@ class KelvinVoigt(Solid):
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
         df1_dpressure_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
+        df1_dt = ufl.derivative(f1, dt, scalar_trial)
 
         f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
             + stiffness_2form(u0, vector_test, emod, nu) - traction_1form(u0) \
@@ -666,6 +669,7 @@ class KelvinVoigt(Solid):
             'form.bi.df1_da0_adj': df1_da0_adj,
             'form.bi.df1_dpressure_adj': df1_dpressure_adj,
             'form.bi.df1_demod': df1_demod,
+            'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,

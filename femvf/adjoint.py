@@ -37,41 +37,26 @@ def adjoint(model, f, functional, show_figure=False):
         The value of the functional
     dict(str: dfn.Vector)
         The gradient of the functional wrt parameter labelled by `str`
+        # TODO: Only gradient wrt. solid properties are included right now
     """
-    # Assuming that fluid and solid properties are constant in time so set them once
-    # and leave them
-    # TODO: Only gradient wrt. solid properties are included right now
-    # grad = model.solid.get_properties()
-    # grad.vector[:] = 0
-
+    # Assumes fluid and solid properties are constant in time
     fluid_props = f.get_fluid_props(0)
     solid_props = f.get_solid_props()
 
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
 
-    # Initialize the functional instance and run it once to initialize any cached values
+    # run the functional once to initialize any cached values
     functional_value = functional(f)
 
     # Make adjoint forms for sensitivity of parameters
     solid = model.solid
-    df1_ddt_form_adj = dfn.adjoint(ufl.derivative(solid.f1, solid.forms['coeff.time.dt'], solid.scalar_trial))
     df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
 
-    ## Preallocating vector
-    # Temporary variables to shorten code
-    def get_block_vec():
-        vspace = solid.vector_fspace
-        return (dfn.Function(vspace).vector(),
-                dfn.Function(vspace).vector(),
-                dfn.Function(vspace).vector())
-
-    # Model states
-    uva0 = get_block_vec()
-    uva1 = get_block_vec()
-    uva2 = get_block_vec()
-
     ## Allocate space for the adjoints of all the parameters
+    # TODO: This is kind of an ugly hardcoded solution. You should come up with a way to encapsulate
+    # solid properties as a collection of vector/array objects. Since this is a gradient,
+    # it can use the same data structure as the properties are stored in
     adj_dt = []
     adj_solid = {}
     for key in solid_props:
@@ -84,11 +69,14 @@ def adjoint(model, f, functional, show_figure=False):
             adj_solid[key] = dfn.Function(solid.vector_fspace).vector()
 
     ## Load states/parameters
+    uva0 = tuple([dfn.Function(solid.vector_fspace).vector() for i in range(3)])
+    uva1 = tuple([dfn.Function(solid.vector_fspace).vector() for i in range(3)])
     N = f.size
     times = f.get_times()
 
     uva2 = (None, None, None)
     uva1 = f.get_state(N-1, out=uva1)
+    uva0 = f.get_state(N-2, out=uva0)
     qp1 = f.get_fluid_state(N-1)
     qp0 = f.get_fluid_state(N-2)
     dt2 = None
@@ -123,19 +111,11 @@ def adjoint(model, f, functional, show_figure=False):
         iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp0, 'u1': uva1[0]}
         iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp_n1, 'u1': uva0[0]}
 
-        adj_state1 = solve_adjoint_exp(model, adj_state1_rhs, iter_params1)
+        adj_state1 = solve_adj_exp(model, adj_state1_rhs, iter_params1)
 
-        # Update adjoint w.r.t parameters
-        model.set_iter_params(**iter_params1)
-        for key, vector in adj_solid.items():
-            if vector is not None:
-                df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
-                vector -= df1_dkey*adj_state1[0]
-
-        df1_ddt = dfn.assemble(df1_ddt_form_adj)
-        adj_dt1 = - (df1_ddt*adj_state1[0]).sum() \
-                  + newmark_v_dt(uva1[0], *uva0, dt1).inner(adj_state1[1]) \
-                  + newmark_a_dt(uva1[0], *uva0, dt1).inner(adj_state1[2])
+        # Update gradients wrt parameters using the adjoint
+        adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj)
+        adj_dt1 = solve_grad_dt(model, adj_state1, iter_params1)
         adj_dt.insert(0, adj_dt1)
 
         # Find the RHS for the next iteration
@@ -183,13 +163,42 @@ def adjoint(model, f, functional, show_figure=False):
 
     return functional_value, grad, functional
 
-def solve_adjoint_imp(model, adj_rhs, it_params, out=None):
+
+def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
+    """
+    Update the gradient wrt solid parameter in-place
+    """
+    model.set_iter_params(**iter_params1)
+    for key, vector in grad_solid.items():
+        if vector is not None:
+            df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
+            vector -= df1_dkey*adj_state1[0]
+    return grad_solid
+
+def solve_grad_dt(model, adj_state1, iter_params1):
+    """
+    Calculate the gradietn wrt dt
+    """
+    model.set_iter_params(**iter_params1)
+    uva0 = iter_params1['uva0']
+    u1 = iter_params1['u1']
+    dt1 = iter_params1['dt']
+
+    dfu1_ddt = dfn.assemble(model.solid.forms['form.bi.df1_dt_adj'])
+    dfv1_ddt = 0 - newmark_v_dt(u1, *uva0, dt1)
+    dfa1_ddt = 0 - newmark_a_dt(u1, *uva0, dt1)
+
+    adj_u1, adj_v1, adj_a1 = adj_state1[:3]
+    adj_dt1 = -(dfu1_ddt*adj_u1).sum() - dfv1_ddt.inner(adj_v1) - dfa1_ddt.inner(adj_a1)
+    return adj_dt1
+
+def solve_adj_imp(model, adj_rhs, it_params, out=None):
     pass
 
 def solve_adjrhs_recurrence_imp(model, adj_uva2, dcost_duva1, it_params2, out=None):
     pass
 
-def solve_adjoint_exp(model, adj_rhs, it_params, out=None):
+def solve_adj_exp(model, adj_rhs, it_params, out=None):
     """
     Solve for adjoint states given the RHS source vector
 
@@ -199,13 +208,20 @@ def solve_adjoint_exp(model, adj_rhs, it_params, out=None):
     Returns
     -------
     """
+    ## Assemble sensitivity matrices
     model.set_iter_params(**it_params)
-    df2_du2 = model.assem_df1_du1_adj()
     dt = it_params['dt']
+
+    dfu2_du2 = model.assem_df1_du1_adj()
+    dfv2_du2 = 0 - newmark_v_du1(dt)
+    dfa2_du2 = 0 - newmark_a_du1(dt)
 
     model.set_ini_state(it_params['u1'], 0, 0)
     dq_du, dp_du = model.get_flow_sensitivity()
+    dfq2_du2 = 0 - dq_du
+    dfp2_du2 = 0 - dp_du
 
+    ## Do the linear algebra that solves for the adjoint states
     if out is None:
         out = tuple([vec.copy() for vec in adj_rhs])
     adj_u, adj_v, adj_a, adj_q, adj_p = out
@@ -218,31 +234,31 @@ def solve_adjoint_exp(model, adj_rhs, it_params, out=None):
     model.solid.bc_base.apply(adj_v_rhs)
     adj_v[:] = adj_v_rhs
 
-    # TODO: how should fluid boundary conditions be applied in a generic way?
-    # the current way is specialized for the 1D case so most likely won't work in other cases
-    # Below, I know there's subglottal pressure at 0 applied so I set that to be 0
+    # TODO: how to apply fluid boundary conditions in a generic way?
     adj_q[:] = adj_q_rhs
 
-    # adj_p_rhs[0] = 0 # Sets subglottal pressure boundary condition
+    # adj_p_rhs[0] = 0 # set the subglottal pressure boundary condition; hardcoded for 1D
     adj_p[:] = adj_p_rhs
 
     dpres_du = dfn.Function(model.solid.vector_fspace).vector()
     dqres_du = dfn.Function(model.solid.vector_fspace).vector()
     solid_dofs, fluid_dofs = model.get_fsi_vector_dofs()
 
-    dqres_du[solid_dofs] = (dq_du * adj_q)
-    dpres_du[solid_dofs] = (dp_du.T @ adj_p)[fluid_dofs]
+    dqres_du[solid_dofs] = (dfq2_du2 * adj_q)
+    dpres_du[solid_dofs] = (dfp2_du2.T @ adj_p)[fluid_dofs]
 
-    adj_u_rhs += newmark_v_du1(dt)*adj_v + newmark_a_du1(dt)*adj_a - dqres_du - dpres_du
+    adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dqres_du + dpres_du
 
-    model.solid.bc_base.apply(df2_du2, adj_u_rhs)
-    dfn.solve(df2_du2, adj_u, adj_u_rhs)
+    model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
+    dfn.solve(dfu2_du2, adj_u, adj_u_rhs)
 
     return adj_u, adj_v, adj_a, adj_q, adj_p
 
 def solve_adjrhs_recurrence_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     """
-    Solves the adjoint recurrence relations to return the rhs for adj_uva1
+    Solves the adjoint recurrence relations to return the rhs
+
+    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
 
     Parameters
     ----------
@@ -253,27 +269,34 @@ def solve_adjrhs_recurrence_exp(model, adj_state2, dcost_dstate1, it_params2, ou
     adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
     dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
 
-    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
+    ## Assemble sensitivity matrices
     dt2 = it_params2['dt']
     model.set_iter_params(**it_params2)
 
-    # Assemble needed forms
-    df2_du1 = model.assem_df1_du0_adj()
-    df2_dv1 = model.assem_df1_dv0_adj()
-    df2_da1 = model.assem_df1_da0_adj()
-    df2_dp1 = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
+    dfu2_du1 = model.assem_df1_du0_adj()
+    dfu2_dv1 = model.assem_df1_dv0_adj()
+    dfu2_da1 = model.assem_df1_da0_adj()
+    dfu2_dp1 = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
 
+    dfv2_du1 = 0 - newmark_v_du0(dt2)
+    dfv2_dv1 = 0 - newmark_v_dv0(dt2)
+    dfv2_da1 = 0 - newmark_v_da0(dt2)
+
+    dfa2_du1 = 0 - newmark_a_du0(dt2)
+    dfa2_dv1 = 0 - newmark_a_dv0(dt2)
+    dfa2_da1 = 0 - newmark_a_da0(dt2)
+
+    ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
     # Allocate a vector the for fluid side mat-vec multiplication
     _, matvec_adj_p_rhs = model.fluid.get_state_vecs()
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    matvec_adj_p_rhs[fluid_dofs] = (df2_dp1 * adj_u2)[solid_dofs]
-    matvec_adj_p_rhs[fluid_dofs] = (df2_dp1 * adj_u2)[solid_dofs]
+    matvec_adj_p_rhs[fluid_dofs] = (dfu2_dp1 * adj_u2)[solid_dofs]
 
-    adj_u1_rhs = dcost_du1 - (df2_du1*adj_u2 - newmark_v_du0(dt2)*adj_v2 - newmark_a_du0(dt2)*adj_a2)
-    adj_v1_rhs = dcost_dv1 - (df2_dv1*adj_u2 - newmark_v_dv0(dt2)*adj_v2 - newmark_a_dv0(dt2)*adj_a2)
-    adj_a1_rhs = dcost_da1 - (df2_da1*adj_u2 - newmark_v_da0(dt2)*adj_v2 - newmark_a_da0(dt2)*adj_a2)
-    adj_q1_rhs = dcost_dq1.copy()
-    adj_p1_rhs = dcost_dp1.copy() + matvec_adj_p_rhs
+    adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
+    adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
+    adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
+    adj_q1_rhs = dcost_dq1 - 0
+    adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
 
     return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
 
