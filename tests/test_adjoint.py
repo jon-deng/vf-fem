@@ -27,8 +27,8 @@ import h5py
 import dolfin as dfn
 
 sys.path.append('../')
-from femvf import meshutils, statefile as sf
-from femvf.forward import forward, integrate_forward
+from femvf import meshutils, statefile as sf, linalg
+from femvf.forward import forward, integrate_forward, implicit_increment_forward
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
@@ -702,8 +702,67 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
 
     return filepath
 
+class TestResidualJacobian(unittest.TestCase):
+    """
+    Tests if jacobians of residuals are correct
+    """
+    def test_df1_dstate1_implicit(self):
+        # Set up the parameters and objects needed for the iteration
+        model, sp, fp = get_starting_rayleigh_model()
+        model.set_solid_props(sp)
+        model.set_fluid_props(fp)
+        uva0 = tuple([dfn.Function(model.solid.vector_fspace).vector() for i in range(3)])
+        model.set_ini_state(*uva0)
+        q0, p0, _ = model.get_pressure()
+        qp0 = (q0, p0)
+        dt = 1e-3
+
+        # Set a delta x1, dx1
+        du1 = dfn.Function(model.solid.vector_fspace).vector()
+        du1[:] = np.random.rand(du1.size())*1e-4
+        dp1 = np.random.rand(qp0[1].size)
+
+        # Calculate residual at x1
+        uva1, qp1, _ = implicit_increment_forward(model, uva0, qp0, dt)
+        model.set_iter_params(u1=uva1[0], qp1=qp1)
+        res_0 = dfn.assemble(model.solid.f1)
+        print(res_0[:])
+
+        # Set up the block matrix dF_duqp
+        dfu_du_adj = model.assem_df1_du1_adj()
+        model.solid.bc_base.apply(dfu_du_adj)
+        dfu_du_adj = dfn.as_backend_type(dfu_du_adj).mat()
+
+        dfu_dp_adj = dfn.as_backend_type(dfn.assemble(model.solid.forms['form.bi.df1_dpressure_adj'])).mat()
+        solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
+        dfu_dp_adj = linalg.reorder_mat_rows(dfu_dp_adj, solid_dofs, fluid_dofs, fluid_dofs.size)
+
+        _, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
+        dfp_du_adj = 0.0 - dp_du
+
+        blocks = [[dfu_du_adj, dfp_du_adj],
+                  [dfu_dp_adj,        1.0]]
+        dfup_dup_adj = linalg.form_block_matrix(blocks)
+        dup = dfup_dup_adj.getVecLeft()
+        dup[:du1.size()] = du1
+        dup[du1.size():] = dp1
+
+        dres_mat = dfup_dup_adj.matMultTranspose(dup)
+
+        # Calculate residual at x1 + dx1
+        uva1_ = tuple([x+dx for x, dx in zip(uva1, duva1)])
+        qp1_ = tuple([x+dx for x, dx in zip(qp1, dqp1)])
+        model.set_iter_params(u1=uva1[0]+du1, qp1=(q1, p1+dp1))
+        res_1 = dfn.assemble(model.solid.f1)
+        model.solid.bc_base.apply(res_1)
+        print(res_1[:])
+
+
 if __name__ == '__main__':
     # unittest.main()
+
+    # test = TestResidualJacobian()
+    # test.test_df1_dstate1_implicit()
 
     test = TestEmodGradient()
     test.setUp()
