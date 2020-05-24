@@ -43,7 +43,6 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         The gradient of the functional wrt parameter labelled by `str`
         # TODO: Only gradient wrt. solid properties are included right now
     """
-    # print(coupling)
     solve_adj, solve_adj_rhs = None, None
     if coupling == 'explicit':
         solve_adj = solve_adj_exp
@@ -145,13 +144,12 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         model.set_iter_params(**iter_params1)
         res = dfn.assemble(model.solid.forms['form.un.f1'])
         model.solid.bc_base.apply(res)
-        print(f"The residual Fu is {res.norm('l2')}")
-        print(f"The final mean pressure is {qp1_[1].mean()}")
-        print("(u, v, a) = ", [x.norm('l2') for x in uva1])
-        print("(q, p) = ", [np.linalg.norm(x) for x in qp1_])
+        # print(f"The residual Fu is {res.norm('l2')}")
+        # print(f"The final mean pressure is {qp1_[1].mean()}")
+        # print("(u, v, a) = ", [x.norm('l2') for x in uva1])
+        # print("(q, p) = ", [np.linalg.norm(x) for x in qp1_])
 
         adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
-        # breakpoint()
 
         # Update gradients wrt parameters using the adjoint
         adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj)
@@ -287,7 +285,6 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     blocks = [[dfu2_du2_mat, dfp2_du2],
               [    dfu2_dp2,      1.0]]
 
-    # breakpoint()
     dfup2_dup2 = linalg.form_block_matrix(blocks)
     adj_up, rhs = dfup2_dup2.getVecs()
 
@@ -305,8 +302,6 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
 
     ksp.setOperators(dfup2_dup2)
     ksp.solve(rhs, adj_up)
-
-    # breakpoint()
 
     adj_u[:] = adj_up[:adj_u_rhs.size()]
     adj_p[:] = adj_up[adj_u_rhs.size():]
@@ -480,7 +475,6 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
 
     model.set_ini_state(it_params['u1'], 0, 0)
     dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
-    breakpoint()
     dfq2_du2 = 0 - dq_du
     dfp2_du2 = 0 - dp_du
 
@@ -497,13 +491,13 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
     model.solid.bc_base.apply(adj_v_rhs)
     adj_v[:] = adj_v_rhs
 
-    # TODO: how to apply fluid boundary conditions in a generic way?
+    # TODO: Think of how to apply fluid boundary conditions in a generic way.
+    # There are no boundary conditions for the Bernoulli case because of the way it's coded but
+    # this will be needed for different models
     adj_q[:] = adj_q_rhs
 
-    # adj_p_rhs[0] = 0 # set the subglottal pressure boundary condition; hardcoded for 1D
     adj_p = dfp2_du2.getVecRight()
     adj_p[:] = adj_p_rhs
-    print(f"adj_p ", adj_p.norm(2))
 
     adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q + dfn.PETScVector(dfp2_du2*adj_p)
     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
@@ -543,13 +537,6 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     dfa2_dv1 = 0 - newmark_a_dv0(dt2)
     dfa2_da1 = 0 - newmark_a_da0(dt2)
 
-    ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-    # Allocate a vector the for fluid side mat-vec multiplication
-    # _, matvec_adj_p_rhs = model.fluid.get_state_vecs()
-    # solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    # matvec_adj_p_rhs[fluid_dofs] = (dfu2_dp1 * adj_u2)[solid_dofs]
-
-    # breakpoint()
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
     dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
     dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)

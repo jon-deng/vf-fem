@@ -167,6 +167,7 @@ class Solid:
         """
         Sets the final state variable, u
 
+        TODO: You might want to make this consistent with set_ini_state
         Parameters
         ----------
         u1 : array_like

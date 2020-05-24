@@ -332,14 +332,6 @@ def explicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
 
     res = dfn.assemble(model.solid.forms['form.un.f1'])
     model.solid.bc_base.apply(res)
-    print(f"Residual Fu is {res.norm('l2')}")
-    # breakpoint()
-
-    # u1.assign(u0)
-    # du = dfn.Function(model.solid.vector_fspace)
-    # _u1, _ = newton_solve(u1.vector(), du.vector(), model.assem_df1_du1, model.assem_f1,
-    #                       [model.bc_base], **newton_prm)
-    # u1.vector()[:] = _u1
 
     u1[:] = solid.u1.vector()
     v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
@@ -428,15 +420,10 @@ def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
     res = dfn.assemble(model.solid.forms['form.un.f1'])
     model.solid.bc_base.apply(res)
-    print(f"Residual Fu is {res.norm('l2')}")
-    print(f"The final mean pressure is {p1.mean()}")
-    # breakpoint()
 
     step_info = {'fluid_info': fluid_info,
                  'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
-    print("(u, v, a) = ", [x.norm('l2') for x in (u1, v1, a1)])
-    print("(q, p) = ", [np.linalg.norm(x) for x in (q1, p1)])
     return (u1, v1, a1), (q1, p1), step_info
 
 def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):

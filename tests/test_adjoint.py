@@ -51,7 +51,7 @@ def get_starting_rayleigh_model():
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_fsi_model(mesh_path, None,Solid=Rayleigh, Fluid=Bernoulli)
+    model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -115,7 +115,7 @@ def get_starting_kelvinvoigt_model():
     return model, solid_props, fluid_props
 
 class TaylorTest(unittest.TestCase):
-    COUPLING = 'explicit'
+    COUPLING = 'implicit'
 
     def test_adjoint(self):
         hs = self.hs
@@ -290,7 +290,7 @@ class TestEmodGradient(TaylorTest):
         # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         t_start, t_final = 0, 0.001
-        times_meas = np.linspace(t_start, t_final, 3)
+        times_meas = np.linspace(t_start, t_final, 2)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step size / number of steps

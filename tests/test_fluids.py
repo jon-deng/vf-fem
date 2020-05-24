@@ -187,11 +187,11 @@ class TestBernoulli(CommonSetup):
         surface_coordinates = self.surface_coordinates
         x = (surface_coordinates, np.zeros(surface_coordinates.shape), np.zeros(surface_coordinates.shape))
 
-        dp_du = self.fluid.get_flow_sensitivity_solid(self.model, x)
+        _, dp_du = self.fluid.get_flow_sensitivity_solid(self.model, x)
 
-        dp_du_t = self.fluid.get_flow_sensitivity_solid(self.model, x, adjoint=True)
-        breakpoint()
-        pass
+        _, dp_du_t = self.fluid.get_flow_sensitivity_solid(self.model, x, adjoint=True)
+        # breakpoint()
+        # pass
 
 class TestSmoothApproximations(unittest.TestCase):
     def test_gaussian(self):

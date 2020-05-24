@@ -523,6 +523,8 @@ class Bernoulli(Fluid1D):
         """
         Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
+        TODO: This function is a bit weird as a dense block in a sparse matrix is set
+
         Parameters
         ----------
         model
@@ -569,22 +571,16 @@ class Bernoulli(Fluid1D):
         else:
             vals = _dp_du.T
 
-        # for row in rows:
-        #     dp_du.setValues(row, cols, vals[row, :])
+        # I think the rows have to be in increasing order for setValues when you set multiple rows
+        # at once. This is not true for assembling the adjoint version so I set one row at a time in
+        # a loop. Otherwise you could do it this way
+        # dp_du.setValues(rows, cols, vals)
+        for ii, row in enumerate(rows):
+            # Pressure dofs are ordered from 0 to #dofs so that's why the index is `i` on `vals`
+            dp_du.setValues(row, cols, vals[ii, :])
 
-        dp_du.setValues(rows, cols, vals)
         dp_du.assemblyBegin()
         dp_du.assemblyEnd()
-
-        # You should be able to create your own vector from scratch too but there are a couple of things
-        # you have to set like local to global mapping that need to be there in order to interface with
-        # a particular fenics setup. I just don't know what it needs to use.
-        # TODO: Figure this out, since it also applies to matrices
-
-        # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vert_to_vdof.size)
-        # dq_du.setValues(vert_to_vdof[surface_verts].reshape(-1), _dq_du)
-        # dq_du.assemblyBegin()
-        # dq_du.assemblyEnd()
 
         dq_du = dfn.Function(model.solid.vector_fspace).vector()
         dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].flat] = _dq_du
