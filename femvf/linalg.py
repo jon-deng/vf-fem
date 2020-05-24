@@ -7,11 +7,11 @@ from petsc4py import PETSc
 
 def form_block_matrix(blocks, finalize=True):
     """
-    Form a monolithic block matrix by combining matrices in `block_mat`
+    Form a monolithic block matrix by combining matrices in `blocks`
 
     Parameters
     ----------
-    block_mat : [[]]
+    blocks : [[Petsc.Mat, ...]]
         A list of lists containing the matrices forming the blocks of the desired block matrix.
         These are organized as:
             [[mat00, ..., mat0n],
@@ -31,7 +31,7 @@ def form_block_matrix(blocks, finalize=True):
     block_mat.create(PETSc.COMM_SELF)
     block_mat.setSizes([np.sum(block_row_sizes), np.sum(block_col_sizes)])
 
-    block_mat.setUp()
+    block_mat.setUp() # You have to do this if you don't preallocate I think
 
     ## Insert the values into the matrix
     nnz = i_mono[1:] - i_mono[:-1]
@@ -46,6 +46,19 @@ def form_block_matrix(blocks, finalize=True):
 def get_blocks_shape(blocks):
     """
     Return the shape of the block matrix, and the sizes of each block
+
+    The function will also check if the supplied blocks have consistent shapes for a valid block
+    matrix.
+
+    Parameters
+    ----------
+    blocks : [[Petsc.Mat, ...]]
+        A list of lists containing the matrices forming the blocks of the desired block matrix.
+        These are organized as:
+            [[mat00, ..., mat0n],
+             [mat10, ..., mat1n],
+             [  ..., ...,   ...],
+             [matm0, ..., matmn]]
     """
     ## Get the block sizes
     # also check that the same number of columns are supplied in each row
@@ -60,10 +73,22 @@ def get_blocks_sizes(blocks, blocks_shape):
     """
     Return the sizes of each block in the block matrix
 
+    Parameters
+    ----------
+    blocks : [[Petsc.Mat, ...]]
+        A list of lists containing the matrices forming the blocks of the desired block matrix.
+        These are organized as:
+            [[mat00, ..., mat0n],
+             [mat10, ..., mat1n],
+             [  ..., ...,   ...],
+             [matm0, ..., matmn]]
+    blocks_shape : (M, N)
+        The shape of the blocks matrix i.e. number of row blocks by number of column blocks.
+
     Returns
     -------
     block_row_sizes, block_col_sizes: np.ndarray
-        An array containing the number of rows/columns along each row/column block. For example, if
+        An array containing the number of rows/columns in each row/column block. For example, if
         the block matrix contains blocks of shape
         [[(2, 5), (2, 6)],
          [(7, 5), (7, 6)]]
@@ -105,6 +130,23 @@ def get_blocks_sizes(blocks, blocks_shape):
 def get_blocks_csr(blocks, blocks_shape):
     """
     Return the CSR format data for each block in a block matrix form
+
+    Parameters
+    ----------
+    blocks : [[Petsc.Mat, ...]]
+        A list of lists containing the matrices forming the blocks of the desired block matrix.
+        These are organized as:
+            [[mat00, ..., mat0n],
+             [mat10, ..., mat1n],
+             [  ..., ...,   ...],
+             [matm0, ..., matmn]]
+    blocks_shape : (M, N)
+        The shape of the blocks matrix i.e. number of row blocks by number of column blocks.
+
+    Returns
+    -------
+    [[(i, j, v), ...]]
+        A 2d list containing the CSR data for each block
     """
     M_BLOCK, N_BLOCK = blocks_shape
 
@@ -139,13 +181,33 @@ def get_blocks_csr(blocks, blocks_shape):
 def get_block_matrix_csr(blocks_csr, blocks_shape, blocks_sizes):
     """
     Return csr data associated with monolithic block matrix
+
+    Parameters
+    ----------
+    blocks : [[Petsc.Mat, ...]]
+        A list of lists containing the matrices forming the blocks of the desired block matrix.
+        These are organized as:
+            [[mat00, ..., mat0n],
+             [mat10, ..., mat1n],
+             [  ..., ...,   ...],
+             [matm0, ..., matmn]]
+    blocks_shape : (M, N)
+        The shape of the blocks matrix i.e. number of row blocks by number of column blocks.
+    blocks_sizes : [], []
+        A tuple of array containing the number of rows in each row block, and the number of columns
+        in each column block.
+
+    Returns
+    -------
+    (np.ndarray, np.ndarray, np.ndarray)
+        A tuple of I, J, V CSR data for the monolithic matrix corresponding to the supplied blocks
     """
     i_block, j_block, v_block = blocks_csr
     M_BLOCK, N_BLOCK = blocks_shape
     block_row_sizes, block_col_sizes = blocks_sizes
 
     # block_row_offsets = np.concatenate(([0] + np.cumsum(block_row_sizes)[:-1]))
-    block_col_offsets = np.concatenate(([0] + np.cumsum(block_col_sizes)[:-1]))
+    block_col_offsets = np.concatenate(([0], np.atleast_1d(np.cumsum(block_col_sizes)[:-1])))
 
     i_mono = [0]
     j_mono = []
@@ -183,3 +245,58 @@ def get_block_matrix_csr(blocks_csr, blocks_shape, blocks_sizes):
     j_mono = np.array(j_mono, dtype=np.int32)
     v_mono = np.array(v_mono, dtype=np.float)
     return i_mono, j_mono, v_mono
+
+def reorder_mat_rows(mat, rows_in, rows_out, m_out, finalize=True):
+    """
+    Reorder the rows of an input matrix to a matrix with a possibly different number of rows
+
+    This is useful for transforming matrices where data is shared between domains along an
+    interface. The rows corresponding to the interface on domain 1 have to be mapped to the rows on
+    the interface in domain 2.
+
+    The number of columns is presevered between the two matrices.
+    """
+    # sort the output indices in increasing row index
+    is_sort = np.argsort(rows_out)
+    rows_in = rows_in[is_sort]
+    rows_out = rows_out[is_sort]
+
+    m_in, n_in = mat.getSize()
+    i_in, j_in, v_in = mat.getValuesCSR()
+
+    i_out = [0]
+    j_out = []
+    v_out = []
+    row_out_prev = 0
+    for row_in, row_out in zip(rows_in, rows_out):
+        idx_start = i_in[row_in]
+        idx_end = i_in[row_in+1]
+
+        # Add zero rows to the array
+        i_out += [i_out[-1]]*max((row_out-row_out_prev-1), 0) # max function ensures no zero rows added if row_out==0
+
+        # Add the nonzero row components
+        i_out.append(i_out[-1]+idx_end-idx_start)
+        j_out += j_in[idx_start:idx_end].tolist()
+        v_out += v_in[idx_start:idx_end].tolist()
+
+        row_out_prev = row_out
+
+    i_out = np.array(i_out, dtype=np.int32)
+    j_out = np.array(j_out, dtype=np.int32)
+    v_out = np.array(v_out, dtype=np.float64)
+
+    mat_out = PETSc.Mat()
+    mat_out.create(PETSc.COMM_SELF)
+    mat_out.setSizes([m_out, n_in])
+
+    nnz = i_out[1:]-i_out[:-1]
+    mat_out.setUp()
+    mat_out.setPreallocationNNZ(nnz)
+
+    mat_out.setValuesCSR(i_out, j_out, v_out)
+
+    if finalize:
+        mat_out.assemble()
+
+    return mat_out

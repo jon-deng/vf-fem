@@ -28,7 +28,7 @@ import dolfin as dfn
 
 sys.path.append('../')
 from femvf import meshutils, statefile as sf
-from femvf.forward import forward
+from femvf.forward import forward, integrate_forward
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
@@ -115,6 +115,8 @@ def get_starting_kelvinvoigt_model():
     return model, solid_props, fluid_props
 
 class TaylorTest(unittest.TestCase):
+    COUPLING = 'explicit'
+
     def test_adjoint(self):
         hs = self.hs
         step_dir = self.step_dir
@@ -167,14 +169,14 @@ class TaylorTest(unittest.TestCase):
 
         functionals = np.array(functionals)
 
-        ## Calculate the gradient using via the adjoint equations at the 0th point
+        ## Calculate the gradient via the adjoint equations at the 0th point
         print("\nComputing Gradient via adjoint calculation")
 
         info = None
         grad = None
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, group='0', mode='r') as f:
-            _, grad, _ = adjoint(model, f, functional)
+            _, grad, _ = adjoint(model, f, functional, coupling=self.COUPLING)
         runtime_end = perf_counter()
 
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -283,16 +285,16 @@ class TestEmodGradient(TaylorTest):
         save_path = 'out/emodgrad-states.h5'
         model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
 
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        # t_start, t_final = 0, 0.001
-        # times_meas = np.linspace(t_start, t_final, 3)
+        # t_start, t_final = 0, 0.01
+        # times_meas = np.linspace(t_start, t_final, 128)
         # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
+        t_start, t_final = 0, 0.001
+        times_meas = np.linspace(t_start, t_final, 3)
+        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+
         ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 6)-9)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
         step_size = 0.5e0 * PASCAL_TO_CGS
         dsolid = solid_props.copy()
@@ -304,7 +306,7 @@ class TestEmodGradient(TaylorTest):
             if os.path.exists(save_path):
                 os.remove(save_path)
             line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
-                        dsolid_props=dsolid, filepath=save_path)
+                        dsolid_props=dsolid, filepath=save_path, coupling=self.COUPLING)
         else:
             print("Using existing files")
 
@@ -394,7 +396,7 @@ class Testu0Gradient(TaylorTest):
             if os.path.exists(save_path):
                 os.remove(save_path)
             line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path)
+                        duva=duva, filepath=save_path, coupling=self.COUPLING)
         else:
             print("Using existing files")
 
@@ -450,7 +452,7 @@ class Testv0Gradient(TaylorTest):
                 os.remove(save_path)
 
             line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path)
+                        duva=duva, filepath=save_path, coupling=self.COUPLING)
         else:
             print("Using existing files")
 
@@ -508,7 +510,7 @@ class Testa0Gradient(TaylorTest):
                 os.remove(save_path)
 
             line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path)
+                        duva=duva, filepath=save_path, coupling=self.COUPLING)
         else:
             print("Using existing files")
 
@@ -557,7 +559,7 @@ class TestdtGradient(TaylorTest):
                 os.remove(save_path)
 
             line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
-                        dtimes=dtimes, filepath=save_path)
+                        dtimes=dtimes, filepath=save_path, coupling=self.COUPLING)
         else:
             print("Using existing files")
 
@@ -614,7 +616,7 @@ class TestParameterizationGradient(TaylorTest):
             if os.path.exists(save_path):
                 os.remove(save_path)
 
-            line_search_p(hs, model, p, dp, filepath=save_path)
+            line_search_p(hs, model, p, dp, filepath=save_path, coupling=self.COUPLING)
         else:
             print("Using existing files")
 
@@ -636,7 +638,7 @@ class TestParameterizationGradient(TaylorTest):
 
 def line_search(hs, model, uva, solid_props, fluid_props, times,
                 duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
-                filepath='temp.h5'):
+                coupling='explicit', filepath='temp.h5'):
     if os.path.exists(filepath):
         os.remove(filepath)
 
@@ -652,21 +654,17 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
         if dfluid_props is not None:
             fluid_props_n.vector[:] += h*dfluid_props.vector
 
-        # TODO: This is definitely a hack because I don't have a consistent interface to run the
-        # forward sim
-        # it should be more like times_n += h*dtimes
         times_n = np.array(times)
         if dtimes is not None:
             times_n += h*dtimes
-        timing_props_n = {'t0': times_n[0], 'tmeas': times_n, 'dt_max': np.inf}
+        # timing_props_n = {'t0': times_n[0], 'tmeas': times_n, 'dt_max': np.inf}
 
         runtime_start = perf_counter()
-        info = forward(model, uva_n, solid_props_n, fluid_props_n, timing_props_n,
-                       adaptive_step_prm={'abs_tol': None},
-                       h5file=filepath, h5group=f'{n}', show_figure=False)
+        info = integrate_forward(model, uva_n, solid_props_n, fluid_props_n, times_n,
+                                 coupling=coupling, h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
-        print(runtime_end-runtime_start)
+        print(f"Run duration {runtime_end-runtime_start} s")
 
         # Save the run info to a pickled file
         if h == 0:
@@ -675,7 +673,7 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
 
     return filepath
 
-def line_search_p(hs, model, p, dp, filepath='temp.h5'):
+def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
     """
     Returns a parameterized line search for parameterization `p` in direction `dp`.
     """
@@ -687,16 +685,15 @@ def line_search_p(hs, model, p, dp, filepath='temp.h5'):
         # Increment all the properties along the search direction
         p_n.vector[:] = p.vector + h*dp.vector
 
-        uva_n, solid_props_n, fluid_props_n, timing_props_n = p_n.convert()
+        uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()
-        info = forward(model, uva_n, solid_props_n, fluid_props_n, timing_props_n,
-                       adaptive_step_prm={'abs_tol': None},
-                       h5file=filepath, h5group=f'{n}', show_figure=False)
+        info = integrate_forward(model, uva_n, solid_props_n, fluid_props_n, times_n,
+                                 coupling=coupling, h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
-        print(runtime_end-runtime_start)
+        print(f"Run duration {runtime_end-runtime_start} s")
 
         # Save the run info to a pickled file
         if h == 0:
@@ -712,9 +709,9 @@ if __name__ == '__main__':
     test.setUp()
     test.test_adjoint()
 
-    test = Testu0Gradient()
-    test.setUp()
-    test.test_adjoint()
+    # test = Testu0Gradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = Testv0Gradient()
     # test.setUp()

@@ -17,8 +17,8 @@ from . import vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 
-DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
-FIXEDPOINT_SOLVER_PRM = {'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-11}
+DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-10}
+FIXEDPOINT_SOLVER_PRM = {'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-11}
 
 # TODO: Make sure you change this to an adaptive time step integrator and stop using it when calculating gradients
 def forward(model, uva, solid_props, fluid_props, timing_props,
@@ -330,6 +330,11 @@ def explicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
               solver_parameters={"newton_solver": newton_solver_prm})
 
+    res = dfn.assemble(model.solid.forms['form.un.f1'])
+    model.solid.bc_base.apply(res)
+    print(f"Residual Fu is {res.norm('l2')}")
+    # breakpoint()
+
     # u1.assign(u0)
     # du = dfn.Function(model.solid.vector_fspace)
     # _u1, _ = newton_solve(u1.vector(), du.vector(), model.assem_df1_du1, model.assem_f1,
@@ -343,9 +348,11 @@ def explicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     model.set_ini_state(u1, v1, a1)
     q1, p1, fluid_info = model.get_pressure()
 
-    return (u1, v1, a1), (q1, p1), fluid_info
+    step_info = {'fluid_info': fluid_info}
 
-def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None, rel_fp_tol=1e-10):
+    return (u1, v1, a1), (q1, p1), step_info
+
+def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -386,17 +393,19 @@ def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None, rel
     if newton_solver_prm is None:
         newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
 
+    # calculate the initial residual
+    model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=u1, qp1=(q1, p1))
+    res0 = dfn.assemble(model.solid.f1)
+    model.solid.bc_base.apply(res0)
+
     # Set tolerances for the fixed point iterations
     nit = 0
-    abs_fp_err, rel_fp_err = np.inf, np.inf
-    model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=None, qp1=None)
-    while rel_fp_err > rel_fp_tol:
-        model.set_iter_params(uva0=uva0, u1=u1, qp1=(q1, p1))
+    abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
+    abs_err0, abs_err, rel_err = res0.norm('l2'), np.inf, np.inf
+    while abs_err > abs_tol and rel_err > rel_tol:
+        model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=u1, qp1=(q1, p1))
         dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
                   solver_parameters={"newton_solver": newton_solver_prm})
-
-        abs_fp_err = (solid.u1.vector()-u1).norm('l2')
-        rel_fp_err = abs_fp_err/solid.u1.vector().norm('l2')
 
         u1[:] = solid.u1.vector()
         v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
@@ -405,14 +414,29 @@ def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None, rel
         # Set the state to calculate the pressure, but you have to set it back after
         model.set_ini_state(u1, v1, a1)
         q1, p1, fluid_info = model.get_pressure()
+
+        # Calculate the error in the solid residual with the updated pressures
+        model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
+        res = dfn.assemble(solid.f1)
+        solid.bc_base.apply(res)
+
+        abs_err = res.norm('l2')
+        rel_err = abs_err/abs_err0
+
         nit += 1
 
-    # print(nit, rel_fp_err)
+    model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
+    res = dfn.assemble(model.solid.forms['form.un.f1'])
+    model.solid.bc_base.apply(res)
+    print(f"Residual Fu is {res.norm('l2')}")
+    print(f"The final mean pressure is {p1.mean()}")
     # breakpoint()
-    step_info = {'fluid_info': fluid_info,
-                 'nit': nit,
-                 'abs_u_err': abs_fp_err, 'rel_u_err': rel_fp_err}
 
+    step_info = {'fluid_info': fluid_info,
+                 'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
+
+    print("(u, v, a) = ", [x.norm('l2') for x in (u1, v1, a1)])
+    print("(q, p) = ", [np.linalg.norm(x) for x in (q1, p1)])
     return (u1, v1, a1), (q1, p1), step_info
 
 def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):

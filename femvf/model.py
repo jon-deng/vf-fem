@@ -259,6 +259,29 @@ class ForwardModel:
 
         return dq_du, dp_du
 
+    def get_flow_sensitivity_solid_ord(self, adjoint=False):
+        """
+        Updates pressure sensitivity using a bernoulli flow model.
+
+        Parameters
+        ----------
+        fluid_props : dict
+            A dictionary of fluid properties
+
+        Returns
+        -------
+        dp_du0 : np.ndarray
+            Sensitivity of surface pressures w.r.t. the initial displacement.
+        dq_du0 : np.ndarray
+            Sensitivity of the flow rate w.r.t. the initial displacement.
+        """
+        # Calculate sensitivities of fluid quantities based on the deformed surface
+        x_surface = self.get_surface_state()
+
+        dq_du, dp_du = self.fluid.get_flow_sensitivity_solid(self, x_surface, adjoint=adjoint)
+
+        return dq_du, dp_du
+
     def pressure_fluidord_to_solidord(self, pressure):
         """
         Converts a pressure vector in surface vert. order to solid DOF order
@@ -562,6 +585,7 @@ class ForwardModel:
 
         uva0 = statefile.get_state(n-1)
         qp0 = statefile.get_fluid_state(n-1)
+        qp1 = statefile.get_fluid_state(n)
         u1 = None
         if set_final_state:
             u1 = statefile.get_u(n)
@@ -569,8 +593,8 @@ class ForwardModel:
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        self.set_iter_params(uva0=uva0, qp0=qp0, dt=dt,
-                             solid_props=solid_props, fluid_props=fluid_props, u1=u1)
+        self.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=u1, qp1=qp1,
+                             solid_props=solid_props, fluid_props=fluid_props)
         return {'uva0': uva0, 'qp0': qp0, 'dt': dt, 'solid_props': solid_props, 'fluid_props': fluid_props, 'u1': u1}
 
 class CachedBiFormAssembler:

@@ -15,13 +15,11 @@ from matplotlib import pyplot as plt
 
 import dolfin as dfn
 import ufl
-from petsc4py import PETSc
 
 from . import solids
 from .newmark import *
-from . import linalg
 
-def adjoint(model, f, functional, coupling='explicit', show_figure=False):
+def adjoint(model, f, functional, show_figure=False):
     """
     Returns the gradient of the cost function using the adjoint model.
 
@@ -30,8 +28,6 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
     model : model.ForwardModel
     f : statefile.StateFile
     functional : functionals.Functional
-    coupling : 'implicit' or 'explicit'
-        How the fluid and structure should be coupled
     show_figures : bool
         Whether to display a figure showing the solution or not.
 
@@ -43,17 +39,6 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         The gradient of the functional wrt parameter labelled by `str`
         # TODO: Only gradient wrt. solid properties are included right now
     """
-    # print(coupling)
-    solve_adj, solve_adj_rhs = None, None
-    if coupling == 'explicit':
-        solve_adj = solve_adj_exp
-        solve_adj_rhs = solve_adj_rhs_exp
-    elif coupling == 'implicit':
-        solve_adj = solve_adj_imp
-        solve_adj_rhs = solve_adj_rhs_imp
-    else:
-        raise ValueError("`coupling` can only be implicit or explicit you goofball")
-
     # Assumes fluid and solid properties are constant in time
     fluid_props = f.get_fluid_props(0)
     solid_props = f.get_solid_props()
@@ -89,7 +74,6 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
     N = f.size
     times = f.get_times()
 
-    qp2 = (None, None)
     uva2 = (None, None, None)
     uva1 = f.get_state(N-1, out=uva1)
     uva0 = f.get_state(N-2, out=uva0)
@@ -97,16 +81,8 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
     qp0 = f.get_fluid_state(N-2)
     dt2 = None
     dt1 = times[N-1] - times[N-2]
-
-    qp1_, qp2_ = None, None
-    if coupling == 'explicit':
-        qp2_ = qp1
-        qp1_ = qp0
-    else:
-        qp2_ = qp2
-        qp1_ = qp1
-    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'qp1': qp2_, 'u1': uva2[0]}
-    iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'u1': uva1[0]}
+    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'qp1': qp1, 'u1': uva2[0]}
+    iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp0, 'u1': uva1[0]}
 
     ## Initialize the adj rhs
     dcost_duva1 = functional.duva(f, N-1, iter_params1, iter_params2)
@@ -131,27 +107,11 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         qp_n1 = f.get_fluid_state(ii-2)
         dt0 = times[ii-1] - times[ii-2]
 
-        # Set the iter params
-        qp0_, qp1_ = None, None
-        if coupling == 'explicit':
-            qp1_ = qp0
-            qp0_ = qp_n1
-        else:
-            qp1_ = qp1
-            qp0_ = qp0
-        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'u1': uva1[0]}
-        iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp0_, 'u1': uva0[0]}
+        # Set the iter params according to an explicit iteration
+        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp0, 'u1': uva1[0]}
+        iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp_n1, 'u1': uva0[0]}
 
-        model.set_iter_params(**iter_params1)
-        res = dfn.assemble(model.solid.forms['form.un.f1'])
-        model.solid.bc_base.apply(res)
-        print(f"The residual Fu is {res.norm('l2')}")
-        print(f"The final mean pressure is {qp1_[1].mean()}")
-        print("(u, v, a) = ", [x.norm('l2') for x in uva1])
-        print("(q, p) = ", [np.linalg.norm(x) for x in qp1_])
-
-        adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
-        # breakpoint()
+        adj_state1 = solve_adj_exp(model, adj_state1_rhs, iter_params1)
 
         # Update gradients wrt parameters using the adjoint
         adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj)
@@ -162,7 +122,7 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         dcost_duva0 = functional.duva(f, ii-1, iter_params0, iter_params1)
         dcost_dqp0 = functional.dqp(f, ii-1, iter_params0, iter_params1)
         dcost_dstate0 = (*dcost_duva0, *dcost_dqp0)
-        adj_state0_rhs = solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
+        adj_state0_rhs = solve_adjrhs_recurrence_exp(model, adj_state1, dcost_dstate0, iter_params1)
 
         # Set initial states to the previous states for the start of the next iteration
         adj_state1_rhs = adj_state0_rhs
@@ -203,9 +163,10 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
 
     return functional_value, grad, functional
 
+
 def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
     """
-    Update the gradient wrt solid parameters
+    Update the gradient wrt solid parameter in-place
     """
     model.set_iter_params(**iter_params1)
     for key, vector in grad_solid.items():
@@ -232,133 +193,12 @@ def solve_grad_dt(model, adj_state1, iter_params1):
     return adj_dt1
 
 def solve_adj_imp(model, adj_rhs, it_params, out=None):
-    """
-    Solve for adjoint states given the RHS source vector
+    pass
 
-    Parameters
-    ----------
+def solve_adjrhs_recurrence_imp(model, adj_uva2, dcost_duva1, it_params2, out=None):
+    pass
 
-    Returns
-    -------
-    """
-    ## Assemble sensitivity matrices
-    model.set_iter_params(**it_params)
-    dt = it_params['dt']
-
-    dfu2_du2 = model.assem_df1_du1_adj()
-    dfv2_du2 = 0 - newmark_v_du1(dt)
-    dfa2_du2 = 0 - newmark_a_du1(dt)
-    dfu2_dp2 = dfn.assemble(model.solid.forms['form.bi.df1_dpressure_adj'])
-
-    # map dfu2_dp2 to have p on the fluid domain
-    solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
-    dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, fluid_dofs.size)
-    # TODO: The final size argument is only valid for the 1D case
-
-    model.set_ini_state(it_params['u1'], 0, 0)
-    dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
-    dfq2_du2 = 0 - dq_du
-    dfp2_du2 = 0 - dp_du
-
-    ## Do the linear algebra that solves for the adjoint states
-    if out is None:
-        out = tuple([vec.copy() for vec in adj_rhs])
-    adj_u, adj_v, adj_a, adj_q, adj_p = out
-
-    adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
-
-    # adjoint states for v, a, and q are explicit so we can solve for them
-    model.solid.bc_base.apply(adj_v_rhs)
-    adj_v[:] = adj_v_rhs
-
-    model.solid.bc_base.apply(adj_a_rhs)
-    adj_a[:] = adj_a_rhs
-
-    # TODO: how to apply fluid boundary conditions in a generic way?
-    adj_q[:] = adj_q_rhs
-
-    adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q
-
-    model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-
-    # now we have to solve the coupled system for pressure and displacement residuals
-    dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
-    blocks = [[dfu2_du2_mat, dfp2_du2],
-              [    dfu2_dp2,      1.0]]
-
-    # breakpoint()
-    dfup2_dup2 = linalg.form_block_matrix(blocks)
-    adj_up, rhs = dfup2_dup2.getVecs()
-
-    # calculate rhs vectors
-    # adj_p_rhs[0] = 0 # set the subglottal pressure boundary condition; hardcoded for 1D
-    rhs[:adj_u_rhs.size()] = adj_u_rhs
-    rhs[adj_u_rhs.size():] = adj_p_rhs
-
-    # Solve the block linear system with LU factorization
-    ksp = PETSc.KSP().create()
-    ksp.setType(ksp.Type.PREONLY)
-
-    pc = ksp.getPC()
-    pc.setType(pc.Type.LU)
-
-    ksp.setOperators(dfup2_dup2)
-    ksp.solve(rhs, adj_up)
-
-    # breakpoint()
-
-    adj_u[:] = adj_up[:adj_u_rhs.size()]
-    adj_p[:] = adj_up[adj_u_rhs.size():]
-
-    return adj_u, adj_v, adj_a, adj_q, adj_p
-
-def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
-    """
-    Solves the adjoint recurrence relations to return the rhs
-
-    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
-    dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
-
-    ## Assemble sensitivity matrices
-    dt2 = it_params2['dt']
-    model.set_iter_params(**it_params2)
-
-    dfu2_du1 = model.assem_df1_du0_adj()
-    dfu2_dv1 = model.assem_df1_dv0_adj()
-    dfu2_da1 = model.assem_df1_da0_adj()
-
-    dfv2_du1 = 0 - newmark_v_du0(dt2)
-    dfv2_dv1 = 0 - newmark_v_dv0(dt2)
-    dfv2_da1 = 0 - newmark_v_da0(dt2)
-
-    dfa2_du1 = 0 - newmark_a_du0(dt2)
-    dfa2_dv1 = 0 - newmark_a_dv0(dt2)
-    dfa2_da1 = 0 - newmark_a_da0(dt2)
-
-    ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-    # Allocate a vector the for fluid side mat-vec multiplication
-    adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
-    adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
-    adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-    adj_q1_rhs = dcost_dq1 - 0
-    adj_p1_rhs = dcost_dp1 - 0
-
-    return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
-
-# TODO: Below are two old codes you had the main difference is how you handle some of the matrices
-# You messed something up in assembling the transposed matrix as well as potentially in reordering
-# the matrix rows somehow... You'll have to look into this again.
-
-def solve_adj_exp_(model, adj_rhs, it_params, out=None):
+def solve_adj_exp(model, adj_rhs, it_params, out=None):
     """
     Solve for adjoint states given the RHS source vector
 
@@ -414,7 +254,7 @@ def solve_adj_exp_(model, adj_rhs, it_params, out=None):
 
     return adj_u, adj_v, adj_a, adj_q, adj_p
 
-def solve_adj_rhs_exp_(model, adj_state2, dcost_dstate1, it_params2, out=None):
+def solve_adjrhs_recurrence_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     """
     Solves the adjoint recurrence relations to return the rhs
 
@@ -460,109 +300,6 @@ def solve_adj_rhs_exp_(model, adj_state2, dcost_dstate1, it_params2, out=None):
 
     return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
 
-def solve_adj_exp(model, adj_rhs, it_params, out=None):
-    """
-    Solve for adjoint states given the RHS source vector
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    ## Assemble sensitivity matrices
-    model.set_iter_params(**it_params)
-    dt = it_params['dt']
-
-    dfu2_du2 = model.assem_df1_du1_adj()
-    dfv2_du2 = 0 - newmark_v_du1(dt)
-    dfa2_du2 = 0 - newmark_a_du1(dt)
-
-    model.set_ini_state(it_params['u1'], 0, 0)
-    dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
-    breakpoint()
-    dfq2_du2 = 0 - dq_du
-    dfp2_du2 = 0 - dp_du
-
-    ## Do the linear algebra that solves for the adjoint states
-    if out is None:
-        out = tuple([vec.copy() for vec in adj_rhs])
-    adj_u, adj_v, adj_a, adj_q, adj_p = out
-
-    adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
-
-    model.solid.bc_base.apply(adj_a_rhs)
-    adj_a[:] = adj_a_rhs
-
-    model.solid.bc_base.apply(adj_v_rhs)
-    adj_v[:] = adj_v_rhs
-
-    # TODO: how to apply fluid boundary conditions in a generic way?
-    adj_q[:] = adj_q_rhs
-
-    # adj_p_rhs[0] = 0 # set the subglottal pressure boundary condition; hardcoded for 1D
-    adj_p = dfp2_du2.getVecRight()
-    adj_p[:] = adj_p_rhs
-    print(f"adj_p ", adj_p.norm(2))
-
-    adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q + dfn.PETScVector(dfp2_du2*adj_p)
-    model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-    dfn.solve(dfu2_du2, adj_u, adj_u_rhs)
-
-    return adj_u, adj_v, adj_a, adj_q, adj_p
-
-def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
-    """
-    Solves the adjoint recurrence relations to return the rhs
-
-    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
-    dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
-
-    ## Assemble sensitivity matrices
-    dt2 = it_params2['dt']
-    model.set_iter_params(**it_params2)
-
-    dfu2_du1 = model.assem_df1_du0_adj()
-    dfu2_dv1 = model.assem_df1_dv0_adj()
-    dfu2_da1 = model.assem_df1_da0_adj()
-    dfu2_dp1 = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
-
-    dfv2_du1 = 0 - newmark_v_du0(dt2)
-    dfv2_dv1 = 0 - newmark_v_dv0(dt2)
-    dfv2_da1 = 0 - newmark_v_da0(dt2)
-
-    dfa2_du1 = 0 - newmark_a_du0(dt2)
-    dfa2_dv1 = 0 - newmark_a_dv0(dt2)
-    dfa2_da1 = 0 - newmark_a_da0(dt2)
-
-    ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-    # Allocate a vector the for fluid side mat-vec multiplication
-    # _, matvec_adj_p_rhs = model.fluid.get_state_vecs()
-    # solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    # matvec_adj_p_rhs[fluid_dofs] = (dfu2_dp1 * adj_u2)[solid_dofs]
-
-    # breakpoint()
-    solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
-    dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
-    matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(adj_u2).vec()
-
-    adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
-    adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
-    adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-    adj_q1_rhs = dcost_dq1 - 0
-    adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
-
-    return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
-
 def get_df1_dsolid_forms(solid):
     df1_dsolid = {}
     for key in solid.PROPERTY_TYPES:
@@ -577,3 +314,4 @@ def get_df1_dsolid_forms(solid):
             except RuntimeError:
                 df1_dsolid[key] = None
     return df1_dsolid
+

@@ -259,7 +259,7 @@ SEPARATION_FACTOR = 1.0
 
 class Fluid1D:
     """
-    This class represents a fluid model
+    This class represents a 1D fluid
     """
     def __init__(self, x_vertices, y_surface):
         """
@@ -271,12 +271,29 @@ class Fluid1D:
         y_surface: np.ndarray
             Array of y surface locations numbered in steamwise increasing order.
         """
-        self.x_vertices = x_vertices
-        self.y_surface = y_surface
         self.properties = FluidProperties(self)
-        # breakpoint()
 
-        # Calculate surface coordinates which is needed for surface integrals
+        # the 'mesh' (also the x coordinates in the reference configuration)
+        self.x_vertices = x_vertices
+
+        # the surface y coordinates of the solid
+        self.y_surface = y_surface
+
+        # form type quantities associated with the mesh
+        # displacement and velocity along the surface at state 0 and 1
+        self.u0surf = np.zeros(x_vertices.shape)
+        self.u1surf = np.zeros(x_vertices.shape)
+
+        self.v0surf = np.zeros(x_vertices.shape)
+        self.v1surf = np.zeros(x_vertices.shape)
+
+        self.p1 = np.zeros(x_vertices.shape)
+        self.p0 = np.zeros(x_vertices.shape)
+
+        self.q0 = np.zeros((1,))
+        self.q1 = np.zeros((1,))
+
+        # Calculate surface coordinates which are needed to compute surface integrals
         dx = self.x_vertices[1:] - self.x_vertices[:-1]
         dy = self.y_surface[1:] - self.y_surface[:-1]
         ds = (dx**2+dy**2)**0.5
@@ -287,6 +304,14 @@ class Fluid1D:
 
     def set_fin_state(self, q1, p1):
         pass
+
+    def set_ini_surf_state(self, u0, v0):
+        self.u0surf[:] = u0
+        self.v0surf[:] = v0
+
+    def set_fin_surf_state(self, u1, v1):
+        self.u1surf[:] = u1
+        self.v1surf[:] = v1
 
     def set_properties(self, props):
         for key in props:
@@ -423,7 +448,7 @@ class Bernoulli(Fluid1D):
 
     def flow_sensitivity(self, surface_state):
         """
-        Returns the sensitivities of flow properties at a surface state.
+        Return the sensitivities of pressure and flow rate to the surface state.
 
         Parameters
         ----------
@@ -446,8 +471,6 @@ class Bernoulli(Fluid1D):
         area = 2 * (y_midline - y)
         darea_dy = -2 # darea_dx = 0
 
-        # This is a non-sparse matrix but falls off quickly to 0 when the area elements are far from the
-        #  minimum value
         a_min = smooth_minimum(area, self.s_vertices, alpha)
         da_min_darea = dsmooth_minimum_df(area, self.s_vertices, alpha)
 
@@ -481,7 +504,6 @@ class Bernoulli(Fluid1D):
         dsep_multiplier_dy = dsmooth_cutoff_dx0(self.s_vertices, s_sep, k=k)[:, None] * ds_sep_dy
 
         # p = sep_multiplier * p_bernoulli
-        # breakpoint()
         dp_dy = sep_multiplier[:, None]*dp_bernoulli_dy + dsep_multiplier_dy*p_bernoulli[:, None]
 
         dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
@@ -497,7 +519,7 @@ class Bernoulli(Fluid1D):
     def get_flow_sensitivity(self, surface_state):
         return self.flow_sensitivity(surface_state)
 
-    def get_flow_sensitivity_solid(self, model, surface_state):
+    def get_flow_sensitivity_solid(self, model, surface_state, adjoint=False):
         """
         Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
@@ -514,19 +536,92 @@ class Bernoulli(Fluid1D):
         dq_du : PETSc.Vec
             Sensitivity of flow rate with respect to displacement
         """
-        _dp_du, _dq_du = self.flow_sensitivity(surface_state)
+        _dq_du, _dp_du = self.flow_sensitivity(surface_state)
 
         dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
         dp_du.setType('aij')
-        dp_du.setSizes([model.solid.vert_to_sdof.size, model.solid.vert_to_vdof.size])
+
+        shape = None
+        if not adjoint:
+            shape = (self.p1.size, model.solid.vert_to_vdof.size)
+        else:
+            shape = (model.solid.vert_to_vdof.size, self.p1.size)
+        dp_du.setSizes(shape)
+        dp_du.setUp()
+
+        pressure_vertices = model.surface_vertices
+        rows, cols = None, None
+        if not adjoint:
+            rows = np.arange(self.p1.size, dtype=np.int32)
+            cols = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
+        else:
+            rows = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
+            cols = np.arange(self.p1.size, dtype=np.int32)
+
+        nnz = np.zeros(dp_du.size[0], dtype=np.int32)
+        nnz[rows] = cols.size
+
+        dp_du.setPreallocationNNZ(nnz)
+
+        vals = None
+        if not adjoint:
+            vals = _dp_du
+        else:
+            vals = _dp_du.T
+
+        # for row in rows:
+        #     dp_du.setValues(row, cols, vals[row, :])
+
+        dp_du.setValues(rows, cols, vals)
+        dp_du.assemblyBegin()
+        dp_du.assemblyEnd()
+
+        # You should be able to create your own vector from scratch too but there are a couple of things
+        # you have to set like local to global mapping that need to be there in order to interface with
+        # a particular fenics setup. I just don't know what it needs to use.
+        # TODO: Figure this out, since it also applies to matrices
+
+        # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vert_to_vdof.size)
+        # dq_du.setValues(vert_to_vdof[surface_verts].reshape(-1), _dq_du)
+        # dq_du.assemblyBegin()
+        # dq_du.assemblyEnd()
+
+        dq_du = dfn.Function(model.solid.vector_fspace).vector()
+        dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].flat] = _dq_du
+
+        return dq_du, dp_du
+
+    def get_flow_sensitivity_solid_old(self, model, surface_state):
+        """
+        Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
+
+        Parameters
+        ----------
+        model
+        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+            States of the surface vertices, ordered following the flow (increasing x coordinate).
+
+        Returns
+        -------
+        dp_du : PETSc.Mat
+            Sensitivity of pressure with respect to displacement
+        dq_du : PETSc.Vec
+            Sensitivity of flow rate with respect to displacement
+        """
+        _dq_du, _dp_du = self.flow_sensitivity(surface_state)
+
+        dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
+        dp_du.setType('aij')
+        dp_du.setSizes([model.solid.vert_to_vdof.size, model.solid.vert_to_vdof.size])
 
         pressure_vertices = model.surface_vertices
         nnz = np.zeros(model.solid.vert_to_sdof.size, dtype=np.int32)
         nnz[model.solid.vert_to_sdof[pressure_vertices]] = pressure_vertices.size*2
-        dp_du.setPreallocationNNZ(list(nnz))
+        dp_du.setPreallocationNNZ(nnz)
 
         rows = model.solid.vert_to_sdof[pressure_vertices]
         cols = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
+        # breakpoint()
         dp_du.setValues(rows, cols, _dp_du)
         dp_du.assemblyBegin()
         dp_du.assemblyEnd()
@@ -574,7 +669,7 @@ def smooth_minimum(f, s, alpha=-1000):
         as `alpha` approachs negative infinity.
     """
     # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
-    # being too small or too large. This constant factors out from the division.
+    # being too small or too large. This constant factors out due to the division.
     K_STABILITY = np.max(alpha*f)
     w = np.exp(alpha*f - K_STABILITY)
 
