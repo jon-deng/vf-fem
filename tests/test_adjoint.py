@@ -115,7 +115,7 @@ def get_starting_kelvinvoigt_model():
     return model, solid_props, fluid_props
 
 class TaylorTest(unittest.TestCase):
-    COUPLING = 'implicit'
+    COUPLING = 'explicit'
 
     def test_adjoint(self):
         hs = self.hs
@@ -285,13 +285,13 @@ class TestEmodGradient(TaylorTest):
         save_path = 'out/emodgrad-states.h5'
         model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
 
-        # t_start, t_final = 0, 0.01
-        # times_meas = np.linspace(t_start, t_final, 128)
-        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        t_start, t_final = 0, 0.001
-        times_meas = np.linspace(t_start, t_final, 2)
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+
+        # t_start, t_final = 0, 0.001
+        # times_meas = np.linspace(t_start, t_final, 2)
+        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step size / number of steps
         hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)

@@ -248,7 +248,7 @@ def get_block_matrix_csr(blocks_csr, blocks_shape, blocks_sizes):
 
 def reorder_mat_rows(mat, rows_in, rows_out, m_out, finalize=True):
     """
-    Reorder the rows of an input matrix to a matrix with a possibly different number of rows
+    Reorder rows of a matrix to a new matrix with a possibly different number of rows
 
     This is useful for transforming matrices where data is shared between domains along an
     interface. The rows corresponding to the interface on domain 1 have to be mapped to the rows on
@@ -300,3 +300,8 @@ def reorder_mat_rows(mat, rows_in, rows_out, m_out, finalize=True):
         mat_out.assemble()
 
     return mat_out
+
+def reorder_mat_cols(mat, cols_in, cols_out, m_out, finalize=True):
+    """
+    Reorder columns of a new matrix with a possibly different number of rows
+    """

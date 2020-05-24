@@ -37,7 +37,7 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluid
 
     # Load the fluid
     fluid = None
-    if fluid_mesh is None and issubclass(Fluid, fluids.Fluid1D):
+    if fluid_mesh is None and issubclass(Fluid, fluids.QuasiSteady1DFluid):
         xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, facet_labels['pressure'])
         fluid = Fluid(xfluid, yfluid)
     elif fluid_mesh is None and not issubclass(Fluid, fluids.Fluid1D):

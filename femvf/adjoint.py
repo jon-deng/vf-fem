@@ -242,6 +242,7 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     ## Assemble sensitivity matrices
     model.set_iter_params(**it_params)
     dt = it_params['dt']
+    print(dt)
 
     dfu2_du2 = model.assem_df1_du1_adj()
     dfv2_du2 = 0 - newmark_v_du1(dt)
@@ -289,7 +290,6 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     adj_up, rhs = dfup2_dup2.getVecs()
 
     # calculate rhs vectors
-    # adj_p_rhs[0] = 0 # set the subglottal pressure boundary condition; hardcoded for 1D
     rhs[:adj_u_rhs.size()] = adj_u_rhs
     rhs[adj_u_rhs.size():] = adj_p_rhs
 
@@ -352,108 +352,6 @@ def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
 # TODO: Below are two old codes you had the main difference is how you handle some of the matrices
 # You messed something up in assembling the transposed matrix as well as potentially in reordering
 # the matrix rows somehow... You'll have to look into this again.
-
-def solve_adj_exp_(model, adj_rhs, it_params, out=None):
-    """
-    Solve for adjoint states given the RHS source vector
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    ## Assemble sensitivity matrices
-    model.set_iter_params(**it_params)
-    dt = it_params['dt']
-
-    dfu2_du2 = model.assem_df1_du1_adj()
-    dfv2_du2 = 0 - newmark_v_du1(dt)
-    dfa2_du2 = 0 - newmark_a_du1(dt)
-
-    model.set_ini_state(it_params['u1'], 0, 0)
-    dq_du, dp_du = model.get_flow_sensitivity()
-    dfq2_du2 = 0 - dq_du
-    dfp2_du2 = 0 - dp_du
-
-    ## Do the linear algebra that solves for the adjoint states
-    if out is None:
-        out = tuple([vec.copy() for vec in adj_rhs])
-    adj_u, adj_v, adj_a, adj_q, adj_p = out
-
-    adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
-
-    model.solid.bc_base.apply(adj_a_rhs)
-    adj_a[:] = adj_a_rhs
-
-    model.solid.bc_base.apply(adj_v_rhs)
-    adj_v[:] = adj_v_rhs
-
-    # TODO: how to apply fluid boundary conditions in a generic way?
-    adj_q[:] = adj_q_rhs
-
-    # adj_p_rhs[0] = 0 # set the subglottal pressure boundary condition; hardcoded for 1D
-    adj_p[:] = adj_p_rhs
-
-    dpres_du = dfn.Function(model.solid.vector_fspace).vector()
-    dqres_du = dfn.Function(model.solid.vector_fspace).vector()
-    solid_dofs, fluid_dofs = model.get_fsi_vector_dofs()
-
-    dqres_du[solid_dofs] = (dfq2_du2 * adj_q)
-    dpres_du[solid_dofs] = (dfp2_du2.T @ adj_p)[fluid_dofs]
-
-    adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dqres_du + dpres_du
-
-    model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-    dfn.solve(dfu2_du2, adj_u, adj_u_rhs)
-
-    return adj_u, adj_v, adj_a, adj_q, adj_p
-
-def solve_adj_rhs_exp_(model, adj_state2, dcost_dstate1, it_params2, out=None):
-    """
-    Solves the adjoint recurrence relations to return the rhs
-
-    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
-    dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
-
-    ## Assemble sensitivity matrices
-    dt2 = it_params2['dt']
-    model.set_iter_params(**it_params2)
-
-    dfu2_du1 = model.assem_df1_du0_adj()
-    dfu2_dv1 = model.assem_df1_dv0_adj()
-    dfu2_da1 = model.assem_df1_da0_adj()
-    dfu2_dp1 = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
-
-    dfv2_du1 = 0 - newmark_v_du0(dt2)
-    dfv2_dv1 = 0 - newmark_v_dv0(dt2)
-    dfv2_da1 = 0 - newmark_v_da0(dt2)
-
-    dfa2_du1 = 0 - newmark_a_du0(dt2)
-    dfa2_dv1 = 0 - newmark_a_dv0(dt2)
-    dfa2_da1 = 0 - newmark_a_da0(dt2)
-
-    ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-    # Allocate a vector the for fluid side mat-vec multiplication
-    _, matvec_adj_p_rhs = model.fluid.get_state_vecs()
-    solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    matvec_adj_p_rhs[fluid_dofs] = (dfu2_dp1 * adj_u2)[solid_dofs]
-
-    adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
-    adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
-    adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-    adj_q1_rhs = dcost_dq1 - 0
-    adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
-
-    return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
 
 def solve_adj_exp(model, adj_rhs, it_params, out=None):
     """
@@ -541,6 +439,7 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
     dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
     matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(adj_u2).vec()
+    print(matvec_adj_p_rhs[:])
 
     adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
     adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)

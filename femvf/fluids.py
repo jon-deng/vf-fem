@@ -257,7 +257,7 @@ def bd_df(f, n, dx):
 ## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
 
-class Fluid1D:
+class QuasiSteady1DFluid:
     """
     This class represents a 1D fluid
     """
@@ -323,6 +323,34 @@ class Fluid1D:
     def get_properties(self):
         return self.properties.copy()
 
+    def set_iter_params(self, qp0, uvsurf0, qp1, uvsurf1, fluid_props):
+        self.set_ini_state(*qp0)
+        self.set_fin_state(*qp1)
+
+        self.set_ini_surf_state(*uvsurf0)
+        self.set_fin_surf_state(*uvsurf1)
+
+        self.set_properties(fluid_props)
+
+    def get_fp1(self):
+        return self.p1 - self.fluid_pressure((self.u1surf, self.v1surf))
+
+    def get_fp0(self):
+        return self.p0 - self.fluid_pressure((self.u0surf, self.v0surf))
+
+    def get_dfp1_dp1(self):
+        return 1.0
+
+    def get_dfp0_dp0(self):
+        return 1.0
+
+    def get_dfp1_du1(self, u_order='fluid'):
+        return -self.flow_sensitivity
+
+    # def get_dfp1_du0(self):
+
+    # def get_dfp0_du0(self):
+
     def fluid_pressure(self):
         raise NotImplementedError("Fluid models have to implement this")
 
@@ -332,7 +360,7 @@ class Fluid1D:
     def get_state_vecs(self):
         raise NotImplementedError("Fluid models have to implement this")
 
-class Bernoulli(Fluid1D):
+class Bernoulli(QuasiSteady1DFluid):
     """
     Represents the Bernoulli fluid model
 
