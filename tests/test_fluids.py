@@ -118,6 +118,83 @@ class TestBernoulli(CommonSetup):
         plt.show()
 
     # @unittest.skip("...")
+    def test_flow_sensitivity_fd(self):
+        """
+        Test if derivatives of the flow quantities/residuals are correct using finite differences
+        """
+        np.random.seed(0)
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
+        surface_coordinates = self.surface_coordinates
+
+        # Set a displacement change direction
+        hs = np.concatenate([[0], 2**np.arange(-3, 3, dtype=np.float)])
+        du = np.zeros(fluid.u1surf.size)
+        du[:] = np.random.rand(du.size)*1e-5
+
+        # Calculate pressure sensitivity using the `Fluid` function
+        x0 = (surface_coordinates, 0, 0)
+        _, dp_du = fluid.flow_sensitivity(x0)
+
+        # Calculated the predicted change in pressure
+        dp = dp_du@du
+
+        # Calculate perturbed pressures for a range of step sizes
+        ps = []
+        for h in hs:
+            x1 = (surface_coordinates + h*du.reshape(-1, 2), 0, 0)
+            ps.append(fluid.fluid_pressure(x1)[1])
+        ps = np.array(ps)
+
+        dp_true = ps[1]-ps[0]
+
+        taylor_remainder_2 = np.abs(ps[1:, :] - ps[0, :] - hs[1:][:, None]*dp)
+        order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
+
+        error = dp - dp_true
+        breakpoint()
+
+        self.assertTrue((error))
+
+    def test_flow_sensitivity_solid(self):
+        """
+        Test if derivatives of the flow quantities/residuals are correct using finite differences
+        """
+        np.random.seed(0)
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
+        surface_coordinates = self.surface_coordinates
+
+        # Set a displacement change direction
+        du_fluid = np.zeros(fluid.u1surf.size)
+        du_fluid[:] = np.random.rand(du_fluid.size)*1e-2
+
+        du_solid = dfn.Function(self.model.solid.vector_fspace).vector().vec()
+        vdof_solid, vdof_fluid = self.model.get_fsi_vector_dofs()
+        du_solid[vdof_solid] = du_fluid[vdof_fluid]
+
+        # Calculate pressure sensitivity using the `Fluid` function
+        x0 = (surface_coordinates, 0, 0)
+        _, dp_du_fluid = fluid.flow_sensitivity(x0)
+        _, dp_du_solid = fluid.get_flow_sensitivity_solid(self.model, x0)
+        _, dp_du_solid_adj = fluid.get_flow_sensitivity_solid(self.model, x0, adjoint=True)
+
+        # Calculated the predicted changes in pressure
+        dp_fluid = dp_du_fluid@du_fluid
+        dp_solid = dp_du_solid*du_solid
+
+        dp_solid_adj = dp_du_solid_adj.getVecRight()
+        breakpoint()
+        dp_du_solid_adj.multTranspose(du_solid, dp_solid_adj)
+
+        error = dp_solid[:] - dp_fluid
+        error_adj = dp_solid_adj[:] - dp_fluid
+
+        self.assertTrue(error)
+
+    # @unittest.skip("...")
     def test_flow_sensitivity(self):
         fluid = self.fluid
         fluid.set_properties(self.fluid_properties)
@@ -180,7 +257,6 @@ class TestBernoulli(CommonSetup):
         ax.set_xlabel("(x, y) node")
         plt.show()
 
-        # breakpoint()
         self.assertTrue(np.all(close))
 
     def test_get_flow_sensitivity_solid(self):
@@ -190,8 +266,6 @@ class TestBernoulli(CommonSetup):
         _, dp_du = self.fluid.get_flow_sensitivity_solid(self.model, x)
 
         _, dp_du_t = self.fluid.get_flow_sensitivity_solid(self.model, x, adjoint=True)
-        # breakpoint()
-        # pass
 
 class TestSmoothApproximations(unittest.TestCase):
     def test_gaussian(self):
@@ -243,4 +317,6 @@ if __name__ == '__main__':
 
     test = TestBernoulli()
     test.setUp()
-    test.test_get_flow_sensitivity_solid()
+    # test.test_get_flow_sensitivity_solid()
+    # test.test_flow_sensitivity_fd()
+    test.test_flow_sensitivity_solid()

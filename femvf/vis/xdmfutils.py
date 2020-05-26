@@ -60,7 +60,6 @@ def export_vertex_values(model, statefile_path, export_path):
             ## Write (q, p) vertex values (pressure only defined)
             VALUE_SHAPE = tuple(scalar_func.value_shape())
 
-            # breakpoint()
             for label in ['pressure']:
                 fo.create_dataset(label, shape=(N_TIME, N_VERT, *VALUE_SHAPE), dtype=np.float64)
 

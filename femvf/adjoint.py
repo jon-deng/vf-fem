@@ -144,10 +144,6 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         model.set_iter_params(**iter_params1)
         res = dfn.assemble(model.solid.forms['form.un.f1'])
         model.solid.bc_base.apply(res)
-        # print(f"The residual Fu is {res.norm('l2')}")
-        # print(f"The final mean pressure is {qp1_[1].mean()}")
-        # print("(u, v, a) = ", [x.norm('l2') for x in uva1])
-        # print("(q, p) = ", [np.linalg.norm(x) for x in qp1_])
 
         adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
 
@@ -178,11 +174,18 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
     model.solid.bc_base.apply(adj_v0)
     model.solid.bc_base.apply(adj_a0)
 
-    # Since we've integrated over the whole time in reverse, the adjoint are not gradients
+
     grad = {}
     grad['u0'] = adj_u0
     grad['v0'] = adj_v0
     grad['a0'] = adj_a0
+
+    if coupling == 'explicit':
+        model.set_ini_state(*uva0)
+        dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
+        adj_p0_ = dp_du.getVecRight()
+        adj_p0_[:] = adj_p0
+        grad['u0'] += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0 # convert PETSc.Vec to dfn.PETScVector
 
     # Change grad_dt to an array
     grad['dt'] = np.array(adj_dt)
@@ -242,7 +245,6 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     ## Assemble sensitivity matrices
     model.set_iter_params(**it_params)
     dt = it_params['dt']
-    print(dt)
 
     dfu2_du2 = model.assem_df1_du1_adj()
     dfv2_du2 = 0 - newmark_v_du1(dt)
@@ -252,8 +254,7 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     # map dfu2_dp2 to have p on the fluid domain
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
     dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
-    dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, fluid_dofs.size)
-    # TODO: The final size argument is only valid for the 1D case
+    dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, model.fluid.p1.size)
 
     model.set_ini_state(it_params['u1'], 0, 0)
     dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
@@ -279,9 +280,12 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
 
     adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q
 
+    bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
+    dfp2_du2.zeroRows(bc_dofs, diag=0.0)
+    # model.solid.bc_base.zero_columns(dfu2_du2, adj_u_rhs.copy(), diagonal_value=1.0)
 
-    # now we have to solve the coupled system for pressure and displacement residuals
+    # solve the coupled system for pressure and displacement residuals
     dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
     blocks = [[dfu2_du2_mat, dfp2_du2],
               [    dfu2_dp2,      1.0]]
@@ -439,7 +443,6 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
     dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
     matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(adj_u2).vec()
-    print(matvec_adj_p_rhs[:])
 
     adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
     adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)

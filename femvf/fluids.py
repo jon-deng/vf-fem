@@ -281,11 +281,11 @@ class QuasiSteady1DFluid:
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
-        self.u0surf = np.zeros(x_vertices.shape)
-        self.u1surf = np.zeros(x_vertices.shape)
+        self.u0surf = np.zeros(2*x_vertices.size)
+        self.u1surf = np.zeros(2*x_vertices.size)
 
-        self.v0surf = np.zeros(x_vertices.shape)
-        self.v1surf = np.zeros(x_vertices.shape)
+        self.v0surf = np.zeros(2*x_vertices.size)
+        self.v1surf = np.zeros(2*x_vertices.size)
 
         self.p1 = np.zeros(x_vertices.shape)
         self.p0 = np.zeros(x_vertices.shape)
@@ -580,12 +580,14 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_du.setUp()
 
         pressure_vertices = model.surface_vertices
+        solid_dofs, fluid_dofs = model.get_fsi_vector_dofs()
+        # ()
         rows, cols = None, None
         if not adjoint:
             rows = np.arange(self.p1.size, dtype=np.int32)
-            cols = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
+            cols = solid_dofs
         else:
-            rows = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
+            rows = solid_dofs
             cols = np.arange(self.p1.size, dtype=np.int32)
 
         nnz = np.zeros(dp_du.size[0], dtype=np.int32)
@@ -645,7 +647,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         rows = model.solid.vert_to_sdof[pressure_vertices]
         cols = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
-        # breakpoint()
+        # ()
         dp_du.setValues(rows, cols, _dp_du)
         dp_du.assemblyBegin()
         dp_du.assemblyEnd()

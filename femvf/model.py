@@ -197,8 +197,6 @@ class ForwardModel:
         u = self.solid.u0.vector()[surface_dofs].reshape(-1, 2)
         v = self.solid.v0.vector()[surface_dofs].reshape(-1, 2)
         a = self.solid.a0.vector()[surface_dofs].reshape(-1, 2)
-        # import matplotlib.pyplot as plt
-        # breakpoint()
 
         x_surface = (self.surface_coordinates + u, v, a)
 

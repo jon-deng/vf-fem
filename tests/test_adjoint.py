@@ -116,8 +116,27 @@ def get_starting_kelvinvoigt_model():
 
 class TaylorTest(unittest.TestCase):
     COUPLING = 'explicit'
+    OVERWRITE_FORWARD_SIMULATIONS = False
+
+    def setUp(self):
+        """
+        Set the model and baseline simulation parameters
+        """
+        self.model, self.solid_props, self.fluid_props = get_starting_kelvinvoigt_model()
+
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
+        self.times = times_meas
+
+        self.uva0 = (0, 0, 0)
 
     def test_adjoint(self):
+        """
+        Checks gradients using a second order taylor test
+
+        The setup for each run (search direction for the taylor test, etc.) is located under
+        `setup_line_search`
+        """
         hs = self.hs
         step_dir = self.step_dir
         model = self.model
@@ -186,7 +205,6 @@ class TaylorTest(unittest.TestCase):
         grad_on_step_dir = None
         if isinstance(self.step_dir, parameterization.FullParameterization):
             grad_p = self.p.dconvert(grad)
-            # breakpoint()
             grad_vector = grad_p.vector
             grad_on_step_dir = np.dot(grad_vector, self.step_dir.vector)
         else:
@@ -275,9 +293,40 @@ class TaylorTest(unittest.TestCase):
         ax.legend()
         return fig, ax
 
-class TestEmodGradient(TaylorTest):
+class TestBasicGradient(TaylorTest):
+    # TODO: refactor the individual test cases to something like this? I think this format makes more sense
+    COUPLING = 'implicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
 
+    def run_line_search(self, save_path, hs, dvua=None, dsolid_props=None, dfluid_props=None, dtimes=None):
+        """
+        Runs a line search of simulations along a specified direction
+        """
+        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
+            if os.path.exists(save_path):
+                os.remove(save_path)
+            line_search(hs, self.model, self.uva0, self.solid_props, self.fluid_props, self.times,
+                        duva=duva, dsolid_props=dsolid_props, dfluid_props=dfluid_props, dtimes=dtimes,
+                        filepath=save_path, coupling=self.COUPLING)
+        else:
+            print("Using existing files")
+
+    def test_emod(self):
+        save_path = 'out/grad_emod-states.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        step_size = 0.5e0 * PASCAL_TO_CGS
+
+        dsolid = self.solid_props.copy()
+        dsolid.vector[:] = 0
+        dsolid['emod'][:] = 1.0*step_size
+
+        self.run_line_search(save_path, hs, dsolid_props=dsolid)
+        # self.test_adjoint()
+
+class TestParameterizedGradient(TaylorTest):
+    pass
+
+class TestEmodGradient(TaylorTest):
     def setUp(self):
         """
         Runs the forward model over several parameters 'steps' and saves their history.
@@ -325,8 +374,6 @@ class TestEmodGradient(TaylorTest):
         self.case_postfix = 'emod'
 
 class Testu0Gradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
-
     def setUp(self):
         """
         Runs the forward model over several parameter 'steps' and saves their history.
@@ -334,16 +381,16 @@ class Testu0Gradient(TaylorTest):
         save_path = 'out/u0grad-states.h5'
         model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
 
-        t_start, t_final = 0, 0.005
-        times_meas = np.linspace(t_start, t_final, 32)
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
         timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
-        t_start, t_final = 0, 0.001
-        times_meas = np.linspace(t_start, t_final, 3)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
+        # t_start, t_final = 0, 0.001
+        # times_meas = np.linspace(t_start, t_final, 3)
+        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-25)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-15)), axis=0)
 
         # Get y--coordinates in DOF order
         xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
@@ -707,8 +754,10 @@ class TestResidualJacobian(unittest.TestCase):
     Tests if jacobians of residuals are correct
     """
     def test_df1_dstate1_implicit(self):
+        np.random.seed(0)
+
         # Set up the parameters and objects needed for the iteration
-        model, sp, fp = get_starting_rayleigh_model()
+        model, sp, fp = get_starting_kelvinvoigt_model()
         model.set_solid_props(sp)
         model.set_fluid_props(fp)
         uva0 = tuple([dfn.Function(model.solid.vector_fspace).vector() for i in range(3)])
@@ -717,18 +766,22 @@ class TestResidualJacobian(unittest.TestCase):
         qp0 = (q0, p0)
         dt = 1e-3
 
-        # Set a delta x1, dx1
+        # Set state change directions du1, dp1
         du1 = dfn.Function(model.solid.vector_fspace).vector()
-        du1[:] = np.random.rand(du1.size())*1e-4
+        # _du1 = np.array(du1[:])
+        # _du1[:20] = 1e-5
+        # du1[:] = _du1
+        du1[:] = np.random.rand(du1.size())*1e-5
+        model.solid.bc_base.apply(du1)
+
         dp1 = np.random.rand(qp0[1].size)
+        dp1 = np.ones(qp0[1].size)*1e-4
 
-        # Calculate residual at x1
+        # Find the state at 1 so you can linearize about this point
         uva1, qp1, _ = implicit_increment_forward(model, uva0, qp0, dt)
-        model.set_iter_params(u1=uva1[0], qp1=qp1)
-        res_0 = dfn.assemble(model.solid.f1)
-        print(res_0[:])
 
-        # Set up the block matrix dF_duqp
+        # Set up the block matrix dFup_dup_adj and dFup_dup
+        model.set_iter_params(uva0=uva0, dt=dt, u1=uva1[0], qp1=qp1)
         dfu_du_adj = model.assem_df1_du1_adj()
         model.solid.bc_base.apply(dfu_du_adj)
         dfu_du_adj = dfn.as_backend_type(dfu_du_adj).mat()
@@ -743,20 +796,41 @@ class TestResidualJacobian(unittest.TestCase):
         blocks = [[dfu_du_adj, dfp_du_adj],
                   [dfu_dp_adj,        1.0]]
         dfup_dup_adj = linalg.form_block_matrix(blocks)
-        dup = dfup_dup_adj.getVecLeft()
+
+        # Calculate the linear change in residual using the residual jacobian
+        dup, dres_jac = dfup_dup_adj.getVecs()
         dup[:du1.size()] = du1
         dup[du1.size():] = dp1
+        dfup_dup_adj.multTranspose(dup, dres_jac)
 
-        dres_mat = dfup_dup_adj.matMultTranspose(dup)
+        dres_u, dres_p = du1.copy(), dp1.copy()
+        dres_u[:] = dres_jac[:du1.size()]
+        dres_p[:] = dres_jac[du1.size():]
+        model.solid.bc_base.apply(dres_u)
 
-        # Calculate residual at x1 + dx1
-        uva1_ = tuple([x+dx for x, dx in zip(uva1, duva1)])
-        qp1_ = tuple([x+dx for x, dx in zip(qp1, dqp1)])
-        model.set_iter_params(u1=uva1[0]+du1, qp1=(q1, p1+dp1))
-        res_1 = dfn.assemble(model.solid.f1)
-        model.solid.bc_base.apply(res_1)
-        print(res_1[:])
+        # Calculate residuals at up1
+        model.set_iter_params(uva0=uva0, u1=uva1[0], qp1=qp1)
+        res_u0 = dfn.assemble(model.solid.f1)
+        model.solid.bc_base.apply(res_u0)
 
+        model.set_ini_state(uva1[0], 0, 0)
+        res_p0 = qp1[1] - model.get_pressure()[1]
+
+        # Calculate residuals at up1 + dup1
+        model.set_iter_params(uva0=uva0, u1=uva1[0]+du1, qp1=(qp1[0], qp1[1]+dp1))
+        res_u1 = dfn.assemble(model.solid.f1)
+        model.solid.bc_base.apply(res_u1)
+
+        model.set_ini_state(uva1[0]+du1, 0, 0)
+        res_p1 = qp1[1]+dp1 - model.get_pressure()[1]
+
+        # Calculate the actual residual change
+        dres_u_true = dfn.as_backend_type(res_u1-res_u0).vec()
+        dres_p_true = res_p1-res_p0
+
+        # Compare and
+        error_u = dres_u.vec() - dres_u_true
+        error_p = dres_p - dres_p_true
 
 if __name__ == '__main__':
     # unittest.main()
@@ -764,13 +838,13 @@ if __name__ == '__main__':
     # test = TestResidualJacobian()
     # test.test_df1_dstate1_implicit()
 
-    test = TestEmodGradient()
-    test.setUp()
-    test.test_adjoint()
-
-    # test = Testu0Gradient()
+    # test = TestEmodGradient()
     # test.setUp()
     # test.test_adjoint()
+
+    test = Testu0Gradient()
+    test.setUp()
+    test.test_adjoint()
 
     # test = Testv0Gradient()
     # test.setUp()

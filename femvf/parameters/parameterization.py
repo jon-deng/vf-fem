@@ -300,7 +300,6 @@ class PeriodicKelvinVoigt(FullParameterization):
         out['v0'].flat[:] = grad_v0
         # out['u0'].flat[:] = grad['u0']
         # out['v0'].flat[:] = grad['v0']
-        # breakpoint()
 
         ## Convert gradients of dt to T (period)
         N = self.constants['NUM_STATES_PER_PERIOD']
