@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 from .base import KeyIndexedArray
 from . import properties as props
-from .. import constants
+from .. import constants, linalg
 from ..forward import DEFAULT_NEWTON_SOLVER_PRM
 
 import dolfin as dfn
@@ -272,7 +272,9 @@ class PeriodicKelvinVoigt(FullParameterization):
 
         N = self.constants['NUM_STATES_PER_PERIOD']
         dt = self['period']/(N-1)
-        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        # timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        timing_props = dt*np.arange(N)
+
 
         ## Convert initial states
         u0, v0 = self['u0'].reshape(-1), self['v0'].reshape(-1)
@@ -333,7 +335,8 @@ class FixedPeriodKelvinVoigt(FullParameterization):
         ## Convert timing properties
         N = self.constants['NUM_STATES_PER_PERIOD']
         dt = self.constants['period']/(N-1)
-        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        # timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        timing_props = dt*np.arange(N)
 
         ## Convert initial states
         u0 = self['u0'].reshape(-1)
@@ -400,7 +403,8 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
         ## Convert timing properties
         N = self.constants['NUM_STATES_PER_PERIOD']
         dt = self.constants['period']/(N-1)
-        timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        # timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
+        timing_props = dt*np.arange(N)
 
         ## Convert initial states
         u0 = self['u0'].reshape(-1)
@@ -484,14 +488,19 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     model.set_params(uva0=uva0, solid_props=solid_props, fluid_props=fluid_props)
 
     q0, p0, _ = model.get_pressure()
-    dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[0])
+    # dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[1])
+    dpressure_du0 = model.get_flow_sensitivity_solid_ord(adjoint=True)[1]
     model.set_params(qp0=(q0, p0))
 
     ## Assemble needed adjoint matrices
     df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj'])
     df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj'])
     df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj'])
-    df0_dpressure_adj = dfn.assemble(model.forms['form.bi.df0_dpressure_adj'])
+    df0_dp0_adj = dfn.as_backend_type(dfn.assemble(model.forms['form.bi.df0_dpressure_adj'])).mat()
+
+    # map dfu0_dp0 to have p on the fluid domain
+    solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
+    df0_dp0_adj = linalg.reorder_mat_rows(df0_dp0_adj, solid_dofs, fluid_dofs, model.fluid.p1.size)
 
     # TODO: I think this should be right to do? (It might not have an apparent effect if the BC is
     # zero)
@@ -507,7 +516,7 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     grad_v0 = grad_v0_in - df0_dv0_adj*adj_a0
 
     ## Correct for the gradient of u0, since f is sensitive to pressure, and pressure depends on u0
-    grad_u0_correction = dfn.Function(model.solid.vector_fspace).vector()
-    dpressure_du0.transpmult(df0_dpressure_adj*adj_a0, grad_u0_correction)
-    grad_u0 = grad_u0 - grad_u0_correction
+    # grad_u0_correction = dfn.Function(model.solid.vector_fspace).vector()
+    # dpressure_du0.transpmult(df0_dp0_adj*adj_a0, grad_u0_correction)
+    grad_u0 = grad_u0 - dfn.PETScVector(dpressure_du0*df0_dp0_adj*adj_a0.vec())
     return grad_u0, grad_v0, adj_a0

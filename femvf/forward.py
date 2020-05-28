@@ -17,7 +17,7 @@ from . import vis
 # from .collision import detect_collision
 from .misc import get_dynamic_fluid_props
 
-DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-10}
+DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-9}
 FIXEDPOINT_SOLVER_PRM = {'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-11}
 
 def integrate_adaptive(model, uva, solid_props, fluid_props, timing_props,
@@ -187,7 +187,7 @@ def integrate_adaptive(model, uva, solid_props, fluid_props, timing_props,
     return info
 
 def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
-                      h5file='tmp.h5', h5group='/', newton_solver_prm=None, coupling='implicit'):
+              h5file='tmp.h5', h5group='/', newton_solver_prm=None, coupling='implicit'):
     if idx_meas is None:
         idx_meas = np.array([])
 
@@ -343,7 +343,7 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
 
     return (u1, v1, a1), (q1, p1), step_info
 
-def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
+def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -393,7 +393,7 @@ def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     nit = 0
     abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
     abs_err0, abs_err, rel_err = res0.norm('l2'), np.inf, np.inf
-    while abs_err > abs_tol and rel_err > rel_tol:
+    while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
         model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=u1, qp1=(q1, p1))
         dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
                   solver_parameters={"newton_solver": newton_solver_prm})

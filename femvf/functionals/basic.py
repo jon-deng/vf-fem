@@ -130,6 +130,11 @@ class PeriodicError(Functional):
     def eval_dp(self, f):
         return None
 
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        dq[:], dp[:] = 0, 0
+        return dq, dp
+
 class FinalDisplacementNorm(Functional):
     r"""
     Return the l2 norm of displacement at the final time
@@ -435,6 +440,10 @@ class KVDampingWork(Functional):
             dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
 
         return {'eta': dwork_deta}
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        return dq, dp
 
 # TODO: Pretty sure this one below does not work
 class RayleighDampingWork(Functional):

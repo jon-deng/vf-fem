@@ -636,11 +636,9 @@ class TestParameterizationGradient(TaylorTest):
         y = xy[:, 1]
 
         t_start, t_final = 0.0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
 
         ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-15)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
 
         constants = {
             'default_solid_props': solid_props,
@@ -649,13 +647,13 @@ class TestParameterizationGradient(TaylorTest):
             'period': t_final-t_start}
         p = parameterization.FixedPeriodKelvinVoigt(model, constants)
         p['elastic_moduli'][:] = solid_props['emod']
-        p['u0'][:, 1] = -1e-1 * (y-y.min()) / (y.max()-y.min())
+        # p['u0'][:, 1] = -1e-1 * (y-y.min()) / (y.max()-y.min())
         # p['v0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e1
 
         dp = p.copy()
         dp['elastic_moduli'][:] = 1.0e3
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
-        dp['u0'][:, 0] = -(y-y.min()) / (y.max()-y.min())*1e-4
+        # dp['u0'][:, 0] = -(y-y.min()) / (y.max()-y.min())*1e-2
         # dp['u0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e-4
 
         print(f"Computing {len(hs)} finite difference points")
@@ -675,9 +673,6 @@ class TestParameterizationGradient(TaylorTest):
         self.parameter = 'dp'
 
         self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
 
         self.save_path = save_path
 
@@ -733,11 +728,12 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
         p_n.vector[:] = p.vector + h*dp.vector
 
         uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
+        breakpoint()
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()
         info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
-                                 coupling=coupling, h5file=filepath, h5group=f'{n}')
+                         coupling=coupling, h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
         print(f"Run duration {runtime_end-runtime_start} s")
@@ -842,9 +838,9 @@ if __name__ == '__main__':
     # test.setUp()
     # test.test_adjoint()
 
-    test = Testu0Gradient()
-    test.setUp()
-    test.test_adjoint()
+    # test = Testu0Gradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = Testv0Gradient()
     # test.setUp()
@@ -858,9 +854,9 @@ if __name__ == '__main__':
     # test.setUp()
     # test.test_adjoint()
 
-    # test = TestParameterizationGradient()
-    # test.setUp()
-    # test.test_adjoint()
+    test = TestParameterizationGradient()
+    test.setUp()
+    test.test_adjoint()
 
     # test = Test2ndOrderDifferentiability()
     # test.setUp()
