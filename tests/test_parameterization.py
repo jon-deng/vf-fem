@@ -15,7 +15,7 @@ import dolfin as dfn
 
 sys.path.append('../')
 from femvf import meshutils, statefile as sf
-from femvf.forward import forward
+from femvf.forward import integrate
 from femvf.adjoint import adjoint
 from femvf.model import ForwardModel
 from femvf.solids import Rayleigh, KelvinVoigt

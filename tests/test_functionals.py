@@ -16,7 +16,7 @@ import dolfin as dfn
 
 sys.path.append('../')
 from femvf import statefile as sf, meshutils
-from femvf.forward import forward
+from femvf.forward import integrate
 from femvf.fluids import Bernoulli
 from femvf.solids import KelvinVoigt, Rayleigh
 from femvf.model import ForwardModel, load_fsi_model
@@ -50,13 +50,12 @@ class TestFunctionals(unittest.TestCase):
 
         t_start = 0.0
         t_final = 0.2
-        # tmeas = np.linspace(t_start, t_final, round((t_final-t_start)/dt_max)+1)
 
         # Set a tmeas for FFT
         tmeas = np.linspace(t_start, t_final, 512)
 
         # Set parameters for the simulation
-        timing_props = {'t0': t0, 'tmeas': tmeas, 'dt_max': dt_max}
+        timing_props = tmeas
         solid_props = model.solid.get_properties()
         fluid_props = model.fluid.get_properties()
 
@@ -93,8 +92,8 @@ class TestFunctionals(unittest.TestCase):
                 os.remove(h5file)
             print("Running forward model to generate data.")
             adaptive_step_prm = {'abs_tol': None}
-            info = forward(model, (0, 0, 0), solid_props, fluid_props, timing_props,
-                           h5file=h5file, adaptive_step_prm=adaptive_step_prm)
+            info = integrate(model, (0, 0, 0), solid_props, fluid_props, timing_props,
+                                     h5file=h5file, adaptive_step_prm=adaptive_step_prm)
 
         self.h5file = h5file
         self.model = model

@@ -14,7 +14,7 @@ import dolfin as dfn
 import h5py
 
 sys.path.append('../')
-from femvf.forward import forward, integrate_forward
+from femvf.forward import integrate
 from femvf.model import ForwardModel, load_fsi_model
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
@@ -79,13 +79,13 @@ class TestForward(unittest.TestCase):
         print("Running forward model")
         # adaptive_step_prm = {'abs_tol': None}
         # runtime_start = perf_counter()
-        # info = forward(model, (u0, 0, 0), solid_props, fluid_props, timing_props,
+        # info = integrate(model, (u0, 0, 0), solid_props, fluid_props, timing_props,
         #                h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
         #                show_figure=False)
         # runtime_end = perf_counter()
 
         runtime_start = perf_counter()
-        info = integrate_forward(model, (u0, 0, 0), solid_props, fluid_props, times,
+        info = integrate(model, (u0, 0, 0), solid_props, fluid_props, times,
                                  h5file=save_path, h5group='/')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

@@ -20,8 +20,7 @@ from .misc import get_dynamic_fluid_props
 DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-10}
 FIXEDPOINT_SOLVER_PRM = {'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-11}
 
-# TODO: Make sure you change this to an adaptive time step integrator and stop using it when calculating gradients
-def forward(model, uva, solid_props, fluid_props, timing_props,
+def integrate_adaptive(model, uva, solid_props, fluid_props, timing_props,
             h5file='tmp.h5', h5group='/',
             adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
     """
@@ -187,16 +186,16 @@ def forward(model, uva, solid_props, fluid_props, timing_props,
 
     return info
 
-def integrate_forward(model, uva, solid_props, fluid_props, times, idx_meas=None,
+def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
                       h5file='tmp.h5', h5group='/', newton_solver_prm=None, coupling='implicit'):
     if idx_meas is None:
         idx_meas = np.array([])
 
     increment_forward = None
     if coupling == 'implicit':
-        increment_forward = implicit_increment_forward
+        increment_forward = implicit_increment
     elif coupling == 'explicit':
-        increment_forward = explicit_increment_forward
+        increment_forward = explicit_increment
     else:
         raise ValueError("`coupling` must be one of 'explicit' of 'implicit'")
 
@@ -287,7 +286,7 @@ def integrate_forward(model, uva, solid_props, fluid_props, times, idx_meas=None
 
     return info
 
-def explicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
+def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -344,7 +343,7 @@ def explicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
 
     return (u1, v1, a1), (q1, p1), step_info
 
-def implicit_increment_forward(model, uva0, qp0, dt, newton_solver_prm=None):
+def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -466,7 +465,7 @@ def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1
     refine = True
     while refine:
         nrefine += 1
-        uva1, qp1, fluid_info = explicit_increment_forward(model, uva0, qp0, dt)
+        uva1, qp1, fluid_info = explicit_increment(model, uva0, qp0, dt)
         info['fluid_info'] = fluid_info
 
         err = newmark_error_estimate(uva1[2], uva0[2], dt, beta=model.forms['coeff.time.beta'].values()[0])

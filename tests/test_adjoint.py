@@ -28,7 +28,7 @@ import dolfin as dfn
 
 sys.path.append('../')
 from femvf import meshutils, statefile as sf, linalg
-from femvf.forward import forward, integrate_forward, implicit_increment_forward
+from femvf.forward import integrate, implicit_increment
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
@@ -707,7 +707,7 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
         # timing_props_n = {'t0': times_n[0], 'tmeas': times_n, 'dt_max': np.inf}
 
         runtime_start = perf_counter()
-        info = integrate_forward(model, uva_n, solid_props_n, fluid_props_n, times_n,
+        info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
                                  coupling=coupling, h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
@@ -736,7 +736,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()
-        info = integrate_forward(model, uva_n, solid_props_n, fluid_props_n, times_n,
+        info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
                                  coupling=coupling, h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
@@ -778,7 +778,7 @@ class TestResidualJacobian(unittest.TestCase):
         dp1 = np.ones(qp0[1].size)*1e-4
 
         # Find the state at 1 so you can linearize about this point
-        uva1, qp1, _ = implicit_increment_forward(model, uva0, qp0, dt)
+        uva1, qp1, _ = implicit_increment(model, uva0, qp0, dt)
 
         # Set up the block matrix dFup_dup_adj and dFup_dup
         model.set_iter_params(uva0=uva0, dt=dt, u1=uva1[0], qp1=qp1)
