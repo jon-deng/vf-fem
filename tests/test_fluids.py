@@ -134,7 +134,7 @@ class TestBernoulli(CommonSetup):
         du[:] = np.random.rand(du.size)*1e-5
 
         # Calculate pressure sensitivity using the `Fluid` function
-        x0 = (surface_coordinates, 0, 0)
+        x0 = (surface_coordinates, 0)
         _, dp_du = fluid.flow_sensitivity(x0)
 
         # Calculated the predicted change in pressure

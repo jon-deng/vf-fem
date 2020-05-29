@@ -357,7 +357,7 @@ class Rayleigh(Solid):
 
         inertia = inertia_2form(a1_nmk, vector_test, rho)
 
-        stiffness = stiffness_2form(vector_trial, vector_test, emod, nu)
+        stiffness = stiffness_2form(u1, vector_test, emod, nu)
 
         damping = damping_2form(v1_nmk, vector_test)
 
@@ -569,7 +569,7 @@ class KelvinVoigt(Solid):
             return kv_damping
 
         inertia = inertia_2form(a1_nmk, vector_test, rho)
-        stiffness = stiffness_2form(vector_trial, vector_test, emod, nu)
+        stiffness = stiffness_2form(u1, vector_test, emod, nu)
         kv_damping = damping_2form(v1_nmk, vector_test)
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
@@ -602,6 +602,7 @@ class KelvinVoigt(Solid):
         f1_linear = inertia + stiffness + kv_damping
         f1_nonlin = -traction - penalty
         f1 = f1_linear + f1_nonlin
+        breakpoint()
 
         df1_du1_linear = ufl.derivative(f1_linear, u1, vector_trial)
         df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)
@@ -613,11 +614,8 @@ class KelvinVoigt(Solid):
                                   facet_function, facet_labels['fixed'])
 
         ## Adjoint forms
-        # Note: For an externally calculated pressure, you have to correct the derivative based on
-        # the sensitivity of pressure loading in `f1` to either `u0` and/or `u1` depending on if
-        # it's strongly coupled.
         df1_du0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, u0, vector_trial))
-        df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(f1_nonlin, u0, vector_trial))
+        df1_du0_adj_nonlin = 0
         df1_du0_adj = df1_du0_adj_linear + df1_du0_adj_nonlin
 
         df1_dv0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, v0, vector_trial))

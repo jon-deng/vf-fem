@@ -412,8 +412,43 @@ class Bernoulli(QuasiSteady1DFluid):
         'alpha': -3000,
         'k': 50,
         'sigma': 0.002}
+    def solve_fin(self):
+        """
+        Return the final flow state
+        """
+        return self.fluid_pressure(self.get_ini_surf_state(), self.fluid_props)
 
-    def fluid_pressure(self, surface_state):
+    def solve_ini(self):
+        """
+        Return the initial flow state
+        """
+        return self.fluid_pressure(self.get_fin_surf_state(), self.fluid_props)
+
+    def solve_fin_sensitivity(self):
+        """
+        Return the final flow state
+        """
+        xy = self.u1surf.copy()
+        dxy_dt = self.v1surf
+        xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
+        xy[1::2] = self.u1surf[1::2] + self.y_surface
+
+        surf_state = (xy, dxy_dt)
+        return self.flow_sensitivity(surf_state, self.fluid_props)
+
+    def solve_ini_sensitivity(self):
+        """
+        Return the initial flow state
+        """
+        xy = self.u0surf.copy()
+        dxy_dt = self.v0surf
+        xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
+        xy[1::2] = self.u0surf[1::2] + self.y_surface
+
+        surf_state = (xy, dxy_dt)
+        return self.fluid_pressure(surf_state, self.fluid_props)
+
+    def fluid_pressure(self, surface_state, fluid_props):
         """
         Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
@@ -433,7 +468,6 @@ class Bernoulli(QuasiSteady1DFluid):
         xy_min, xy_sep: (2,) np.ndarray
             The coordinates of the vertices at minimum and separation areas
         """
-        fluid_props = self.properties
         y_midline = fluid_props['y_midline']
         p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
         rho = fluid_props['rho']
@@ -485,7 +519,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'pressure': p}
         return flow_rate, p, info
 
-    def flow_sensitivity(self, surface_state):
+    def flow_sensitivity(self, surface_state, fluid_props):
         """
         Return the sensitivities of pressure and flow rate to the surface state.
 
@@ -496,7 +530,6 @@ class Bernoulli(QuasiSteady1DFluid):
         fluid_props : properties.FluidProperties
             A dictionary of fluid property keyword arguments.
         """
-        fluid_props = self.properties
         assert surface_state[0].size%2 == 0
 
         y_midline = fluid_props['y_midline']
@@ -684,6 +717,24 @@ class Bernoulli(QuasiSteady1DFluid):
         area = 2 * (self.properties['y_midline'] - y)
         a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
         return a_min
+
+    def get_ini_surf_state(self):
+        xy = self.u0surf.copy()
+        dxy_dt = self.v0surf
+        xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
+        xy[1::2] = self.u0surf[1::2] + self.y_surface
+
+        surf_state = (xy, dxy_dt)
+        return surf_state
+
+    def get_fin_surf_state(self):
+        xy = self.u1surf.copy()
+        dxy_dt = self.v1surf
+        xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
+        xy[1::2] = self.u1surf[1::2] + self.y_surface
+
+        surf_state = (xy, dxy_dt)
+        return surf_state
 
     def get_state_vecs(self):
         return np.zeros((1,)), np.zeros(self.x_vertices.size)

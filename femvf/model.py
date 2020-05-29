@@ -273,6 +273,9 @@ class ForwardModel:
 
         return dq_du, dp_du
 
+    def get_flow_sensitivity_(self):
+        return self.fluid.solve_fin_sensitivity()
+
     def get_flow_sensitivity_solid_ord(self, adjoint=False):
         """
         Updates pressure sensitivity using a bernoulli flow model.
@@ -296,7 +299,6 @@ class ForwardModel:
 
         return dq_du, dp_du
 
-    # @profile
     def assem_f1(self, u1=None):
         """
         Return the residual vector
@@ -528,7 +530,8 @@ class ForwardModel:
             self.set_solid_props(solid_props)
 
     # @profile
-    def set_iter_params(self, uva0=None, qp0=None, dt=None, uva1=None, qp1=None, solid_props=None, fluid_props=None):
+    def set_iter_params(self, uva0=None, qp0=None, dt=None, uva1=None, qp1=None,
+                        solid_props=None, fluid_props=None):
         """
         Sets all parameter values needed to integrate the model over a time step.
 
