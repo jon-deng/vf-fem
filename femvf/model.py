@@ -124,7 +124,7 @@ class ForwardModel:
     def forms(self):
         return self.solid.forms
 
-    # solid/fluid interfacing functions
+    # Solid / fluid interfacing functions
     def get_fsi_scalar_dofs(self):
         """
         Return dofs of the FSI interface on the solid and fluid
@@ -150,6 +150,34 @@ class ForwardModel:
         vdof_fluid = np.arange(vdof_solid.size)
 
         return vdof_solid, vdof_fluid
+
+    def map_fsi_scalar_from_solid_to_fluid(self, solid_scalar):
+        sdof_fluid, sdof_solid = self.get_fsi_scalar_dofs()
+
+        fluid_scalar = self.fluid.get_surf_scalar()
+        fluid_scalar[sdof_fluid] = solid_scalar[sdof_solid]
+        return fluid_scalar
+
+    def map_fsi_vector_from_solid_to_fluid(self, solid_vector):
+        vdof_fluid, vdof_solid = self.get_fsi_vector_dofs()
+
+        fluid_vector = self.fluid.get_surf_vector()
+        fluid_vector[vdof_fluid] = solid_vector[vdof_solid]
+        return fluid_vector
+
+    def map_fsi_scalar_from_fluid_to_solid(self, fluid_scalar):
+        sdof_fluid, sdof_solid = self.get_fsi_scalar_dofs()
+
+        solid_scalar = dfn.Function(self.solid.scalar_fspace).vector()
+        solid_scalar[sdof_solid] = fluid_scalar[sdof_fluid]
+        return solid_scalar
+
+    def map_fsi_vector_from_fluid_to_solid(self, fluid_vector):
+        vdof_fluid, vdof_solid = self.get_fsi_vector_dofs()
+
+        solid_vector = dfn.Function(self.solid.vector_fspace).vector()
+        solid_vector[vdof_solid] = fluid_vector[vdof_fluid]
+        return solid_vector
 
     # Core solver functions
     def get_ref_config(self):
@@ -179,7 +207,7 @@ class ForwardModel:
         displacement = self.solid.u0.vector()[self.solid.vert_to_vdof].reshape(-1, 2)
         return self.solid.mesh.coordinates() + displacement
 
-    def get_surface_state(self):
+    def get_surf_state(self):
         """
         Returns the state (u, v, a) of surface vertices of the model.
 
@@ -212,7 +240,7 @@ class ForwardModel:
             A dictionary of fluid properties for the 1D bernoulli fluids model
         """
         # Update the pressure loading based on the deformed surface
-        x_surface = self.get_surface_state()
+        x_surface = self.get_surf_state()
 
         # Check that the surface doesn't cross over the midline
         if np.max(x_surface[0][..., 1]) > self.fluid.properties['y_midline']:
@@ -221,18 +249,6 @@ class ForwardModel:
         q, pressure, fluid_info = self.fluid.fluid_pressure(x_surface)
 
         return q, pressure, fluid_info
-
-    def set_pressure(self, pressure):
-        """
-        Set surface pressures
-
-        Parameters
-        ----------
-        pressure : array_like
-            An array of pressure values in surface vertex/fluid order
-        """
-        pressure_solidord = self.pressure_fluidord_to_solidord(pressure)
-        self.forms['coeff.fsi.pressure'].vector()[:] = pressure_solidord
 
     def get_flow_sensitivity(self):
         """
@@ -251,7 +267,7 @@ class ForwardModel:
             Sensitivity of the flow rate w.r.t. the initial displacement.
         """
         # Calculate sensitivities of fluid quantities based on the deformed surface
-        x_surface = self.get_surface_state()
+        x_surface = self.get_surf_state()
 
         dq_du, dp_du = self.fluid.get_flow_sensitivity(x_surface)
 
@@ -274,33 +290,11 @@ class ForwardModel:
             Sensitivity of the flow rate w.r.t. the initial displacement.
         """
         # Calculate sensitivities of fluid quantities based on the deformed surface
-        x_surface = self.get_surface_state()
+        x_surface = self.get_surf_state()
 
         dq_du, dp_du = self.fluid.get_flow_sensitivity_solid(self, x_surface, adjoint=adjoint)
 
         return dq_du, dp_du
-
-    def pressure_fluidord_to_solidord(self, pressure):
-        """
-        Converts a pressure vector in surface vert. order to solid DOF order
-
-        Parameters
-        ----------
-        pressure : array_like
-        model : ufl.Coefficient
-            The coefficient representing the pressure
-
-        Returns
-        -------
-        xy_min, xy_sep :
-            Locations of the minimum and separation areas, as well as surface pressures.
-        """
-        pressure_solid = dfn.Function(self.solid.scalar_fspace).vector()
-
-        surface_verts = self.surface_vertices
-        pressure_solid[self.solid.vert_to_sdof[surface_verts]] = pressure
-
-        return pressure_solid
 
     # @profile
     def assem_f1(self, u1=None):
@@ -373,7 +367,7 @@ class ForwardModel:
         """
         Return glottal width
         """
-        x_surface = self.get_surface_state()
+        x_surface = self.get_surf_state()
 
         return self.fluid.get_glottal_width(x_surface)
 
@@ -381,7 +375,7 @@ class ForwardModel:
         """
         Return glottal width
         """
-        x_surface = self.get_surface_state()
+        x_surface = self.get_surf_state()
 
         return self.fluid_props['y_midline'] - np.max(x_surface[0][..., 1])
 
@@ -389,7 +383,7 @@ class ForwardModel:
         """
         Return the smallest distance to the collision plane
         """
-        u_surface = self.get_surface_state()[0]
+        u_surface = self.get_surf_state()[0]
 
         return self.solid.forms['coeff.prop.y_collision'].values()[0] - np.max(u_surface[..., 1])
 
@@ -397,7 +391,7 @@ class ForwardModel:
         """
         Return the maximum y-coordinate of the reference configuration
         """
-        x_surface = self.get_surface_state()
+        x_surface = self.get_surf_state()
 
         return np.max(x_surface[0][..., 1])
 
@@ -406,12 +400,12 @@ class ForwardModel:
         Return vertex numbers of nodes in collision.
         """
         # import ipdb; ipdb.set_trace()
-        u_surface = self.get_surface_state()[0]
+        u_surface = self.get_surf_state()[0]
         verts = self.surface_vertices[u_surface[..., 1] > self.y_collision.values()[0]]
         return verts
 
     # Methods for setting model parameters
-    def set_ini_state(self, u0, v0, a0):
+    def set_ini_solid_state(self, u0, v0, a0):
         """
         Sets the state variables u, v, and a at the start of the step.
 
@@ -421,31 +415,36 @@ class ForwardModel:
         """
         self.solid.set_ini_state(u0, v0, a0)
 
-    def set_fin_state(self, u1):
+        uv0_fluid = [self.map_fsi_vector_from_solid_to_fluid(y) for y in (u0, v0)]
+        self.fluid.set_ini_surf_state(*uv0_fluid)
+
+    def set_fin_solid_state(self, u1, v1, a1):
         """
         Sets the displacement at the end of the time step.
-
-        Named `set_final_state` so that it pairs up with `set_initial_state`,  even though there is
-        only an input `u`, instead of `u`, `v` and `a`.
 
         This could be an initial guess in the case of non-linear governing equations, or a solved
         state so that the non-linear form can be linearized for the given state.
 
         Parameters
         ----------
-        u1 : array_like
+        uva1 : tuple of array_like
         """
-        self.solid.set_fin_state(u1)
+        self.solid.set_fin_state(u1, v1, a1)
+
+        uv1_fluid = [self.map_fsi_vector_from_solid_to_fluid(y) for y in (u1, v1)]
+        self.fluid.set_ini_surf_state(*uv1_fluid)
 
     def set_ini_fluid_state(self, q0, p0):
         self.fluid.set_ini_state(q0, p0)
-        # self.set_pressure(p0)
+
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(p0)
+        self.solid.set_ini_surf_pressure(p0_solid)
 
     def set_fin_fluid_state(self, q1, p1):
-        # Not needed for steady Bernoulli model, but keep it here for consistency and maybe future
-        # use
         self.fluid.set_fin_state(q1, p1)
-        self.set_pressure(p1)
+
+        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(p1)
+        self.solid.set_ini_surf_pressure(p1_solid)
 
     def set_time_step(self, dt):
         """
@@ -456,6 +455,7 @@ class ForwardModel:
         dt : float
         """
         self.solid.set_time_step(dt)
+        self.fluid.set_time_step(dt)
 
     def set_solid_props(self, solid_props):
         """
@@ -480,19 +480,20 @@ class ForwardModel:
         self.fluid.set_properties(fluid_props)
 
     # @profile
-    def set_params(self, uva0=None, qp0=None, solid_props=None, fluid_props=None):
+    def set_ini_params(self, uva0=None, qp0=None, solid_props=None, fluid_props=None):
         """
-        Set all parameters needed to integrate the model.
+        Sets all properties at the initial time.
 
         Parameters
         ----------
-        uva0 : array_like
+        uva0 : tuple of array_like
+        qp0 : tuple of array_like
         dt : float
         fluid_props : dict
         solid_props : dict
         """
         if uva0 is not None:
-            self.set_ini_state(*uva0)
+            self.set_ini_solid_state(*uva0)
 
         if qp0 is not None:
             self.set_ini_fluid_state(*qp0)
@@ -503,33 +504,54 @@ class ForwardModel:
         if solid_props is not None:
             self.set_solid_props(solid_props)
 
-    # @profile
-    def set_iter_params(self, uva0=None, qp0=None, dt=None, u1=None, qp1=None, solid_props=None, fluid_props=None):
+    def set_fin_params(self, uva1=None, qp0=None, solid_props=None, fluid_props=None):
         """
-        Set parameter values needed to integrate the model over a time step.
-
-        All parameter values are optional as some may remain constant. In this case, the current
-        state of the parameter is simply unchanged.
+        Sets all properties at the final time.
 
         Parameters
         ----------
-        uva0 : tuple of dfn.GenericVector
+        uva1 : tuple of array_like
+        qp1 : tuple of array_like
+        fluid_props : dict
+        solid_props : dict
+        """
+        if uva1 is not None:
+            self.set_fin_solid_state(*uva1)
+
+        if qp1 is not None:
+            self.set_ini_fluid_state(*qp1)
+
+        if fluid_props is not None:
+            self.set_fluid_props(fluid_props)
+
+        if solid_props is not None:
+            self.set_solid_props(solid_props)
+
+    # @profile
+    def set_iter_params(self, uva0=None, qp0=None, dt=None, uva1=None, qp1=None, solid_props=None, fluid_props=None):
+        """
+        Sets all parameter values needed to integrate the model over a time step.
+
+        The parameter specified at the final time (index 1) are initial guesses for the solution.
+        One can then use a Newton method to iteratively solve for the actual final states.
+
+        Unspecified parameters will have unchanged values.
+
+        Parameters
+        ----------
+        uva0, uva1 : tuple of array_like
+            Initial and final solid states
+        qp0, qp1 : tuple of array_like
+            Initial and final fluid states
         dt : float
-        u1 : dfn.GenericVector
         fluid_props : FluidProperties
         solid_props : SolidProperties
-        u1 : dfn.GenericVector
         """
-        self.set_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
+        self.set_ini_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
+        self.set_fin_params(uva1=uva1, qp1=qp1)
 
         if dt is not None:
             self.set_time_step(dt)
-
-        if u1 is not None:
-            self.set_fin_state(u1)
-
-        if qp1 is not None:
-            self.set_fin_fluid_state(*qp1)
 
     def set_params_fromfile(self, statefile, n, update_props=True):
         """
@@ -556,7 +578,7 @@ class ForwardModel:
         qp0 = statefile.get_fluid_state(n)
 
         # Assign the values to the model
-        self.set_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
+        self.set_ini_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
         return {'uva0': uva0, 'qp0': qp0, 'solid_props': solid_props, 'fluid_props': fluid_props}
 
     def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=True):
@@ -583,17 +605,20 @@ class ForwardModel:
 
         uva0 = statefile.get_state(n-1)
         qp0 = statefile.get_fluid_state(n-1)
-        qp1 = statefile.get_fluid_state(n)
-        u1 = None
+
+        uva1 = None
+        qp1 = None
         if set_final_state:
-            u1 = statefile.get_u(n)
+            uva1 = statefile.get_state(n)
+            qp1 = statefile.get_fluid_state(n)
 
         dt = statefile.get_time(n) - statefile.get_time(n-1)
 
         # Assign the values to the model
-        self.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, u1=u1, qp1=qp1,
+        self.set_iter_params(uva0=uva0, qp0=qp0, uva1=uva1, qp1=qp1, dt=dt,
                              solid_props=solid_props, fluid_props=fluid_props)
-        return {'uva0': uva0, 'qp0': qp0, 'dt': dt, 'solid_props': solid_props, 'fluid_props': fluid_props, 'u1': u1}
+        return {'uva0': uva0, 'uva1': uva1, 'qp0': qp0, 'qp1': qp1, 'dt': dt,
+                'solid_props': solid_props, 'fluid_props': fluid_props, }
 
 class CachedBiFormAssembler:
     """

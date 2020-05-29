@@ -179,10 +179,10 @@ class Solid:
         self.forms['coeff.state.v1'].vector()[:] = v1
         self.forms['coeff.state.a1'].vector()[:] = a1
 
-    def set_ini_pressure(self, p0):
+    def set_ini_surf_pressure(self, p0):
         self.forms['coeff.fsi.p0'].vector()[:] = p0
 
-    def set_fin_pressure(self, p1):
+    def set_fin_surf_pressure(self, p1):
         self.forms['coeff.fsi.p1'].vector()[:] = p1
 
     def set_time_step(self, dt):
@@ -230,8 +230,8 @@ class Solid:
         self.set_ini_state(*uva0)
         self.set_fin_state(*uva1)
 
-        self.set_ini_pressure(p0)
-        self.set_fin_pressure(p1)
+        self.set_ini_surf_pressure(p0)
+        self.set_fin_surf_pressure(p1)
 
         self.set_properties(props)
         self.set_time_step(dt)

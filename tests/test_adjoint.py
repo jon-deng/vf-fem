@@ -757,7 +757,7 @@ class TestResidualJacobian(unittest.TestCase):
         model.set_solid_props(sp)
         model.set_fluid_props(fp)
         uva0 = tuple([dfn.Function(model.solid.vector_fspace).vector() for i in range(3)])
-        model.set_ini_state(*uva0)
+        model.set_ini_solid_state(*uva0)
         q0, p0, _ = model.get_pressure()
         qp0 = (q0, p0)
         dt = 1e-3
@@ -777,7 +777,7 @@ class TestResidualJacobian(unittest.TestCase):
         uva1, qp1, _ = implicit_increment(model, uva0, qp0, dt)
 
         # Set up the block matrix dFup_dup_adj and dFup_dup
-        model.set_iter_params(uva0=uva0, dt=dt, u1=uva1[0], qp1=qp1)
+        model.set_iter_params(uva0=uva0, dt=dt, uva1=uva1, qp1=qp1)
         dfu_du_adj = model.assem_df1_du1_adj()
         model.solid.bc_base.apply(dfu_du_adj)
         dfu_du_adj = dfn.as_backend_type(dfu_du_adj).mat()
@@ -805,19 +805,19 @@ class TestResidualJacobian(unittest.TestCase):
         model.solid.bc_base.apply(dres_u)
 
         # Calculate residuals at up1
-        model.set_iter_params(uva0=uva0, u1=uva1[0], qp1=qp1)
+        model.set_iter_params(uva0=uva0, uva1=uva1[0], qp1=qp1)
         res_u0 = dfn.assemble(model.solid.f1)
         model.solid.bc_base.apply(res_u0)
 
-        model.set_ini_state(uva1[0], 0, 0)
+        model.set_ini_solid_state(uva1[0], 0, 0)
         res_p0 = qp1[1] - model.get_pressure()[1]
 
         # Calculate residuals at up1 + dup1
-        model.set_iter_params(uva0=uva0, u1=uva1[0]+du1, qp1=(qp1[0], qp1[1]+dp1))
+        model.set_iter_params(uva0=uva0, uva1=uva1[0]+du1, qp1=(qp1[0], qp1[1]+dp1))
         res_u1 = dfn.assemble(model.solid.f1)
         model.solid.bc_base.apply(res_u1)
 
-        model.set_ini_state(uva1[0]+du1, 0, 0)
+        model.set_ini_solid_state(uva1[0]+du1, 0, 0)
         res_p1 = qp1[1]+dp1 - model.get_pressure()[1]
 
         # Calculate the actual residual change

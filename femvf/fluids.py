@@ -313,6 +313,11 @@ class QuasiSteady1DFluid:
         self.u1surf[:] = u1
         self.v1surf[:] = v1
 
+    def set_time_step(self, dt):
+        # This is a quasi-steady fluid so time doesn't matter. I put this here for consistency if
+        # you were to use a unsteady fluid.
+        pass
+
     def set_properties(self, props):
         for key in props:
             if self.properties[key].shape == ():
@@ -345,7 +350,7 @@ class QuasiSteady1DFluid:
         return 1.0
 
     def get_dfp1_du1(self, u_order='fluid'):
-        return -self.flow_sensitivity
+        return -1*self.flow_sensitivity
 
     # def get_dfp1_du0(self):
 
@@ -359,6 +364,12 @@ class QuasiSteady1DFluid:
 
     def get_state_vecs(self):
         raise NotImplementedError("Fluid models have to implement this")
+
+    def get_fsi_vector(self):
+        raise NotImplementedError()
+
+    def get_fsi_scalar(self):
+        raise NotImplementedError()
 
 class Bernoulli(QuasiSteady1DFluid):
     """
@@ -676,6 +687,12 @@ class Bernoulli(QuasiSteady1DFluid):
 
     def get_state_vecs(self):
         return np.zeros((1,)), np.zeros(self.x_vertices.size)
+
+    def get_surf_vector(self):
+        raise np.zeros(self.x_vertices.shape[0]*2) # This is a hardcoded 2 dimensional thing
+
+    def get_surf_scalar(self):
+        raise np.zeros(self.x_vertices.shape[0])
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
