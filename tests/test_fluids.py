@@ -7,7 +7,7 @@ import unittest
 
 import dolfin as dfn
 
-import pandas as pd
+# import pandas as pd
 import matplotlib.pyplot as plt
 import autograd
 import autograd.numpy as np
@@ -18,8 +18,7 @@ petsc4py.init()
 
 sys.path.append('../')
 from femvf.model import load_fsi_model
-from femvf import fluids, transforms, meshutils
-from femvf.parameters.properties import FluidProperties
+from femvf import fluids
 from femvf.constants import PASCAL_TO_CGS
 
 class CommonSetup(unittest.TestCase):
@@ -78,7 +77,8 @@ class CommonSetup(unittest.TestCase):
         mesh_path = '../meshes/M5-3layers.xml'
 
         self.model = load_fsi_model(mesh_path, None, Fluid=fluids.Bernoulli)
-        self.surface_coordinates = self.model.surface_coordinates
+        self.surface_coordinates = np.stack([self.model.fluid.x_vertices,
+                                             self.model.fluid.y_surface], axis=-1)
 
         self.fluid = self.model.fluid
         self.fluid_properties = self.fluid.get_properties()
@@ -88,10 +88,11 @@ class CommonSetup(unittest.TestCase):
         self.p_sup = 0*PASCAL_TO_CGS
 
 class TestBernoulli(CommonSetup):
-    # @unittest.skip("Validated")
+
     def test_fluid_pressure(self):
         """
-        Tests if bernoulli fluid pressures are calculated correctly
+        Tests if bernoulli fluid pressures are calculated correctly by qualitatively comparing
+        with manually calculated Bernoulli pressures
         """
         fluid = self.fluid
         fluid.set_properties(self.fluid_properties)
@@ -99,7 +100,7 @@ class TestBernoulli(CommonSetup):
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
 
         surf_state = (xy_surf, np.zeros(xy_surf.shape), np.zeros(xy_surf.shape))
-        q_test, p_test, info = fluid.fluid_pressure(surf_state)
+        q_test, p_test, info = fluid.fluid_pressure(surf_state, fluid_props)
 
         area = 2*(fluid_props['y_midline'] - xy_surf[..., 1])
         p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*info['flow_rate']**2*(1/fluid_props['a_sub']**2 - 1/area**2)
@@ -117,8 +118,7 @@ class TestBernoulli(CommonSetup):
 
         plt.show()
 
-    # @unittest.skip("...")
-    def test_flow_sensitivity_fd(self):
+    def test_flow_sensitivity(self):
         """
         Test if derivatives of the flow quantities/residuals are correct using finite differences
         """
@@ -153,7 +153,6 @@ class TestBernoulli(CommonSetup):
         order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
 
         error = dp - dp_true
-        breakpoint()
 
         self.assertTrue((error))
 
@@ -177,9 +176,10 @@ class TestBernoulli(CommonSetup):
 
         # Calculate pressure sensitivity using the `Fluid` function
         x0 = (surface_coordinates, 0, 0)
-        _, dp_du_fluid = fluid.flow_sensitivity(x0)
-        _, dp_du_solid = fluid.get_flow_sensitivity_solid(self.model, x0)
-        _, dp_du_solid_adj = fluid.get_flow_sensitivity_solid(self.model, x0, adjoint=True)
+        _, dp_du_fluid = fluid.flow_sensitivity(x0, self.fluid_properties)
+        _, dp_du_solid = fluid.flow_sensitivity_solid(self.model, x0, self.fluid_properties)
+        _, dp_du_solid_adj = fluid.flow_sensitivity_solid(self.model, x0, self.fluid_properties,
+                                                          adjoint=True)
 
         # Calculated the predicted changes in pressure
         dp_fluid = dp_du_fluid@du_fluid
@@ -194,78 +194,48 @@ class TestBernoulli(CommonSetup):
 
         self.assertTrue(error)
 
-    # @unittest.skip("...")
-    def test_flow_sensitivity(self):
+    def test_get_ini_surf_config(self):
         fluid = self.fluid
-        fluid.set_properties(self.fluid_properties)
+        x_surf = self.surface_coordinates
 
-        surface_coordinates = self.surface_coordinates
+        u0, v0 = fluid.get_surf_vector(), fluid.get_surf_vector()
+        u0[:], v0[:] = np.random.rand(*u0.shape), np.random.rand(*v0.shape)
 
-        ## Calculate pressure sensitivity using the `Fluid` class function
-        x = (surface_coordinates, np.zeros(surface_coordinates.shape), np.zeros(surface_coordinates.shape))
-        _, dp_du_an = fluid.flow_sensitivity(x)
+        # A reference surface config
+        surf_config_ref = (x_surf.reshape(-1) + u0, v0)
 
-        ## Calculate pressure sensitivity with finite differences
-        dp_du_fd = np.zeros((surface_coordinates.shape[0], surface_coordinates.shape[0]*2))
-        dy = np.zeros(surface_coordinates.shape)
-        DY = 1e-7
-        for ii in range(surface_coordinates.shape[0]):
-            dy[...] = 0
-            dy[ii, 1] += DY
-            x = (surface_coordinates+dy, np.zeros(dy.shape), np.zeros(dy.shape))
-            _, pressure, *_ = fluid.fluid_pressure(x)
+        # Surface config calculated by function to test
+        fluid.set_ini_surf_state(u0, v0)
 
-            dp_du_fd[:, 2*ii+1] = np.array(pressure)
+        surf_config = fluid.get_ini_surf_config()
 
-        x = (surface_coordinates, np.zeros(dy.shape), np.zeros(dy.shape))
-        q, pressure, *_ = fluid.fluid_pressure(x)
-        dp_du_fd[:, 1::2] -= pressure[..., None]
+        self.assertTrue(np.all(surf_config_ref[0] == surf_config[0]))
 
-        dp_du_fd /= DY
+    def test_get_fin_surf_config(self):
+        fluid = self.fluid
+        x_surf = self.surface_coordinates
 
-        ## Check if calculated pressure sensitivity compares well with finite differences
-        close = np.isclose(dp_du_fd, dp_du_an, rtol=1e-3, atol=1e-4)
-        self.assertTrue(np.all(close))
+        u1, v1 = fluid.get_surf_vector(), fluid.get_surf_vector()
+        u1[:], v1[:] = np.random.rand(*u1.shape), np.random.rand(*v1.shape)
 
-        err = np.abs(dp_du_fd - dp_du_an)
-        rel_err = err/np.maximum(np.abs(dp_du_fd), 1.0)
-        breakpoint()
+        # A reference surface config
+        surf_config_ref = (x_surf.reshape(-1) + u1, v1)
 
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
-        mappable = ax.matshow(rel_err)
-        fig.colorbar(mappable, ax=ax)
-        ax.set_ylabel("pressure node")
-        ax.set_xlabel("(x, y) node")
-        ax.set_title("")
-        plt.show()
+        # Surface config calculated by function to test
+        fluid.set_ini_surf_state(u1, v1)
 
-        ## Calculate pressure sensitivity with auto-differentiation
-        def fluid_pressure(x):
-            x_ = x.reshape(-1, 2)
-            q, p, _ = fluid.fluid_pressure((x_, np.zeros(x_.shape), np.zeros(x_.shape)))
-            return p
+        surf_config = fluid.get_ini_surf_config()
 
-        dp_du_ad = autograd.jacobian(fluid_pressure, 0)(surface_coordinates.reshape(-1))
+        self.assertTrue(np.all(surf_config_ref[0] == surf_config[0]))
 
-        fig, ax = plt.subplots(1, 1, constrained_layout=True)
-        err = np.abs(dp_du_ad - dp_du_an)
-        rel_err = err/np.maximum(np.abs(dp_du_ad), 1.0)
+    def test_solve_qp1(self):
+        fluid = self.fluid
 
-        mappable = ax.matshow(err)
-        fig.colorbar(mappable, ax=ax)
-        ax.set_ylabel("pressure node")
-        ax.set_xlabel("(x, y) node")
-        plt.show()
+        u1 = fluid.get_surf_vector()
+        u1[:] = 0.1
 
-        self.assertTrue(np.all(close))
-
-    def test_get_flow_sensitivity_solid(self):
-        surface_coordinates = self.surface_coordinates
-        x = (surface_coordinates, np.zeros(surface_coordinates.shape), np.zeros(surface_coordinates.shape))
-
-        _, dp_du = self.fluid.get_flow_sensitivity_solid(self.model, x)
-
-        _, dp_du_t = self.fluid.get_flow_sensitivity_solid(self.model, x, adjoint=True)
+        fluid.set_fin_surf_state(u1, 0.0)
+        qp1 = fluid.solve_qp1()
 
 class TestSmoothApproximations(unittest.TestCase):
     def test_gaussian(self):
@@ -317,6 +287,10 @@ if __name__ == '__main__':
 
     test = TestBernoulli()
     test.setUp()
+
+    test.test_fluid_pressure()
+    test.test_get_ini_surf_config()
+    test.test_get_fin_surf_config()
     # test.test_get_flow_sensitivity_solid()
     # test.test_flow_sensitivity_fd()
-    test.test_flow_sensitivity_solid()
+    # test.test_flow_sensitivity_solid()

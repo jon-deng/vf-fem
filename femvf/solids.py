@@ -7,21 +7,20 @@ TODO: The form definitions have a lot of repeated code. Many of the form operati
 You should think about what forms should be custom made for different solid governing equations
 and what types of forms are always generated the same way, and refactor accordingly.
 """
-from os import path
 
-import numpy as np
+
 
 import dolfin as dfn
 import ufl
-from petsc4py import PETSc as pc
 
-from . import fluids
-from . import constants as const
+
+
+
 from .parameters.properties import SolidProperties
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from .newmark import *
-# from .operators import LinCombOfMats
+
 
 def cauchy_stress(u, emod, nu):
     """
@@ -75,14 +74,14 @@ def stiffness_2form(trial, test, emod, nu):
     return biform_k(trial, test, emod, nu)
 
 def traction_1form(trial, test, pressure, facet_normal, traction_ds):
-        deformation_gradient = ufl.grad(trial) + ufl.Identity(2)
-        deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+    deformation_gradient = ufl.grad(trial) + ufl.Identity(2)
+    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
 
-        fluid_force = -pressure*deformation_cofactor*facet_normal
+    fluid_force = -pressure*deformation_cofactor*facet_normal
 
-        # ds(facet_label['pressure']) should be replaced with traction_ds
-        traction = ufl.dot(fluid_force, test)*traction_ds
-        return traction
+    # ds(facet_label['pressure']) should be replaced with traction_ds
+    traction = ufl.dot(fluid_force, test)*traction_ds
+    return traction
 
 class Solid:
     """
@@ -403,7 +402,8 @@ class Rayleigh(Solid):
 
         ## Adjoint forms
         df1_du0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, u0, vector_trial))
-        df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(f1_nonlin, u0, vector_trial))
+        # df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(f1_nonlin, u0, vector_trial))
+        df1_du0_adj_nonlin = 0
         df1_du0_adj = df1_du0_adj_linear + df1_du0_adj_nonlin
 
         df1_dv0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, v0, vector_trial))
@@ -602,7 +602,6 @@ class KelvinVoigt(Solid):
         f1_linear = inertia + stiffness + kv_damping
         f1_nonlin = -traction - penalty
         f1 = f1_linear + f1_nonlin
-        breakpoint()
 
         df1_du1_linear = ufl.derivative(f1_linear, u1, vector_trial)
         df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)

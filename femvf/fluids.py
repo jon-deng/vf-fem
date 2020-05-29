@@ -2,10 +2,10 @@
 Functionality related to fluids
 """
 
-import numpy as np
-import autograd
-import autograd.numpy as np
 import math
+import numpy as np
+# import autograd
+import autograd.numpy as np
 
 import dolfin as dfn
 from petsc4py import PETSc
@@ -328,6 +328,33 @@ class QuasiSteady1DFluid:
     def get_properties(self):
         return self.properties.copy()
 
+    def get_ini_surf_state(self):
+        xy = self.u0surf.copy()
+        dxy_dt = self.v0surf
+        xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
+        xy[1::2] = self.u0surf[1::2] + self.y_surface
+
+        surf_state = (xy, dxy_dt)
+        return surf_state
+
+    def get_fin_surf_state(self):
+        xy = self.u1surf.copy()
+        dxy_dt = self.v1surf
+        xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
+        xy[1::2] = self.u1surf[1::2] + self.y_surface
+
+        surf_state = (xy, dxy_dt)
+        return surf_state
+
+    def get_state_vecs(self):
+        return np.zeros((1,)), np.zeros(self.x_vertices.size)
+
+    def get_surf_vector(self):
+        return np.zeros(self.x_vertices.shape[0]*2)
+
+    def get_surf_scalar(self):
+        return np.zeros(self.x_vertices.shape[0])
+
     def set_iter_params(self, qp0, uvsurf0, qp1, uvsurf1, fluid_props):
         self.set_ini_state(*qp0)
         self.set_fin_state(*qp1)
@@ -352,24 +379,25 @@ class QuasiSteady1DFluid:
     def get_dfp1_du1(self, u_order='fluid'):
         return -1*self.flow_sensitivity
 
-    # def get_dfp1_du0(self):
-
-    # def get_dfp0_du0(self):
-
-    def fluid_pressure(self):
+    # Methods that subclasses must implement
+    def solve_qp1(self):
         raise NotImplementedError("Fluid models have to implement this")
 
-    def flow_sensitivity(self):
+    def solve_qp0(self):
         raise NotImplementedError("Fluid models have to implement this")
 
-    def get_state_vecs(self):
+    def solve_dqp1_du1(self, adjoint=False):
         raise NotImplementedError("Fluid models have to implement this")
 
-    def get_fsi_vector(self):
-        raise NotImplementedError()
+    def solve_dqp0_du0(self, adjoint=False):
+        raise NotImplementedError("Fluid models have to implement this")
 
-    def get_fsi_scalar(self):
-        raise NotImplementedError()
+    def solve_dqp1_du1_solid(self, adjoint=False):
+        raise NotImplementedError("Fluid models have to implement this")
+
+    def solve_dqp0_du0_solid(self, adjoint=False):
+        raise NotImplementedError("Fluid models have to implement this")
+
 
 class Bernoulli(QuasiSteady1DFluid):
     """
@@ -412,45 +440,52 @@ class Bernoulli(QuasiSteady1DFluid):
         'alpha': -3000,
         'k': 50,
         'sigma': 0.002}
-    def solve_fin(self):
+
+    def solve_qp1(self):
         """
         Return the final flow state
         """
-        return self.fluid_pressure(self.get_ini_surf_state(), self.fluid_props)
+        return self.fluid_pressure(self.get_fin_surf_config(), self.properties)
 
-    def solve_ini(self):
+    def solve_qp0(self):
         """
         Return the initial flow state
         """
-        return self.fluid_pressure(self.get_fin_surf_state(), self.fluid_props)
+        return self.fluid_pressure(self.get_ini_surf_config(), self.properties)
 
-    def solve_fin_sensitivity(self):
+    def solve_dqp1_du1(self, adjoint=False):
         """
         Return the final flow state
         """
-        xy = self.u1surf.copy()
-        dxy_dt = self.v1surf
-        xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
-        xy[1::2] = self.u1surf[1::2] + self.y_surface
+        return self.flow_sensitivity(self.get_fin_surf_config(), self.properties)
 
-        surf_state = (xy, dxy_dt)
-        return self.flow_sensitivity(surf_state, self.fluid_props)
-
-    def solve_ini_sensitivity(self):
+    def solve_dqp0_du0(self, adjoint=False):
         """
-        Return the initial flow state
+        Return the final flow state
         """
-        xy = self.u0surf.copy()
-        dxy_dt = self.v0surf
-        xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
-        xy[1::2] = self.u0surf[1::2] + self.y_surface
+        return self.flow_sensitivity(self.get_ini_surf_config(), self.properties)
 
-        surf_state = (xy, dxy_dt)
-        return self.fluid_pressure(surf_state, self.fluid_props)
+    def solve_dqp1_du1_solid(self, adjoint=False):
+        """
+        Return the final flow state
+        """
+        return self.flow_sensitivity(self.get_fin_surf_config(), self.properties)
+
+    def solve_dqp0_du0_solid(self, adjoint=False):
+        """
+        Return the final flow state
+        """
+        return self.flow_sensitivity(self.get_ini_surf_config(), self.properties)
+
 
     def fluid_pressure(self, surface_state, fluid_props):
         """
         Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
+
+        TODO: I think it would make more sense to treat this as a generic Bernoulli pressure
+        calculator. It could be refactored to not use an self variable, instead it would pass a
+        reference surface mesh, and current surface mesh (x, y coordinates of vertices in increasing
+        streamwise direction).
 
         Parameters
         ----------
@@ -474,7 +509,7 @@ class Bernoulli(QuasiSteady1DFluid):
         a_sub = fluid_props['a_sub']
         alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
 
-        x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+        x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
 
         area = 2 * (y_midline - y)
         dt_area = -2 * (y)
@@ -588,10 +623,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dflow_rate_du, dp_du
 
-    def get_flow_sensitivity(self, surface_state):
-        return self.flow_sensitivity(surface_state)
-
-    def get_flow_sensitivity_solid(self, model, surface_state, adjoint=False):
+    def flow_sensitivity_solid(self, model, surface_state, fluid_props, adjoint=False):
         """
         Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
 
@@ -610,7 +642,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dq_du : PETSc.Vec
             Sensitivity of flow rate with respect to displacement
         """
-        _dq_du, _dp_du = self.flow_sensitivity(surface_state)
+        _dq_du, _dp_du = self.flow_sensitivity(surface_state, fluid_props)
 
         dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
         dp_du.setType('aij')
@@ -661,56 +693,6 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dq_du, dp_du
 
-    def get_flow_sensitivity_solid_old(self, model, surface_state):
-        """
-        Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
-
-        Parameters
-        ----------
-        model
-        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-            States of the surface vertices, ordered following the flow (increasing x coordinate).
-
-        Returns
-        -------
-        dp_du : PETSc.Mat
-            Sensitivity of pressure with respect to displacement
-        dq_du : PETSc.Vec
-            Sensitivity of flow rate with respect to displacement
-        """
-        _dq_du, _dp_du = self.flow_sensitivity(surface_state)
-
-        dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
-        dp_du.setType('aij')
-        dp_du.setSizes([model.solid.vert_to_vdof.size, model.solid.vert_to_vdof.size])
-
-        pressure_vertices = model.surface_vertices
-        nnz = np.zeros(model.solid.vert_to_sdof.size, dtype=np.int32)
-        nnz[model.solid.vert_to_sdof[pressure_vertices]] = pressure_vertices.size*2
-        dp_du.setPreallocationNNZ(nnz)
-
-        rows = model.solid.vert_to_sdof[pressure_vertices]
-        cols = model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices, :].reshape(-1)
-        # ()
-        dp_du.setValues(rows, cols, _dp_du)
-        dp_du.assemblyBegin()
-        dp_du.assemblyEnd()
-
-        # You should be able to create your own vector from scratch too but there are a couple of things
-        # you have to set like local to global mapping that need to be there in order to interface with
-        # a particular fenics setup. I just don't know what it needs to use.
-        # TODO: Figure this out, since it also applies to matrices
-
-        # dq_du = PETSc.Vec().create(PETSc.COMM_SELF).createSeq(vert_to_vdof.size)
-        # dq_du.setValues(vert_to_vdof[surface_verts].reshape(-1), _dq_du)
-        # dq_du.assemblyBegin()
-        # dq_du.assemblyEnd()
-
-        dq_du = dfn.Function(model.solid.vector_fspace).vector()
-        dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].flat] = _dq_du
-
-        return dq_du, dp_du
-
     def get_glottal_width(self, surface_state):
         x, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
@@ -718,7 +700,7 @@ class Bernoulli(QuasiSteady1DFluid):
         a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
         return a_min
 
-    def get_ini_surf_state(self):
+    def get_ini_surf_config(self):
         xy = self.u0surf.copy()
         dxy_dt = self.v0surf
         xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
@@ -727,7 +709,7 @@ class Bernoulli(QuasiSteady1DFluid):
         surf_state = (xy, dxy_dt)
         return surf_state
 
-    def get_fin_surf_state(self):
+    def get_fin_surf_config(self):
         xy = self.u1surf.copy()
         dxy_dt = self.v1surf
         xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
@@ -735,15 +717,6 @@ class Bernoulli(QuasiSteady1DFluid):
 
         surf_state = (xy, dxy_dt)
         return surf_state
-
-    def get_state_vecs(self):
-        return np.zeros((1,)), np.zeros(self.x_vertices.size)
-
-    def get_surf_vector(self):
-        raise np.zeros(self.x_vertices.shape[0]*2) # This is a hardcoded 2 dimensional thing
-
-    def get_surf_scalar(self):
-        raise np.zeros(self.x_vertices.shape[0])
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation

@@ -39,13 +39,11 @@ class TestForward(unittest.TestCase):
         model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
         dt = 5e-5
-        times_meas = [0, 0.01]
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
         p_sub = 500
 
-        timing_props = {'t0': 0, 'tmeas': times_meas, 'dt_max': dt}
         times = np.linspace(0, 0.01, 100)
 
         fluid_props = model.fluid.get_properties()
@@ -86,7 +84,7 @@ class TestForward(unittest.TestCase):
 
         runtime_start = perf_counter()
         info = integrate(model, (u0, 0, 0), solid_props, fluid_props, times,
-                                 h5file=save_path, h5group='/')
+                                 h5file=save_path, h5group='/', coupling='explicit')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
