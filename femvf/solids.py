@@ -163,16 +163,27 @@ class Solid:
         self.forms['coeff.state.v0'].vector()[:] = v0
         self.forms['coeff.state.a0'].vector()[:] = a0
 
-    def set_fin_state(self, u1):
+    def set_fin_state(self, u1, v1, a1):
         """
-        Sets the final state variable, u
+        Sets the final state variables.
 
-        TODO: You might want to make this consistent with set_ini_state
+        Note that the solid forms are in displacement form so only the displacement is needed as an
+        initial guess to solve the solid equations. The state `v1` and `a1` are specified explicitly
+        by the Newmark relations once you solve for `u1`.
+
         Parameters
         ----------
-        u1 : array_like
+        u1, v1, a1 : array_like
         """
         self.forms['coeff.state.u1'].vector()[:] = u1
+        self.forms['coeff.state.v1'].vector()[:] = v1
+        self.forms['coeff.state.a1'].vector()[:] = a1
+
+    def set_ini_pressure(self, p0):
+        self.forms['coeff.fsi.p0'].vector()[:] = p0
+
+    def set_fin_pressure(self, p1):
+        self.forms['coeff.fsi.p1'].vector()[:] = p1
 
     def set_time_step(self, dt):
         """
@@ -205,18 +216,23 @@ class Solid:
             else:
                 coefficient.vector()[:] = props[key]
 
-    def set_iter_params(self, u1, uva0, dt, props):
+    def set_iter_params(self, uva1, uva0, p1, p0, dt, props):
         """
         Sets all coefficient values to solve the model
 
         Parameters
         ----------
-        u1 : array_like
-        uva0 : tuple of array_like
+        uva1, uva0 : tuple of array_like
+        p1, p0 : array_like
+        dt : float
         props : dict_like
         """
         self.set_ini_state(*uva0)
-        self.set_fin_state(u1)
+        self.set_fin_state(*uva1)
+
+        self.set_ini_pressure(p0)
+        self.set_fin_pressure(p1)
+
         self.set_properties(props)
         self.set_time_step(dt)
 
