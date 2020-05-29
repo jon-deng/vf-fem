@@ -324,22 +324,26 @@ class Rayleigh(Solid):
         a0 = dfn.Function(vector_fspace)
 
         u1 = dfn.Function(vector_fspace)
-        v1 = newmark_v(vector_trial, u0, v0, a0, dt, gamma, beta)
-        a1 = newmark_a(vector_trial, u0, v0, a0, dt, gamma, beta)
+        v1 = dfn.Function(vector_fspace)
+        a1 = dfn.Function(vector_fspace)
+
+        v1_nmk = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+        a1_nmk = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
-        pressure = dfn.Function(scalar_fspace)
+        p0 = dfn.Function(scalar_fspace)
+        p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
             return rayleigh_m * biform_m(trial, test, rho) \
-                + rayleigh_k * biform_k(trial, test, emod, nu)
+                   + rayleigh_k * biform_k(trial, test, emod, nu)
 
-        inertia = inertia_2form(a1, vector_test, rho)
+        inertia = inertia_2form(a1_nmk, vector_test, rho)
 
         stiffness = stiffness_2form(vector_trial, vector_test, emod, nu)
 
-        damping = damping_2form(v1, vector_test)
+        damping = damping_2form(v1_nmk, vector_test)
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
@@ -347,7 +351,7 @@ class Rayleigh(Solid):
 
         facet_normal = dfn.FacetNormal(mesh)
         traction_ds = ds(facet_labels['pressure'])
-        traction = traction_1form(u0, vector_test, pressure, facet_normal, traction_ds)
+        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
 
         # Use the penalty method to account for collision
         def penalty_1form(u):
@@ -362,13 +366,13 @@ class Rayleigh(Solid):
 
             # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
             penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) \
-                    * ds(facet_labels['pressure'])
+                      * ds(facet_labels['pressure'])
 
             return penalty
 
         penalty = penalty_1form(u1)
 
-        f1_linear = ufl.action(inertia + stiffness + damping, u1)
+        f1_linear = inertia + stiffness + damping
         f1_nonlin = -traction - penalty
         f1 = f1_linear + f1_nonlin
 
@@ -379,12 +383,9 @@ class Rayleigh(Solid):
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                facet_function, facet_labels['fixed'])
+                                  facet_function, facet_labels['fixed'])
 
         ## Adjoint forms
-        # Note: For an externally calculated pressure, you have to correct the derivative based on
-        # the sensitivity of pressure loading in `f1` to either `u0` and/or `u1` depending on if
-        # it's strongly coupled.
         df1_du0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, u0, vector_trial))
         df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(f1_nonlin, u0, vector_trial))
         df1_du0_adj = df1_du0_adj_linear + df1_du0_adj_nonlin
@@ -402,23 +403,24 @@ class Rayleigh(Solid):
         df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
-        df1_dpressure_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
+        df1_dp1_adj = dfn.adjoint(ufl.derivative(f1, p1, scalar_trial))
         df1_dt = ufl.derivative(f1, dt, scalar_trial)
 
         # Also define an 'f0' form that solves for a0, given u0 and v0
         # This is needed to solve for the first 'a0' given u0, v0 initial states
         f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
-            + stiffness_2form(u0, vector_test, emod, nu) - traction \
+            + stiffness_2form(u0, vector_test, emod, nu) \
+            - traction_1form(u0, vector_test, p0, facet_normal, traction_ds) \
             - penalty_1form(u0)
         df0_du0 = ufl.derivative(f0, u0, vector_trial)
         df0_dv0 = ufl.derivative(f0, v0, vector_trial)
         df0_da0 = ufl.derivative(f0, a0, vector_trial)
-        df0_dpressure = ufl.derivative(f0, pressure, scalar_trial)
+        df0_dp0 = ufl.derivative(f0, p0, scalar_trial)
 
         df0_du0_adj = dfn.adjoint(df0_du0)
         df0_dv0_adj = dfn.adjoint(df0_dv0)
         df0_da0_adj = dfn.adjoint(df0_da0)
-        df0_dpressure_adj = dfn.adjoint(df0_dpressure)
+        df0_dp0_adj = dfn.adjoint(df0_dp0)
 
         forms = {
             'measure.dx': dx,
@@ -442,8 +444,11 @@ class Rayleigh(Solid):
             'coeff.state.v0': v0,
             'coeff.state.a0': a0,
             'coeff.state.u1': u1,
+            'coeff.state.v1': v1,
+            'coeff.state.a1': a1,
 
-            'coeff.fsi.pressure': pressure,
+            'coeff.fsi.p0': p0,
+            'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
             'coeff.prop.nu': nu,
@@ -461,18 +466,18 @@ class Rayleigh(Solid):
             'form.bi.df1_du0_adj': df1_du0_adj,
             'form.bi.df1_dv0_adj': df1_dv0_adj,
             'form.bi.df1_da0_adj': df1_da0_adj,
-            'form.bi.df1_dpressure_adj': df1_dpressure_adj,
+            'form.bi.df1_dp1_adj': df1_dp1_adj,
             'form.bi.df1_demod': df1_demod,
             'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
             'form.bi.df0_da0_adj': df0_da0_adj,
-            'form.bi.df0_dpressure_adj': df0_dpressure_adj,
+            'form.bi.df0_dp0_adj': df0_dp0_adj,
             'form.bi.df0_du0': df0_du0,
             'form.bi.df0_dv0': df0_dv0,
             'form.bi.df0_da0': df0_da0,
-            'form.bi.df0_dpressure': df0_dpressure}
+            'form.bi.df0_dp0': df0_dp0}
         return forms
 
 class KelvinVoigt(Solid):
@@ -519,6 +524,7 @@ class KelvinVoigt(Solid):
         rho = dfn.Constant(1.0)
         nu = dfn.Constant(1.0)
         emod = dfn.Function(scalar_fspace)
+        kv_eta = dfn.Function(scalar_fspace)
 
         emod.vector()[:] = 1.0
 
@@ -531,35 +537,32 @@ class KelvinVoigt(Solid):
         a0 = dfn.Function(vector_fspace)
 
         u1 = dfn.Function(vector_fspace)
-        v1 = newmark_v(vector_trial, u0, v0, a0, dt, gamma, beta)
-        a1 = newmark_a(vector_trial, u0, v0, a0, dt, gamma, beta)
+        v1 = dfn.Function(vector_fspace)
+        a1 = dfn.Function(vector_fspace)
+
+        v1_nmk = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+        a1_nmk = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
-        pressure = dfn.Function(scalar_fspace)
-
-        kv_eta = dfn.Function(scalar_fspace)
+        p0 = dfn.Function(scalar_fspace)
+        p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
             kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * ufl.dx
             return kv_damping
 
-        inertia = inertia_2form(a1, vector_test, rho)
+        inertia = inertia_2form(a1_nmk, vector_test, rho)
         stiffness = stiffness_2form(vector_trial, vector_test, emod, nu)
-        kv_damping = damping_2form(v1, vector_test)
+        kv_damping = damping_2form(v1_nmk, vector_test)
 
-        # Compute the pressure loading Neumann boundary condition on the reference configuration
+        # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        def traction_1form(u):
-            deformation_gradient = ufl.grad(u) + ufl.Identity(2)
-            deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
 
-            fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
-
-            traction = ufl.dot(fluid_force, vector_test)*ds(facet_labels['pressure'])
-            return traction
-
-        traction = traction_1form(u0)
+        facet_normal = dfn.FacetNormal(mesh)
+        traction_ds = ds(facet_labels['pressure'])
+        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
 
         # Use the penalty method to account for collision
         def penalty_1form(u):
@@ -580,7 +583,7 @@ class KelvinVoigt(Solid):
         # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
         penalty = penalty_1form(u1)
 
-        f1_linear = ufl.action(inertia + stiffness + kv_damping, u1)
+        f1_linear = inertia + stiffness + kv_damping
         f1_nonlin = -traction - penalty
         f1 = f1_linear + f1_nonlin
 
@@ -614,21 +617,22 @@ class KelvinVoigt(Solid):
         df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
-        df1_dpressure_adj = dfn.adjoint(ufl.derivative(f1, pressure, scalar_trial))
+        df1_dp1_adj = dfn.adjoint(ufl.derivative(f1, p1, scalar_trial))
         df1_dt = ufl.derivative(f1, dt, scalar_trial)
 
         f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
-            + stiffness_2form(u0, vector_test, emod, nu) - traction_1form(u0) \
-            - penalty_1form(u0)
+             + stiffness_2form(u0, vector_test, emod, nu) \
+             - traction_1form(u0, vector_test, p0, facet_normal, traction_ds) \
+             - penalty_1form(u0)
         df0_du0 = ufl.derivative(f0, u0, vector_trial)
         df0_dv0 = ufl.derivative(f0, v0, vector_trial)
         df0_da0 = ufl.derivative(f0, a0, vector_trial)
-        df0_dpressure = ufl.derivative(f0, pressure, scalar_trial)
+        df0_dp0 = ufl.derivative(f0, p0, scalar_trial)
 
         df0_du0_adj = dfn.adjoint(df0_du0)
         df0_dv0_adj = dfn.adjoint(df0_dv0)
         df0_da0_adj = dfn.adjoint(df0_da0)
-        df0_dpressure_adj = dfn.adjoint(df0_dpressure)
+        df0_dp0_adj = dfn.adjoint(df0_dp0)
 
         forms = {
             'measure.dx': dx,
@@ -651,8 +655,11 @@ class KelvinVoigt(Solid):
             'coeff.state.v0': v0,
             'coeff.state.a0': a0,
             'coeff.state.u1': u1,
+            'coeff.state.v1': v1,
+            'coeff.state.a1': a1,
 
-            'coeff.fsi.pressure': pressure,
+            'coeff.fsi.p0': p0,
+            'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
             'coeff.prop.eta': kv_eta,
@@ -668,16 +675,16 @@ class KelvinVoigt(Solid):
             'form.bi.df1_du0_adj': df1_du0_adj,
             'form.bi.df1_dv0_adj': df1_dv0_adj,
             'form.bi.df1_da0_adj': df1_da0_adj,
-            'form.bi.df1_dpressure_adj': df1_dpressure_adj,
+            'form.bi.df1_dp1_adj': df1_dp1_adj,
             'form.bi.df1_demod': df1_demod,
             'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,
             'form.bi.df0_dv0_adj': df0_dv0_adj,
             'form.bi.df0_da0_adj': df0_da0_adj,
-            'form.bi.df0_dpressure_adj': df0_dpressure_adj,
+            'form.bi.df0_dp0_adj': df0_dp0_adj,
             'form.bi.df0_du0': df0_du0,
             'form.bi.df0_dv0': df0_dv0,
             'form.bi.df0_da0': df0_da0,
-            'form.bi.df0_dpressure': df0_dpressure}
+            'form.bi.df0_dp0': df0_dp0}
         return forms
