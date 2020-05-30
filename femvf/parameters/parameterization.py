@@ -489,14 +489,14 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
 
     q0, p0, _ = model.solve_qp0()
     # dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[1])
-    dpressure_du0 = model.get_flow_sensitivity_solid_ord(adjoint=True)[1]
+    _, dp0_du0 = model.solve_dqp0_du0_solid(adjoint=True)
     model.set_ini_params(qp0=(q0, p0))
 
     ## Assemble needed adjoint matrices
     df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj'])
     df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj'])
     df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj'])
-    df0_dp0_adj = dfn.as_backend_type(dfn.assemble(model.forms['form.bi.df0_dpressure_adj'])).mat()
+    df0_dp0_adj = dfn.as_backend_type(dfn.assemble(model.forms['form.bi.df0_dp0_adj'])).mat()
 
     # map dfu0_dp0 to have p on the fluid domain
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
@@ -518,5 +518,5 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     ## Correct for the gradient of u0, since f is sensitive to pressure, and pressure depends on u0
     # grad_u0_correction = dfn.Function(model.solid.vector_fspace).vector()
     # dpressure_du0.transpmult(df0_dp0_adj*adj_a0, grad_u0_correction)
-    grad_u0 = grad_u0 - dfn.PETScVector(dpressure_du0*df0_dp0_adj*adj_a0.vec())
+    grad_u0 = grad_u0 - dfn.PETScVector(dp0_du0*df0_dp0_adj*adj_a0.vec())
     return grad_u0, grad_v0, adj_a0
