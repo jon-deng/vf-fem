@@ -260,10 +260,10 @@ class ForwardModel:
         return self.fluid.solve_dqp0_du0(adjoint)
 
     def solve_dqp1_du1_solid(self, adjoint=False):
-        return self.fluid.solve_dqp1_du1_solid(adjoint)
+        return self.fluid.solve_dqp1_du1_solid(self, adjoint)
 
     def solve_dqp0_du0_solid(self, adjoint=False):
-        return self.fluid.solve_dqp0_du0_solid(adjoint)
+        return self.fluid.solve_dqp0_du0_solid(self, adjoint)
 
     # Solid residuals
     def assem_f1(self):

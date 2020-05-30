@@ -19,7 +19,7 @@ from femvf.model import ForwardModel, load_fsi_model
 from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.solids import Rayleigh
+from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
 
 class TestForward(unittest.TestCase):
@@ -84,7 +84,7 @@ class TestForward(unittest.TestCase):
 
         runtime_start = perf_counter()
         info = integrate(model, (u0, 0, 0), solid_props, fluid_props, times,
-                                 h5file=save_path, h5group='/', coupling='explicit')
+                         h5file=save_path, h5group='/', coupling='explicit')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 

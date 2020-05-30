@@ -465,18 +465,20 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         return self.flow_sensitivity(self.get_ini_surf_config(), self.properties)
 
-    def solve_dqp1_du1_solid(self, adjoint=False):
+    # TODO: Refactor to use the DOF map from solid to fluid rather than `ForwardModel`
+    def solve_dqp1_du1_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(self.get_fin_surf_config(), self.properties)
+        return self.flow_sensitivity_solid(model, self.get_fin_surf_config(), self.properties,
+                                           adjoint)
 
-    def solve_dqp0_du0_solid(self, adjoint=False):
+    def solve_dqp0_du0_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(self.get_ini_surf_config(), self.properties)
-
+        return self.flow_sensitivity_solid(model, self.get_ini_surf_config(), self.properties,
+                                           adjoint)
 
     def fluid_pressure(self, surface_state, fluid_props):
         """
@@ -573,7 +575,7 @@ class Bernoulli(QuasiSteady1DFluid):
         a_sub = fluid_props['a_sub']
         alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
 
-        x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+        x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
 
         area = 2 * (y_midline - y)
         darea_dy = -2 # darea_dx = 0

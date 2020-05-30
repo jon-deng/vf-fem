@@ -6,14 +6,15 @@ dependicies:
     - numpy
     - scipy
     - pandas
-    - h5py
     - matplotlib
-    - ipython
-    - jupyter
-    - tabulate
-    - tqdm
     - autograd
     - cyipopt
     - nlopt
     - fenics
+    - h5py
+    - ipython
+    - ipdb
+    - jupyter
+    - tabulate
+    - tqdm
 

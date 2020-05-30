@@ -457,9 +457,9 @@ def convert_uv0(model, uv0, solid_props, fluid_props):
 
     """
     ## Set parameters for the state
-    model.set_params(uva0=(*uv0, 0), solid_props=solid_props, fluid_props=fluid_props)
-    q0, p0, _ = model.get_pressure()
-    model.set_params(qp0=(q0, p0))
+    model.set_ini_params(uva0=(*uv0, 0), solid_props=solid_props, fluid_props=fluid_props)
+    q0, p0, _ = model.solve_qp0()
+    model.set_ini_params(qp0=(q0, p0))
 
     ## Solve for the acceleration
     newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
@@ -485,12 +485,12 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     grad_a0_in = grad_uva0[2]
 
     ## Set the model parameters to correctly assemble needed matrices
-    model.set_params(uva0=uva0, solid_props=solid_props, fluid_props=fluid_props)
+    model.set_ini_params(uva0=uva0, solid_props=solid_props, fluid_props=fluid_props)
 
-    q0, p0, _ = model.get_pressure()
+    q0, p0, _ = model.solve_qp0()
     # dpressure_du0 = dfn.PETScMatrix(model.get_flow_sensitivity()[1])
     dpressure_du0 = model.get_flow_sensitivity_solid_ord(adjoint=True)[1]
-    model.set_params(qp0=(q0, p0))
+    model.set_ini_params(qp0=(q0, p0))
 
     ## Assemble needed adjoint matrices
     df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj'])

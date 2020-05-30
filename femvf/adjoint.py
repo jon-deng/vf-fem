@@ -104,8 +104,8 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
     else:
         qp2_ = qp2
         qp1_ = qp1
-    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'qp1': qp2_, 'u1': uva2[0]}
-    iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'u1': uva1[0]}
+    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'qp1': qp2_, 'uva1': uva2}
+    iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
 
     ## Initialize the adj rhs
     dcost_duva1 = functional.duva(f, N-1, iter_params1, iter_params2)
@@ -138,8 +138,8 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         else:
             qp1_ = qp1
             qp0_ = qp0
-        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'u1': uva1[0]}
-        iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp0_, 'u1': uva0[0]}
+        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
+        iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp0_, 'uva1': uva0}
 
         model.set_iter_params(**iter_params1)
         res = dfn.assemble(model.solid.forms['form.un.f1'])
@@ -181,8 +181,8 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
     grad['a0'] = adj_a0
 
     if coupling == 'explicit':
-        model.set_ini_state(*uva0)
-        dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
+        # model.set_ini_state(*uva0)
+        dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
         adj_p0_ = dp_du.getVecRight()
         adj_p0_[:] = adj_p0
         grad['u0'] += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0 # convert PETSc.Vec to dfn.PETScVector
@@ -221,12 +221,12 @@ def solve_grad_dt(model, adj_state1, iter_params1):
     """
     model.set_iter_params(**iter_params1)
     uva0 = iter_params1['uva0']
-    u1 = iter_params1['u1']
+    uva1 = iter_params1['uva1']
     dt1 = iter_params1['dt']
 
     dfu1_ddt = dfn.assemble(model.solid.forms['form.bi.df1_dt_adj'])
-    dfv1_ddt = 0 - newmark_v_dt(u1, *uva0, dt1)
-    dfa1_ddt = 0 - newmark_a_dt(u1, *uva0, dt1)
+    dfv1_ddt = 0 - newmark_v_dt(uva1[0], *uva0, dt1)
+    dfa1_ddt = 0 - newmark_a_dt(uva1[0], *uva0, dt1)
 
     adj_u1, adj_v1, adj_a1 = adj_state1[:3]
     adj_dt1 = -(dfu1_ddt*adj_u1).sum() - dfv1_ddt.inner(adj_v1) - dfa1_ddt.inner(adj_a1)
@@ -249,15 +249,14 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     dfu2_du2 = model.assem_df1_du1_adj()
     dfv2_du2 = 0 - newmark_v_du1(dt)
     dfa2_du2 = 0 - newmark_a_du1(dt)
-    dfu2_dp2 = dfn.assemble(model.solid.forms['form.bi.df1_dpressure_adj'])
+    dfu2_dp2 = dfn.assemble(model.solid.forms['form.bi.df1_dp1_adj'])
 
     # map dfu2_dp2 to have p on the fluid domain
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
     dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
     dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, model.fluid.p1.size)
 
-    model.set_ini_state(it_params['u1'], 0, 0)
-    dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
+    dq_du, dp_du = model.solve_dqp1_du1_solid(adjoint=True)
     dfq2_du2 = 0 - dq_du
     dfp2_du2 = 0 - dp_du
 
@@ -353,10 +352,6 @@ def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
 
     return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
 
-# TODO: Below are two old codes you had the main difference is how you handle some of the matrices
-# You messed something up in assembling the transposed matrix as well as potentially in reordering
-# the matrix rows somehow... You'll have to look into this again.
-
 def solve_adj_exp(model, adj_rhs, it_params, out=None):
     """
     Solve for adjoint states given the RHS source vector
@@ -375,8 +370,8 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
     dfv2_du2 = 0 - newmark_v_du1(dt)
     dfa2_du2 = 0 - newmark_a_du1(dt)
 
-    model.set_ini_state(it_params['u1'], 0, 0)
-    dq_du, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
+    # model.set_ini_state(it_params['u1'], 0, 0)
+    dq_du, dp_du = model.solve_dqp1_du1_solid(adjoint=True)
     dfq2_du2 = 0 - dq_du
     dfp2_du2 = 0 - dp_du
 
@@ -429,7 +424,10 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     dfu2_du1 = model.assem_df1_du0_adj()
     dfu2_dv1 = model.assem_df1_dv0_adj()
     dfu2_da1 = model.assem_df1_da0_adj()
-    dfu2_dp1 = dfn.assemble(model.forms['form.bi.df1_dpressure_adj'])
+    # df1_dp1 is assembled because the explicit coupling is achieved through passing the previous
+    # pressure as the current pressure rather than changing the actualy governing equations to use
+    # the previous pressure
+    dfu2_dp1 = dfn.assemble(model.forms['form.bi.df1_dp1_adj'])
 
     dfv2_du1 = 0 - newmark_v_du0(dt2)
     dfv2_dv1 = 0 - newmark_v_dv0(dt2)

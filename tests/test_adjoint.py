@@ -115,8 +115,8 @@ def get_starting_kelvinvoigt_model():
     return model, solid_props, fluid_props
 
 class TaylorTest(unittest.TestCase):
-    COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    COUPLING = 'implicit'
+    OVERWRITE_FORWARD_SIMULATIONS = True
 
     def setUp(self):
         """
@@ -834,9 +834,9 @@ if __name__ == '__main__':
     # test = TestResidualJacobian()
     # test.test_df1_dstate1_implicit()
 
-    # test = TestEmodGradient()
-    # test.setUp()
-    # test.test_adjoint()
+    test = TestEmodGradient()
+    test.setUp()
+    test.test_adjoint()
 
     # test = Testu0Gradient()
     # test.setUp()
@@ -854,9 +854,9 @@ if __name__ == '__main__':
     # test.setUp()
     # test.test_adjoint()
 
-    test = TestParameterizationGradient()
-    test.setUp()
-    test.test_adjoint()
+    # test = TestParameterizationGradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = Test2ndOrderDifferentiability()
     # test.setUp()
