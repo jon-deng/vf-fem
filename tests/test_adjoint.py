@@ -113,160 +113,9 @@ def get_starting_kelvinvoigt_model():
 
     return model, solid_props, fluid_props
 
-class TaylorTest(unittest.TestCase):
+class TaylorTestUtils(unittest.TestCase):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
-
-    def test_adjoint(self):
-        """
-        Checks gradients using a second order taylor test
-
-        The setup for each run (search direction for the taylor test, etc.) is located under
-        `setup_line_search`
-        """
-        hs = self.hs
-        step_dir = self.step_dir
-        model = self.model
-        save_path = self.save_path
-
-        run_info = None
-        with open(path.splitext(save_path)[0]+".pickle", 'rb') as f:
-            run_info = pickle.load(f)
-
-        ## Select the functional you want to test
-        # fkwargs = {}
-        # Functional = funcs.TransferWorkbyDisplacementIncrement
-        # Functional = funcs.TransferWorkbyVelocity
-        # Functional = funcs.KVDampingWork
-
-        # Functional = funcs.FinalSurfacePower
-        # Functional = funcs.FinalSurfaceDisplacementIncrementNorm
-        # Functional = funcs.FinalSurfaceDisplacementNorm
-        # Functional = funcs.FinalSurfacePressureNorm
-        # Functional = funcs.PeriodicError
-        Functional = funcs.FinalDisplacementNorm
-        # Functional = funcs.FinalVelocityNorm
-        # Functional = funcs.DisplacementNorm
-        # Functional = funcs.VelocityNorm
-        # Functional = funcs.StrainEnergy
-
-        # fkwargs = {'tukey_alpha': 0.05, 'f0':100, 'df':50}
-        # Functional = extra_funcs.AcousticPower
-        # Functional = extra_funcs.AcousticEfficiency
-        # Functional = extra_funcs.F0WeightedAcousticPower
-
-        functional = Functional(model)
-        # functional.constants['n_start'] = 1
-
-        ## Solve the model for each point along the 'direction' of parameter changes
-        print(f"\nSolving models along parameter search direction")
-
-        total_runtime = 0
-        functionals = list()
-        for n, h in enumerate(hs):
-            with sf.StateFile(model, save_path, group=f'{n}', mode='r') as f:
-                runtime_start = perf_counter()
-                val = functional(f)
-                functionals.append(val)
-                runtime_end = perf_counter()
-                total_runtime += runtime_end-runtime_start
-                print(f"f = {val:.2e}")
-        print(f"Runtime {total_runtime:.2f} seconds")
-
-        functionals = np.array(functionals)
-
-        ## Calculate the gradient via the adjoint equations at the 0th point
-        print("\nComputing Gradient via adjoint calculation")
-
-        info = None
-        grad = None
-        runtime_start = perf_counter()
-        with sf.StateFile(model, save_path, group='0', mode='r') as f:
-            _, grad, _ = adjoint(model, f, functional, coupling=self.COUPLING)
-        runtime_end = perf_counter()
-
-        print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
-
-        # Find the component of the gradient along the step direction
-        grad_vector = None
-        grad_on_step_dir = None
-        if isinstance(self.step_dir, parameterization.FullParameterization):
-            grad_p = self.p.dconvert(grad)
-            grad_vector = grad_p.vector
-            grad_on_step_dir = np.dot(grad_vector, self.step_dir.vector)
-        else:
-            grad_vector = grad[self.parameter]
-            grad_on_step_dir = np.dot(grad_vector, step_dir)
-
-
-        ## Compare the adjoint and finite difference projected gradients
-        taylor_remainder_1 = np.abs(functionals[1:] - functionals[0])
-        taylor_remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*grad_on_step_dir)
-
-        order_1 = np.log(taylor_remainder_1[1:]/taylor_remainder_1[:-1]) / np.log(2)
-        order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
-
-        print("\nSteps:", hs[1:])
-
-        print("\n1st order taylor remainders: \n", taylor_remainder_1)
-        print("Numerical order: \n", order_1)
-
-        print("\n2nd order taylor remainders: \n", taylor_remainder_2)
-        print("Numerical order: \n", order_2)
-
-        print("\n||dg/dp|| = ", np.linalg.norm(grad_vector, ord=2))
-        print("dg/dp * step_dir = ", grad_on_step_dir)
-        print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
-
-        fig, ax = self.plot_taylor_convergence(grad_on_step_dir, hs, functionals)
-        fig.savefig(f'Convergence_{self.case_postfix}.png')
-
-        # Plot the glottal width vs time of the simulation at zero step size
-        fig, axs = plt.subplots(3, 1, constrained_layout=True, sharex=True)
-
-        ax = axs[0]
-        ax.plot(run_info['time'], run_info['glottal_width'])
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Glottal width [cm]")
-
-        ax = axs[0].twinx()
-        ax.plot(run_info['time'], run_info['glottal_width'] <= 0.002, ls='-.')
-        ax.set_ylabel("Collision")
-
-        ax = axs[1]
-        ax.plot(run_info['time'], run_info['flow_rate'])
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Flow rate [cm^2/s]")
-
-        ax = axs[2]
-        # ax.plot(run_info['time'][1:], run_info['idx_min_area'], label="Minimum area location")
-        ax.plot(run_info['time'][1:], run_info['idx_separation'], label="Separation location")
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Separation location")
-
-        ax = ax.twinx()
-        for n in np.sort(np.unique(run_info['idx_separation'])):
-            ax.plot(run_info['time'][1:], run_info['pressure'][:, n]/PASCAL_TO_CGS, label=f"Vertex {n:d}", ls='-.')
-        ax.legend()
-        ax.set_xlabel("Time [s]")
-        ax.set_ylabel("Pressure [Pa]")
-
-        fig.savefig(f'Kinematics_{self.case_postfix}.png')
-
-        # Visualize the computed gradient
-        # plot the u, v, a gradient components
-        tri = model.get_triangulation()
-        fig, axs = plt.subplots(3, 2, constrained_layout=True)
-        for ii, comp in enumerate(['u0', 'v0', 'a0']):
-            for jj in range(2):
-                grad_comp = grad[comp][:].reshape(-1, 2)[:, jj]
-                mappable = axs[ii, jj].tripcolor(tri, grad_comp[model.solid.vert_to_sdof])
-
-                axs[ii, jj].set_title(f"$\\nabla_{{{comp}}} f$")
-
-                fig.colorbar(mappable, ax=axs[ii, jj])
-
-        plt.show()
 
     def plot_taylor_convergence(self, grad_on_step_dir, h, g):
         # Plot the adjoint gradient and finite difference approximations of the gradient
@@ -296,7 +145,7 @@ class TaylorTest(unittest.TestCase):
                 fig.colorbar(mappable, ax=axs[ii, jj])
         return fig, axs
 
-class TestBasicGradient(TaylorTest):
+class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
     FUNCTIONAL = funcs.FinalDisplacementNorm
@@ -438,7 +287,7 @@ class TestBasicGradient(TaylorTest):
         self.assertTrue(np.all(order_1 == 1.0))
         self.assertTrue(np.all(order_2 == 2.0))
 
-class TestParameterizedGradient(TaylorTest):
+class TestParameterizedGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
     FUNCTIONAL = funcs.FinalDisplacementNorm
@@ -762,36 +611,3 @@ if __name__ == '__main__':
     test = TestParameterizedGradient()
     test.setUp()
     test.test_fixed_period_kelvin_voigt()
-
-    # test = TestResidualJacobian()
-    # test.test_df1_dstate1_implicit()
-
-    # test = TestEmodGradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = Testu0Gradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = Testv0Gradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = Testa0Gradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = TestdtGradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = TestParameterizationGradient()
-    # test.setUp()
-    # test.test_adjoint()
-
-    # test = Test2ndOrderDifferentiability()
-    # test.setUp()
-    # test.test_c2smoothness()
-    # test.show_solution_info()
-    # test.test_adjoint()
