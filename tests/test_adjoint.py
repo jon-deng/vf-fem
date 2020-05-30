@@ -21,20 +21,19 @@ import unittest
 
 # from math import round
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import matplotlib.pyplot as plt
-import h5py
+# import h5py
 import dolfin as dfn
 
 sys.path.append('../')
-from femvf import meshutils, statefile as sf, linalg
+from femvf import statefile as sf, linalg
 from femvf.forward import integrate, implicit_increment
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
-from femvf.model import ForwardModel, load_fsi_model
+from femvf.model import load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
-from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.parameters import parameterization
 from femvf.functionals import basic as funcs
 
@@ -115,20 +114,8 @@ def get_starting_kelvinvoigt_model():
     return model, solid_props, fluid_props
 
 class TaylorTest(unittest.TestCase):
-    COUPLING = 'implicit'
+    COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
-
-    def setUp(self):
-        """
-        Set the model and baseline simulation parameters
-        """
-        self.model, self.solid_props, self.fluid_props = get_starting_kelvinvoigt_model()
-
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        self.times = times_meas
-
-        self.uva0 = (0, 0, 0)
 
     def test_adjoint(self):
         """
@@ -231,7 +218,7 @@ class TaylorTest(unittest.TestCase):
         print("dg/dp * step_dir = ", grad_on_step_dir)
         print("FD approximation of dg/dp * step_dir = ", (functionals[1:] - functionals[0])/hs[1:])
 
-        fig, ax = self.plot_taylor_test(grad_on_step_dir, hs, functionals)
+        fig, ax = self.plot_taylor_convergence(grad_on_step_dir, hs, functionals)
         fig.savefig(f'Convergence_{self.case_postfix}.png')
 
         # Plot the glottal width vs time of the simulation at zero step size
@@ -281,7 +268,7 @@ class TaylorTest(unittest.TestCase):
 
         plt.show()
 
-    def plot_taylor_test(self, grad_on_step_dir, h, g):
+    def plot_taylor_convergence(self, grad_on_step_dir, h, g):
         # Plot the adjoint gradient and finite difference approximations of the gradient
         fig, ax = plt.subplots(1, 1, constrained_layout=True)
         ax.plot(h[1:], (g[1:] - g[0])/h[1:],
@@ -289,16 +276,48 @@ class TaylorTest(unittest.TestCase):
         ax.axhline(grad_on_step_dir, color='C1', label="Adjoint gradient")
         ax.ticklabel_format(axis='y', style='sci')
         ax.set_xlabel("Step size")
-        ax.set_ylabel("Gradient of functional")
+        ax.set_ylabel(r"$\frac{df}{dh}$")
         ax.legend()
         return fig, ax
 
-class TestBasicGradient(TaylorTest):
-    # TODO: refactor the individual test cases to something like this? I think this format makes more sense
-    COUPLING = 'implicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    def plot_grad(self, model, grad):
+        """
+        Plot the (u, v, a) initial state gradients
+        """
+        tri = model.get_triangulation()
+        fig, axs = plt.subplots(3, 2, constrained_layout=True)
+        for ii, comp in enumerate(['u0', 'v0', 'a0']):
+            for jj in range(2):
+                grad_comp = grad[comp][:].reshape(-1, 2)[:, jj]
+                mappable = axs[ii, jj].tripcolor(tri, grad_comp[model.solid.vert_to_sdof])
 
-    def run_line_search(self, save_path, hs, dvua=None, dsolid_props=None, dfluid_props=None, dtimes=None):
+                axs[ii, jj].set_title(f"$\\nabla_{{{comp}}} f$")
+
+                fig.colorbar(mappable, ax=axs[ii, jj])
+        return fig, axs
+
+class TestBasicGradient(TaylorTest):
+    COUPLING = 'explicit'
+    OVERWRITE_FORWARD_SIMULATIONS = False
+    FUNCTIONAL = funcs.FinalDisplacementNorm
+
+    def setUp(self):
+        """
+        Set the model and baseline simulation parameters
+
+        This should set the starting point of the line search; all the parameters needed to solve
+        a single simulation are given by this set up.
+        """
+        self.model, self.solid_props, self.fluid_props = get_starting_kelvinvoigt_model()
+
+        t_start, t_final = 0, 0.01
+        times_meas = np.linspace(t_start, t_final, 128)
+        self.times = times_meas
+
+        self.uva0 = (0, 0, 0)
+
+    def get_taylor_order(self, save_path, hs,
+                         duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None):
         """
         Runs a line search of simulations along a specified direction
         """
@@ -311,6 +330,21 @@ class TestBasicGradient(TaylorTest):
         else:
             print("Using existing files")
 
+        functional = self.FUNCTIONAL(self.model)
+        gs, remainders, orders, grads = grad_and_taylor_order(
+            save_path, functional, hs, self.model, duva=duva, dsolid_props=dsolid_props,
+            dfluid_props=dfluid_props, dtimes=dtimes, coupling=self.COUPLING)
+
+        remainder_1, remainder_2 = remainders
+        order_1, order_2 = orders
+        grad, grad_step, grad_step_fd = grads
+
+        self.plot_taylor_convergence(grad_step, hs, gs)
+        self.plot_grad(self.model, grad)
+        plt.show()
+
+        return (order_1, order_2)
+
     def test_emod(self):
         save_path = 'out/grad_emod-states.h5'
         hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
@@ -320,81 +354,13 @@ class TestBasicGradient(TaylorTest):
         dsolid.vector[:] = 0
         dsolid['emod'][:] = 1.0*step_size
 
-        self.run_line_search(save_path, hs, dsolid_props=dsolid)
-        # self.test_adjoint()
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
+        # self.assertTrue(np.all(order_1 == 1.0))
+        # self.assertTrue(np.all(order_2 == 2.0))
 
-class TestParameterizedGradient(TaylorTest):
-    pass
-
-class TestEmodGradient(TaylorTest):
-    def setUp(self):
-        """
-        Runs the forward model over several parameters 'steps' and saves their history.
-        """
-        save_path = 'out/emodgrad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
-
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        # t_start, t_final = 0, 0.001
-        # times_meas = np.linspace(t_start, t_final, 2)
-        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
-
-        step_size = 0.5e0 * PASCAL_TO_CGS
-        dsolid = solid_props.copy()
-        dsolid.vector[:] = 0
-        dsolid['emod'][:] = 1.0*step_size
-
-        print(f"Computing {len(hs)} finite difference points")
-        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
-            if os.path.exists(save_path):
-                os.remove(save_path)
-            line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
-                        dsolid_props=dsolid, filepath=save_path, coupling=self.COUPLING)
-        else:
-            print("Using existing files")
-
-        self.hs = hs
-        # self.step_dir = dsolid
-        self.step_dir = dsolid['emod']
-        self.parameter = 'emod'
-
-        self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-
-        self.case_postfix = 'emod'
-
-class Testu0Gradient(TaylorTest):
-    def setUp(self):
-        """
-        Runs the forward model over several parameter 'steps' and saves their history.
-        """
+    def test_u0(self):
         save_path = 'out/u0grad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
-
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        # t_start, t_final = 0, 0.001
-        # times_meas = np.linspace(t_start, t_final, 3)
-        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        ## Set the step direction / step sizes
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-15)), axis=0)
-
-        # Get y--coordinates in DOF order
-        xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
-        y = xy[:, 1]
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
         ## Pick a step direction
         # Increment `u` linearly as a function of x and y in the y direction
@@ -403,10 +369,10 @@ class Testu0Gradient(TaylorTest):
         # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
 
         # Increment `u` only along the pressure surface
-        surface_dofs = model.solid.vert_to_vdof.reshape(-1, 2)[model.surface_vertices]
-        xy_surface = model.solid.mesh.coordinates()[model.surface_vertices, :]
+        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.surface_vertices]
+        xy_surface = self.model.solid.mesh.coordinates()[self.model.surface_vertices, :]
         x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
-        step_dir = dfn.Function(model.solid.vector_fspace).vector()
+        step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
 
         x_frac = (x_surf-x_surf.min())/(x_surf.max()-x_surf.min())
         step_dir[np.array(surface_dofs[:, 0])] = 1*(1.0-x_frac) + 0.25*x_frac
@@ -419,71 +385,19 @@ class Testu0Gradient(TaylorTest):
         # step_dir[surface_dofs[:, 0].flat] = 0.0
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
-        model.solid.bc_base.apply(step_dir)
+        self.model.solid.bc_base.apply(step_dir)
 
         duva = (step_dir, 0.0, 0.0)
 
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
-        # u0_y = -1e-2 * (y-y.min()) / (y.max()-y.min())
-        # u0_x = np.zeros(y.shape)
-        # u0[:] = np.stack([u0_x, u0_y], axis=-1).flat
+        order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
+        self.assertTrue(np.all(order_1 == 1.0))
+        self.assertTrue(np.all(order_2 == 2.0))
 
-        print(f"Computing {len(hs)} finite difference points")
-
-        # tri = model.get_triangulation()
-        # model.set_ini_state((u0[0]+duva[0])*1e-2, 0, 0)
-        # tri_def = model.get_triangulation(config='cur')
-
-        # fig, ax = plt.subplots(1, 1)
-        # ax.triplot(tri)
-        # ax.triplot(tri_def)
-        # plt.show()
-
-        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
-            if os.path.exists(save_path):
-                os.remove(save_path)
-            line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path, coupling=self.COUPLING)
-        else:
-            print("Using existing files")
-
-        self.hs = hs
-        self.step_dir = step_dir
-        self.parameter = 'u0'
-
-        self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-
-        self.case_postfix = 'u0'
-
-class Testv0Gradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
-
-    def setUp(self):
-        """
-        Runs the forward model over several parameters 'steps' and saves their history.
-        """
+    def test_v0(self):
         save_path = 'out/v0grad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        # N = 1
-        # t_start, t_final = 0, 0.01/100 * N
-        # times_meas = np.linspace(t_start, t_final, N+1)
-        # timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-10)), axis=0)
-
-        # Get y--coordinates in DOF order
-        xy = model.get_ref_config()[dfn.dof_to_vertex_map(model.solid.scalar_fspace)]
+        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
@@ -492,51 +406,15 @@ class Testv0Gradient(TaylorTest):
         step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         duva = (0.0, step_dir, 0.0)
 
-        print(f"Computing {len(hs)} finite difference points")
+        order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
+        self.assertTrue(np.all(order_1 == 1.0))
+        self.assertTrue(np.all(order_2 == 2.0))
 
-        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
-            if os.path.exists(save_path):
-                os.remove(save_path)
-
-            line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path, coupling=self.COUPLING)
-        else:
-            print("Using existing files")
-
-        plt.show()
-
-        self.hs = hs
-        self.step_dir = step_dir
-        self.parameter = 'v0'
-
-        self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-
-        self.case_postfix = 'v0'
-
-class Testa0Gradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
-
-    def setUp(self):
-        """
-        Runs the forward model over several parameters 'steps' and saves their history.
-        """
+    def test_a0(self):
         save_path = 'out/a0grad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
-        t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[-1]}
-
-        ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)+2)), axis=0)
-
-        # Get y--coordinates in DOF order
-        xy = model.get_ref_config()[dfn.dof_to_vertex_map(model.solid.scalar_fspace)]
+        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
@@ -545,138 +423,86 @@ class Testa0Gradient(TaylorTest):
         step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         duva = (0.0, 0.0, step_dir)
 
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
-        u0_y = -1e-2*(y-y.min())/(y.max()-y.min())
-        u0_x = np.zeros(y.shape)
-        u0[:] = np.stack([u0_x, u0_y], axis=-1).flat
+        order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
+        self.assertTrue(np.all(order_1 == 1.0))
+        self.assertTrue(np.all(order_2 == 2.0))
 
-        print(f"Computing {len(hs)} finite difference points")
-
-        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
-            if os.path.exists(save_path):
-                os.remove(save_path)
-
-            line_search(hs, model, (u0[:], 0, 0), solid_props, fluid_props, times_meas,
-                        duva=duva, filepath=save_path, coupling=self.COUPLING)
-        else:
-            print("Using existing files")
-
-        plt.show()
-
-        self.hs = hs
-        self.step_dir = step_dir
-        self.parameter = 'a0'
-
-        self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-
-        self.case_postfix = 'a0'
-
-class TestdtGradient(TaylorTest):
-    OVERWRITE_FORWARD_SIMULATIONS = True
-
-    def setUp(self):
-        """
-        Runs the forward model over several parameter 'steps' and saves their history.
-        """
+    def test_dt(self):
         save_path = 'out/dtgrad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
-        t_start, t_final = 0.0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
-        timing_props = {'t0': t_start, 'tmeas': times_meas, 'dt_max': times_meas[1]}
-
-        ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-20)), axis=0)
-
-        # Make the step size increase each time step
-        step_dir = np.ones(128-1)
-        dtimes = np.zeros(times_meas.size)
+        dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1.0
 
-        print(f"Computing {len(hs)} finite difference points")
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
+        self.assertTrue(np.all(order_1 == 1.0))
+        self.assertTrue(np.all(order_2 == 2.0))
 
-        fig, ax = plt.subplots(1, 1)
-        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
-            if os.path.exists(save_path):
-                os.remove(save_path)
-
-            line_search(hs, model, (0, 0, 0), solid_props, fluid_props, times_meas,
-                        dtimes=dtimes, filepath=save_path, coupling=self.COUPLING)
-        else:
-            print("Using existing files")
-
-        plt.show()
-
-        self.hs = hs
-        self.step_dir = step_dir
-        # self.parameter = 'dt'
-
-        self.model = model
-        self.solid_props = solid_props
-        self.fluid_props = fluid_props
-        self.timing_props = timing_props
-
-        self.save_path = save_path
-
-        self.case_postfix = 'dt'
-
-class TestParameterizationGradient(TaylorTest):
+class TestParameterizedGradient(TaylorTest):
+    COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
+    FUNCTIONAL = funcs.FinalDisplacementNorm
 
     def setUp(self):
-        save_path = 'out/parameterizationgrad-states.h5'
-        model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+        """
+        Set the model and baseline simulation parameters
 
-        xy = model.get_ref_config().flat[model.solid.vdof_to_vert].reshape(-1, 2)
+        This should set the starting point of the line search; all the parameters needed to solve
+        a single simulation are given by this set up.
+        """
+        self.model, solid_props, fluid_props = get_starting_kelvinvoigt_model()
+
+        xy = self.model.get_ref_config().flat[self.model.solid.vdof_to_vert].reshape(-1, 2)
         y = xy[:, 1]
 
         t_start, t_final = 0.0, 0.01
-
-        ## Set the step direction / step size / number of steps
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
 
         constants = {
             'default_solid_props': solid_props,
             'default_fluid_props': fluid_props,
             'NUM_STATES_PER_PERIOD': 128,
             'period': t_final-t_start}
-        p = parameterization.FixedPeriodKelvinVoigt(model, constants)
-        p['elastic_moduli'][:] = solid_props['emod']
-        # p['u0'][:, 1] = -1e-1 * (y-y.min()) / (y.max()-y.min())
-        # p['v0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e1
+        self.p = parameterization.FixedPeriodKelvinVoigt(self.model, constants)
+        self.p['elastic_moduli'][:] = solid_props['emod']
 
-        dp = p.copy()
-        dp['elastic_moduli'][:] = 1.0e3
-        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
-        # dp['u0'][:, 0] = -(y-y.min()) / (y.max()-y.min())*1e-2
-        # dp['u0'][:, 1] = -(y-y.min()) / (y.max()-y.min())*1e-4
-
-        print(f"Computing {len(hs)} finite difference points")
+    def get_taylor_order(self, save_path, hs, dp):
+        """
+        Runs a line search of simulations along a specified direction
+        """
         if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.exists(save_path):
             if os.path.exists(save_path):
                 os.remove(save_path)
-
-            line_search_p(hs, model, p, dp, filepath=save_path, coupling=self.COUPLING)
+            line_search_p(hs, self.model, self.p, dp, coupling=self.COUPLING,
+                          filepath=save_path)
         else:
             print("Using existing files")
 
+        functional = self.FUNCTIONAL(self.model)
+        gs, remainders, orders, grads = grad_and_taylor_order_p(
+            save_path, functional, hs, self.model, self.p, dp, coupling=self.COUPLING)
+
+        remainder_1, remainder_2 = remainders
+        order_1, order_2 = orders
+        grad, grad_step, grad_step_fd = grads
+
+        self.plot_taylor_convergence(grad_step, hs, gs)
+        self.plot_grad(self.model, grad)
         plt.show()
 
-        self.hs = hs
-        self.p = p
-        self.step_dir = dp
-        self.parameter = 'dp'
+        return (order_1, order_2)
 
-        self.model = model
+    def test_fixed_period_kelvin_voigt(self):
+        save_path = 'out/parameterizationgrad-states.h5'
 
-        self.save_path = save_path
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
 
-        self.case_postfix = 'dp'
+        dp = self.p.copy()
+        dp['elastic_moduli'][:] = 1.0e3
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
+        print(order_1, order_2)
+        # self.assertTrue(np.all(order_1 == 1.0))
+        # self.assertTrue(np.all(order_2 == 2.0))
 
 def line_search(hs, model, uva, solid_props, fluid_props, times,
                 duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
@@ -703,7 +529,7 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
 
         runtime_start = perf_counter()
         info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
-                                 coupling=coupling, h5file=filepath, h5group=f'{n}')
+                         coupling=coupling, h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
         print(f"Run duration {runtime_end-runtime_start} s")
@@ -728,7 +554,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
         p_n.vector[:] = p.vector + h*dp.vector
 
         uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
-        breakpoint()
+        # breakpoint()
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()
@@ -744,6 +570,100 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
                 pickle.dump(info, f)
 
     return filepath
+
+def grad_and_taylor_order(filepath, functional, hs, model,
+                          duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
+                          coupling='explicit'):
+    directions = [(duva, 'uva0'), (dsolid_props, 'emod'), (dfluid_props, 'fluid_props'),
+                  (dtimes, 'times')]
+
+    ## Calculate the functional value at each point along the line search
+    total_runtime = 0
+    functionals = list()
+    for n, h in enumerate(hs):
+        with sf.StateFile(model, filepath, group=f'{n}', mode='r') as f:
+            runtime_start = perf_counter()
+            val = functional(f)
+            functionals.append(val)
+            runtime_end = perf_counter()
+            total_runtime += runtime_end-runtime_start
+            print(f"f = {val:.2e}")
+    print(f"Runtime {total_runtime:.2f} seconds")
+
+    functionals = np.array(functionals)
+
+    ## Calculate the gradient via the adjoint equations at the 0th point
+    print("\nComputing Gradient via adjoint calculation")
+
+    grad = None
+    runtime_start = perf_counter()
+    with sf.StateFile(model, filepath, group='0', mode='r') as f:
+        _, grad, _ = adjoint(model, f, functional, coupling=coupling)
+    runtime_end = perf_counter()
+    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+    ## Project the gradient along the step direction
+    grad_step = 0
+    for direction, label in directions:
+        if label == 'uva0':
+            for ii, sub_label in enumerate(('u0', 'v0', 'a0')):
+                # Make sure the direction is a vector since sometimes it's a float = 0, representing no displacement
+                _direction = np.zeros(grad[sub_label].size())
+                _direction[:] = direction[ii]
+                grad_step += np.dot(grad[sub_label], _direction)
+        else:
+            if direction is not None:
+                grad_step += np.dot(grad[label], direction[label])
+    grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
+
+    ## Compare the adjoint and finite difference projected gradients
+    remainder_1 = np.abs(functionals[1:] - functionals[0])
+    remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*grad_step)
+
+    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
+    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
+
+    return functionals, (remainder_1, remainder_2), (order_1, order_2), (grad, grad_step, grad_step_fd)
+
+def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='explicit'):
+    ## Calculate the functional value at each point along the line search
+    total_runtime = 0
+    functionals = list()
+    for n, h in enumerate(hs):
+        with sf.StateFile(model, filepath, group=f'{n}', mode='r') as f:
+            runtime_start = perf_counter()
+            val = functional(f)
+            functionals.append(val)
+            runtime_end = perf_counter()
+            total_runtime += runtime_end-runtime_start
+            print(f"f = {val:.2e}")
+    print(f"Runtime {total_runtime:.2f} seconds")
+
+    functionals = np.array(functionals)
+
+    ## Calculate the gradient via the adjoint equations at the 0th point
+    print("\nComputing Gradient via adjoint calculation")
+
+    grad = None
+    runtime_start = perf_counter()
+    with sf.StateFile(model, filepath, group='0', mode='r') as f:
+        _, grad, _ = adjoint(model, f, functional, coupling=coupling)
+    runtime_end = perf_counter()
+    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+    ## Project the gradient along the step direction
+    grad_p = p.dconvert(grad)
+    grad_step = np.dot(grad_p.vector, dp.vector)
+    grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
+
+    ## Compare the adjoint and finite difference projected gradients
+    remainder_1 = np.abs(functionals[1:] - functionals[0])
+    remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*grad_step)
+
+    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
+    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
+
+    return functionals, (remainder_1, remainder_2), (order_1, order_2), (grad, grad_step, grad_step_fd)
 
 class TestResidualJacobian(unittest.TestCase):
     """
@@ -831,12 +751,24 @@ class TestResidualJacobian(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
+    # test = TestBasicGradient()
+    # test.setUp()
+    # test.test_emod()
+    # test.test_u0()
+    # test.test_v0()
+    # test.test_a0()
+    # test.test_dt()
+
+    test = TestParameterizedGradient()
+    test.setUp()
+    test.test_fixed_period_kelvin_voigt()
+
     # test = TestResidualJacobian()
     # test.test_df1_dstate1_implicit()
 
-    test = TestEmodGradient()
-    test.setUp()
-    test.test_adjoint()
+    # test = TestEmodGradient()
+    # test.setUp()
+    # test.test_adjoint()
 
     # test = Testu0Gradient()
     # test.setUp()
