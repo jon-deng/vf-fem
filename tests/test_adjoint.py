@@ -114,8 +114,6 @@ def get_starting_kelvinvoigt_model():
     return model, solid_props, fluid_props
 
 class TaylorTestUtils(unittest.TestCase):
-    COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
 
     def plot_taylor_convergence(self, grad_on_step_dir, h, g):
         # Plot the adjoint gradient and finite difference approximations of the gradient
@@ -129,25 +127,25 @@ class TaylorTestUtils(unittest.TestCase):
         ax.legend()
         return fig, ax
 
-    def plot_grad(self, model, grad):
+    def plot_grad_uva(self, model, grad_uva):
         """
         Plot the (u, v, a) initial state gradients
         """
         tri = model.get_triangulation()
         fig, axs = plt.subplots(3, 2, constrained_layout=True)
-        for ii, comp in enumerate(['u0', 'v0', 'a0']):
+        for ii, (grad, label) in enumerate(zip(grad_uva, ['u0', 'v0', 'a0'])):
             for jj in range(2):
-                grad_comp = grad[comp][:].reshape(-1, 2)[:, jj]
+                grad_comp = grad[:].reshape(-1, 2)[:, jj]
                 mappable = axs[ii, jj].tripcolor(tri, grad_comp[model.solid.vert_to_sdof])
 
-                axs[ii, jj].set_title(f"$\\nabla_{{{comp}}} f$")
+                axs[ii, jj].set_title(f"$\\nabla_{{{label}}} f$")
 
                 fig.colorbar(mappable, ax=axs[ii, jj])
         return fig, axs
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
     FUNCTIONAL = funcs.FinalDisplacementNorm
 
     def setUp(self):
@@ -186,16 +184,16 @@ class TestBasicGradient(TaylorTestUtils):
 
         remainder_1, remainder_2 = remainders
         order_1, order_2 = orders
-        grad, grad_step, grad_step_fd = grads
+        (grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd = grads
 
         self.plot_taylor_convergence(grad_step, hs, gs)
-        self.plot_grad(self.model, grad)
+        self.plot_grad_uva(self.model, grad_uva)
         plt.show()
 
         return (order_1, order_2)
 
     def test_emod(self):
-        save_path = 'out/grad_emod-states.h5'
+        save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
         hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
@@ -204,12 +202,14 @@ class TestBasicGradient(TaylorTestUtils):
         dsolid['emod'][:] = 1.0*step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
-        # self.assertTrue(np.all(order_1 == 1.0))
-        # self.assertTrue(np.all(order_2 == 2.0))
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+        print(order_1)
+        print(order_2)
 
     def test_u0(self):
-        save_path = 'out/u0grad-states.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        save_path = f'out/linesearch_u0_{self.COUPLING}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-16)), axis=0)
 
         ## Pick a step direction
         # Increment `u` linearly as a function of x and y in the y direction
@@ -239,11 +239,13 @@ class TestBasicGradient(TaylorTestUtils):
         duva = (step_dir, 0.0, 0.0)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
-        self.assertTrue(np.all(order_1 == 1.0))
-        self.assertTrue(np.all(order_2 == 2.0))
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+        print(order_1)
+        print(order_2)
 
     def test_v0(self):
-        save_path = 'out/v0grad-states.h5'
+        save_path = f'out/linesearch_v0_{self.COUPLING}.h5'
         hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
         xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
@@ -256,12 +258,14 @@ class TestBasicGradient(TaylorTestUtils):
         duva = (0.0, step_dir, 0.0)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
-        self.assertTrue(np.all(order_1 == 1.0))
-        self.assertTrue(np.all(order_2 == 2.0))
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+        print(order_1)
+        print(order_2)
 
     def test_a0(self):
-        save_path = 'out/a0grad-states.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        save_path = f'out/linesearch_a0_{self.COUPLING}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9))), axis=0)
 
         xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
         y = xy[:, 1]
@@ -273,19 +277,23 @@ class TestBasicGradient(TaylorTestUtils):
         duva = (0.0, 0.0, step_dir)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
-        self.assertTrue(np.all(order_1 == 1.0))
-        self.assertTrue(np.all(order_2 == 2.0))
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+        print(order_1)
+        print(order_2)
 
-    def test_dt(self):
-        save_path = 'out/dtgrad-states.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+    def test_times(self):
+        save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9))), axis=0)
 
         dtimes = np.zeros(self.times.size)
-        dtimes[1:] = np.arange(1, dtimes.size)*1.0
+        dtimes[1:] = np.arange(1, dtimes.size)*1e-9
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
-        self.assertTrue(np.all(order_1 == 1.0))
-        self.assertTrue(np.all(order_2 == 2.0))
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+        print(order_1)
+        print(order_2)
 
 class TestParameterizedGradient(TaylorTestUtils):
     COUPLING = 'explicit'
@@ -423,9 +431,6 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
 def grad_and_taylor_order(filepath, functional, hs, model,
                           duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
                           coupling='explicit'):
-    directions = [(duva, 'uva0'), (dsolid_props, 'emod'), (dfluid_props, 'fluid_props'),
-                  (dtimes, 'times')]
-
     ## Calculate the functional value at each point along the line search
     total_runtime = 0
     functionals = list()
@@ -444,25 +449,34 @@ def grad_and_taylor_order(filepath, functional, hs, model,
     ## Calculate the gradient via the adjoint equations at the 0th point
     print("\nComputing Gradient via adjoint calculation")
 
-    grad = None
+    grad_uva, grad_solid, grad_fluid, grad_times = None, None, None, None
     runtime_start = perf_counter()
     with sf.StateFile(model, filepath, group='0', mode='r') as f:
-        _, grad, _ = adjoint(model, f, functional, coupling=coupling)
+        _, grad_uva, grad_solid, grad_fluid, grad_times = adjoint(model, f, functional, coupling)
     runtime_end = perf_counter()
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
     ## Project the gradient along the step direction
+    directions = [duva, dsolid_props, dfluid_props, dtimes]
+    gradients = [grad_uva, grad_solid, grad_fluid, grad_times]
     grad_step = 0
-    for direction, label in directions:
-        if label == 'uva0':
-            for ii, sub_label in enumerate(('u0', 'v0', 'a0')):
-                # Make sure the direction is a vector since sometimes it's a float = 0, representing no displacement
-                _direction = np.zeros(grad[sub_label].size())
-                _direction[:] = direction[ii]
-                grad_step += np.dot(grad[sub_label], _direction)
-        else:
-            if direction is not None:
-                grad_step += np.dot(grad[label], direction[label])
+
+    for ii in range(3):
+        # Make sure the direction is a vector since sometimes it's a float = 0, representing no
+        # displacement
+        _direction = np.zeros(grad_uva[ii].size())
+        _direction[:] = duva[ii]
+        grad_step += np.dot(grad_uva[ii], _direction)
+
+    if dfluid_props is not None:
+        grad_step += np.dot(grad_fluid.vector, dfluid_props.vector)
+
+    if dsolid_props is not None:
+        grad_step += np.dot(grad_solid.vector, dsolid_props.vector)
+
+    if dtimes is not None:
+        grad_step += np.dot(grad_times, dtimes)
+
     grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
 
     ## Compare the adjoint and finite difference projected gradients
@@ -472,7 +486,8 @@ def grad_and_taylor_order(filepath, functional, hs, model,
     order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
     order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
 
-    return functionals, (remainder_1, remainder_2), (order_1, order_2), (grad, grad_step, grad_step_fd)
+    return functionals, (remainder_1, remainder_2), (order_1, order_2), \
+           ((grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd)
 
 def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='explicit'):
     ## Calculate the functional value at each point along the line search
@@ -600,14 +615,14 @@ class TestResidualJacobian(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    # test = TestBasicGradient()
-    # test.setUp()
+    test = TestBasicGradient()
+    test.setUp()
     # test.test_emod()
     # test.test_u0()
     # test.test_v0()
     # test.test_a0()
-    # test.test_dt()
+    test.test_times()
 
-    test = TestParameterizedGradient()
-    test.setUp()
-    test.test_fixed_period_kelvin_voigt()
+    # test = TestParameterizedGradient()
+    # test.setUp()
+    # test.test_fixed_period_kelvin_voigt()
