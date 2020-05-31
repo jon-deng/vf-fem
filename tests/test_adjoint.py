@@ -290,7 +290,7 @@ class TestBasicGradient(TaylorTestUtils):
 
 class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
     FUNCTIONAL = funcs.FinalDisplacementNorm
 
     def setUp(self):
@@ -344,33 +344,41 @@ class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
         return (order_1, order_2)
 
     def test_u0(self):
-        save_path = 'out/linesearch_periodickelvinvoigt_u0.h5'
+        save_path = f'out/linesearch_periodickelvinvoigt_u0_{self.COUPLING}.h5'
 
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 0))), axis=0)
 
         dp = self.p.copy()
         dp.vector[:] = 0
-        dp['u0'][:] = 1.0e3
+        du0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        du0[:] = 1e-5
+        self.model.solid.bc_base.apply(du0)
+
+        dp['u0'].reshape(-1)[:] = du0
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
 
     def test_v0(self):
-        save_path = 'out/linesearch_periodickelvinvoigt_v0.h5'
+        save_path = f'out/linesearch_periodickelvinvoigt_v0_{self.COUPLING}.h5'
 
-        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 0))), axis=0)
 
         dp = self.p.copy()
         dp.vector[:] = 0
-        dp['v0'][:] = 1.0e3
+        dv0 = dfn.Function(self.model.solid.vector_fspace).vector()
+        dv0[:] = 1e-1
+        self.model.solid.bc_base.apply(dv0)
+
+        dp['v0'].reshape(-1)[:] = dv0
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
 
     def test_period(self):
-        save_path = 'out/linesearch_periodickelvinvoigt_period.h5'
+        save_path = f'out/linesearch_periodickelvinvoigt_period_{self.COUPLING}.h5'
 
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 0))), axis=0)
 
@@ -647,6 +655,6 @@ if __name__ == '__main__':
 
     test = TestPeriodicKelvinVoigtGradient()
     test.setUp()
-    # test.test_u0()
-    # test.test_v0()
+    test.test_u0()
+    test.test_v0()
     test.test_period()
