@@ -190,6 +190,9 @@ class TestBasicGradient(TaylorTestUtils):
         self.plot_grad_uva(self.model, grad_uva)
         plt.show()
 
+        print(order_1)
+        print(order_2)
+
         return (order_1, order_2)
 
     def test_emod(self):
@@ -204,8 +207,6 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
-        print(order_1)
-        print(order_2)
 
     def test_u0(self):
         save_path = f'out/linesearch_u0_{self.COUPLING}.h5'
@@ -241,8 +242,6 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
-        print(order_1)
-        print(order_2)
 
     def test_v0(self):
         save_path = f'out/linesearch_v0_{self.COUPLING}.h5'
@@ -260,8 +259,6 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
-        print(order_1)
-        print(order_2)
 
     def test_a0(self):
         save_path = f'out/linesearch_a0_{self.COUPLING}.h5'
@@ -279,8 +276,6 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
-        print(order_1)
-        print(order_2)
 
     def test_times(self):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
@@ -292,8 +287,6 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
-        print(order_1)
-        print(order_2)
 
 class TestParameterizedGradient(TaylorTestUtils):
     COUPLING = 'explicit'
@@ -340,11 +333,14 @@ class TestParameterizedGradient(TaylorTestUtils):
 
         remainder_1, remainder_2 = remainders
         order_1, order_2 = orders
-        grad, grad_step, grad_step_fd = grads
+        (grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd = grads
 
         self.plot_taylor_convergence(grad_step, hs, gs)
-        self.plot_grad(self.model, grad)
+        self.plot_grad_uva(self.model, grad_uva)
         plt.show()
+
+        print(order_1)
+        print(order_2)
 
         return (order_1, order_2)
 
@@ -357,7 +353,6 @@ class TestParameterizedGradient(TaylorTestUtils):
         dp['elastic_moduli'][:] = 1.0e3
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
-        print(order_1, order_2)
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
 
@@ -511,12 +506,12 @@ def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='ex
     grad = None
     runtime_start = perf_counter()
     with sf.StateFile(model, filepath, group='0', mode='r') as f:
-        _, grad, _ = adjoint(model, f, functional, coupling=coupling)
+        _, grad_uva, grad_solid, grad_fluid, grad_times = adjoint(model, f, functional, coupling=coupling)
     runtime_end = perf_counter()
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
     ## Project the gradient along the step direction
-    grad_p = p.dconvert(grad)
+    grad_p = p.dconvert(grad_uva, grad_solid, grad_fluid, grad_times)
     grad_step = np.dot(grad_p.vector, dp.vector)
     grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
 
@@ -527,7 +522,8 @@ def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='ex
     order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
     order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
 
-    return functionals, (remainder_1, remainder_2), (order_1, order_2), (grad, grad_step, grad_step_fd)
+    return functionals, (remainder_1, remainder_2), (order_1, order_2), \
+           ((grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd)
 
 class TestResidualJacobian(unittest.TestCase):
     """
@@ -615,14 +611,14 @@ class TestResidualJacobian(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    test = TestBasicGradient()
-    test.setUp()
+    # test = TestBasicGradient()
+    # test.setUp()
     # test.test_emod()
     # test.test_u0()
     # test.test_v0()
     # test.test_a0()
-    test.test_times()
+    # test.test_times()
 
-    # test = TestParameterizedGradient()
-    # test.setUp()
-    # test.test_fixed_period_kelvin_voigt()
+    test = TestParameterizedGradient()
+    test.setUp()
+    test.test_fixed_period_kelvin_voigt()

@@ -161,7 +161,7 @@ class FullParameterization:
         """
         return NotImplementedError
 
-    def dconvert(self, grad):
+    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
         Return the sensitivity of the solid/fluid properties to the parameter vector.
 
@@ -201,7 +201,7 @@ class NodalElasticModuli(FullParameterization):
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
 
-    def dconvert(self, grad):
+    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -210,7 +210,7 @@ class NodalElasticModuli(FullParameterization):
         """
         out = self.copy()
         out.vector[:] = 0.0
-        out['elastic_moduli'][:] = grad['emod']
+        out['elastic_moduli'][:] = grad_solid['emod']
 
         return out
 
@@ -237,7 +237,7 @@ class KelvinVoigtNodalConstants(FullParameterization):
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
 
-    def dconvert(self, grad):
+    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -246,8 +246,8 @@ class KelvinVoigtNodalConstants(FullParameterization):
         """
         out = self.copy()
         out.vector[:] = 0.0
-        out['elastic_moduli'][:] = 1.0*grad['emod']
-        out['eta'][:] = 0.0
+        out['elastic_moduli'][:] = 1.0*grad_solid['emod']
+        out['eta'][:] = grad_solid['eta']
 
         return out
 
@@ -283,7 +283,7 @@ class PeriodicKelvinVoigt(FullParameterization):
         # print(uva[0].norm('l2'), uva[1].norm('l2'), uva[2].norm('l2'))
         return uva, solid_props, fluid_props, timing_props
 
-    def dconvert(self, grad):
+    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -295,8 +295,7 @@ class PeriodicKelvinVoigt(FullParameterization):
 
         ## Convert gradients of u,v,a to u,v
         uva0, solid_props, fluid_props, _ = self.convert()
-        grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
-        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva, uva0, solid_props, fluid_props)
 
         out['u0'].flat[:] = grad_u0
         out['v0'].flat[:] = grad_v0
@@ -305,7 +304,9 @@ class PeriodicKelvinVoigt(FullParameterization):
 
         ## Convert gradients of dt to T (period)
         N = self.constants['NUM_STATES_PER_PERIOD']
-        out['period'][()] = np.sum(grad['dt']) * 1/(N-1)
+        # This conversion rule is because the integration times are distributed evenly
+        # using N points over the period
+        out['period'][()] = np.dot(np.linspace(0, self['period'], N), grad_times)
 
         return out
 
@@ -345,7 +346,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
 
         return uva, solid_props, fluid_props, timing_props
 
-    def dconvert(self, grad):
+    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -357,8 +358,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
 
         ## Convert initial states
         uva0, solid_props, fluid_props, _ = self.convert()
-        grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
-        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva, uva0, solid_props, fluid_props)
 
         out['u0'].flat[:] = grad_u0
         out['v0'].flat[:] = grad_v0
@@ -371,7 +371,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
         # df0_deta_adj = dfn.assemble(df0_deta_adj_frm)
 
         df0_demod_adj = dfn.assemble(df0_demod_adj_frm)
-        out['elastic_moduli'][:] = grad['emod'] - df0_demod_adj*adj_a0
+        out['elastic_moduli'][:] = grad_solid['emod'] - df0_demod_adj*adj_a0
 
         return out
 
@@ -413,7 +413,7 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
 
         return uva, solid_props, fluid_props, timing_props
 
-    def dconvert(self, grad):
+    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
@@ -425,8 +425,7 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
 
         ## Convert initial state
         uva0, solid_props, fluid_props, _ = self.convert()
-        grad_uva0 = (grad['u0'], grad['v0'], grad['a0'])
-        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva0, uva0, solid_props, fluid_props)
+        grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva, uva0, solid_props, fluid_props)
 
         out['u0'].flat[:] = grad_u0
         out['v0'].flat[:] = grad_v0
@@ -439,8 +438,8 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
 
         df0_demod_adj = dfn.assemble(df0_demod_adj_frm)
         df0_deta_adj = dfn.assemble(df0_deta_adj_frm)
-        out['elastic_moduli'][:] = grad['emod'] - df0_demod_adj*adj_a0
-        out['eta'][:] = grad['eta'] - df0_deta_adj*adj_a0
+        out['elastic_moduli'][:] = grad_solid['emod'] - df0_demod_adj*adj_a0
+        out['eta'][:] = grad_solid['eta'] - df0_deta_adj*adj_a0
 
         return out
 
