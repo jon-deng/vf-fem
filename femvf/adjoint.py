@@ -81,6 +81,7 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
             adj_solid[key] = dfn.Function(solid.scalar_fspace).vector()
         else:
             adj_solid[key] = dfn.Function(solid.vector_fspace).vector()
+    # adj_fluid = ....
 
     ## Load states/parameters
     uva0 = tuple([dfn.Function(solid.vector_fspace).vector() for i in range(3)])
@@ -168,41 +169,62 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         # qp1 = qp0
         # dt2 = dt1
 
-    ## Calculate sensitivities wrt initial states
-    adj_u0, adj_v0, adj_a0, adj_q0, adj_p0 = adj_state1_rhs
-    model.solid.bc_base.apply(adj_u0)
-    model.solid.bc_base.apply(adj_v0)
-    model.solid.bc_base.apply(adj_a0)
-
-
-    grad = {}
-    grad['u0'] = adj_u0
-    grad['v0'] = adj_v0
-    grad['a0'] = adj_a0
-
-    if coupling == 'explicit':
-        # model.set_ini_state(*uva0)
-        dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
-        adj_p0_ = dp_du.getVecRight()
-        adj_p0_[:] = adj_p0
-        grad['u0'] += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0 # convert PETSc.Vec to dfn.PETScVector
-
-    # Change grad_dt to an array
-    grad['dt'] = np.array(adj_dt)
-
-    for key, vector in adj_solid.items():
-        if vector is not None:
-            grad[key] = vector
-
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
     dfunc_dparam = functional.dp(f)
     if dfunc_dparam is not None:
         for key, vector in adj_solid.items():
             if vector is not None:
-                grad[key] += dfunc_dparam.get(key, 0)
+                vector += dfunc_dparam.get(key, 0)
 
-    return functional_value, grad, functional
+    ## Calculate gradients
+    # Calculate sensitivities wrt initial states
+    adj_u0, adj_v0, adj_a0, adj_q0, adj_p0 = adj_state1_rhs
+    model.solid.bc_base.apply(adj_u0)
+    model.solid.bc_base.apply(adj_v0)
+    model.solid.bc_base.apply(adj_a0)
+
+    grad = {}
+    grad_u0 = adj_u0
+    grad_v0 = adj_v0
+    grad_a0 = adj_a0
+
+    if coupling == 'explicit':
+        # model.set_ini_state(*uva0)
+        dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
+        adj_p0_ = dp_du.getVecRight()
+        adj_p0_[:] = adj_p0
+        grad_u0 += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0 # convert PETSc.Vec to dfn.PETScVector
+
+    grad_uva = (grad_u0, grad_v0, grad_a0)
+
+    # Calculate sensitivities w.r.t solid properties
+    grad_solid = model.solid.get_properties()
+    grad_solid.vector[:] = 0
+    for key, vector in adj_solid.items():
+        if vector is not None:
+            if grad_solid[key].shape == ():
+                grad_solid[key][()] = vector
+            else:
+                grad_solid[key][:] = vector
+
+    # Calculate sensitivties w.r.t fluid properties
+    grad_fluid = model.fluid.get_properties()
+    grad_fluid.vector[:] = 0
+
+    # Calculate sensitivities w.r.t integration times
+    grad_dt = np.array(adj_dt)
+
+    grad_times = np.zeros(N)
+    # the conversion below is becase dt = t1 - t0
+    grad_times[1:] = grad_dt
+    grad_times[:-1] -= grad_dt
+
+    for key, vector in adj_solid.items():
+        if vector is not None:
+            grad[key] = vector
+
+    return functional_value, grad_uva, grad_solid, grad_fluid, grad_times
 
 def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
     """
