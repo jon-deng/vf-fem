@@ -288,7 +288,7 @@ class TestBasicGradient(TaylorTestUtils):
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
-class TestParameterizedGradient(TaylorTestUtils):
+class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
     FUNCTIONAL = funcs.FinalDisplacementNorm
@@ -310,10 +310,9 @@ class TestParameterizedGradient(TaylorTestUtils):
         constants = {
             'default_solid_props': solid_props,
             'default_fluid_props': fluid_props,
-            'NUM_STATES_PER_PERIOD': 128,
-            'period': t_final-t_start}
-        self.p = parameterization.FixedPeriodKelvinVoigt(self.model, constants)
-        self.p['elastic_moduli'][:] = solid_props['emod']
+            'NUM_STATES_PER_PERIOD': 128}
+        self.p = parameterization.PeriodicKelvinVoigt(self.model, constants)
+        self.p['period'][()] = t_final-t_start
 
     def get_taylor_order(self, save_path, hs, dp):
         """
@@ -344,13 +343,40 @@ class TestParameterizedGradient(TaylorTestUtils):
 
         return (order_1, order_2)
 
-    def test_fixed_period_kelvin_voigt(self):
-        save_path = 'out/parameterizationgrad-states.h5'
+    def test_u0(self):
+        save_path = 'out/linesearch_periodickelvinvoigt_u0.h5'
 
         hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
 
         dp = self.p.copy()
-        dp['elastic_moduli'][:] = 1.0e3
+        dp.vector[:] = 0
+        dp['u0'][:] = 1.0e3
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
+        # self.assertTrue(np.all(order_1 == 1.0))
+        # self.assertTrue(np.all(order_2 == 2.0))
+
+    def test_v0(self):
+        save_path = 'out/linesearch_periodickelvinvoigt_v0.h5'
+
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 3)-5)), axis=0)
+
+        dp = self.p.copy()
+        dp.vector[:] = 0
+        dp['v0'][:] = 1.0e3
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
+        # self.assertTrue(np.all(order_1 == 1.0))
+        # self.assertTrue(np.all(order_2 == 2.0))
+
+    def test_period(self):
+        save_path = 'out/linesearch_periodickelvinvoigt_period.h5'
+
+        hs = np.concatenate(([0], 2.0**(np.arange(-6, 0))), axis=0)
+
+        dp = self.p.copy()
+        dp.vector[:] = 0
+        dp['period'][()] = 1.0e-4
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
         # self.assertTrue(np.all(order_1 == 1.0))
@@ -619,6 +645,8 @@ if __name__ == '__main__':
     # test.test_a0()
     # test.test_times()
 
-    test = TestParameterizedGradient()
+    test = TestPeriodicKelvinVoigtGradient()
     test.setUp()
-    test.test_fixed_period_kelvin_voigt()
+    # test.test_u0()
+    # test.test_v0()
+    test.test_period()

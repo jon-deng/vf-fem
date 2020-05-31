@@ -270,18 +270,15 @@ class PeriodicKelvinVoigt(FullParameterization):
         solid_props = self.constants['default_solid_props'].copy()
         fluid_props = self.constants['default_fluid_props'].copy()
 
+        ## Convert to integration times
         N = self.constants['NUM_STATES_PER_PERIOD']
-        dt = self['period']/(N-1)
-        # timing_props = {'t0': 0.0, 'dt_max': dt, 'tmeas': dt*np.arange(N)}
-        timing_props = dt*np.arange(N)
+        times = np.linspace(0.0, self['period'], N)
 
-
-        ## Convert initial states
+        ## Convert to initial states
         u0, v0 = self['u0'].reshape(-1), self['v0'].reshape(-1)
         uva = convert_uv0(self.model, (u0, v0), solid_props, fluid_props)
 
-        # print(uva[0].norm('l2'), uva[1].norm('l2'), uva[2].norm('l2'))
-        return uva, solid_props, fluid_props, timing_props
+        return uva, solid_props, fluid_props, times
 
     def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
@@ -293,7 +290,7 @@ class PeriodicKelvinVoigt(FullParameterization):
         out = self.copy()
         out.vector[:] = 0.0
 
-        ## Convert gradients of u,v,a to u,v
+        ## Convert gradients of uva
         uva0, solid_props, fluid_props, _ = self.convert()
         grad_u0, grad_v0, adj_a0 = dconvert_uv0(self.model, grad_uva, uva0, solid_props, fluid_props)
 
@@ -302,11 +299,11 @@ class PeriodicKelvinVoigt(FullParameterization):
         # out['u0'].flat[:] = grad['u0']
         # out['v0'].flat[:] = grad['v0']
 
-        ## Convert gradients of dt to T (period)
+        ## Convert gradients of integration times to T (period)
         N = self.constants['NUM_STATES_PER_PERIOD']
         # This conversion rule is because the integration times are distributed evenly
         # using N points over the period
-        out['period'][()] = np.dot(np.linspace(0, self['period'], N), grad_times)
+        out['period'][()] = np.dot(np.linspace(0, 1.0, N), grad_times)
 
         return out
 
