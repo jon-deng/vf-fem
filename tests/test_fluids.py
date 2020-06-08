@@ -237,7 +237,86 @@ class TestBernoulli(CommonSetup):
         fluid.set_fin_surf_state(u1, 0.0)
         qp1 = fluid.solve_qp1()
 
-class TestSmoothApproximations(unittest.TestCase):
+class TestSmoothApproximations(CommonSetup):
+    def setUp(self):
+        super().setUp()
+
+        alpha, k, sigma = -500, 75, 0.005
+        self.fluid_properties['alpha'][()] = alpha
+        self.fluid_properties['k'][()] = k
+        self.fluid_properties['sigma'][()] = sigma
+
+    def test_smooth_minimum_weights(self):
+        """
+        Plots the values of the smoothing factors
+        """
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
+        xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
+        y = xy_surf.reshape(-1, 2)[:, 1]
+
+        area = 2 * (fluid_props['y_midline'] - y)
+
+        # print(fluid_props.)
+        print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
+        # breakpoint()
+        K_STABILITY = np.max(fluid_props['alpha']*area)
+        w_smooth_min = np.exp(fluid_props['alpha']*area - K_STABILITY)
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(fluid.x_vertices, y)
+        ax = ax.twinx()
+        ax.plot(fluid.x_vertices, w_smooth_min, marker='o', ls='none')
+        plt.show()
+
+    def test_smooth_selection_weights(self):
+        """
+        Plots the values of the smoothing factors
+        """
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
+        xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
+        y = xy_surf.reshape(-1, 2)[:, 1]
+
+        area = 2 * (fluid_props['y_midline'] - y)
+
+        # print(fluid_props.)
+        print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
+        log_w = fluids.log_gaussian(area, np.min(area), fluid_props['sigma'])
+        w = np.exp(log_w - np.max(log_w))
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(fluid.x_vertices, y)
+
+        ax = ax.twinx()
+        ax.plot(fluid.x_vertices, w, marker='o', ls='none')
+        plt.show()
+
+    def test_smooth_cutoff(self):
+        """
+        Plots the values of the smoothing factors
+        """
+        fluid = self.fluid
+        fluid.set_properties(self.fluid_properties)
+
+        xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
+        y = xy_surf.reshape(-1, 2)[:, 1]
+
+        area = 2 * (fluid_props['y_midline'] - y)
+
+        # print(fluid_props.)
+        print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
+        w = fluids.smooth_cutoff(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['k'])
+
+        fig, ax = plt.subplots(1, 1)
+        ax.plot(fluid.x_vertices, y)
+
+        ax = ax.twinx()
+        ax.plot(fluid.x_vertices, w, marker='o', ls='none')
+        plt.show()
+
     def test_gaussian(self):
         dgaussian_dx_ad = autograd.grad(fluids.gaussian, 0)
         dgaussian_dx0_ad = autograd.grad(fluids.gaussian, 1)
@@ -253,7 +332,7 @@ class TestSmoothApproximations(unittest.TestCase):
 
         self.assertAlmostEqual(dsigmoid_dx_ad(x), fluids.dsigmoid_dx(x))
 
-    def test_smooth_cutoff(self):
+    def test_dsmooth_cutoff(self):
         dsmooth_cutoff_dx_ad = autograd.grad(fluids.smooth_cutoff, 0)
         dsmooth_cutoff_dx0_ad = autograd.grad(fluids.smooth_cutoff, 1)
         x, k = 0.1, 100.0
@@ -285,12 +364,18 @@ class TestSmoothApproximations(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    test = TestBernoulli()
-    test.setUp()
+    # test = TestBernoulli()
+    # test.setUp()
 
-    test.test_fluid_pressure()
-    test.test_get_ini_surf_config()
-    test.test_get_fin_surf_config()
+    # test.test_fluid_pressure()
+    # test.test_get_ini_surf_config()
+    # test.test_get_fin_surf_config()
     # test.test_get_flow_sensitivity_solid()
     # test.test_flow_sensitivity_fd()
     # test.test_flow_sensitivity_solid()
+
+    test = TestSmoothApproximations()
+    test.setUp()
+    test.test_smooth_minimum_weights()
+    test.test_smooth_selection_weights()
+    test.test_smooth_cutoff()

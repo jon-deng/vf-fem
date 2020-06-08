@@ -82,7 +82,7 @@ class PeriodicError(Functional):
     where :math:T is the period.
     """
     func_types = ()
-    default_constants = {}
+    default_constants = {'alpha': 1e3}
 
     @staticmethod
     def form_definitions(model):
@@ -95,40 +95,118 @@ class PeriodicError(Functional):
         res_u = forms['u_N']-forms['u_0']
         res_v = forms['v_N']-forms['v_0']
 
-        forms['res'] = (ufl.inner(res_u, res_u) + ufl.inner(res_v, res_v)) * ufl.dx
+        # forms['alpha'] = dfn.Constant(1.0)
 
-        forms['dres_du_0'] = ufl.derivative(forms['res'], forms['u_0'], model.solid.vector_trial)
-        forms['dres_dv_0'] = ufl.derivative(forms['res'], forms['v_0'], model.solid.vector_trial)
+        forms['resu'] = ufl.inner(res_u, res_u) * ufl.dx
+        forms['resv'] = ufl.inner(res_v, res_v) * ufl.dx
 
-        forms['dres_du_N'] = ufl.derivative(forms['res'], forms['u_N'], model.solid.vector_trial)
-        forms['dres_dv_N'] = ufl.derivative(forms['res'], forms['v_N'], model.solid.vector_trial)
+        forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], model.solid.vector_trial)
+        forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], model.solid.vector_trial)
+
+        forms['dresv_dv_0'] = ufl.derivative(forms['resv'], forms['v_0'], model.solid.vector_trial)
+        forms['dresv_dv_N'] = ufl.derivative(forms['resv'], forms['v_N'], model.solid.vector_trial)
         return forms
 
     def eval(self, f):
+        alphau = self.constants['alpha']
         self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], _ = f.get_state(0)
         self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
-
-        # TODO: Values should be cached in self.u_..... anyway so don't have to cahce anything
-        # self.cache['u_0'] = self.u_0.vector()
-        # self.cache['v_0'] = self.v_0.vector()
-        # self.cache['u_N'] = self.u_N.vector()
-        # self.cache['v_N'] = self.v_N.vector()
-
-        return dfn.assemble(self.forms['res'])
+        erru = dfn.assemble(self.forms['resu'])
+        errv = dfn.assemble(self.forms['resv'])
+        print(alphau**2*erru, errv)
+        return alphau**2*erru + errv
 
     def eval_duva(self, f, n, iter_params0, iter_params1):
+        alphau = self.constants['alpha']
         du = dfn.Function(self.model.solid.vector_fspace).vector()
         dv = dfn.Function(self.model.solid.vector_fspace).vector()
         if n == 0:
-            du[:] = dfn.assemble(self.forms['dres_du_0'])
-            dv[:] = dfn.assemble(self.forms['dres_dv_0'])
+            du[:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
+            dv[:] = dfn.assemble(self.forms['dresv_dv_0'])
         elif n == f.size-1:
-            du[:] = dfn.assemble(self.forms['dres_du_N'])
-            dv[:] = dfn.assemble(self.forms['dres_dv_N'])
+            du[:] = alphau**2*dfn.assemble(self.forms['dresu_du_N'])
+            dv[:] = dfn.assemble(self.forms['dresv_dv_N'])
         return du, dv, 0.0
 
     def eval_dp(self, f):
         return None
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        dq[:], dp[:] = 0, 0
+        return dq, dp
+
+class PeriodicEnergyError(Functional):
+    """
+    Functional that measures the periodicity of a simulation
+
+    This returns
+    .. math:: \int_\Omega ||u(T)-u(0)||_K^2 + ||v(T)-v(0)||_M^2 \, dx ,
+    where :math:T is the period.
+    """
+    func_types = ()
+    default_constants = {'alpha': 1.0}
+
+    @staticmethod
+    def form_definitions(model):
+        from ..solids import biform_m, biform_k
+        forms = {}
+        forms['u_0'] = dfn.Function(model.solid.vector_fspace)
+        forms['u_N'] = dfn.Function(model.solid.vector_fspace)
+        forms['v_0'] = dfn.Function(model.solid.vector_fspace)
+        forms['v_N'] = dfn.Function(model.solid.vector_fspace)
+
+        res_u = forms['u_N']-forms['u_0']
+        res_v = forms['v_N']-forms['v_0']
+        rho = model.solid.forms['coeff.prop.rho']
+        emod = model.solid.forms['coeff.prop.emod']
+        nu = model.solid.forms['coeff.prop.nu']
+
+        forms['resu'] = biform_k(res_u, res_u, emod, nu)
+        forms['resv'] = biform_m(res_v, res_v, rho)
+
+        forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], model.solid.vector_trial)
+        forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], model.solid.vector_trial)
+        forms['dresu_demod'] = ufl.derivative(forms['resu'], emod, model.solid.scalar_trial)
+
+        forms['dresv_dv_0'] = ufl.derivative(forms['resv'], forms['v_0'], model.solid.vector_trial)
+        forms['dresv_dv_N'] = ufl.derivative(forms['resv'], forms['v_N'], model.solid.vector_trial)
+        return forms
+
+    def eval(self, f):
+        alphau = self.constants['alpha']
+
+        self.model.set_solid_props(f.get_solid_props())
+        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], _ = f.get_state(0)
+        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
+
+        erru = dfn.assemble(self.forms['resu'])
+        errv = dfn.assemble(self.forms['resv'])
+        print(alphau**2*erru, errv)
+        return alphau**2*erru + errv
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        alphau = self.constants['alpha']
+        du = dfn.Function(self.model.solid.vector_fspace).vector()
+        dv = dfn.Function(self.model.solid.vector_fspace).vector()
+        if n == 0:
+            du[:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
+            dv[:] = dfn.assemble(self.forms['dresv_dv_0'])
+        elif n == f.size-1:
+            du[:] = alphau**2*dfn.assemble(self.forms['dresu_du_N'])
+            dv[:] = dfn.assemble(self.forms['dresv_dv_N'])
+        return du, dv, 0.0
+
+    def eval_dp(self, f):
+        alphau = self.constants['alpha']
+
+        self.model.set_solid_props(f.get_solid_props())
+        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], _ = f.get_state(0)
+        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
+
+        derru_demod = dfn.assemble(self.forms['dresu_demod'])
+
+        return {'emod': alphau**2*derru_demod}
 
     def eval_dqp(self, f, n, iter_params0, iter_params1):
         dq, dp = self.model.fluid.get_state_vecs()
@@ -363,6 +441,97 @@ class FinalSurfacePower(Functional):
     def eval_dp(self, f):
         return None
 
+## Energy functionals
+class ElasticEnergyDifference(Functional):
+    func_types = ()
+    default_constants = {}
+
+    @staticmethod
+    def form_definitions(model):
+        from ..solids import biform_k
+        forms = {}
+
+        emod = model.solid.forms['coeff.prop.emod']
+        nu = model.solid.forms['coeff.prop.nu']
+
+        u_ini = dfn.Function(model.solid.vector_fspace)
+        u_fin = dfn.Function(model.solid.vector_fspace)
+
+        en_elastic_ini = biform_k(u_ini, u_ini, emod, nu)
+        en_elastic_fin = biform_k(u_fin, u_fin, emod, nu)
+
+        forms['u_ini'] = u_ini
+        forms['u_fin'] = u_fin
+        forms['en_elastic_ini'] = en_elastic_ini
+        forms['en_elastic_fin'] = en_elastic_fin
+        forms['den_elastic_ini_du'] = dfn.derivative(en_elastic_ini, u_ini, model.solid.vector_trial)
+        forms['den_elastic_fin_du'] = dfn.derivative(en_elastic_fin, u_fin, model.solid.vector_trial)
+
+        forms['den_elastic_ini_demod'] = dfn.derivative(en_elastic_ini, emod)
+        forms['den_elastic_fin_demod'] = dfn.derivative(en_elastic_fin, emod)
+        return forms
+
+    def eval(self, f):
+        self.model.set_solid_props(f.get_solid_props())
+        u_ini_vec = f.get_state(0)[0]
+        u_fin_vec = f.get_state(-1)[0]
+
+        self.forms['u_ini'].vector()[:] = u_ini_vec
+        self.forms['u_fin'].vector()[:] = u_fin_vec
+
+        en_elastic_ini = dfn.assemble(self.forms['en_elastic_ini'])
+        en_elastic_fin = dfn.assemble(self.forms['en_elastic_fin'])
+        return (en_elastic_fin - en_elastic_ini)**2
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        du, dv, da = 0.0, 0.0, 0.0
+        if n == 0 or n == f.size-1:
+            u_ini_vec = f.get_state(0)[0]
+            u_fin_vec = f.get_state(-1)[0]
+
+            self.forms['u_ini'].vector()[:] = u_ini_vec
+            self.forms['u_fin'].vector()[:] = u_fin_vec
+            self.model.set_solid_props(f.get_solid_props())
+
+            en_elastic_ini = dfn.assemble(self.forms['en_elastic_ini'])
+            en_elastic_fin = dfn.assemble(self.forms['en_elastic_fin'])
+
+            den_elastic_ini_du = dfn.assemble(self.forms['den_elastic_ini_du'])
+            den_elastic_fin_du = dfn.assemble(self.forms['den_elastic_fin_du'])
+
+            # out = (en_elastic_fin - en_elastic_ini)**2
+            if n == f.size-1:
+                du = 2*(en_elastic_fin - en_elastic_ini) * den_elastic_fin_du
+            elif n == 0:
+                du = 2*(en_elastic_fin - en_elastic_ini) * -den_elastic_ini_du
+        else:
+            du = 0
+
+        return du, dv, da
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        return dq, dp
+
+    def eval_dp(self, f):
+        self.model.set_solid_props(f.get_solid_props())
+        u_ini_vec = f.get_state(0)[0]
+        u_fin_vec = f.get_state(-1)[0]
+
+        self.forms['u_ini'].vector()[:] = u_ini_vec
+        self.forms['u_fin'].vector()[:] = u_fin_vec
+
+        en_elastic_ini = dfn.assemble(self.forms['en_elastic_ini'])
+        en_elastic_fin = dfn.assemble(self.forms['en_elastic_fin'])
+
+        den_elastic_ini_demod = dfn.assemble(self.forms['den_elastic_ini_demod'])
+        den_elastic_fin_demod = dfn.assemble(self.forms['den_elastic_fin_demod'])
+        # out = (en_elastic_fin - en_elastic_ini)**2
+        demod = 2*(en_elastic_fin - en_elastic_ini)*(den_elastic_fin_demod - den_elastic_ini_demod)
+
+        # dsolid = {'emod': demod}
+        return {'emod': demod}
+
 class KVDampingWork(Functional):
     """
     Returns the work dissipated in the tissue due to damping
@@ -499,7 +668,7 @@ class RayleighDampingWork(Functional):
 
 class TransferWorkbyVelocity(Functional):
     """
-    Return work done by the fluid on the vocal folds by integrating power on the surface over time.
+    Return work done by the fluid on the vocal folds by integrating power over the surface over time.
 
     Parameters
     ----------
@@ -706,50 +875,6 @@ class TransferWorkbyDisplacementIncrement(Functional):
     def eval_dp(self, f):
         return None
 
-class VolumeFlow(Functional):
-    """
-    Return the total volume of fluid that flowed through the vocal folds
-
-    Parameters
-    ----------
-    n_start : int, optional
-        Starting index to compute the functional over
-    """
-    func_types = ()
-    default_constants = {
-        'm_start': 0,
-        'tukey_alpha': 0.0}
-
-    def eval(self, f):
-        N_STATE = f.get_num_states()
-        N_START = self.constants['m_start']
-
-        totalflow = 0
-        for ii in range(N_START, N_STATE-1):
-            fluid_info, _ = self.model.set_iter_params_fromfile(f, ii+1)
-
-            totalflow += fluid_info['flow_rate'] * self.model.dt.values()[0]
-
-        return totalflow
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        N_START = self.constants['m_start']
-
-        num_states = f.get_num_states()
-        du = None
-        if n < N_START or n == num_states-1:
-            du = dfn.Function(self.model.solid.vector_fspace).vector()
-        else:
-            # self.model.set_iter_params_fromfile(f, n+1)
-            self.model.set_iter_params(**iter_params1)
-            _, dq_dun = self.model.get_flow_sensitivity()
-            du = dq_dun * self.model.dt.values()[0]
-
-        return du, 0.0, 0.0
-
-    def eval_dp(self, f):
-        return None
-
 class SubglottalWork(Functional):
     """
     Return the total work input into the fluid from the lungs (subglottal).
@@ -830,6 +955,51 @@ class TransferEfficiency(Functional):
             du = dfn.Function(self.model.solid.vector_fspace).vector()
         else:
             du = dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
+
+        return du, 0.0, 0.0
+
+    def eval_dp(self, f):
+        return None
+
+## Flow functionals
+class VolumeFlow(Functional):
+    """
+    Return the total volume of fluid that flowed through the vocal folds
+
+    Parameters
+    ----------
+    n_start : int, optional
+        Starting index to compute the functional over
+    """
+    func_types = ()
+    default_constants = {
+        'm_start': 0,
+        'tukey_alpha': 0.0}
+
+    def eval(self, f):
+        N_STATE = f.get_num_states()
+        N_START = self.constants['m_start']
+
+        totalflow = 0
+        for ii in range(N_START, N_STATE-1):
+            fluid_info, _ = self.model.set_iter_params_fromfile(f, ii+1)
+
+            totalflow += fluid_info['flow_rate'] * self.model.dt.values()[0]
+
+        return totalflow
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        N_START = self.constants['m_start']
+
+        num_states = f.get_num_states()
+        du = None
+        if n < N_START or n == num_states-1:
+            du = dfn.Function(self.model.solid.vector_fspace).vector()
+        else:
+            # self.model.set_iter_params_fromfile(f, n+1)
+            self.model.set_iter_params(**iter_params1)
+            _, dq_dun = self.model.get_flow_sensitivity()
+            du = dq_dun * self.model.dt.values()[0]
 
         return du, 0.0, 0.0
 
@@ -943,6 +1113,7 @@ class SampledMeanFlowRate(Functional):
     def eval_dp(self, f):
         return dfn.Function(self.model.solid.scalar_fspace).vector()
 
+## Glottal width functionals
 class GlottalWidthErrorNorm(Functional):
     """
     Represents the difference between a measured vs model glottal width
@@ -1198,6 +1369,3 @@ def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
         fn = (n+1)*f0
 
     return comb
-
-# TODO: Previously had a lagrangian regularization term here but accidentally
-# deleted that code... need to make it again.

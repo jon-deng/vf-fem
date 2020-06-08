@@ -8,13 +8,8 @@ You should think about what forms should be custom made for different solid gove
 and what types of forms are always generated the same way, and refactor accordingly.
 """
 
-
-
 import dolfin as dfn
 import ufl
-
-
-
 
 from .parameters.properties import SolidProperties
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS

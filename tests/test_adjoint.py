@@ -35,7 +35,9 @@ from femvf.fluids import Bernoulli
 from femvf.model import load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import basic as funcs
+from femvf.functionals import basic
+
+from femvf.utils import line_search, line_search_p
 
 # sys.path.append(path.expanduser('~/lib/vf-optimization'))
 # from optvf import functionals as extra_funcs
@@ -145,8 +147,11 @@ class TaylorTestUtils(unittest.TestCase):
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
-    FUNCTIONAL = funcs.FinalDisplacementNorm
+    OVERWRITE_FORWARD_SIMULATIONS = False
+    # FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = basic.ElasticEnergyDifference
+    FUNCTIONAL = basic.PeriodicError
+    FUNCTIONAL = basic.PeriodicEnergyError
 
     def setUp(self):
         """
@@ -190,8 +195,8 @@ class TestBasicGradient(TaylorTestUtils):
         self.plot_grad_uva(self.model, grad_uva)
         plt.show()
 
-        print(order_1)
-        print(order_2)
+        print('1st order Taylor', order_1)
+        print('2nd order Taylor', order_2)
 
         return (order_1, order_2)
 
@@ -291,7 +296,7 @@ class TestBasicGradient(TaylorTestUtils):
 class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    FUNCTIONAL = funcs.FinalDisplacementNorm
+    FUNCTIONAL = basic.FinalDisplacementNorm
 
     def setUp(self):
         """
@@ -389,73 +394,6 @@ class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
-
-def line_search(hs, model, uva, solid_props, fluid_props, times,
-                duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
-                coupling='explicit', filepath='temp.h5'):
-    if os.path.exists(filepath):
-        os.remove(filepath)
-
-    for n, h in enumerate(hs):
-        # Increment all the properties along the search direction
-        uva_n = tuple([uva[i] + h*duva[i] for i in range(3)])
-
-        solid_props_n = solid_props.copy()
-        if dsolid_props is not None:
-            solid_props_n.vector[:] += h*dsolid_props.vector
-
-        fluid_props_n = fluid_props.copy()
-        if dfluid_props is not None:
-            fluid_props_n.vector[:] += h*dfluid_props.vector
-
-        times_n = np.array(times)
-        if dtimes is not None:
-            times_n += h*dtimes
-        # timing_props_n = {'t0': times_n[0], 'tmeas': times_n, 'dt_max': np.inf}
-
-        runtime_start = perf_counter()
-        info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
-                         coupling=coupling, h5file=filepath, h5group=f'{n}')
-        runtime_end = perf_counter()
-
-        print(f"Run duration {runtime_end-runtime_start} s")
-
-        # Save the run info to a pickled file
-        if h == 0:
-            with open(path.splitext(filepath)[0] + ".pickle", 'wb') as f:
-                pickle.dump(info, f)
-
-    return filepath
-
-def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
-    """
-    Returns a parameterized line search for parameterization `p` in direction `dp`.
-    """
-    if os.path.exists(filepath):
-        os.remove(filepath)
-
-    p_n = p.copy()
-    for n, h in enumerate(hs):
-        # Increment all the properties along the search direction
-        p_n.vector[:] = p.vector + h*dp.vector
-
-        uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
-        # breakpoint()
-        # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
-
-        runtime_start = perf_counter()
-        info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
-                         coupling=coupling, h5file=filepath, h5group=f'{n}')
-        runtime_end = perf_counter()
-
-        print(f"Run duration {runtime_end-runtime_start} s")
-
-        # Save the run info to a pickled file
-        if h == 0:
-            with open(path.splitext(filepath)[0] + ".pickle", 'wb') as f:
-                pickle.dump(info, f)
-
-    return filepath
 
 def grad_and_taylor_order(filepath, functional, hs, model,
                           duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
@@ -645,16 +583,16 @@ class TestResidualJacobian(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    # test = TestBasicGradient()
-    # test.setUp()
+    test = TestBasicGradient()
+    test.setUp()
     # test.test_emod()
-    # test.test_u0()
+    test.test_u0()
     # test.test_v0()
     # test.test_a0()
-    # test.test_times()
+    test.test_times()
 
-    test = TestPeriodicKelvinVoigtGradient()
-    test.setUp()
-    test.test_u0()
-    test.test_v0()
-    test.test_period()
+    # test = TestPeriodicKelvinVoigtGradient()
+    # test.setUp()
+    # test.test_u0()
+    # test.test_v0()
+    # test.test_period()

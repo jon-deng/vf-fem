@@ -28,6 +28,10 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluid
     mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
     if isinstance(solid_mesh, str):
         ext = path.splitext(solid_mesh)[1]
+        # if no extension is supplied, assume it's a fenics xml mesh
+        if ext == '':
+            ext = '.xml'
+
         if ext.lower() == '.xml':
             # The solid mesh is an xml file
             mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)

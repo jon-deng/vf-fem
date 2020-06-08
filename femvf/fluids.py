@@ -438,7 +438,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'rho': 1.1225 * SI_DENSITY_TO_CGS,
         'y_midline': 0.61,
         'alpha': -3000,
-        'k': 50,
+        'k': 75,
         'sigma': 0.002}
 
     def solve_qp1(self):
