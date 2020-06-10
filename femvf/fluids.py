@@ -428,7 +428,9 @@ class Bernoulli(QuasiSteady1DFluid):
         'y_midline': ('const', ()),
         'alpha': ('const', ()),
         'k': ('const', ()),
-        'sigma': ('const', ())}
+        'sigma': ('const', ()),
+        'beta': ('const', ()),
+        'a_min_stable': ('const', ())}
 
     PROPERTY_DEFAULTS = {
         'p_sub': 800 * PASCAL_TO_CGS,
@@ -439,7 +441,9 @@ class Bernoulli(QuasiSteady1DFluid):
         'y_midline': 0.61,
         'alpha': -3000,
         'k': 75,
-        'sigma': 0.002}
+        'sigma': 0.002,
+        'beta': 3/.002,
+        'a_min_stable': 0.001}
 
     def solve_qp1(self):
         """
@@ -514,11 +518,12 @@ class Bernoulli(QuasiSteady1DFluid):
         x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
 
         area = 2 * (y_midline - y)
-        dt_area = -2 * (y)
+        area_safe = smooth_lower_bound(area, fluid_props['a_min_stable'], fluid_props['beta'])
+        dt_area = -2 * surface_state[1].reshape(-1, 2)[:, 1]
 
         # Calculate minimum and separation areas/locations
-        a_min = smooth_minimum(area, self.s_vertices, alpha)
-        dt_a_min = np.sum(dsmooth_minimum_df(area, self.s_vertices, alpha) * dt_area)
+        a_min = smooth_minimum(area_safe, self.s_vertices, alpha)
+        dt_a_min = np.sum(dsmooth_minimum_df(area_safe, self.s_vertices, alpha) * dt_area)
         a_sep = SEPARATION_FACTOR * a_min
         dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
@@ -527,11 +532,11 @@ class Bernoulli(QuasiSteady1DFluid):
         flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
         dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
 
-        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
+        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
 
         # Calculate x_sep for plotting/information purposes
-        x_sep = smooth_selection(x, area, a_sep, self.s_vertices, sigma)
-        s_sep = smooth_selection(self.s_vertices, area, a_sep, self.s_vertices, sigma=sigma)
+        x_sep = smooth_selection(x, area_safe, a_sep, self.s_vertices, sigma)
+        s_sep = smooth_selection(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma=sigma)
         sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
 
         p = sep_multiplier * p_bernoulli
@@ -552,7 +557,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'x_sep': x_sep,
                 'a_min': a_min,
                 'a_sep': a_sep,
-                'area': area,
+                'area': area_safe,
                 'pressure': p}
         return flow_rate, p, info
 
@@ -580,8 +585,11 @@ class Bernoulli(QuasiSteady1DFluid):
         area = 2 * (y_midline - y)
         darea_dy = -2 # darea_dx = 0
 
-        a_min = smooth_minimum(area, self.s_vertices, alpha)
-        da_min_darea = dsmooth_minimum_df(area, self.s_vertices, alpha)
+        area_safe = smooth_lower_bound(area, fluid_props['a_min_stable'], fluid_props['beta'])
+        darea_safe_darea = dsmooth_lower_bound_df(area, fluid_props['a_min_stable'], fluid_props['beta'])
+
+        a_min = smooth_minimum(area_safe, self.s_vertices, alpha)
+        da_min_darea = dsmooth_minimum_df(area_safe, self.s_vertices, alpha) * darea_safe_darea
 
         a_sep = SEPARATION_FACTOR * a_min
         da_sep_da_min = SEPARATION_FACTOR
@@ -594,9 +602,9 @@ class Bernoulli(QuasiSteady1DFluid):
         dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
 
         # Find Bernoulli pressure
-        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area**-2)
-        dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area**3)
-        dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area**-2) * dflow_rate_sqr_da_sep
+        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
+        dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area_safe**3) * darea_safe_darea
+        dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area_safe**-2) * dflow_rate_sqr_da_sep
         dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
@@ -605,9 +613,9 @@ class Bernoulli(QuasiSteady1DFluid):
         # dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, self.s_vertices, sigma)*darea_dy \
         #             + dsmooth_selection_dy0(x, area, a_sep, self.s_vertices, sigma)*da_sep_dy
 
-        s_sep = smooth_selection(self.s_vertices, area, a_sep, self.s_vertices, sigma=sigma)
-        ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area, a_sep, self.s_vertices, sigma)*darea_dy \
-                    + dsmooth_selection_dy0(self.s_vertices, area, a_sep, self.s_vertices, sigma)*da_sep_dy
+        s_sep = smooth_selection(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma=sigma)
+        ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma)*darea_dy \
+                    + dsmooth_selection_dy0(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma)*da_sep_dy
 
         sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
         dsep_multiplier_dy = dsmooth_cutoff_dx0(self.s_vertices, s_sep, k=k)[:, None] * ds_sep_dy
@@ -722,6 +730,61 @@ class Bernoulli(QuasiSteady1DFluid):
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
+
+def smooth_lower_bound(f, f_lb, beta=100):
+    """
+    Return the value of `f` subject to a smooth lower bound `f_lb`
+
+    Function is based on a scaled and shifted version of the 'SoftPlus' function. This function
+    smoothly blends a constant function when f<f_lb with a linear function when f>f_lb.
+    The 'region' of smoothness is roughly characterized by 'df = f-f_lb', where the function is 95%
+    a straight line when `beta*df = 3`.
+
+    Parameters
+    ----------
+    f : array_like
+    f_lb : float
+        The minimum possible value of `f`
+    beta : float
+        The level of smoothness of the bounded function. This quantity has units of [cm^-1] if `f`
+        has units of [cm]. Larger values of beta increase the sharpness of the bound.
+    """
+    # Manually return 1 if the exponent is large enough to cause overflow
+    exponent = beta*(f-f_lb)
+    idx_underflow = exponent <= -50.0
+    idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
+    idx_overflow = exponent > 50.0
+
+    out = np.zeros(exponent.shape)
+    out[idx_underflow] = f_lb
+    out[idx_normal] = 1/beta*np.log(1 + np.exp(exponent[idx_normal])) + f_lb
+    out[idx_overflow] = f[idx_overflow]
+    return out
+
+def dsmooth_lower_bound_df(f, f_lb, beta=100):
+    """
+    Return the sensitivity of `smooth_lower_bound` to `f`
+
+    Parameters
+    ----------
+    f : array_like
+    f_lb : float
+        The minimum possible value of `f`
+    beta : float
+        The level of smoothness of the bounded function. This quantity has units of [cm^-1] if `f`
+        has units of [cm]. Larger values of beta increase the sharpness of the bound.
+    """
+    # Manually return limiting values if the exponents are large enough to cause overflow
+    exponent = beta*(f-f_lb)
+    idx_underflow = exponent <= -50.0
+    idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
+    idx_overflow = exponent > 50.0
+
+    out = np.zeros(exponent.shape)
+    out[idx_underflow] = 0
+    out[idx_normal] = np.exp(exponent[idx_normal]) / (1+np.exp(exponent[idx_normal]))
+    out[idx_overflow] = 1
+    return out
 
 def smooth_minimum(f, s, alpha=-1000):
     """

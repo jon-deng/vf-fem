@@ -147,7 +147,7 @@ class TaylorTestUtils(unittest.TestCase):
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
     # FUNCTIONAL = basic.FinalDisplacementNorm
     FUNCTIONAL = basic.ElasticEnergyDifference
     FUNCTIONAL = basic.PeriodicError
