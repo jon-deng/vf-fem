@@ -93,10 +93,9 @@ class FullParameterization:
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            try:
-                return np.all(self.vector == other.vector)
-            except:
-                raise
+            return np.all(self.vector == other.vector)
+        elif isinstance(other, np.ndarray):
+            return np.all(self.vector == other)
         else:
             raise TypeError(f"Cannot compare type {type(self)} <-- {type(other)}")
 
@@ -104,6 +103,9 @@ class FullParameterization:
         return not self.__eq__(other)
 
     def copy(self):
+        """
+        Return a copy of parameterization
+        """
         out = type(self)(self.model, self.constants)
         out.vector[:] = self.vector
         return out
@@ -234,6 +236,7 @@ class KelvinVoigtNodalConstants(FullParameterization):
         timing_props = self.constants['default_timing_props'].copy()
 
         solid_props['emod'][:] = self['elastic_moduli']
+        solid_props['eta'][:] = self['eta']
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
 

@@ -4,190 +4,26 @@ Forward model
 Uses CGS (cm-g-s) units unless otherwise stated
 """
 
-from math import isclose, ceil, floor, remainder
-
 import numpy as np
-from matplotlib import pyplot as plt
 import dolfin as dfn
 
 from . import solids
 from . import statefile as sf
-from . import vis
 
-# from .collision import detect_collision
-from .misc import get_dynamic_fluid_props
+DEFAULT_NEWTON_SOLVER_PRM = {
+    'linear_solver': 'petsc',
+    'absolute_tolerance': 1e-7,
+    'relative_tolerance': 1e-9}
 
-DEFAULT_NEWTON_SOLVER_PRM = {'linear_solver': 'petsc', 'absolute_tolerance': 1e-7, 'relative_tolerance': 1e-9}
-FIXEDPOINT_SOLVER_PRM = {'absolute_tolerance': 1e-8, 'relative_tolerance': 1e-11}
-
-def integrate_adaptive(model, uva, solid_props, fluid_props, timing_props,
-            h5file='tmp.h5', h5group='/',
-            adaptive_step_prm=None, newton_solver_prm=None, show_figure=False, figure_path=None):
-    """
-    Solves the forward model over specific time instants.
-
-    The `model` is solved over specific time instants. All intermediate solution states are saved to
-    an hdf5 file.
-
-    Parameters
-    ----------
-    model : model.ForwardModel
-        An object representing the forward model.
-    uva : tuple of array_like or float
-        Initial solid state (u, v, a)
-    qp : tuple of array_like or float
-        Initial fluid state (q, p)
-    timing_props : properties.TimingProperties
-        A timing properties object
-    solid_props : properties.SolidProperties
-        A solid properties object
-    fluid_props : properties.FluidProperties
-        A fluid properties object
-    h5file : string
-        Path to an hdf5 file where solution information will be appended.
-    h5group : string
-        A group in the h5 file to save solution information under.
-    adaptive_step_prm : dict of {'abs_tol': float or None, 'abs_tol_bounds': tuple}
-        A desired tolerance that the norm of the displacement solution should meet
-        Bounds on the solution norm tolerance. Time steps are adjusted so that the local error in
-        :math:`u_{n+1}` is between `abs_tol_bounds[0]*abs_tol` and `abs_tol_bounds[1]*abs_tol`.
-    show_figure : bool
-        Determines whether to display figures of the solution or not.
-    figure_path : string
-        A path to save figures to. The figures will have a postfix of the iteration number and
-        extension added.
-
-    Returns
-    -------
-    info : dict
-        A dictionary of info about the run.
-    """
-    # The default for adaptive time stepping is to not use it. Plus I think I messed up how it works
-    if adaptive_step_prm is None:
-        adaptive_step_prm = {'abs_tol': None, 'abs_tol_bounds': (0.0, 0.0)}
-    info = {}
-
-    t0, tmeas, dt_max = timing_props['t0'], timing_props['tmeas'], timing_props['dt_max']
-    model.set_fluid_props(fluid_props)
-    model.set_solid_props(solid_props)
-
-    # Allocate functions for states
-    u0 = dfn.Function(model.solid.vector_fspace).vector()
-    v0 = dfn.Function(model.solid.vector_fspace).vector()
-    a0 = dfn.Function(model.solid.vector_fspace).vector()
-    u0[:], v0[:], a0[:] = uva
-
-    model.set_ini_state(u0, v0, a0)
-
-    q0, p0, info = model.get_pressure()
-    model.set_pressure(p0)
-
-    # TODO: This should be removed. If you want to calculate a functional to record
-    # during the solution, a parameter should be made available in the function for that
-    ## Record things of interest initial state
-    idx_separation = []
-    idx_min_area = []
-    glottal_width = []
-    flow_rate = []
-    pressure = []
-    glottal_width.append(info['a_min'])
-    flow_rate.append(info['flow_rate'])
-
-    ## Allocate a figure for plotting
-    fig, axs = None, None
-    if show_figure:
-        fig, axs = vis.init_figure(model, fluid_props)
-
-    # Get the solution times
-    tmeas = np.array(tmeas)
-    if tmeas[-1] < tmeas[0]:
-        raise ValueError("The final solution time must be greater than the initial solution time."
-                         f"The input intial/final times were {tmeas[0]}/{tmeas[-1]}")
-    if tmeas.size <= 1:
-        raise ValueError("There must be atleast 2 measured time instances.")
-
-    ## Initialize datasets to save in h5 file
-    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0),
-                      fluid_props=fluid_props, solid_props=solid_props)
-        f.append_time(t0)
-
-    ## Loop through solution times and write solution variables to the h5file.
-    # TODO: Hardcoded the calculation of glottal width here, but it should be an option you
-    # can pass in along with other functionals of interest
-    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        t_current = t0
-        n_state = 0
-
-        for t_target in tmeas:
-            # Keep incrementing until you reach the target time
-            dt_proposal = dt_max
-            while not isclose(t_current, t_target, rel_tol=1e-7, abs_tol=10*2**-52):
-                assert t_current < t_target
-
-                uva0 = (u0, v0, a0)
-                qp0 = (q0, p0)
-
-                # Increment the state using a target time step. If the previous time step was
-                # refined to be smaller than the max time step, then try using that time step again.
-                # If the local error is super low, the refinement time step will be predicted to be
-                # high and so it will go back to the max time step.
-                dt_target = min(dt_proposal, dt_max, t_target - t_current)
-                uva1, qp1, dt_actual, step_info = adaptive_step(model, uva0, qp0, dt_target,
-                                                                **adaptive_step_prm)
-                n_state += 1
-                t_current += dt_actual
-
-                dt_proposal = dt_actual
-
-                idx_separation.append(step_info['fluid_info']['idx_sep'])
-                idx_min_area.append(step_info['fluid_info']['idx_min'])
-                glottal_width.append(step_info['fluid_info']['a_min'])
-                flow_rate.append(step_info['fluid_info']['flow_rate'])
-                pressure.append(step_info['fluid_info']['pressure'])
-
-                ## Write the solution outputs to a file
-                f.append_time(t_current)
-                f.append_state(uva1)
-                f.append_fluid_state(qp1)
-
-                ## Update initial conditions for the next time step
-                u0[:] = uva1[0]
-                v0[:] = uva1[1]
-                a0[:] = uva1[2]
-                q0 = qp1[0]
-                p0 = qp1[1]
-
-                ## Plot the solution
-                if show_figure:
-                    fig, axs = vis.update_figure(fig, axs, model, t_current, (u0, v0, a0),
-                                                 step_info['fluid_info'],
-                                                 solid_props, fluid_props)
-                    plt.pause(0.001)
-
-                    if figure_path is not None:
-                        ext = '.png'
-                        fig.savefig(f'{figure_path}_{n_state}{ext}')
-
-            f.append_meas_index(n_state)
-
-        # Write out the quantities fo interest to the h5file
-        f.file[f'{h5group}/gaw'] = np.array(glottal_width)
-
-        info['meas_ind'] = f.get_meas_indices()
-        info['time'] = f.get_times()
-        info['glottal_width'] = np.array(glottal_width)
-        info['flow_rate'] = np.array(flow_rate)
-        info['idx_separation'] = np.array(idx_separation)
-        info['idx_min_area'] = np.array(idx_min_area)
-        info['pressure'] = np.array(pressure)
-        info['h5file'] = h5file
-        info['h5group'] = h5group
-
-    return info
+FIXEDPOINT_SOLVER_PRM = {
+    'absolute_tolerance': 1e-8,
+    'relative_tolerance': 1e-11}
 
 def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
               h5file='tmp.h5', h5group='/', newton_solver_prm=None, coupling='implicit'):
+    """
+    Integrate the model over each time in `times` for the specified parameters
+    """
     if idx_meas is None:
         idx_meas = np.array([])
 
@@ -427,70 +263,6 @@ def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
                  'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
     return (u1, v1, a1), (q1, p1), step_info
-
-def adaptive_step(model, uva0, qp0, dt_max, abs_tol=1e-5, abs_tol_bounds=(0.8, 1.2)):
-    """
-    Integrate the model over `dt` using a smaller time step if needed.
-
-    # TODO: `fluid_props` is assumed to be constant over the time step
-
-    Parameters
-    ----------
-    model : model.ForwardModel
-    uva0 : tuple of dfn.Function
-        Initial states (u0, v0, a0) for the forward model.
-    qp0 : tuple of fluid state variables
-        (float, array_like) for Bernoulli
-    dt_max : float
-        The maximum time step to increment over.
-    solid_props : dict
-        A dictionary of solid properties.
-    fluid_props : dict
-        A dictionary of fluid properties.
-    adaptive : bool
-        Setting `adaptive=False` will enforce a single integration over the interval `dt`.
-
-    Returns
-    -------
-    tuple(3 * dfn.Function)
-        The states at the end of the time step.
-    float
-        The time step integrated over.
-    fluid_info : dict
-        A dictionary containing information on the fluid solution. These include the flow rate,
-        surface pressure, etc.
-    """
-    uva1 = None
-    dt = dt_max
-    info = {}
-
-    nrefine = -1
-    refine = True
-    while refine:
-        nrefine += 1
-        uva1, qp1, fluid_info = explicit_increment(model, uva0, qp0, dt)
-        info['fluid_info'] = fluid_info
-
-        err = newmark_error_estimate(uva1[2], uva0[2], dt, beta=model.forms['coeff.time.beta'].values()[0])
-        err_norm = err.norm('l2')
-        info['err_norm'] = err_norm
-        info['nrefine'] = nrefine
-
-        # coll_verts = model.get_collision_verts()
-
-        if abs_tol is not None:
-            # step control method that prevents crossing the midline in one step near collision
-            # TODO: I think i deleted this so you'll have to got to and old commit to find it....
-            refine, dt = refine_initial_collision(model, uva0, uva1, dt)
-
-            # Step control method from [1]
-            if err_norm > abs_tol_bounds[1]*abs_tol or err_norm < abs_tol_bounds[0]*abs_tol:
-                dt = (abs_tol/err_norm)**(1/3) * dt
-                refine = True
-        else:
-            refine = False
-
-    return uva1, qp1, dt, info
 
 def newton_solve(u, du, jac, res, bcs, **kwargs):
     """

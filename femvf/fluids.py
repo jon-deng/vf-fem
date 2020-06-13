@@ -2,7 +2,6 @@
 Functionality related to fluids
 """
 
-import math
 import numpy as np
 # import autograd
 import autograd.numpy as np
@@ -12,247 +11,6 @@ from petsc4py import PETSc
 
 from .parameters.properties import FluidProperties
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
-
-## 1D Euler model
-def fluid_pressure_vasu(uva, x0, xr, fluid_props):
-    """
-    Return fluid surface pressures according to a 1D flow model.
-
-    The flow model is given by "" vasudevan etc.
-
-    Parameters
-    ----------
-    x : tuple of (u, v, a) each of (#surface vertices, geometric dimension) np.ndarray
-        States of the surface vertices, ordered following the flow (increasing x coordinate).
-    fluid_props : dict
-        A dictionary of fluid properties.
-    xr : np.ndarray
-        The nodal locations of the fixed reference grid over which the problem is solved.
-
-    Returns
-    -------
-    q, p : np.ndarray
-        An array of flow rate and pressure vectors for each each vertex
-    dqdx, dpdx : np.ndarray
-        Arrays of sensititivies of nodal flow rates and pressures to the surface displacements and
-        velocities
-    xy_min, xy_sep: (2,) np.ndarray
-        The coordinates of the vertices at minimum and separation areas
-    """
-    u, v, a = uva
-
-    area = 2*u[..., 1]
-    darea_dt = 2*v[..., 1]
-
-def res_fluid(n, p_bcs, qp0, qp1, xy_ref, uva0, uva1, fluid_props, dt):
-    """
-    Return the momentum and continuity equation residuals applied at node `n`.
-
-    Momentum and continuity residuals are returned based on the equation between state 0 and 1
-    over a given time step and a guess of the final fluid and solid states.
-
-    Parameters
-    ----------
-    qp0, qp1 : tuple(array_like, array_like)
-        The fluid flow rate and pressure states in a tuple
-    uva : tuple(array_like, array_like, array_like)
-        The fluid-structure interace displacement, velocity, and acceleration states in a tuple
-    xy_ref, uva0, uva1 : tuple(array_like, array_like)
-        xy coordinates/displacements of the fluid-structure interace at the reference configuration,
-        and current and future timesteps
-    fluid_props : femvf.parameters.properties.FluidProperties
-        The fluid properties
-    dt : float
-        The timestep between the initial and final states of the iteration.
-
-    Returns
-    -------
-    tuple(float, float)
-        The continuity and momentum equation residuals respectively.
-    """
-    ## Set the finite differencing stencil according to the node
-    fdiff = None
-    NUM_NODE = xy_ref.size
-
-    if n == NUM_NODE-1:
-        fdiff = bd
-    elif n == 0:
-        fdiff = fd
-    else:
-        fdiff = cd
-
-    ## Precompute some variables needed in computing residuals for continuity and momentum
-    # The reference grid for ALE is evenly spaced between the first and last FSI interface
-    # x-coordinates
-    dx = (xy_ref[-1, 0] - xy_ref[0, 0]) / NUM_NODE
-    u1, v1, _ = uva1
-
-    rho = fluid_props['rho']
-
-    # Flow rate and pressure
-    q0, _ = qp0
-    q1, p1 = qp1
-
-    area = 2*u1[..., 1]
-    darea_dt = 2*v1[..., 1]
-
-    # The x-coordinates of the moving mesh are the initial surface node values plus the
-    # x-displacement
-    # This is needed to calculate deformation gradient for use in ALE
-    # x0 = xr + u0[..., 0]
-    x1 = xy_ref[..., 0] + u1[..., 0]
-
-    def_grad = 1/fdiff(x1, n, dx)
-    darea_dx = fdiff(area, n, dx)
-    dq_dx = fdiff(q1, n, dx)
-    dp_dx = fdiff(p1, n, dx)
-    dqarea_dx = fdiff(area*q1, n, dx)
-
-    ## Calculate the momentum and continuity residuals
-    res_continuity = darea_dt[n] - darea_dx*def_grad*v1[n, 0] + dqarea_dx*def_grad
-
-    dq_dt = (q1[n]-q0[n])/dt
-    sep_criteria = q0[n]*fluid_props['rho']*(-q0[n]*dq_dx - dq_dt)
-    xx = separation_factor(0.25, 0.1, sep_criteria)
-    tau = (1-xx)*rho*q1[n]*dq_dx*def_grad
-    res_momentum = rho*q1[n]*dq_dx*def_grad + rho*(dq_dt-dq_dx*def_grad*v1[n, 0]) \
-                   + dp_dx*def_grad - tau
-
-    return res_continuity, res_momentum
-
-def res_fluid_quasistatic(n, p_bcs, qp0, xy_ref, uva0, fluid_props):
-    """
-    Return the momentum and continuity equation residuals applied at node `n`.
-
-    Momentum and continuity residuals are returned based on the equation between state 0 and 1
-    over a given time step and a guess of the final fluid and solid states.
-
-    Parameters
-    ----------
-    n : int
-        The node number to compute the residual at
-    p_bcs : tuple(float, float)
-        The pressure boundary conditions at the inlet and outlet
-    qp0 : tuple(array_like[:], array_like[:])
-        The fluid flow rate and pressure states in a tuple
-    uva0 : tuple(array_like[:, 2], array_like[:, 2], array_like[:, 2])
-        The fluid-structure interace displacement, velocity, and acceleration states in a tuple
-    xy_ref : array_like[:, 2]
-        The fluid-structure interace coordinates in the reference configuration
-    fluid_props : femvf.parameters.properties.FluidProperties
-        The fluid properties
-
-    Returns
-    -------
-    tuple(float, float)
-        The continuity and momentum equation residuals respectively.
-    """
-    ## Set the finite differencing stencil according to the node
-    fdiff = None
-    NUM_NODE = xy_ref.shape[0]
-
-    if n == NUM_NODE-1:
-        fdiff = bd
-    elif n == 0:
-        fdiff = fd
-    else:
-        fdiff = cd
-
-    ## Precompute some variables needed in computing residuals for continuity and momentum
-    # The reference grid for ALE is evenly spaced between the first and last FSI interface
-    # x-coordinates
-    dx = (xy_ref[-1, 0] - xy_ref[0, 0]) / NUM_NODE
-    u0, v0, _ = uva0
-
-    rho = fluid_props['rho']
-
-    # Flow rate and pressure
-    q0, p0 = qp0
-    p0[0], p0[-1] = p_bcs[0], p_bcs[1]
-
-    # The x-coordinates of the moving mesh are the initial surface node values plus the
-    # x-displacement
-    xy0 = xy_ref[..., :] + u0[..., :]
-    area = 2*(fluid_props['y_midline'] - xy0[..., 1])
-
-    def_grad = 1/fdiff(xy0[..., 0], n, dx)
-    # darea_dx = fdiff(area, n, dx)
-    dq_dx = fdiff(q0, n, dx)
-    dp_dx = fdiff(p0, n, dx)
-    dqarea_dx = fdiff(area*q0, n, dx)
-
-    ## Calculate the momentum and continuity residuals
-    res_continuity = dqarea_dx*def_grad
-
-    # The separation criteria is based on q dp/dx but most suggest using the inviscid approximation,
-    # which is dp/dx = -rho*q*dq/dx
-    sep_criteria = q0[n]*fluid_props['rho'] * (-q0[n]*dq_dx)
-    xx = separation_factor(0.0, 0.1, sep_criteria)
-    tau = (1-xx)*rho*q0[n]*dq_dx*def_grad
-    res_momentum = rho*q0[n]*dq_dx*def_grad + dp_dx*def_grad - tau
-
-    info = {'tau': tau, 'separation_factor': xx}
-
-    return res_continuity, res_momentum, info
-
-def separation_factor(sep_factor_min, alpha_max, alpha):
-    r"""
-    Return the separation factor (a fancy x)
-
-    parameters
-    ----------
-    alpha : float
-        A separation criteria given by :math:`\alpha=q\frac{dp}{dx}` or approximated by the inviscid
-        approximation using :math:`\alpha \approx q*(-\rho q \frac{dq}{dx}-rho\frac{dq}{dt})`
-    """
-    sep_factor = None
-    if alpha < 0:
-        sep_factor = 1
-    elif alpha < alpha_max:
-        sep_factor = sep_factor_min/2*(1-math.cos(math.pi*alpha/alpha_max))
-    else:
-        sep_factor = sep_factor_min
-
-    return sep_factor
-
-def cd(f, n, dx):
-    """
-    Return the central difference approximation of f at n.
-    """
-    return (f[n+1]-f[n-1]) / (2*dx)
-
-def cd_df(f, n, dx):
-    """
-    Return the derivative of the central difference approximation of f at n, to the vector of f.
-    """
-    idxs = [n-1, n+1]
-    vals = [-1/(2*dx), 1/(2*dx)]
-
-def fd(f, n, dx):
-    """
-    Return the central difference approximation of f at n.
-    """
-    return (f[n+1]-f[n]) / dx
-
-def fd_df(f, n, dx):
-    """
-    Return the derivative of the central difference approximation of f at n, to the vector of f.
-    """
-    idxs = [n, n+1]
-    vals = [-1/dx, 1/dx]
-
-def bd(f, n, dx):
-    """
-    Return the central difference approximation of f at n.
-    """
-    return (f[n]-f[n-1]) / dx
-
-def bd_df(f, n, dx):
-    """
-    Return the derivative of the central difference approximation of f at n, to the vector of f.
-    """
-    idxs = [n-1, n]
-    vals = [-1/dx, 1/dx]
 
 ## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
@@ -300,25 +58,45 @@ class QuasiSteady1DFluid:
         self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
 
     def set_ini_state(self, q0, p0):
-        pass
+        """
+        Set the initial fluid state
+        """
+        self.q0[:] = q0
+        self.p0[:] = p0
 
     def set_fin_state(self, q1, p1):
-        pass
+        """
+        Set the final fluid state
+        """
+        self.q1[:] = q1
+        self.p1[:] = p1
 
     def set_ini_surf_state(self, u0, v0):
+        """
+        Set the initial surface displacement and velocity
+        """
         self.u0surf[:] = u0
         self.v0surf[:] = v0
 
     def set_fin_surf_state(self, u1, v1):
+        """
+        Set the final surface displacement and velocity
+        """
         self.u1surf[:] = u1
         self.v1surf[:] = v1
 
     def set_time_step(self, dt):
+        """
+        Set the time step
+        """
         # This is a quasi-steady fluid so time doesn't matter. I put this here for consistency if
         # you were to use a unsteady fluid.
         pass
 
     def set_properties(self, props):
+        """
+        Set the fluid properties
+        """
         for key in props:
             if self.properties[key].shape == ():
                 self.properties[key][()] = props[key]
@@ -326,9 +104,15 @@ class QuasiSteady1DFluid:
                 self.properties[key][:] = props[key]
 
     def get_properties(self):
+        """
+        Return the fluid properties
+        """
         return self.properties.copy()
 
     def get_ini_surf_state(self):
+        """
+        Return the initial surface displacement and velocity
+        """
         xy = self.u0surf.copy()
         dxy_dt = self.v0surf
         xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
@@ -338,6 +122,9 @@ class QuasiSteady1DFluid:
         return surf_state
 
     def get_fin_surf_state(self):
+        """
+        Return the final surface displacement and velocity
+        """
         xy = self.u1surf.copy()
         dxy_dt = self.v1surf
         xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
@@ -347,15 +134,27 @@ class QuasiSteady1DFluid:
         return surf_state
 
     def get_state_vecs(self):
+        """
+        Return empty flow speed and pressure state vectors
+        """
         return np.zeros((1,)), np.zeros(self.x_vertices.size)
 
     def get_surf_vector(self):
+        """
+        Return a vector representing vector data on the FSI surface
+        """
         return np.zeros(self.x_vertices.shape[0]*2)
 
     def get_surf_scalar(self):
+        """
+        Return a vector representing scalar data on the FSI surface
+        """
         return np.zeros(self.x_vertices.shape[0])
 
     def set_iter_params(self, qp0, uvsurf0, qp1, uvsurf1, fluid_props):
+        """
+        Set all parameters needed to define an iteration/time step of the model
+        """
         self.set_ini_state(*qp0)
         self.set_fin_state(*qp1)
 
@@ -364,38 +163,41 @@ class QuasiSteady1DFluid:
 
         self.set_properties(fluid_props)
 
-    def get_fp1(self):
-        return self.p1 - self.fluid_pressure((self.u1surf, self.v1surf))
-
-    def get_fp0(self):
-        return self.p0 - self.fluid_pressure((self.u0surf, self.v0surf))
-
-    def get_dfp1_dp1(self):
-        return 1.0
-
-    def get_dfp0_dp0(self):
-        return 1.0
-
-    def get_dfp1_du1(self, u_order='fluid'):
-        return -1*self.flow_sensitivity
-
     # Methods that subclasses must implement
     def solve_qp1(self):
+        """
+        Return the final flow and pressure
+        """
         raise NotImplementedError("Fluid models have to implement this")
 
     def solve_qp0(self):
+        """
+        Return the initial flow and pressure
+        """
         raise NotImplementedError("Fluid models have to implement this")
 
     def solve_dqp1_du1(self, adjoint=False):
+        """
+        Return sensitivities of the final flow and pressure
+        """
         raise NotImplementedError("Fluid models have to implement this")
 
     def solve_dqp0_du0(self, adjoint=False):
+        """
+        Return sensitivities of the initial flow and pressure
+        """
         raise NotImplementedError("Fluid models have to implement this")
 
-    def solve_dqp1_du1_solid(self, adjoint=False):
+    def solve_dqp1_du1_solid(self, model, adjoint=False):
+        """
+        Return sensitivities of the final flow and pressure
+        """
         raise NotImplementedError("Fluid models have to implement this")
 
-    def solve_dqp0_du0_solid(self, adjoint=False):
+    def solve_dqp0_du0_solid(self, model, adjoint=False):
+        """
+        Return sensitivities of the initial flow and pressure
+        """
         raise NotImplementedError("Fluid models have to implement this")
 
 
@@ -430,7 +232,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'k': ('const', ()),
         'sigma': ('const', ()),
         'beta': ('const', ()),
-        'a_min_stable': ('const', ())}
+        'y_gap_min': ('const', ())}
 
     PROPERTY_DEFAULTS = {
         'p_sub': 800 * PASCAL_TO_CGS,
@@ -439,11 +241,11 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sup': 0.6,
         'rho': 1.1225 * SI_DENSITY_TO_CGS,
         'y_midline': 0.61,
-        'alpha': -3000,
-        'k': 75,
-        'sigma': 0.002,
+        'alpha': -3/0.002,
+        'k': 3/0.002,
+        'sigma': 2.5*0.002,
         'beta': 3/.002,
-        'a_min_stable': 0.001}
+        'y_gap_min': 0.001}
 
     def solve_qp1(self):
         """
@@ -518,7 +320,7 @@ class Bernoulli(QuasiSteady1DFluid):
         x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
 
         area = 2 * (y_midline - y)
-        area_safe = smooth_lower_bound(area, fluid_props['a_min_stable'], fluid_props['beta'])
+        area_safe = smooth_lower_bound(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
         dt_area = -2 * surface_state[1].reshape(-1, 2)[:, 1]
 
         # Calculate minimum and separation areas/locations
@@ -530,7 +332,8 @@ class Bernoulli(QuasiSteady1DFluid):
         # 1D Bernoulli approximation of the flow
         p_sep = p_sup
         flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
-        dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 * (2*a_sep**-3 * dt_a_sep)
+        dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 \
+                           * (2*a_sep**-3 * dt_a_sep)
 
         p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
 
@@ -585,8 +388,8 @@ class Bernoulli(QuasiSteady1DFluid):
         area = 2 * (y_midline - y)
         darea_dy = -2 # darea_dx = 0
 
-        area_safe = smooth_lower_bound(area, fluid_props['a_min_stable'], fluid_props['beta'])
-        darea_safe_darea = dsmooth_lower_bound_df(area, fluid_props['a_min_stable'], fluid_props['beta'])
+        area_safe = smooth_lower_bound(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
+        darea_safe_darea = dsmooth_lower_bound_df(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
 
         a_min = smooth_minimum(area_safe, self.s_vertices, alpha)
         da_min_darea = dsmooth_minimum_df(area_safe, self.s_vertices, alpha) * darea_safe_darea
@@ -614,8 +417,10 @@ class Bernoulli(QuasiSteady1DFluid):
         #             + dsmooth_selection_dy0(x, area, a_sep, self.s_vertices, sigma)*da_sep_dy
 
         s_sep = smooth_selection(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma=sigma)
-        ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma)*darea_dy \
-                    + dsmooth_selection_dy0(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma)*da_sep_dy
+        ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area_safe, a_sep, self.s_vertices,
+                                         sigma) * darea_dy \
+                    + dsmooth_selection_dy0(self.s_vertices, area_safe, a_sep, self.s_vertices,
+                                            sigma) * da_sep_dy
 
         sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
         dsep_multiplier_dy = dsmooth_cutoff_dx0(self.s_vertices, s_sep, k=k)[:, None] * ds_sep_dy
@@ -629,13 +434,14 @@ class Bernoulli(QuasiSteady1DFluid):
 
         ## Calculate the flow rate sensitivity
         dflow_rate_du = np.zeros(surface_state[0].size)
-        dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) * da_sep_da_min * da_min_darea * darea_dy
+        dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) \
+                              * da_sep_da_min * da_min_darea * darea_dy
 
         return dflow_rate_du, dp_du
 
     def flow_sensitivity_solid(self, model, surface_state, fluid_props, adjoint=False):
         """
-        Returns sparse matrices/vectors for the sensitivity of pressure and flow rate to displacement.
+        Returns sparse mats/vecs for the sensitivity of pressure and flow rate to displacement.
 
         TODO: This function is a bit weird as a dense block in a sparse matrix is set
 
@@ -704,13 +510,22 @@ class Bernoulli(QuasiSteady1DFluid):
         return dq_du, dp_du
 
     def get_glottal_width(self, surface_state):
-        x, y = surface_state[0][:, 0], surface_state[0][:, 1]
+        """
+        Return the non smoothed, glottal width
+        """
+        _, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
         area = 2 * (self.properties['y_midline'] - y)
         a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
         return a_min
 
     def get_ini_surf_config(self):
+        """
+        Return the initial surface configuration
+
+        This is the surface state, but the displacements are converted to current configuration
+        positions
+        """
         xy = self.u0surf.copy()
         dxy_dt = self.v0surf
         xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
@@ -720,6 +535,12 @@ class Bernoulli(QuasiSteady1DFluid):
         return surf_state
 
     def get_fin_surf_config(self):
+        """
+        Return the final surface configuration
+
+        This is the surface state, but the displacements are converted to current configuration
+        positions
+        """
         xy = self.u1surf.copy()
         dxy_dt = self.v1surf
         xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
@@ -737,6 +558,7 @@ def smooth_lower_bound(f, f_lb, beta=100):
 
     Function is based on a scaled and shifted version of the 'SoftPlus' function. This function
     smoothly blends a constant function when f<f_lb with a linear function when f>f_lb.
+
     The 'region' of smoothness is roughly characterized by 'df = f-f_lb', where the function is 95%
     a straight line when `beta*df = 3`.
 
@@ -790,6 +612,9 @@ def smooth_minimum(f, s, alpha=-1000):
     """
     Return the smooth approximation to the minimum element of f integrated over s.
 
+    The 'region' of smoothness is roughly characterized by 'df'. If f_min has the maximum weight,
+    a value at f_min+df will have 5% of that weight if alpha*df = -3.
+
     Parameters
     ----------
     f : array_like
@@ -833,21 +658,6 @@ def dsmooth_minimum_df(f, s, alpha=-1000):
 
     return dnum_df/den - num/den**2 * dden_df
 
-def d2smooth_minimum_df2(f, s, alpha=-1000):
-    # TODO: Need to to implement this
-    K_STABILITY = np.max(alpha*f)
-    w = np.exp(alpha*f - K_STABILITY)
-    dw_df = alpha*np.exp(alpha*f - K_STABILITY)
-    d2w_df2 = alpha**2*np.exp(alpha*f - K_STABILITY)
-
-    num = trapz(f*w, s)
-    den = trapz(w, s)
-
-    dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)
-    dden_df = dtrapz_df(w, s)*dw_df
-
-    return dnum_df/den - num/den**2 * dden_df
-
 def trapz(f, s):
     """
     Return the integral of `f` over `s` using the trapezoidal rule
@@ -855,20 +665,38 @@ def trapz(f, s):
     assert len(f.shape) == 1
     assert len(s.shape) == 1
 
-    return np.sum( (s[1:]-s[:-1])*(f[1:]+f[:-1])/2 )
+    return np.sum((s[1:]-s[:-1])*(f[1:]+f[:-1])/2)
 
 def dtrapz_df(f, s):
+    """
+    Return the sensitivity of `trapz` to `f`
+    """
     out = np.zeros(f.size)
     out[:-1] += (s[1:]-s[:-1]) / 2
     out[1:] += (s[1:]-s[:-1]) / 2
     return out
 
 def sigmoid(x):
-    return 1/(1+np.exp(-x))
+    """
+    Return the sigmoid function evaluated at `x`
+    """
+    exponent = -x
+    idx_underflow = exponent <= -50.0
+    idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
+    idx_overflow = exponent > 50.0
+
+    out = np.zeros(x.shape)
+    out[idx_underflow] = 1.0
+    out[idx_normal] = 1/(1+np.exp(exponent[idx_normal]))
+    out[idx_overflow] = 0.0
+
+    return out
 
 def dsigmoid_dx(x):
     """
-    This is a diagonal matrix
+    Return the sensitivity of `sigmoid` to `x`
+
+    This returns a scalar representing the diagonal of the sensitivity matrix
     """
     sig = sigmoid(x)
     return sig * (1-sig)
@@ -876,6 +704,9 @@ def dsigmoid_dx(x):
 def smooth_cutoff(x, x0, k=100):
     """
     Return the mirrored logistic function evaluated at x-x0
+
+    The 'region' of smoothness is roughly characterized by dx. If x = x0 + dx, the cutoff function
+    will drop to just 5% if k*dx = 3.
     """
     arg = -k*(x-x0)
     return sigmoid(arg)
@@ -897,28 +728,48 @@ def dsmooth_cutoff_dx0(x, x0, k=100):
     return dsigmoid_dx(arg) * darg_dx0
 
 def log_gaussian(x, x0, sigma=1.0):
+    """
+    Return the log of the gaussian with mean `x0` and variance `sigma`
+    """
     return np.log(1/(sigma*(2*np.pi)**0.5)) + -0.5*((x-x0)/sigma)**2
 
 def log_dgaussian_dx(x, x0, sigma=1.0):
+    """
+    Return the sensitivity of `log_gaussian` to `x`
+    """
     return log_gaussian(x, x0, sigma) * -(x-x0)/sigma**2
 
 def log_dgaussian_dx0(x, x0, sigma=1.0):
+    """
+    Return the sensitivity of `log_gaussian` to `x0`
+    """
     return log_gaussian(x, x0, sigma) * -(x-x0)/sigma**2
 
 def gaussian(x, x0, sigma=1.0):
+    """
+    Return the gaussian with mean `x0` and variance `sigma`
+    """
     return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
 
 def dgaussian_dx(x, x0, sigma=1.0):
+    """
+    Return the sensitivity of `gaussian` to `x`
+    """
     return gaussian(x, x0, sigma) * -(x-x0)/sigma**2
 
 def dgaussian_dx0(x, x0, sigma=1.0):
+    """
+    Return the sensitivity of `gaussian` to `x0`
+    """
     return gaussian(x, x0, sigma) * (x-x0)/sigma**2
 
 def smooth_selection(x, y, y0, s, sigma=1.0):
     """
     Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
 
-    Weights are computed according to a gaussian distribution.
+    Weights are computed according to a gaussian distribution. The 'region' of smoothness is roughly
+    characterized by 'sigma'. If y = y0 +- 2.5*sigma, it's weight will be about 5% of the weight
+    corresponding to y = y0.
 
     Parameters
     ----------

@@ -5,23 +5,19 @@ Makes a vocal fold go elggiw elggiw.
 
 I'm using CGS : cm-g-s units
 """
-# TODO: Refactor this to use adj_qp (sensitive to fluid state)
-# This means functionals have to provide a sensitivity to flow and pressure variables
 
 import numpy as np
-
-from matplotlib import tri
-from matplotlib import pyplot as plt
-
 import dolfin as dfn
 import ufl
 from petsc4py import PETSc
 
-from . import solids
-from .newmark import *
+# from .newmark import *
+# from .newmark import
+from newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmark_v_da0, newmark_v_dt,
+                     newmark_a_du1, newmark_a_du0, newmark_a_dv0, newmark_a_da0, newmark_a_dt)
 from . import linalg
 
-def adjoint(model, f, functional, coupling='explicit', show_figure=False):
+def adjoint(model, f, functional, coupling='explicit'):
     """
     Returns the gradient of the cost function using the adjoint model.
 
@@ -194,7 +190,9 @@ def adjoint(model, f, functional, coupling='explicit', show_figure=False):
         dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
         adj_p0_ = dp_du.getVecRight()
         adj_p0_[:] = adj_p0
-        grad_u0 += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0 # convert PETSc.Vec to dfn.PETScVector
+
+        # have to convert (dp_du*adj_p0_) to dfn.PETScVector to add left and right terms
+        grad_u0 += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0
 
     grad_uva = (grad_u0, grad_v0, grad_a0)
 
@@ -308,8 +306,7 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
 
     # solve the coupled system for pressure and displacement residuals
     dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
-    blocks = [[dfu2_du2_mat, dfp2_du2],
-              [    dfu2_dp2,      1.0]]
+    blocks = [[dfu2_du2_mat, dfp2_du2], [dfu2_dp2, 1.0]]
 
     dfup2_dup2 = linalg.form_block_matrix(blocks)
     adj_up, rhs = dfup2_dup2.getVecs()
@@ -476,7 +473,8 @@ def get_df1_dsolid_forms(solid):
     df1_dsolid = {}
     for key in solid.PROPERTY_TYPES:
         try:
-            df1_dsolid[key] = dfn.adjoint(ufl.derivative(solid.f1, solid.forms[f'coeff.prop.{key}'], solid.scalar_trial))
+            df1_dsolid[key] = dfn.adjoint(ufl.derivative(solid.f1, solid.forms[f'coeff.prop.{key}'],
+                                                         solid.scalar_trial))
         except RuntimeError:
             df1_dsolid[key] = None
 

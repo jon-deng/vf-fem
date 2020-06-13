@@ -286,6 +286,11 @@ class FinalVelocityNorm(Functional):
 
         return 0.0, dv, 0.0
 
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        dq[:], dp[:] = 0, 0
+        return dq, dp
+
     def eval_dp(self, f):
         return None
 
