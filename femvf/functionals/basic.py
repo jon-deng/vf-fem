@@ -1,9 +1,8 @@
 """
 This module contains definitions of various functionals.
 
-A functional is mapping that accepts the time history of all states
-.. ::math {(u, v, a, q, p; t, params)_n for n in {0, 1, ..., N-1}}
-and returns a real number.
+A functional is mapping from the time history of all states and parameters to a real number
+.. ::math {(u, v, a, q, p; t, params)_n for n in {0, 1, ..., N-1}} .
 
 A functional should take in the entire time history of states from a forward model run and return a
 real number.
@@ -905,32 +904,19 @@ class SubglottalWork(Functional):
         ret = 0
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            self.model.set_params_fromfile(f, ii)
+            # self.model.set_params_fromfile(f, ii)
+            fluid_props = f.get_fluid_props(0)
+            qp0 = f.get_fluid_state(ii)
             dt = f.get_time(ii+1) - f.get_time(ii)
-            q, *_ = self.model.solve_qp0()
 
-            ret += dt*q*self.model.fluid.properties['p_sub']
+            # ret += dt*q*self.model.fluid.properties['p_sub']
+            ret += dt*qp0[0]*fluid_props['p_sub']
 
         self.cache.update({'N_STATE': N_STATE})
 
         return ret
 
     def eval_duva(self, f, n, iter_params0, iter_params1):
-        du = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        N_START = self.constants['n_start']
-        N_STATE = self.cache['N_STATE']
-
-        if n >= N_START and n < N_STATE-1:
-            # fluid_props = iter_params1['fluid_props']
-            fluid_props = self.model.fluid_props
-            self.model.set_iter_params(**iter_params1)
-            _, dq_du = self.model.get_flow_sensitivity()
-
-            du += self.model.dt.values()[0] * fluid_props['p_sub'] * dq_du
-        else:
-            pass
-
         return 0.0, 0.0, 0.0
 
     def eval_dqp(self, f, n, iter_params0, iter_params1):
@@ -940,9 +926,9 @@ class SubglottalWork(Functional):
         N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
-            fluid_props = self.model.fluid_props
+            fluid_props = f.get_fluid_props(0)
+            # qp0 = f.get_fluid_state(ii)
             dt = f.get_time(n+1) - f.get_time(n)
-            self.model.set_iter_params(**iter_params1)
 
             dq[:] = dt*fluid_props['p_sub']
         else:
