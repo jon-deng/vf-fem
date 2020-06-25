@@ -148,11 +148,12 @@ class TaylorTestUtils(unittest.TestCase):
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    # FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
-    FUNCTIONAL = basic.TransferEfficiency
+    # FUNCTIONAL = basic.TransferEfficiency
+    # FUNCTIONAL = basic.SubglottalWork
 
     def setUp(self):
         """
