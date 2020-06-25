@@ -5,6 +5,9 @@ Contains definition of the abstract functional
 import dolfin as dfn
 
 def new_statefile(self, f):
+    """
+    Return if `f` has been updated
+    """
     statefile_updated = self._f is None or self._f != f
 
     if not statefile_updated:
@@ -13,6 +16,9 @@ def new_statefile(self, f):
     return statefile_updated
 
 def update_cache(func):
+    """
+    Return a decorated instance method that updates a cache attribute on new input files
+    """
     def wrapped_func(self, f, *args, **kwargs):
         """
         Reruns the `eval` function if the passed in file instance is different from what was last
@@ -31,9 +37,9 @@ class AbstractFunctional:
     """
     This class represents a functional to be computed given a solved forward model
 
-    After running a functional over forward model states, the value is cached in _value.
+    This class should not be used directly to create functional except in special instances.
 
-    To make a new functional ....
+    After running a functional over forward model states, the value is cached in _value.
 
     Parameters
     ----------
@@ -56,6 +62,9 @@ class AbstractFunctional:
         A dictionary of cached values. These are specific to the functional and values are likely
         to be cached if they are needed to compute sensitivities and are expensive to compute.
     """
+    # TODO : The code for functionals is quite hard to follow.
+    # Rethink what are the basic things that are required. Not all the things in __init__
+    # are likely needed so you can get rid of relevant stuff
     CACHE = True
 
     ## Subclasses should also add a `default_constants` class attribute
@@ -85,12 +94,15 @@ class AbstractFunctional:
 
     @property
     def forms(self):
+        """
+        Return a dictionary of UFL variational forms.
+        """
         return self._forms
 
     @update_cache
     def duva(self, f, n, iter_params0, iter_params1):
         """
-        Return the sensitivity of the functional to :math:`u^n`
+        Return dg/d(u, v, a)
 
         Parameters
         ----------
@@ -120,13 +132,20 @@ class AbstractFunctional:
 
     @update_cache
     def dqp(self, f, n, iter_params0, iter_params1):
+        """
+        Return dg/d(q, p)
+        """
         return self.eval_dqp(f, n, iter_params0, iter_params1)
 
     @update_cache
     def dp(self, f):
+        """
+        Return dg/dp
+        """
         return self.eval_dp(f)
 
     ## Subclasses have to implement these methods
+    # optional
     @staticmethod
     def form_definitions(model):
         """
@@ -136,6 +155,7 @@ class AbstractFunctional:
         """
         return {}
 
+    # mandatory
     def eval(self, f):
         """
         Return the value of the objective function for the state history in `f`
@@ -144,7 +164,7 @@ class AbstractFunctional:
 
     def eval_duva(self, f, n, iter_params0, iter_params1):
         """
-        Return the sensitivity of the functional to :math:`u^n`
+        Return dg/d(u, v, a)
 
         Parameters
         ----------
@@ -163,17 +183,34 @@ class AbstractFunctional:
         raise NotImplementedError("`eval_duva` must be implemented")
 
     def eval_dqp(self, f, n, iter_params0, iter_params1):
+        """
+        Return dg/d(q, p)
+
+        Parameters
+        ----------
+        n : int
+            Index of state
+        f : statefile.StateFile
+            The history of states to compute it over
+        iter_params0, iter_params1 : dict
+            Dictionary of parameters that specify iteration n. These are parameters fed into
+            `model.ForwardModel.set_iter_params` with signature:
+            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
+
+            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
+            at `n+0`.
+        """
         raise NotImplementedError("You have to implement this")
 
     def eval_dp(self, f):
         """
-        Return the sensitivity of the functional with respect to the parameters.
+        Return dg/d(parameters)
         """
         raise NotImplementedError("`eval_dp` must be implemented")
 
     def eval_dt(self, f, n):
         """
-        Return the sensitivity of the functional with respect to the time step.
+        Return the dg/d dt
         """
         raise NotImplementedError("`eval_dt` must be implemented")
 
@@ -202,39 +239,3 @@ class AbstractFunctional:
     # def __neg__(self):
 
     # def __pos__(self):
-
-
-# class ScalarMultiple(AbstractFunctional):
-
-# class Sum(AbstractFunctional):
-#     def eval(self, f):
-#         return self.funcs[0](f) + self.funcs[1](f)
-
-#     def eval_duva(self, n, p0, p1):
-#         return self.funcs[0].duva(f, n, p0, p1) + self.funcs[1].duva(f, n, p0, p1)
-
-#     def eval_dp(n, p0, p1):
-#         return self.funcs[0].duva(f, n, p0, p1) + self.funcs[1].duva(f, n, p0, p1)
-
-# class ProductOfFuncs(AbstractFunctional):
-#     def eval(self, f):
-#         return
-#     def eval_duva(self, n, p0, p1):
-
-# class QuotientOfFuncs(AbstractFunctional):
-#     def eval(self, f):
-#         return
-#     def eval_duva(self, n, p0, p1):
-#     def eval_dp(n, p0, p1):
-
-# class PowerOfFuncs(AbstractFunctional):
-#     def eval(self, f):
-#         return
-#     def eval_duva(self, n, p0, p1):
-#     def eval_dp(n, p0, p1):
-
-# class ScalarMultiple(AbstractFunctional):
-#     def eval(self, f):
-#         return
-#     def eval_duva(self, n, p0, p1):
-#     def eval_dp(n, p0, p1):

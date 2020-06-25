@@ -13,8 +13,8 @@ from petsc4py import PETSc
 
 # from .newmark import *
 # from .newmark import
-from newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmark_v_da0, newmark_v_dt,
-                     newmark_a_du1, newmark_a_du0, newmark_a_dv0, newmark_a_da0, newmark_a_dt)
+from .newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmark_v_da0, newmark_v_dt,
+                      newmark_a_du1, newmark_a_du0, newmark_a_dv0, newmark_a_da0, newmark_a_dt)
 from . import linalg
 
 def adjoint(model, f, functional, coupling='explicit'):

@@ -33,10 +33,7 @@ from ..solids import strain
 
 class Functional(AbstractFunctional):
     """
-    This is a class that interfaces manual `Functional` definitions to the `AbstractFunctional`
-
-    It gives all `Functionals` a simple init call `__init__(self, model)` and a standard way to
-    make new manually defined functionals.
+    This class provides an interface/method to define basic functionals
 
     To define a new functional, create class attributes `func_types` and `default_constants`. The
     `func_types` should be a tuple of `Functional` classes that are needed to calculate the
@@ -54,24 +51,6 @@ class Functional(AbstractFunctional):
     def __init__(self, model):
         funcs = tuple(Func(model) for Func in type(self).func_types)
         super().__init__(model, *funcs)
-
-class Constant(Functional):
-    """
-    Functional that always evaluates to a constant
-    """
-    func_types = ()
-    default_constants = {
-        'value': 0.0
-    }
-
-    def eval(self, f):
-        return self.constants['value']
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        return (0.0, 0.0, 0.0)
-
-    def eval_dp(self, f):
-        return None
 
 class PeriodicError(Functional):
     """
@@ -816,7 +795,7 @@ class TransferWorkbyDisplacementIncrement(Functional):
         vector_trial = solid.forms['trial.vector']
         scalar_trial = solid.forms['trial.scalar']
 
-        pressure = solid.forms['coeff.fsi.pressure']
+        pressure = solid.forms['coeff.fsi.p1']
         u1 = solid.forms['coeff.state.u1']
         u0 = solid.forms['coeff.state.u0']
 
@@ -877,37 +856,68 @@ class TransferWorkbyDisplacementIncrement(Functional):
 
         return du, 0.0, 0.0
 
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        N_START = self.constants['n_start']
+        N_STATE = f.get_num_states()
+
+        du = dfn.Function(self.model.solid.vector_fspace).vector()
+        if n >= N_START:
+            if n != N_START:
+                self.model.set_iter_params_fromfile(f, n)
+                # self.model.set_iter_params(**iter_params0)
+
+                du += dfn.assemble(self.forms['dfluid_work_du1'])
+
+            if n != N_STATE-1:
+                self.model.set_iter_params_fromfile(f, n+1)
+                # self.model.set_iter_params(**iter_params1)
+                dp_du, _ = self.model.get_flow_sensitivity()
+
+                du += dfn.assemble(self.forms['dfluid_work_du0'])
+
+                # Correct dfluidwork_du0 since pressure depends on u0 too
+                dfluidwork_dp = dfn.assemble(self.forms['dfluid_work_dpressure'],
+                                                tensor=dfn.PETScVector()).vec()
+
+                dfluidwork_du0_correction = dfn.as_backend_type(du).vec().copy()
+                dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
+
+                du += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
+
+        return du, 0.0, 0.0
+
     def eval_dp(self, f):
         return None
 
 class SubglottalWork(Functional):
     """
-    Return the total work input into the fluid from the lungs (subglottal).
+    Return the total work input into the fluid from the lungs.
     """
     func_types = ()
     default_constants = {
-        'm_start': 0}
+        'n_start': 0}
 
     def eval(self, f):
-        meas_ind = f.get_meas_indices()
-        N_START = meas_ind[self.constants['m_start']]
+        # meas_ind = f.get_meas_indices()
+        N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
 
         ret = 0
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            fluid_info, _ = self.model.set_iter_params_fromfile(f, ii+1)
+            self.model.set_params_fromfile(f, ii)
+            q, _ = self.model.solve_qp0()
 
-            ret += self.model.dt.values()[0]*fluid_info['flow_rate']*self.model.fluid_props['p_sub']
+            ret += self.model.dt.values()[0]*q*self.model.fluid_props['p_sub']
 
-        self.cache.update({'m_start': N_START, 'N_STATE': N_STATE})
+        self.cache.update({'N_STATE': N_STATE})
 
         return ret
 
     def eval_duva(self, f, n, iter_params0, iter_params1):
         du = dfn.Function(self.model.solid.vector_fspace).vector()
 
-        N_START = self.cache['m_start']
+        N_START = self.constants['n_start']
         N_STATE = self.cache['N_STATE']
 
         if n >= N_START and n < N_STATE-1:
@@ -920,7 +930,23 @@ class SubglottalWork(Functional):
         else:
             pass
 
-        return du, 0.0, 0.0
+        return 0.0, 0.0, 0.0
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+
+        N_START = self.constants['n_start']
+        N_STATE = self.cache['N_STATE']
+
+        if n >= N_START and n < N_STATE-1:
+            fluid_props = self.model.fluid_props
+            self.model.set_iter_params(**iter_params1)
+
+            dq[:] = self.model.dt.values()[0] * fluid_props['p_sub']
+        else:
+            pass
+
+        return dq, dp
 
     def eval_dp(self, f):
         return None
@@ -936,8 +962,8 @@ class TransferEfficiency(Functional):
     default_constants = {}
 
     def eval(self, f):
-        totalfluidwork = self.funcs[0]()
-        totalinputwork = self.funcs[1]()
+        totalfluidwork = self.funcs[0](f)
+        totalinputwork = self.funcs[1](f)
 
         res = totalfluidwork/totalinputwork
 
@@ -962,6 +988,10 @@ class TransferEfficiency(Functional):
             du = dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
 
         return du, 0.0, 0.0
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        return dq, dp
 
     def eval_dp(self, f):
         return None

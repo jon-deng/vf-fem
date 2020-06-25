@@ -3,10 +3,13 @@
 *.lprof
 *.prof
 *.out
+*.txt
+*.log
 
 # binary data
 *.pickle
 *.h5
+*.ipynb
 
 # documents
 *.pdf

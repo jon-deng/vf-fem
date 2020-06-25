@@ -147,11 +147,12 @@ class TaylorTestUtils(unittest.TestCase):
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
     # FUNCTIONAL = basic.FinalDisplacementNorm
-    FUNCTIONAL = basic.ElasticEnergyDifference
-    FUNCTIONAL = basic.PeriodicError
-    FUNCTIONAL = basic.PeriodicEnergyError
+    # FUNCTIONAL = basic.ElasticEnergyDifference
+    # FUNCTIONAL = basic.PeriodicError
+    # FUNCTIONAL = basic.PeriodicEnergyError
+    FUNCTIONAL = basic.TransferEfficiency
 
     def setUp(self):
         """
