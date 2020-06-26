@@ -163,7 +163,7 @@ class QuasiSteady1DFluid:
 
         self.set_properties(fluid_props)
 
-    # Methods that subclasses must implement
+    ## Methods that subclasses must implement
     def solve_qp1(self):
         """
         Return the final flow and pressure
@@ -286,6 +286,7 @@ class Bernoulli(QuasiSteady1DFluid):
         return self.flow_sensitivity_solid(model, self.get_ini_surf_config(), self.properties,
                                            adjoint)
 
+    ## internal methods
     def fluid_pressure(self, surface_state, fluid_props):
         """
         Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
@@ -418,7 +419,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         s_sep = smooth_selection(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma=sigma)
         ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area_safe, a_sep, self.s_vertices,
-                                         sigma) * darea_dy \
+                                         sigma) * darea_safe_darea * darea_dy \
                     + dsmooth_selection_dy0(self.s_vertices, area_safe, a_sep, self.s_vertices,
                                             sigma) * da_sep_dy
 
@@ -598,14 +599,14 @@ def dsmooth_lower_bound_df(f, f_lb, beta=100):
     """
     # Manually return limiting values if the exponents are large enough to cause overflow
     exponent = beta*(f-f_lb)
-    idx_underflow = exponent <= -50.0
+    # idx_underflow = exponent <= -50.0
     idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
     idx_overflow = exponent > 50.0
 
     out = np.zeros(exponent.shape)
-    out[idx_underflow] = 0
+    # out[idx_underflow] = 0
     out[idx_normal] = np.exp(exponent[idx_normal]) / (1+np.exp(exponent[idx_normal]))
-    out[idx_overflow] = 1
+    out[idx_overflow] = 1.0
     return out
 
 def smooth_minimum(f, s, alpha=-1000):

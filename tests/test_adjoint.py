@@ -105,6 +105,8 @@ def get_starting_kelvinvoigt_model():
     fluid_props['alpha'][()] = alpha
     fluid_props['k'][()] = k
     fluid_props['sigma'][()] = sigma
+    fluid_props['y_gap_min'][()] = y_coll_offset
+    # fluid_props['y_gap_min'][()] = -10000
 
     solid_props = model.solid.get_properties()
     solid_props['emod'][:] = emod
@@ -147,7 +149,7 @@ class TaylorTestUtils(unittest.TestCase):
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
@@ -163,6 +165,7 @@ class TestBasicGradient(TaylorTestUtils):
         This should set the starting point of the line search; all the parameters needed to solve
         a single simulation are given by this set up.
         """
+        self.CASE_NAME = 'singleperiod'
         self.model, self.solid_props, self.fluid_props = get_starting_kelvinvoigt_model()
 
         t_start, t_final = 0, 0.01
@@ -170,6 +173,7 @@ class TestBasicGradient(TaylorTestUtils):
         self.times = times_meas
 
         self.uva0 = (0, 0, 0)
+        # self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
 
     def get_taylor_order(self, save_path, hs,
                          duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None):
@@ -245,7 +249,7 @@ class TestBasicGradient(TaylorTestUtils):
 
         self.model.solid.bc_base.apply(step_dir)
 
-        duva = (step_dir*0.1, 0.0, 0.0)
+        duva = (step_dir*0.01, 0.0, 0.0)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -259,12 +263,15 @@ class TestBasicGradient(TaylorTestUtils):
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
-        step_dir = np.zeros(xy.size)
-        step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        # step_dir = np.zeros(xy.size)
+        step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
+        _step_dir = step_dir[:].copy()
+        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = (0.0, step_dir, 0.0)
+        duva = (0.0, step_dir*0.1, 0.0)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -278,12 +285,14 @@ class TestBasicGradient(TaylorTestUtils):
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
-        step_dir = np.zeros(xy.size)
-        step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
+        _step_dir = step_dir[:].copy()
+        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = (0.0, 0.0, step_dir*50)
+        duva = (0.0, 0.0, step_dir)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -299,6 +308,138 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
+class TestBasicGradientSingleStep(TestBasicGradient):
+    COUPLING = 'explicit'
+    OVERWRITE_FORWARD_SIMULATIONS = True
+    FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = basic.ElasticEnergyDifference
+    # FUNCTIONAL = basic.PeriodicError
+    # FUNCTIONAL = basic.PeriodicEnergyError
+    # FUNCTIONAL = basic.TransferEfficiency
+    # FUNCTIONAL = basic.SubglottalWork
+    # FUNCTIONAL = basic.FinalFlowRateNorm
+
+    def setUp(self):
+        """
+        Set the model and baseline simulation parameters
+
+        This should set the starting point of the line search; all the parameters needed to solve
+        a single simulation are given by this set up.
+        """
+        self.CASE_NAME = 'singlestep'
+
+        ## parameter set
+        self.model, self.solid_props, self.fluid_props = get_starting_kelvinvoigt_model()
+
+        t_start, t_final = 0, 0.001
+        times_meas = np.linspace(t_start, t_final, 2)
+        self.times = times_meas
+
+        self.uva0 = (0, 0, 0)
+
+        # Step sizes and scale factor
+        self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
+
+    def test_emod(self):
+        save_path = f'out/linesearch_emod_{self.COUPLING}_{self.CASE_NAME}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        step_size = 0.5e0 * PASCAL_TO_CGS
+
+        dsolid = self.solid_props.copy()
+        dsolid.vector[:] = 0
+        dsolid['emod'][:] = 1.0*step_size/5
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
+    def test_u0(self):
+        save_path = f'out/linesearch_u0_{self.COUPLING}_{self.CASE_NAME}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-16)), axis=0)
+
+        ## Pick a step direction
+        # Increment `u` linearly as a function of x and y in the y direction
+        # step_dir = np.zeros(xy.size)
+        # step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+
+        # Increment `u` only along the pressure surface
+        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.surface_vertices]
+        xy_surface = self.model.solid.mesh.coordinates()[self.model.surface_vertices, :]
+        x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
+        step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
+
+        x_frac = (x_surf-x_surf.min())/(x_surf.max()-x_surf.min())
+        step_dir[np.array(surface_dofs[:, 0])] = 1*(1.0-x_frac) + 0.25*x_frac
+        step_dir[np.array(surface_dofs[:, 1])] = -1*(1.0-x_frac) + 0.25*x_frac
+        # step_dir[np.array(surface_dofs[:, 0])] = (y_surf/y_surf.max())**2
+        # step_dir[np.array(surface_dofs[:, 1])] = (y_surf/y_surf.max())**2
+
+        # Increment `u` only in the interior of the body
+        # step_dir[:] = 1.0
+        # step_dir[surface_dofs[:, 0].flat] = 0.0
+        # step_dir[surface_dofs[:, 1].flat] = 0.0
+
+        self.model.solid.bc_base.apply(step_dir)
+
+        duva = (step_dir*0.00005, 0.0, 0.0)
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
+    def test_v0(self):
+        save_path = f'out/linesearch_v0_{self.COUPLING}_{self.CASE_NAME}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+
+        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
+        y = xy[:, 1]
+
+        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
+        # step_dir = np.zeros(xy.size)
+        step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
+        _step_dir = step_dir[:].copy()
+        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir[:] = _step_dir
+
+        self.model.solid.bc_base.apply(step_dir)
+        duva = (0.0, step_dir*1e-5, 0.0)
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
+    def test_a0(self):
+        save_path = f'out/linesearch_a0_{self.COUPLING}_{self.CASE_NAME}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9))), axis=0)
+
+        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
+        y = xy[:, 1]
+
+        # Set the step direction as a linear (de)increase in x and y displacement in the y direction
+        step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
+        _step_dir = step_dir[:].copy()
+        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        step_dir[:] = _step_dir
+
+        self.model.solid.bc_base.apply(step_dir)
+        duva = (0.0, 0.0, step_dir*1e-4)
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
+    def test_times(self):
+        save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9))), axis=0)
+
+        dtimes = np.zeros(self.times.size)
+        dtimes[1:] = np.arange(1, dtimes.size)*1e-11
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
 
 class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
     COUPLING = 'explicit'
@@ -405,6 +546,8 @@ class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
 def grad_and_taylor_order(filepath, functional, hs, model,
                           duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
                           coupling='explicit'):
+    """
+    """
     ## Calculate the functional value at each point along the line search
     total_runtime = 0
     functionals = list()
@@ -464,6 +607,8 @@ def grad_and_taylor_order(filepath, functional, hs, model,
            ((grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd)
 
 def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='explicit'):
+    """
+    """
     ## Calculate the functional value at each point along the line search
     total_runtime = 0
     functionals = list()
@@ -592,8 +737,16 @@ if __name__ == '__main__':
 
     test = TestBasicGradient()
     test.setUp()
-    # test.test_emod()
+    test.test_emod()
     test.test_u0()
+    test.test_v0()
+    test.test_a0()
+    test.test_times()
+
+    # test = TestBasicGradientSingleStep()
+    # test.setUp()
+    # test.test_emod()
+    # test.test_u0()
     # test.test_v0()
     # test.test_a0()
     # test.test_times()
