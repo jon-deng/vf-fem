@@ -146,14 +146,15 @@ class TaylorTestUtils(unittest.TestCase):
         return fig, axs
 
 class TestBasicGradient(TaylorTestUtils):
-    COUPLING = 'implicit'
+    COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    # FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
     # FUNCTIONAL = basic.TransferEfficiency
-    FUNCTIONAL = basic.SubglottalWork
+    # FUNCTIONAL = basic.SubglottalWork
+    # FUNCTIONAL = basic.FinalFlowRateNorm
 
     def setUp(self):
         """
@@ -244,7 +245,7 @@ class TestBasicGradient(TaylorTestUtils):
 
         self.model.solid.bc_base.apply(step_dir)
 
-        duva = (step_dir, 0.0, 0.0)
+        duva = (step_dir*0.1, 0.0, 0.0)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -261,6 +262,8 @@ class TestBasicGradient(TaylorTestUtils):
         step_dir = np.zeros(xy.size)
         step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+
+        self.model.solid.bc_base.apply(step_dir)
         duva = (0.0, step_dir, 0.0)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
@@ -278,6 +281,8 @@ class TestBasicGradient(TaylorTestUtils):
         step_dir = np.zeros(xy.size)
         step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+
+        self.model.solid.bc_base.apply(step_dir)
         duva = (0.0, 0.0, step_dir*50)
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
@@ -587,8 +592,8 @@ if __name__ == '__main__':
 
     test = TestBasicGradient()
     test.setUp()
-    test.test_emod()
-    # test.test_u0()
+    # test.test_emod()
+    test.test_u0()
     # test.test_v0()
     # test.test_a0()
     # test.test_times()

@@ -424,6 +424,29 @@ class FinalSurfacePower(Functional):
     def eval_dp(self, f):
         return None
 
+class FinalFlowRateNorm(Functional):
+    func_types = ()
+
+    def eval(self, f):
+        qp = f.get_fluid_state(f.size-1)
+
+        return qp[0]**2
+
+    def eval_duva(self, f, n, iter_params0, iter_params1):
+        return (0.0, 0.0, 0.0)
+
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+
+        if n == f.size-1:
+            qp = f.get_fluid_state(n)
+            dq[:] = 2*qp[0]
+
+        return dq, dp
+
+    def eval_dp(self, f):
+        return None
+
 ## Energy functionals
 class ElasticEnergyDifference(Functional):
     func_types = ()
