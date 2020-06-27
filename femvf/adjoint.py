@@ -167,11 +167,10 @@ def adjoint(model, f, functional, coupling='explicit'):
 
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
-    dfunc_dparam = functional.dp(f)
-    if dfunc_dparam is not None:
-        for key, vector in adj_solid.items():
-            if vector is not None:
-                vector += dfunc_dparam.get(key, 0)
+    dfunc_dsolid = functional.dsolid(f)
+    for key, vector in adj_solid.items():
+        if vector is not None:
+            vector[:] += dfunc_dsolid[key]
 
     ## Calculate gradients
     # Calculate sensitivities wrt initial states

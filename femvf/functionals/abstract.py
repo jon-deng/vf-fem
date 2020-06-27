@@ -138,14 +138,36 @@ class AbstractFunctional:
         return self.eval_dqp(f, n, iter_params0, iter_params1)
 
     @update_cache
-    def dp(self, f):
+    def dsolid(self, f):
         """
-        Return dg/dp
+        Return dg/dsolid_paramters
         """
-        return self.eval_dp(f)
+        return self.eval_dsolid(f)
+
+    @update_cache
+    def dfluid(self, f):
+        """
+        Return dg/dfluid_parameters
+        """
+        return self.eval_dfluid(f)
+
+    @update_cache
+    def ddt(self, f, n):
+        """
+        Return dg/ddt
+        """
+        return self.eval_ddt(f, n)
+
+    @update_cache
+    def dt0(self, f, n):
+        """
+        Return dg/ddt
+        """
+        return self.eval_dt0(f, n)
 
     ## Subclasses have to implement these methods
     # optional
+    # TODO: Don't think think form_definitions needs to be a part of the base class
     @staticmethod
     def form_definitions(model):
         """
@@ -202,17 +224,29 @@ class AbstractFunctional:
         """
         raise NotImplementedError("You have to implement this")
 
-    def eval_dp(self, f):
+    def eval_dsolid(self, f):
         """
-        Return dg/d(parameters)
+        Return the dg/dsolidparameters
         """
-        raise NotImplementedError("`eval_dp` must be implemented")
+        raise NotImplementedError("`eval_dt0` must be implemented")
 
-    def eval_dt(self, f, n):
+    def eval_dfluid(self, f):
         """
-        Return the dg/d dt
+        Return the dg/dfluidparameters
         """
-        raise NotImplementedError("`eval_dt` must be implemented")
+        raise NotImplementedError("`eval_dt0` must be implemented")
+
+    def eval_t0(self, f, n):
+        """
+        Return the dg/dt0
+        """
+        raise NotImplementedError("`eval_dt0` must be implemented")
+
+    def eval_ddt(self, f, n):
+        """
+        Return the dg/ddt
+        """
+        raise NotImplementedError("`eval_ddt` must be implemented")
 
     # def __add__(self, other):
 

@@ -14,9 +14,6 @@ dfunctional_du(model, n, f, ....) -> float, dict
 
 , where the parameters have the same uses as defined previously. Parameter `n` is the state to
 compute the sensitivity with respect to.
-
-TODO: __call__ should implement caching behaviour based on whether the statefile instance is the
-same as was passed on the last call
 """
 
 import numpy as np
@@ -106,13 +103,26 @@ class PeriodicError(Functional):
             dv[:] = dfn.assemble(self.forms['dresv_dv_N'])
         return du, dv, 0.0
 
-    def eval_dp(self, f):
-        return None
-
     def eval_dqp(self, f, n, iter_params0, iter_params1):
         dq, dp = self.model.fluid.get_state_vecs()
         dq[:], dp[:] = 0, 0
         return dq, dp
+
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class PeriodicEnergyError(Functional):
     """
@@ -175,7 +185,15 @@ class PeriodicEnergyError(Functional):
             dv[:] = dfn.assemble(self.forms['dresv_dv_N'])
         return du, dv, 0.0
 
-    def eval_dp(self, f):
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        dq[:], dp[:] = 0, 0
+        return dq, dp
+
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+
         alphau = self.constants['alpha']
 
         self.model.set_solid_props(f.get_solid_props())
@@ -183,13 +201,20 @@ class PeriodicEnergyError(Functional):
         self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
 
         derru_demod = dfn.assemble(self.forms['dresu_demod'])
+        dsolid['emod'][:] = alphau**2*derru_demod
 
-        return {'emod': alphau**2*derru_demod}
+        return dsolid
 
-    def eval_dqp(self, f, n, iter_params0, iter_params1):
-        dq, dp = self.model.fluid.get_state_vecs()
-        dq[:], dp[:] = 0, 0
-        return dq, dp
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class FinalDisplacementNorm(Functional):
     r"""
@@ -228,8 +253,21 @@ class FinalDisplacementNorm(Functional):
         dq, dp = self.model.fluid.get_state_vecs()
         return dq, dp
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class FinalVelocityNorm(Functional):
     r"""
@@ -269,8 +307,21 @@ class FinalVelocityNorm(Functional):
         dq[:], dp[:] = 0, 0
         return dq, dp
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class FinalSurfaceDisplacementNorm(Functional):
     r"""
@@ -305,8 +356,21 @@ class FinalSurfaceDisplacementNorm(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class FinalSurfacePressureNorm(Functional):
     r"""
@@ -351,8 +415,21 @@ class FinalSurfacePressureNorm(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class FinalSurfacePower(Functional):
     """
@@ -421,8 +498,21 @@ class FinalSurfacePower(Functional):
 
         return du, dv, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class FinalFlowRateNorm(Functional):
     func_types = ()
@@ -444,8 +534,21 @@ class FinalFlowRateNorm(Functional):
 
         return dq, dp
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 ## Energy functionals
 class ElasticEnergyDifference(Functional):
@@ -519,7 +622,10 @@ class ElasticEnergyDifference(Functional):
         dq, dp = self.model.fluid.get_state_vecs()
         return dq, dp
 
-    def eval_dp(self, f):
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+
         self.model.set_solid_props(f.get_solid_props())
         u_ini_vec = f.get_state(0)[0]
         u_fin_vec = f.get_state(-1)[0]
@@ -534,9 +640,20 @@ class ElasticEnergyDifference(Functional):
         den_elastic_fin_demod = dfn.assemble(self.forms['den_elastic_fin_demod'])
         # out = (en_elastic_fin - en_elastic_ini)**2
         demod = 2*(en_elastic_fin - en_elastic_ini)*(den_elastic_fin_demod - den_elastic_ini_demod)
+        dsolid['emod'][:] = demod
 
-        # dsolid = {'emod': demod}
-        return {'emod': demod}
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class KVDampingWork(Functional):
     """
@@ -599,7 +716,14 @@ class KVDampingWork(Functional):
 
         return 0.0, dv, 0.0
 
-    def eval_dp(self, f):
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        return dq, dp
+
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+
         N_START = 0
         N_STATE = f.get_num_states()
 
@@ -614,11 +738,19 @@ class KVDampingWork(Functional):
             dpower_right_deta = dfn.assemble(self.forms['ddamping_power_deta'])
             dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
 
-        return {'eta': dwork_deta}
+        dsolid['eta'][:] = dwork_deta
+        return dsolid
 
-    def eval_dqp(self, f, n, iter_params0, iter_params1):
-        dq, dp = self.model.fluid.get_state_vecs()
-        return dq, dp
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 # TODO: Pretty sure this one below does not work
 class RayleighDampingWork(Functional):
@@ -669,8 +801,23 @@ class RayleighDampingWork(Functional):
         dv = dfn.assemble(self.forms['ddamping_power_dv']) * self.model.solid.dt.vector()[0]
         return 0.0, dv, 0.0
 
-    def eval_dp(self, f):
-        return dfn.assemble(self.forms['ddamping_power_demod']) * self.model.solid.dt.vector()[0]
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+
+        dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.model.solid.dt.vector()[0]
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class TransferWorkbyVelocity(Functional):
     """
@@ -769,7 +916,20 @@ class TransferWorkbyVelocity(Functional):
 
         return du, dv, 0.0
 
-    def eval_dt(self, f, n):
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
         # TODO: This hasn't been tested yet or called in the adjoint code
         N_STATE = f.size
 
@@ -788,9 +948,6 @@ class TransferWorkbyVelocity(Functional):
         dfluid_power_dtn = 0.5*(fluid_power0 - fluid_power2)
 
         return dfluid_power_dtn
-
-    def eval_dp(self, f):
-        return None
 
 class TransferWorkbyDisplacementIncrement(Functional):
     """
@@ -908,8 +1065,21 @@ class TransferWorkbyDisplacementIncrement(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class SubglottalWork(Functional):
     """
@@ -959,8 +1129,21 @@ class SubglottalWork(Functional):
 
         return dq, dp
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class TransferEfficiency(Functional):
     """
@@ -1004,8 +1187,21 @@ class TransferEfficiency(Functional):
         dq, dp = self.model.fluid.get_state_vecs()
         return dq, dp
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 ## Flow functionals
 class VolumeFlow(Functional):
@@ -1049,8 +1245,21 @@ class VolumeFlow(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class MFDR(Functional):
     """
@@ -1117,8 +1326,21 @@ class MFDR(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class SampledMeanFlowRate(Functional):
     func_types = ()
@@ -1156,8 +1378,21 @@ class SampledMeanFlowRate(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return dfn.Function(self.model.solid.scalar_fspace).vector()
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 ## Glottal width functionals
 class GlottalWidthErrorNorm(Functional):
@@ -1218,8 +1453,21 @@ class GlottalWidthErrorNorm(Functional):
 
         return du, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return dfn.Function(self.model.solid.scalar_fspace).vector()
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
+
+    def eval_t0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
 
 class DFTGlottalWidthErrorNorm(Functional):
     """
@@ -1288,106 +1536,21 @@ class DFTGlottalWidthErrorNorm(Functional):
         dft_gw_meas = self.cache['dft_gw_meas']
         raise NotImplementedError("You need to fix this")
 
-    def eval_dp(self, f):
-        return None
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
 
-class InitialGlottalWidth(Functional):
-    default_constants = {}
-    func_types = ()
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
 
-    def eval(self, f):
-        model = self.model
-        params = model.set_iter_params_fromfile(f, 1)
-        fluid_props = params['fluid_props']
+    def eval_t0(self, f, n):
+        return 0.0
 
-        x, _, _ = self.model.get_surface_state()
-        y = x[:, 1]
-
-        area = 2 * (fluid_props['y_midline'] - y)
-
-        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
-
-        return amin
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        model = self.model
-
-        params = model.set_iter_params_fromfile(f, 0)
-        fluid_props = params['fluid_props']
-
-        x, v, a = self.model.get_surface_state()
-        y = x[:, 1]
-
-        dy_du = np.zeros(x.shape); dy_du[:, 1] = 1.0
-
-        area = 2 * (fluid_props['y_midline'] - y)
-        darea_du = 2 * -dy_du
-
-        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
-        damin_darea = dsmooth_minimum_df(area, model.fluid.s_vertices, fluid_props['alpha'])
-        damin_du = damin_darea[:, None] * darea_du
-
-        ## Map the sensitivity to the solid DOFS
-        # Get a list of pressure DOFS
-        du = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        pressure_vertices = model.surface_vertices
-        pressure_dofs = model.solid.vert_to_sdof[pressure_vertices]
-        vector_dofs = np.stack([pressure_dofs, pressure_dofs+1], axis=-1)
-        du[vector_dofs.reshape(-1)] = damin_du.reshape(-1)
-
-        return du, 0.0, 0.0
-
-    def dp(self, f):
-        return None
-
-class InitialGlottalWidthVelocity(Functional):
-    def eval(self, f):
-        model = self.model
-        params = model.set_iter_params_fromfile(f, 0)
-        fluid_props = params['fluid_props']
-
-        x, v, a = self.model.get_surface_state()
-        y, dy_dt = x[1::2], v[1::2]
-
-        area = 2 * (fluid_props['y_midline'] - y)
-        darea_dt = 2 * -dy_dt
-
-        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
-        damin_darea = dsmooth_minimum_df(area, model.fluid.s_vertices, fluid_props['alpha'])
-
-        damin_dt = np.dot(damin_darea, darea_dt)
-
-        return damin_dt
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        model = self.model
-        params = model.set_iter_params_fromfile(f, 0)
-        fluid_props = params['fluid_props']
-
-        x, v, a = self.model.get_surface_state()
-        y, dy_dt = x[1::2], v[1::2]
-
-        dy_du = np.zeros(x.size); dy_du[1::2] = 1.0
-        ddy_dt_dv = np.zeros(x.size); ddy_dt_dv[1::2] = 1.0
-
-        area = 2 * (fluid_props['y_midline'] - y)
-        darea_dt = 2 * -dy_dt
-
-        darea_du = 2 * -dy_du
-        ddarea_dt_dv = 2*-ddy_dt_dv
-
-        amin = smooth_minimum(area, model.fluid.s_vertices, fluid_props['alpha'])
-        damin_darea = dsmooth_minimum_df(area, model.fluid.s_vertices, fluid_props['alpha'])
-
-        damin_darea
-
-        damin_dt = np.dot(damin_darea, darea_dt)
-
-        return damin_dt
-
-    def dp(self, f):
-        return None
+    def eval_ddt(self, f, n):
+        return 0.0
 
 def gaussian_f0_comb(dft_freq, f0=1.0, df=1):
     """
