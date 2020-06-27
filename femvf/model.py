@@ -157,6 +157,7 @@ class ForwardModel:
 
     # @staticmethod
     def _ignore_nonvector(map_fsi_func):
+        """Decorator so that floats are ignored in the map_ functions"""
         def wrapped_map_fsi_func(self, x):
             if isinstance(x, (float, int)):
                 return x
@@ -183,7 +184,7 @@ class ForwardModel:
 
     @_ignore_nonvector
     def map_fsi_scalar_from_fluid_to_solid(self, fluid_scalar):
-        sdof_solid, sdof_fluid  = self.get_fsi_scalar_dofs()
+        sdof_solid, sdof_fluid = self.get_fsi_scalar_dofs()
 
         solid_scalar = dfn.Function(self.solid.scalar_fspace).vector()
         solid_scalar[sdof_solid] = fluid_scalar[sdof_fluid]

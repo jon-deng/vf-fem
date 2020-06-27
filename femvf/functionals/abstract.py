@@ -236,7 +236,7 @@ class AbstractFunctional:
         """
         raise NotImplementedError("`eval_dt0` must be implemented")
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         """
         Return the dg/dt0
         """

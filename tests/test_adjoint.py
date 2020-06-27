@@ -149,14 +149,16 @@ class TaylorTestUtils(unittest.TestCase):
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
-    # FUNCTIONAL = basic.TransferEfficiency
     # FUNCTIONAL = basic.SubglottalWork
+    # FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
+    # FUNCTIONAL = basic.TransferWorkbyVelocity
     # FUNCTIONAL = basic.FinalFlowRateNorm
+    # FUNCTIONAL = basic.TransferEfficiency
 
     def setUp(self):
         """
@@ -198,9 +200,9 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = orders
         (grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd = grads
 
-        self.plot_taylor_convergence(grad_step, hs, gs)
-        self.plot_grad_uva(self.model, grad_uva)
-        plt.show()
+        # self.plot_taylor_convergence(grad_step, hs, gs)
+        # self.plot_grad_uva(self.model, grad_uva)
+        # plt.show()
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)

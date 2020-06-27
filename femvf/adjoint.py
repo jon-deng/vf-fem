@@ -146,7 +146,7 @@ def adjoint(model, f, functional, coupling='explicit'):
 
         # Update gradients wrt parameters using the adjoint
         adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj)
-        adj_dt1 = solve_grad_dt(model, adj_state1, iter_params1)
+        adj_dt1 = solve_grad_dt(model, adj_state1, iter_params1) + functional.ddt(f, ii)
         adj_dt.insert(0, adj_dt1)
 
         # Find the RHS for the next iteration

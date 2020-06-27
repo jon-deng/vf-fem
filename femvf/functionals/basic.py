@@ -118,7 +118,7 @@ class PeriodicError(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -210,7 +210,7 @@ class PeriodicEnergyError(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -263,7 +263,7 @@ class FinalDisplacementNorm(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -317,7 +317,7 @@ class FinalVelocityNorm(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -366,7 +366,7 @@ class FinalSurfaceDisplacementNorm(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -425,7 +425,7 @@ class FinalSurfacePressureNorm(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -508,7 +508,7 @@ class FinalSurfacePower(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -544,7 +544,7 @@ class FinalFlowRateNorm(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -649,7 +649,7 @@ class ElasticEnergyDifference(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -746,13 +746,52 @@ class KVDampingWork(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
-        return 0.0
+    def eval_dt0(self, f, n):
+        dt0 = 0
+        # N_START = 0
+        # N_STATE = f.get_num_states()
+
+        # # Add dt0 due to work increment to the 'left' of dt0
+        # if n >= N_START+1:
+        #     # Calculate damped work over n-1 -> n
+        #     self.model.set_params_fromfile(f, n-1)
+        #     power_left = dfn.assemble(self.forms['damping_power'])
+
+        #     self.model.set_params_fromfile(f, n)
+        #     power_right = dfn.assemble(self.forms['damping_power'])
+        #     # res += (power_left+power_right)/2 * (time[n]-time[n-1])
+        #     dt0 += (power_left+power_right)/2
+
+        # if n < N_STATE-1:
+        #     # Calculate damped work over n -> n + 1
+        #     self.model.set_params_fromfile(f, n)
+        #     power_left = dfn.assemble(self.forms['damping_power'])
+
+        #     self.model.set_params_fromfile(f, n+1)
+        #     power_right = dfn.assemble(self.forms['damping_power'])
+        #     # res += (power_left+power_right)/2 * (time[n+1]-time[n])
+        #     dt0 += -(power_left+power_right)/2
+
+        return dt0
 
     def eval_ddt(self, f, n):
-        return 0.0
+        ddt = 0
+        N_START = 0
+        N_STATE = f.get_num_states()
+        if n >= N_START+1:
+            # Calculate damped work over n-1 -> n
+            time = f.get_times()
 
-# TODO: Pretty sure this one below does not work
+            self.model.set_params_fromfile(f, n-1)
+            power_left = dfn.assemble(self.forms['damping_power'])
+
+            self.model.set_params_fromfile(f, n)
+            power_right = dfn.assemble(self.forms['damping_power'])
+            # res += (power_left+power_right)/2 * (time[n]-time[n-1])
+            ddt = (power_left+power_right)/2
+
+        return ddt
+
 class RayleighDampingWork(Functional):
     """
     Represent the strain work dissipated in the tissue due to damping
@@ -801,6 +840,10 @@ class RayleighDampingWork(Functional):
         dv = dfn.assemble(self.forms['ddamping_power_dv']) * self.model.solid.dt.vector()[0]
         return 0.0, dv, 0.0
 
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+        return dq, dp
+
     def eval_dsolid(self, f):
         dsolid = self.model.solid.get_properties()
         dsolid.vector[:] = 0.0
@@ -813,11 +856,23 @@ class RayleighDampingWork(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
-        return 0.0
+        ddt = 0
+        N_START = 0
+        # N_STATE = f.get_num_states()
+
+        res = 0
+        # for ii in range(N_START, N_STATE-1):
+        if n > N_START:
+            # Set form coefficients to represent the equation from state ii to ii+1
+            self.model.set_iter_params_fromfile(f, n)
+            # res += dfn.assemble(self.forms['damping_power']) * self.model.solid.dt.vector()[0]
+            ddt += dfn.assemble(self.forms['damping_power'])
+
+        return ddt
 
 class TransferWorkbyVelocity(Functional):
     """
@@ -842,7 +897,7 @@ class TransferWorkbyVelocity(Functional):
         vector_trial = solid.forms['trial.vector']
         scalar_trial = solid.forms['trial.scalar']
 
-        pressure = solid.forms['coeff.fsi.pressure']
+        pressure = solid.forms['coeff.fsi.p0']
         u0 = solid.forms['coeff.state.u0']
         v0 = solid.forms['coeff.state.v0']
 
@@ -885,18 +940,8 @@ class TransferWorkbyVelocity(Functional):
         N_STATE = f.size
 
         self.model.set_params_fromfile(f, n)
-        dp_du, _ = self.model.get_flow_sensitivity()
         dfluid_power_dun = dfn.assemble(self.forms['dfluid_power_du'])
         dfluid_power_dvn = dfn.assemble(self.forms['dfluid_power_dv'])
-
-        # Correct dfluid_power_n_du since pressure depends on u0 too
-        dfluidpower_dp = dfn.assemble(self.forms['dfluid_power_dpressure'],
-                                      tensor=dfn.PETScVector()).vec()
-
-        dfluidpower_du0_correction = dfn.as_backend_type(dfluid_power_dun).vec().copy()
-        dp_du.multTranspose(dfluidpower_dp, dfluidpower_du0_correction)
-
-        dfluid_power_dun += dfn.Vector(dfn.PETScVector(dfluidpower_du0_correction))
 
         # Here, add sensitivity to state `n` based on the 'left' and 'right' quadrature intervals
         # Note that if `n == 0` / `n == N_STATE-1` there is not left/right quadrature interval,
@@ -916,6 +961,35 @@ class TransferWorkbyVelocity(Functional):
 
         return du, dv, 0.0
 
+    def eval_dqp(self, f, n, iter_params0, iter_params1):
+        dq, dp = self.model.fluid.get_state_vecs()
+
+        # The work terms that involve state n are given by
+        # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
+        N_START = self.constants['n_start']
+        N_STATE = f.size
+
+        self.model.set_params_fromfile(f, n)
+        dfluidpower_dp = dfn.assemble(self.forms['dfluid_power_dpressure'])
+        dfluidpower_dp = self.model.map_fsi_scalar_from_solid_to_fluid(dfluidpower_dp)
+
+        # Here, add sensitivity to state `n` based on the 'left' and 'right' quadrature intervals
+        # Note that if `n == 0` / `n == N_STATE-1` there is not left/right quadrature interval,
+        # respectively
+        dt_left = 0
+        dt_right = 0
+        if n >= N_START:
+            if n != N_START:
+                ts = f['time'][n-1:n+1]
+                dt_left = ts[1] - ts[0]
+            if n != N_STATE-1:
+                ts = f['time'][n:n+2]
+                dt_right = ts[1] - ts[0]
+
+        dp = 0.5 * dfluidpower_dp * (dt_left + dt_right)
+
+        return dq, dp
+
     def eval_dsolid(self, f):
         dsolid = self.model.solid.get_properties()
         dsolid.vector[:] = 0.0
@@ -926,28 +1000,44 @@ class TransferWorkbyVelocity(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
-        return 0.0
+    def eval_dt0(self, f, n):
+        dt0 = 0.0
+
+        # N_START = self.constants['n_start']
+        # N_STATE = f.size
+
+        # # t = f['time'][:]
+        # def power(n):
+        #     self.model.set_params_fromfile(f, n)
+        #     return dfn.assemble(self.forms['fluid_power'])
+
+        # # derivative due to the left interval
+        # if n > N_START:
+        #     # work += 1/2*(power(n-1) + power(n))*(t[n]-t[n-1])
+        #     dt0 += 1/2*(power(n-1) + power(n))
+
+        # # derivative due to right interval
+        # if n < N_STATE-1:
+        #     # work += 1/2*(power(n+1) + power(n))*(t[n+1]-t[n])
+        #     dt0 += -1/2*(power(n+1) + power(n))
+
+        return dt0
 
     def eval_ddt(self, f, n):
-        # TODO: This hasn't been tested yet or called in the adjoint code
-        N_STATE = f.size
+        ddt = 0.0
+
+        N_START = self.constants['n_start']
 
         # Add sensitivity to state `n` based on the 'left' quadrature interval
-        fluid_power0 = 0.0
-        if n != 0:
+        if n > N_START:
             self.model.set_params_fromfile(f, n-1)
             fluid_power0 = dfn.assemble(self.forms['fluid_power'])
 
-        fluid_power2 = 0.0
-        if n != N_STATE-1:
-            self.model.set_params_fromfile(f, n+1)
-            fluid_power2 = dfn.assemble(self.forms['fluid_power'])
+            self.model.set_params_fromfile(f, n)
+            fluid_power1 = dfn.assemble(self.forms['fluid_power'])
+            ddt += 0.5 * (fluid_power0 + fluid_power1)
 
-        # dt_n = 0.5*(fluid_power1+fluid_power0) - 0.5*(fluid_power2+fluid_power1)
-        dfluid_power_dtn = 0.5*(fluid_power0 - fluid_power2)
-
-        return dfluid_power_dtn
+        return ddt
 
 class TransferWorkbyDisplacementIncrement(Functional):
     """
@@ -1015,23 +1105,12 @@ class TransferWorkbyDisplacementIncrement(Functional):
                 self.model.set_iter_params_fromfile(f, n)
                 # self.model.set_iter_params(**iter_params0)
 
-                du += dfn.assemble(self.forms['dfluid_work_du1'])
+                du[:] += dfn.assemble(self.forms['dfluid_work_du1'])
 
             if n != N_STATE-1:
                 self.model.set_iter_params_fromfile(f, n+1)
-                # self.model.set_iter_params(**iter_params1)
-                dp_du, _ = self.model.get_flow_sensitivity()
 
-                du += dfn.assemble(self.forms['dfluid_work_du0'])
-
-                # Correct dfluidwork_du0 since pressure depends on u0 too
-                dfluidwork_dp = dfn.assemble(self.forms['dfluid_work_dpressure'],
-                                                tensor=dfn.PETScVector()).vec()
-
-                dfluidwork_du0_correction = dfn.as_backend_type(du).vec().copy()
-                dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
-
-                du += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
+                du[:] += dfn.assemble(self.forms['dfluid_work_du0'])
 
         return du, 0.0, 0.0
 
@@ -1039,31 +1118,16 @@ class TransferWorkbyDisplacementIncrement(Functional):
         N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
 
-        du = dfn.Function(self.model.solid.vector_fspace).vector()
+        dq, dp = self.model.fluid.get_state_vecs()
+
         if n >= N_START:
             if n != N_START:
+                # self.model.set_iter_params_fromfile(f, n)
                 self.model.set_iter_params_fromfile(f, n)
-                # self.model.set_iter_params(**iter_params0)
+                dfluidwork_dp = dfn.assemble(self.forms['dfluid_work_dpressure'])
+                dp[:] += self.model.map_fsi_scalar_from_solid_to_fluid(dfluidwork_dp)
 
-                du += dfn.assemble(self.forms['dfluid_work_du1'])
-
-            if n != N_STATE-1:
-                self.model.set_iter_params_fromfile(f, n+1)
-                # self.model.set_iter_params(**iter_params1)
-                dp_du, _ = self.model.get_flow_sensitivity()
-
-                du += dfn.assemble(self.forms['dfluid_work_du0'])
-
-                # Correct dfluidwork_du0 since pressure depends on u0 too
-                dfluidwork_dp = dfn.assemble(self.forms['dfluid_work_dpressure'],
-                                                tensor=dfn.PETScVector()).vec()
-
-                dfluidwork_du0_correction = dfn.as_backend_type(du).vec().copy()
-                dp_du.multTranspose(dfluidwork_dp, dfluidwork_du0_correction)
-
-                du += dfn.Vector(dfn.PETScVector(dfluidwork_du0_correction))
-
-        return du, 0.0, 0.0
+        return dq, dp
 
     def eval_dsolid(self, f):
         dsolid = self.model.solid.get_properties()
@@ -1075,7 +1139,7 @@ class TransferWorkbyDisplacementIncrement(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
@@ -1086,8 +1150,7 @@ class SubglottalWork(Functional):
     Return the total work input into the fluid from the lungs.
     """
     func_types = ()
-    default_constants = {
-        'n_start': 0}
+    default_constants = {'n_start': 0}
 
     def eval(self, f):
         # meas_ind = f.get_meas_indices()
@@ -1095,15 +1158,14 @@ class SubglottalWork(Functional):
         N_STATE = f.get_num_states()
 
         ret = 0
-        for ii in range(N_START, N_STATE-1):
+        fluid_props = f.get_fluid_props(0)
+        for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            # self.model.set_params_fromfile(f, ii)
-            fluid_props = f.get_fluid_props(0)
-            qp0 = f.get_fluid_state(ii)
-            dt = f.get_time(ii+1) - f.get_time(ii)
+            qp0 = f.get_fluid_state(ii-1)
+            qp1 = f.get_fluid_state(ii)
+            dt = f.get_time(ii) - f.get_time(ii-1)
 
-            # ret += dt*q*self.model.fluid.properties['p_sub']
-            ret += dt*qp0[0]*fluid_props['p_sub']
+            ret += 0.5*(qp0[0]+qp1[0])*fluid_props['p_sub']*dt
 
         self.cache.update({'N_STATE': N_STATE})
 
@@ -1118,14 +1180,16 @@ class SubglottalWork(Functional):
         N_START = self.constants['n_start']
         N_STATE = self.cache['N_STATE']
 
-        if n >= N_START and n < N_STATE-1:
-            fluid_props = f.get_fluid_props(0)
-            # qp0 = f.get_fluid_state(ii)
-            dt = f.get_time(n+1) - f.get_time(n)
+        fluid_props = f.get_fluid_props(0)
+        # derivative from left quadrature interval
+        if n > N_START:
+            dt = f.get_time(n) - f.get_time(n-1)
+            dq[:] += 0.5*fluid_props['p_sub']*dt
 
-            dq[:] = dt*fluid_props['p_sub']
-        else:
-            pass
+        # derivative from right quadrature interval
+        if n < N_STATE-1:
+            dt = f.get_time(n+1) - f.get_time(n)
+            dq[:] += 0.5*fluid_props['p_sub']*dt
 
         return dq, dp
 
@@ -1139,11 +1203,25 @@ class SubglottalWork(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
-        return 0.0
+        ddt = 0.0
+
+        N_START = self.constants['n_start']
+
+        fluid_props = f.get_fluid_props(0)
+        def power(n):
+            qp = f.get_fluid_state(n)
+            return qp[0]*fluid_props['p_sub']
+
+        if n > N_START:
+            # dt = f.get_time(n) - f.get_time(n-1)
+            # work = 0.5*(power(n-1)+power(n))*dt
+            ddt += 0.5*(power(n-1)+power(n))
+
+        return ddt
 
 class TransferEfficiency(Functional):
     """
@@ -1167,19 +1245,19 @@ class TransferEfficiency(Functional):
     def eval_duva(self, f, n, iter_params0, iter_params1):
         # TODO : Is there something slightly wrong with this one? Seems slightly wrong from
         # comparing with FD. The error is small but it is not propto step size?
-        N_START = self.constants['m_start']
+        # N_START = self.constants['m_start']
 
-        tfluidwork = self.cache.get('totalfluidwork', None)
-        tinputwork = self.cache.get('totalinputwork', None)
+        tfluidwork = self.funcs[0](f)
+        tinputwork = self.funcs[1](f)
 
-        dtotalfluidwork_dun = self.funcs[0].eval_du(f, n, iter_params0, iter_params1)
-        dtotalinputwork_dun = self.funcs[1].eval_du(f, n, iter_params0, iter_params1)
+        dtotalfluidwork_dun = self.funcs[0].du(f, n, iter_params0, iter_params1)
+        dtotalinputwork_dun = self.funcs[1].du(f, n, iter_params0, iter_params1)
 
-        du = None
-        if n < N_START:
-            du = dfn.Function(self.model.solid.vector_fspace).vector()
-        else:
-            du = dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
+        # du = None
+        # if n < N_START:
+        #     du = dfn.Function(self.model.solid.vector_fspace).vector()
+        # else:
+        du = dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
 
         return du, 0.0, 0.0
 
@@ -1197,202 +1275,16 @@ class TransferEfficiency(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
-        return 0.0
+        tfluidwork = self.funcs[0](f)
+        tinputwork = self.funcs[1](f)
 
-## Flow functionals
-class VolumeFlow(Functional):
-    """
-    Return the total volume of fluid that flowed through the vocal folds
-
-    Parameters
-    ----------
-    n_start : int, optional
-        Starting index to compute the functional over
-    """
-    func_types = ()
-    default_constants = {
-        'm_start': 0,
-        'tukey_alpha': 0.0}
-
-    def eval(self, f):
-        N_STATE = f.get_num_states()
-        N_START = self.constants['m_start']
-
-        totalflow = 0
-        for ii in range(N_START, N_STATE-1):
-            fluid_info, _ = self.model.set_iter_params_fromfile(f, ii+1)
-
-            totalflow += fluid_info['flow_rate'] * self.model.dt.values()[0]
-
-        return totalflow
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        N_START = self.constants['m_start']
-
-        num_states = f.get_num_states()
-        du = None
-        if n < N_START or n == num_states-1:
-            du = dfn.Function(self.model.solid.vector_fspace).vector()
-        else:
-            # self.model.set_iter_params_fromfile(f, n+1)
-            self.model.set_iter_params(**iter_params1)
-            _, dq_dun = self.model.get_flow_sensitivity()
-            du = dq_dun * self.model.dt.values()[0]
-
-        return du, 0.0, 0.0
-
-    def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
-        dsolid.vector[:] = 0.0
-        return dsolid
-
-    def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
-        dfluid.vector[:] = 0.0
-        return dfluid
-
-    def eval_t0(self, f, n):
-        return 0.0
-
-    def eval_ddt(self, f, n):
-        return 0.0
-
-class MFDR(Functional):
-    """
-    Return the maximum flow declination rate.
-    """
-    func_types = ()
-    default_constants = {
-        'm_start': 0
-    }
-
-    def eval(self, f):
-        flow_rate = []
-        info = {}
-
-        num_states = f.get_num_states()
-        for ii in range(num_states-1):
-            # Set form coefficients to represent the equation at state ii
-            info, _ = self.model.set_iter_params_fromfile(f, ii+1)
-
-            flow_rate.append(info['flow_rate'])
-        flow_rate = np.array(flow_rate)
-
-        times = f.get_solution_times()[:-1]
-        dflow_rate_dt = (flow_rate[1:]-flow_rate[:-1]) / (times[1:] - times[:-1])
-
-        N_START = self.constants['m_start']
-        idx_min = np.argmin(dflow_rate_dt[N_START:]) + N_START
-
-        res = dflow_rate_dt[idx_min]
-
-        self.cache.update({'idx_mfdr': idx_min})
-
-        return res
-
-    # TODO: Pretty sure this is wrong so you should fix it if you are going to use it
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        du = None
-
-        idx_mfdr = self.cache.get('idx_mfdr', None)
-
-        if n == idx_mfdr or n == idx_mfdr+1:
-            # First calculate flow rates at n and n+1
-            # fluid_info, _ = self.model.set_iter_params_fromfile(f, n+2)
-
-            # q1 = fluid_info['flow_rate']
-            dq1_du = self.model.get_flow_sensitivity()[1]
-            t1 = f.get_time(n+1)
-
-            # fluid_info, _ = self.model.set_iter_params_fromfile(f, n+1)
-
-            # q0 = fluid_info['flow_rate']
-            dq0_du = self.model.get_flow_sensitivity()[1]
-            t0 = f.get_time(n)
-
-            dfdr_du0 = -dq0_du / (t1-t0)
-            dfdr_du1 = dq1_du / (t1-t0)
-
-            if n == idx_mfdr:
-                du = dfdr_du0
-            elif n == idx_mfdr+1:
-                du = dfdr_du1
-        else:
-            du = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        return du, 0.0, 0.0
-
-    def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
-        dsolid.vector[:] = 0.0
-        return dsolid
-
-    def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
-        dfluid.vector[:] = 0.0
-        return dfluid
-
-    def eval_t0(self, f, n):
-        return 0.0
-
-    def eval_ddt(self, f, n):
-        return 0.0
-
-class SampledMeanFlowRate(Functional):
-    func_types = ()
-    default_constants = {
-        'tukey_alpha': 0.0
-    }
-
-    def eval(self, f):
-        meas_ind = f.get_meas_indices()
-        tukey_window = sig.tukey(meas_ind.size, alpha=self.constants['tukey_alpha'])
-
-        # Note that we loop through measured indices
-        # you should space these at equal time intervals for a valid DFT result
-        sum_flow_rate = 0
-        for m, n in enumerate(meas_ind):
-            self.model.set_params_fromfile(f, n)
-            sum_flow_rate += self.model.get_pressure()['flow_rate'] * tukey_window[m]
-
-        return sum_flow_rate / meas_ind.size
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        meas_ind = f.get_meas_indices()
-        tukey_window = sig.tukey(meas_ind.size, alpha=self.constants['tukey_alpha'])
-
-        du = None
-
-        m = np.where(meas_ind == n)[0]
-        assert m.size == 0 or m.size == 1
-        if m.size == 1:
-            self.model.set_iter_params(**iter_params1)
-            _, dq_dun = self.model.get_flow_sensitivity()
-            du = dq_dun * tukey_window[m] / meas_ind.size
-        else:
-            du = dfn.Function(self.model.solid.vector_fspace).vector()
-
-        return du, 0.0, 0.0
-
-    def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
-        dsolid.vector[:] = 0.0
-        return dsolid
-
-    def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
-        dfluid.vector[:] = 0.0
-        return dfluid
-
-    def eval_t0(self, f, n):
-        return 0.0
-
-    def eval_ddt(self, f, n):
-        return 0.0
+        dtotalfluidwork_ddt = self.funcs[0].ddt(f, n)
+        dtotalinputwork_ddt = self.funcs[1].ddt(f, n)
+        return dtotalfluidwork_ddt/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_ddt
 
 ## Glottal width functionals
 class GlottalWidthErrorNorm(Functional):
@@ -1463,90 +1355,7 @@ class GlottalWidthErrorNorm(Functional):
         dfluid.vector[:] = 0.0
         return dfluid
 
-    def eval_t0(self, f, n):
-        return 0.0
-
-    def eval_ddt(self, f, n):
-        return 0.0
-
-class DFTGlottalWidthErrorNorm(Functional):
-    """
-    Represents the difference between a measured vs model glottal width using DFT coefficients
-    """
-    func_types = ()
-    default_constants = {
-        'gw_meas': 0.0,
-        'tukey_alpha': 0.05,
-        'smooth_min_alpha': -2000.0
-    }
-
-    def eval(self, f):
-        model = self.model
-
-        # Get the initial locations of the nodes
-        X_REF = model.get_ref_config()
-        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
-        X_REF_SURFACE = X_REF[DOF_SURFACE]
-
-        # Calculate the glottal width at every node
-        gw_model = []
-        idx_meas = f.get_meas_indices()
-        for n in idx_meas:
-            u = f.get_state(n)[0]
-            xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
-            y_surf = xy_surf[1::2]
-            gw = smooth_minimum(y_surf, alpha=self.constants['alpha_min'])
-            gw_model.append(gw)
-
-        dft_gw_model = np.fft.rfft(gw_model)
-        dft_gw_meas = np.fft.rfft(self.constants['gw_meas'])
-
-        err = dft_gw_model - dft_gw_meas
-
-        self.cache['gw_model'] = gw_model
-        self.cache['dft_gw_model'] = dft_gw_model
-        self.cache['dft_gw_meas'] = dft_gw_meas
-        return np.sum(np.abs(err)**2)
-
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        model = self.model
-
-        # Get the initial locations of the nodes
-        X_REF = model.get_ref_config()
-        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
-        Y_DOF = DOF_SURFACE[1::2]
-        X_REF_SURFACE = X_REF[DOF_SURFACE]
-
-        # Set up a map from state index to measured index
-        N = f.size
-        idx_meas = f.get_meas_indices()
-        M = idx_meas.size
-
-        n_to_m = {n: -1 for n in range(N)}
-        for m, n in enumerate(idx_meas):
-            n_to_m[n] = m
-
-        #
-        gw_model = self.cache['gw_model']
-
-        dft_gw_model = self.cache['dft_gw_model']
-        m_meas = n_to_m[n]
-        dft_gw_model_dgw_n = np.exp(1j*2*np.pi*m_meas*np.arange(M)/M)
-
-        dft_gw_meas = self.cache['dft_gw_meas']
-        raise NotImplementedError("You need to fix this")
-
-    def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
-        dsolid.vector[:] = 0.0
-        return dsolid
-
-    def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
-        dfluid.vector[:] = 0.0
-        return dfluid
-
-    def eval_t0(self, f, n):
+    def eval_dt0(self, f, n):
         return 0.0
 
     def eval_ddt(self, f, n):
