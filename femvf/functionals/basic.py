@@ -1003,24 +1003,6 @@ class TransferWorkbyVelocity(Functional):
     def eval_dt0(self, f, n):
         dt0 = 0.0
 
-        # N_START = self.constants['n_start']
-        # N_STATE = f.size
-
-        # # t = f['time'][:]
-        # def power(n):
-        #     self.model.set_params_fromfile(f, n)
-        #     return dfn.assemble(self.forms['fluid_power'])
-
-        # # derivative due to the left interval
-        # if n > N_START:
-        #     # work += 1/2*(power(n-1) + power(n))*(t[n]-t[n-1])
-        #     dt0 += 1/2*(power(n-1) + power(n))
-
-        # # derivative due to right interval
-        # if n < N_STATE-1:
-        #     # work += 1/2*(power(n+1) + power(n))*(t[n+1]-t[n])
-        #     dt0 += -1/2*(power(n+1) + power(n))
-
         return dt0
 
     def eval_ddt(self, f, n):
@@ -1095,7 +1077,6 @@ class TransferWorkbyDisplacementIncrement(Functional):
         return res
 
     def eval_duva(self, f, n, iter_params0, iter_params1):
-
         N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
 
@@ -1181,15 +1162,16 @@ class SubglottalWork(Functional):
         N_STATE = self.cache['N_STATE']
 
         fluid_props = f.get_fluid_props(0)
-        # derivative from left quadrature interval
-        if n > N_START:
-            dt = f.get_time(n) - f.get_time(n-1)
-            dq[:] += 0.5*fluid_props['p_sub']*dt
+        if n >= N_START:
+            # derivative from left quadrature interval
+            if n != N_START:
+                dt = f.get_time(n) - f.get_time(n-1)
+                dq[:] += 0.5*fluid_props['p_sub']*dt
 
-        # derivative from right quadrature interval
-        if n < N_STATE-1:
-            dt = f.get_time(n+1) - f.get_time(n)
-            dq[:] += 0.5*fluid_props['p_sub']*dt
+            # derivative from right quadrature interval
+            if n != N_STATE-1:
+                dt = f.get_time(n+1) - f.get_time(n)
+                dq[:] += 0.5*fluid_props['p_sub']*dt
 
         return dq, dp
 
