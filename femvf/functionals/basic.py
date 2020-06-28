@@ -1231,7 +1231,6 @@ class TransferEfficiency(Functional):
     the fluid.
     """
     func_types = (TransferWorkbyDisplacementIncrement, SubglottalWork)
-    default_constants = {}
 
     def eval(self, f):
         totalfluidwork = self.funcs[0](f)
@@ -1250,20 +1249,23 @@ class TransferEfficiency(Functional):
         tfluidwork = self.funcs[0](f)
         tinputwork = self.funcs[1](f)
 
-        dtotalfluidwork_dun = self.funcs[0].du(f, n, iter_params0, iter_params1)
-        dtotalinputwork_dun = self.funcs[1].du(f, n, iter_params0, iter_params1)
+        dtotalfluidwork_duvan = self.funcs[0].duva(f, n, iter_params0, iter_params1)
+        dtotalinputwork_duvan = self.funcs[1].duva(f, n, iter_params0, iter_params1)
 
-        # du = None
-        # if n < N_START:
-        #     du = dfn.Function(self.model.solid.vector_fspace).vector()
-        # else:
-        du = dtotalfluidwork_dun/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dun
+        duva = [dtotalfluidwork_duvan[i]/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_duvan[i] for i in range(3)]
 
-        return du, 0.0, 0.0
+        return tuple(duva)
 
     def eval_dqp(self, f, n, iter_params0, iter_params1):
-        dq, dp = self.model.fluid.get_state_vecs()
-        return dq, dp
+        tfluidwork = self.funcs[0](f)
+        tinputwork = self.funcs[1](f)
+
+        dtotalfluidwork_dqp = self.funcs[0].dqp(f, n, iter_params0, iter_params1)
+        dtotalinputwork_dqp = self.funcs[1].dqp(f, n, iter_params0, iter_params1)
+
+        dqp = [dtotalfluidwork_dqp[i]/tinputwork - tfluidwork/tinputwork**2*dtotalinputwork_dqp[i] for i in range(2)]
+
+        return tuple(dqp)
 
     def eval_dsolid(self, f):
         dsolid = self.model.solid.get_properties()
