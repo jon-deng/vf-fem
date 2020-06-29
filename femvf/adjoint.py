@@ -416,7 +416,7 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
 
     adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q + dfn.PETScVector(dfp2_du2*adj_p)
     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-    dfn.solve(dfu2_du2, adj_u, adj_u_rhs)
+    dfn.solve(dfu2_du2, adj_u, adj_u_rhs, 'petsc')
 
     return adj_u, adj_v, adj_a, adj_q, adj_p
 
