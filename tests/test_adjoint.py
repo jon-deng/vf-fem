@@ -150,19 +150,19 @@ class TaylorTestUtils(unittest.TestCase):
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
     # FUNCTIONAL = basic.SubglottalWork
-    # FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
+    FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
     # FUNCTIONAL = basic.TransferWorkbyVelocity
     # FUNCTIONAL = basic.FinalFlowRateNorm
     # FUNCTIONAL = basic.TransferEfficiency
 
     def setUp(self):
         """
-        Set the model and baseline simulation parameters
+        Set the model, parameters, and functional to test with
 
         This should set the starting point of the line search; all the parameters needed to solve
         a single simulation are given by this set up.
@@ -175,6 +175,9 @@ class TestBasicGradient(TaylorTestUtils):
         self.times = times_meas
 
         self.uva0 = (0, 0, 0)
+
+        self.functional = self.FUNCTIONAL(self.model)
+        self.functional.constants['n_start'] = 64
         # self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
 
     def get_taylor_order(self, save_path, hs,
@@ -191,9 +194,8 @@ class TestBasicGradient(TaylorTestUtils):
         else:
             print("Using existing files")
 
-        functional = self.FUNCTIONAL(self.model)
         gs, remainders, orders, grads = grad_and_taylor_order(
-            save_path, functional, hs, self.model, duva=duva, dsolid_props=dsolid_props,
+            save_path, self.functional, hs, self.model, duva=duva, dsolid_props=dsolid_props,
             dfluid_props=dfluid_props, dtimes=dtimes, coupling=self.COUPLING)
 
         remainder_1, remainder_2 = remainders

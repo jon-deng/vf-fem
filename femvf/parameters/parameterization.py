@@ -201,7 +201,7 @@ class NodalElasticModuli(FullParameterization):
 
         solid_props['emod'][:] = self['elastic_moduli']
 
-        return (0, 0, 0), solid_props, fluid_props, timing_props
+        return (0.0, 0.0, 0.0), solid_props, fluid_props, timing_props
 
     def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
         """
