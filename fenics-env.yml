@@ -3,18 +3,18 @@ channels:
     - defaults
     - conda-forge
 dependicies:
-    - numpy
     - scipy
+    - numpy
+    - jupyter
     - pandas
     - matplotlib
-    - autograd
-    - cyipopt
-    - nlopt
-    - fenics
     - h5py
-    - ipython
-    - ipdb
-    - jupyter
     - tabulate
     - tqdm
+    - ipython
+    - cyipopt
+    - fenics
+    - nlopt
+    - ipdb
+    - autograd
 
