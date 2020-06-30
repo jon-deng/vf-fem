@@ -85,8 +85,6 @@ def adjoint(model, f, functional, coupling='explicit'):
     N = f.size
     times = f.get_times()
 
-    qp2 = (None, None)
-    uva2 = (None, None, None)
     _uva1 = f.get_state(N-1)
     _uva0 = f.get_state(N-2)
     for i in range(3):
@@ -94,22 +92,18 @@ def adjoint(model, f, functional, coupling='explicit'):
         uva1[i][:] = _uva1[i]
     qp1 = f.get_fluid_state(N-1)
     qp0 = f.get_fluid_state(N-2)
-    dt2 = None
     dt1 = times[N-1] - times[N-2]
 
-    qp1_, qp2_ = None, None
+    qp1_ = None
     if coupling == 'explicit':
-        qp2_ = qp1
         qp1_ = qp0
     else:
-        qp2_ = qp2
         qp1_ = qp1
-    iter_params2 = {'uva0': uva1, 'qp0': qp1, 'dt': dt2, 'qp1': qp2_, 'uva1': uva2}
     iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
 
     ## Initialize the adj rhs
-    dcost_duva1 = functional.duva(f, N-1, iter_params1, iter_params2)
-    dcost_dqp1 = functional.dqp(f, N-1, iter_params1, iter_params2)
+    dcost_duva1 = functional.duva(f, N-1)
+    dcost_dqp1 = functional.dqp(f, N-1)
     adj_state1_rhs = (*dcost_duva1, *dcost_dqp1)
 
     ## Loop through states for adjoint computation
@@ -130,20 +124,13 @@ def adjoint(model, f, functional, coupling='explicit'):
             uva0[i][:] = _uva0[i]
         qp0 = f.get_fluid_state(ii-1)
 
-        uva_n1 = f.get_state(ii-2)
-        qp_n1 = f.get_fluid_state(ii-2)
-        dt0 = times[ii-1] - times[ii-2]
-
         # Set the iter params
-        qp0_, qp1_ = None, None
+        qp1_ = None
         if coupling == 'explicit':
             qp1_ = qp0
-            qp0_ = qp_n1
         else:
             qp1_ = qp1
-            qp0_ = qp0
         iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
-        iter_params0 = {'uva0': uva_n1, 'qp0': qp_n1, 'dt': dt0, 'qp1': qp0_, 'uva1': uva0}
 
         model.set_iter_params(**iter_params1)
         res = dfn.assemble(model.solid.forms['form.un.f1'])
@@ -157,20 +144,13 @@ def adjoint(model, f, functional, coupling='explicit'):
         adj_dt.insert(0, adj_dt1)
 
         # Find the RHS for the next iteration
-        dcost_duva0 = functional.duva(f, ii-1, iter_params0, iter_params1)
-        dcost_dqp0 = functional.dqp(f, ii-1, iter_params0, iter_params1)
+        dcost_duva0 = functional.duva(f, ii-1)
+        dcost_dqp0 = functional.dqp(f, ii-1)
         dcost_dstate0 = (*dcost_duva0, *dcost_dqp0)
         adj_state0_rhs = solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
 
         # Set initial states to the previous states for the start of the next iteration
         adj_state1_rhs = adj_state0_rhs
-
-        # iter_params2 = iter_params1
-        # adj_state2 = adj_state1
-        # uva2 = uva1
-        # uva1 = uva0
-        # qp1 = qp0
-        # dt2 = dt1
 
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
@@ -476,6 +456,9 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
 
 def get_df1_dsolid_forms(solid):
+    """
+    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
+    """
     df1_dsolid = {}
     for key in solid.PROPERTY_TYPES:
         try:
