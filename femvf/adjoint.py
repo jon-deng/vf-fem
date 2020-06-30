@@ -51,7 +51,7 @@ def adjoint(model, f, functional, coupling='explicit'):
 
     # Assumes fluid and solid properties are constant in time
     fluid_props = f.get_fluid_props(0)
-    solid_props = f.get_solid_props()
+    solid_props = f.get_solid_props(0)
 
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
@@ -87,8 +87,11 @@ def adjoint(model, f, functional, coupling='explicit'):
 
     qp2 = (None, None)
     uva2 = (None, None, None)
-    uva1 = f.get_state(N-1, out=uva1)
-    uva0 = f.get_state(N-2, out=uva0)
+    _uva1 = f.get_state(N-1)
+    _uva0 = f.get_state(N-2)
+    for i in range(3):
+        uva0[i][:] = _uva0[i]
+        uva1[i][:] = _uva1[i]
     qp1 = f.get_fluid_state(N-1)
     qp0 = f.get_fluid_state(N-2)
     dt2 = None
@@ -115,12 +118,16 @@ def adjoint(model, f, functional, coupling='explicit'):
     for ii in range(N-1, 0, -1):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to read
         # index 0
-        uva1 = f.get_state(ii, out=uva1)
+        _uva1 = f.get_state(ii)
+        for i in range(3):
+            uva1[i][:] = _uva1[i]
         qp1 = f.get_fluid_state(ii)
 
         dt1 = times[ii] - times[ii-1]
 
-        uva0 = f.get_state(ii-1, out=uva0)
+        _uva0 = f.get_state(ii-1)
+        for i in range(3):
+            uva0[i][:] = _uva0[i]
         qp0 = f.get_fluid_state(ii-1)
 
         uva_n1 = f.get_state(ii-2)

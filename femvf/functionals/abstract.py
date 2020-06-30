@@ -100,7 +100,7 @@ class AbstractFunctional:
         return self._forms
 
     @update_cache
-    def duva(self, f, n, iter_params0, iter_params1):
+    def duva(self, f, n):
         """
         Return dg/d(u, v, a)
 
@@ -110,15 +110,8 @@ class AbstractFunctional:
             Index of state
         f : statefile.StateFile
             The history of states to compute it over
-        iter_params0, iter_params1 : dict
-            Dictionary of parameters that specify iteration n. These are parameters fed into
-            `model.ForwardModel.set_iter_params` with signature:
-            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
-
-            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
-            at `n+0`.
         """
-        in_duva = self.eval_duva(f, n, iter_params0, iter_params1)
+        in_duva = self.eval_duva(f, n)
 
         ret_duva = []
         for dz in in_duva:
@@ -131,11 +124,11 @@ class AbstractFunctional:
         return tuple(ret_duva)
 
     @update_cache
-    def dqp(self, f, n, iter_params0, iter_params1):
+    def dqp(self, f, n):
         """
         Return dg/d(q, p)
         """
-        return self.eval_dqp(f, n, iter_params0, iter_params1)
+        return self.eval_dqp(f, n)
 
     @update_cache
     def dsolid(self, f):
@@ -184,7 +177,7 @@ class AbstractFunctional:
         """
         raise NotImplementedError("`eval` must be implemented")
 
-    def eval_duva(self, f, n, iter_params0, iter_params1):
+    def eval_duva(self, f, n):
         """
         Return dg/d(u, v, a)
 
@@ -204,7 +197,7 @@ class AbstractFunctional:
         """
         raise NotImplementedError("`eval_duva` must be implemented")
 
-    def eval_dqp(self, f, n, iter_params0, iter_params1):
+    def eval_dqp(self, f, n):
         """
         Return dg/d(q, p)
 

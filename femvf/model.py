@@ -547,7 +547,7 @@ class ForwardModel:
         solid_props, fluid_props = None, None
         if update_props:
             fluid_props = statefile.get_fluid_props(n)
-            solid_props = statefile.get_solid_props()
+            solid_props = statefile.get_solid_props(n)
 
         uva0 = statefile.get_state(n)
         qp0 = statefile.get_fluid_state(n)
@@ -576,7 +576,7 @@ class ForwardModel:
         solid_props, fluid_props = None, None
         if update_props:
             fluid_props = statefile.get_fluid_props(0)
-            solid_props = statefile.get_solid_props()
+            solid_props = statefile.get_solid_props(0)
 
         uva0 = statefile.get_state(n-1)
         qp0 = statefile.get_fluid_state(n-1)

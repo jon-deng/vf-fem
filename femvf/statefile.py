@@ -3,6 +3,7 @@ Module to work with state values from a forward pass stored in an hdf5 file.
 """
 
 from os.path import join
+from collections import OrderedDict
 
 import h5py
 import dolfin as dfn
@@ -10,6 +11,34 @@ import numpy as np
 
 from . import constants
 from .parameters.properties import FluidProperties
+
+def get_from_cache(cache_name):
+    """
+    Return a decorator that gives a functions caching behaviour to the specified cache
+
+    Parameters
+    ----------
+    cache_key : str
+        key to the cache in the `StateFile` objects `cache` attribute that the function should use
+        for storing cached values into
+    """
+    def decorator(func):
+        """
+        Parameters
+        ----------
+        func : callable(key) -> value
+        """
+        def wrapper(self, key):
+            cache = self.cache[cache_name]
+            if cache.get(key) is None:
+                val = func(self, key)
+                cache.put(key, val)
+
+            return cache.get(key)
+
+        return wrapper
+
+    return decorator
 
 class StateFile:
     """
@@ -39,7 +68,7 @@ class StateFile:
         Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, model, name, group='/', mode='r', NCHUNK=100,
+    def __init__(self, model, name, group='/', mode='r', NCHUNK=100, cache_size=5,
                  **kwargs):
         self.model = model
         self.file = h5py.File(name, mode=mode, **kwargs)
@@ -47,7 +76,10 @@ class StateFile:
 
         self.NCHUNK = NCHUNK
 
-        # self.data = self.file[self.group]
+        # create caches to store read values
+        self.cache = {}
+        for name in ['uva', 'qp', 'solid', 'fluid']:
+            self.cache[name] = Cache(5)
 
     ## Implement an h5 group interface to the underlying root group
     def __enter__(self):
@@ -81,6 +113,7 @@ class StateFile:
         """
         return self.get_num_states()
 
+    ## Statefile properties related to the root group where things are stored
     @property
     def root_group_name(self):
         """
@@ -105,6 +138,7 @@ class StateFile:
         """
         return self.file[self.root_group_name]
 
+    ## Functions for initializing layout when writing
     def init_layout(self, uva0=None, qp0=None, fluid_props=None, solid_props=None):
         r"""
         Initializes the layout of the state file.
@@ -257,6 +291,7 @@ class StateFile:
         if solid_props is not None:
             self.append_solid_props(solid_props)
 
+    ## Functions for writing by appending
     def append_meas_index(self, index):
         """
         Append measured indices to the file.
@@ -347,7 +382,7 @@ class StateFile:
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
 
-    ## Read property functions
+    ## Functions for reading and writing to specific indices
     def get_time(self, n):
         """
         Returns the time at state n.
@@ -372,51 +407,6 @@ class StateFile:
         """
         return self.root_group['u'].shape[0]
 
-    def get_u(self, n, out=None):
-        """
-        Returns displacement at index `n`.
-        """
-        ret = None
-        dset = self.root_group['u']
-        if out is None:
-            ret = dset[n]
-        else:
-            out[:] = dset[n]
-            ret = out
-
-        return ret
-
-    # def get_v(self, n):
-
-    # def get_a(self, n):
-
-    def get_state(self, n, out=None):
-        """
-        Returns form coefficient vectors for states (u, v, a) at index n.
-
-        Parameters
-        ----------
-        n : int
-            Index to set the functions for.
-        out : tuple of 3 dfn.Function
-            A set of functions to set vector values for.
-        """
-
-        labels = ('u', 'v', 'a')
-        ret = []
-        if out is None:
-            for label in labels:
-                dset = self.root_group[label]
-                ret.append(dset[n])
-        else:
-            for function, label in zip(out, labels):
-                dset = self.root_group[label]
-                function[:] = dset[n]
-
-            ret = out
-
-        return tuple(ret)
-
     def set_state(self, n, uva):
         """
         Set form coefficient vectors for states `uva=(u, v, a)` at index n.
@@ -430,24 +420,6 @@ class StateFile:
         """
         for label, value in zip(('u', 'v', 'a'), uva):
             self.root_group[label][n] = value
-
-    def get_fluid_state(self, n, out=None):
-        """
-        Returns fluid states q, p at index n.
-
-        Parameters
-        ----------
-        n : int
-            Index to set the functions for.
-        out : tuple of 3 dfn.Function
-            A set of functions to set vector values for.
-        """
-
-        labels = ('q', 'p')
-        q = self.root_group['q'][n, 0]
-        p = self.root_group['p'][n, :]
-
-        return (q, p)
 
     def set_fluid_state(self, n, qp):
         """
@@ -465,9 +437,69 @@ class StateFile:
         self.root_group['q'][n, 0] = qp[0]
         self.root_group['p'][n, :] = qp[1]
 
+    def get_iter_params(self, n):
+        """
+        Return parameter defining iteration `n`
+
+        Parameters
+        ----------
+        n : int
+            Index of the iteration.
+        """
+
+        uva0 = self.get_state(n-1)
+        dt = self.get_time(n) - self.get_time(n-1)
+        solid_props = self.get_solid_props(n-1)
+        fluid_props = self.get_fluid_props(n-1)
+        u1 = self.get_u(n)
+
+        return {'uva0': uva0, 'dt': dt, 'u1': u1,
+                'solid_props': solid_props, 'fluid_props': fluid_props}
+
+    # these read functions are cached for performance reasons
+    @get_from_cache('uva')
+    def get_state(self, n):
+        """
+        Return form coefficient vectors for states (u, v, a) at index n.
+
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        out : tuple of 3 dfn.Function
+            A set of functions to set vector values for.
+        """
+        labels = ('u', 'v', 'a')
+        ret = []
+        for label in labels:
+            dset = self.root_group[label]
+            ret.append(dset[n])
+
+        return tuple(ret)
+
+    @get_from_cache('qp')
+    def get_fluid_state(self, n):
+        """
+        Return fluid states q, p at index n.
+
+        Parameters
+        ----------
+        n : int
+            Index to set the functions for.
+        out : tuple of 3 dfn.Function
+            A set of functions to set vector values for.
+        """
+
+        labels = ('q', 'p')
+        q = self.root_group['q'][n, 0]
+        p = self.root_group['p'][n, :]
+
+        return (q, p)
+
+    @get_from_cache('fluid')
     def get_fluid_props(self, n):
         """
-        Returns the fluid properties dictionary at index n.
+        Return the fluid properties dictionary at index n.
         """
         fluid_props = self.model.fluid.get_properties()
         fluid_group = self.root_group['fluid_properties']
@@ -486,7 +518,8 @@ class StateFile:
 
         return fluid_props
 
-    def get_solid_props(self):
+    @get_from_cache('solid')
+    def get_solid_props(self, n):
         """
         Returns the solid properties
         """
@@ -503,25 +536,6 @@ class StateFile:
 
         return solid_props
 
-    def get_iter_params(self, n):
-        """
-        Return parameter defining iteration `n`
-
-        Parameters
-        ----------
-        n : int
-            Index of the iteration.
-        """
-
-        uva0 = self.get_state(n-1)
-        dt = self.get_time(n) - self.get_time(n-1)
-        solid_props = self.get_solid_props()
-        fluid_props = self.get_fluid_props(n-1)
-        u1 = self.get_u(n)
-
-        return {'uva0': uva0, 'dt': dt, 'u1': u1,
-                'solid_props': solid_props, 'fluid_props': fluid_props}
-
 def solid_property_shape(property_desc, solid):
     const_or_field = property_desc[0]
     data_shape = property_desc[1]
@@ -533,3 +547,39 @@ def solid_property_shape(property_desc, solid):
         shape = data_shape
 
     return shape
+
+class Cache:
+    """
+    Represents a cache of arbitrary items
+    """
+    def __init__(self, cache_size):
+        self.N = cache_size
+        self.data = OrderedDict()
+
+    def __len__(self):
+        return len(self.data)
+
+    def put(self, key, val):
+        """
+        Add `key`: `val` to the cache
+
+        Parameters
+        ----------
+        key : hashable
+        val : object
+        """
+        if key in self.data:
+            self.data.move_to_end(key, last=False)
+        else:
+            self.data[key] = val
+
+            # remove the oldest item in the cache if the cache exceeds the cache size
+            if len(self.data) > self.N:
+                self.data.popitem(last=False)
+
+    def get(self, key):
+        if key in self.data:
+            self.data.move_to_end(key, last=False)
+            return self.data[key]
+        else:
+            return None
