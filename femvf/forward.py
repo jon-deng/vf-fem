@@ -6,9 +6,11 @@ Uses CGS (cm-g-s) units unless otherwise stated
 
 import numpy as np
 import dolfin as dfn
+from petsc4py import PETSc
 
 from . import solids
 from . import statefile as sf
+from . import linalg
 
 DEFAULT_NEWTON_SOLVER_PRM = {
     'linear_solver': 'petsc',
@@ -263,6 +265,105 @@ def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
                  'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
     return (u1, v1, a1), (q1, p1), step_info
+
+def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
+    """
+    Solve for the state variables at the end of the time step using a Newton method
+    """
+    # Configure the Newton solver
+    if newton_solver_prm is None:
+        newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+
+    abs_tol = newton_solver_prm['absolute_tolerance']
+    rel_tol = newton_solver_prm['relative_tolerance']
+
+
+    solid = model.solid
+
+    # Set initial guesses for the states at the next time
+    u0, v0, a0 = uva0
+    u1 = dfn.Function(solid.vector_fspace).vector()
+    v1 = dfn.Function(solid.vector_fspace).vector()
+    a1 = dfn.Function(solid.vector_fspace).vector()
+
+    u1[:] = u0
+    # v1[:] = v0
+    # a1[:] = a0
+    q1, p1 = qp0
+
+    # Calculate the initial residual
+    model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, uva1=(u1, 0.0, 0.0), qp1=(q1, p1))
+    res_u = dfn.assemble(model.solid.f1)
+    model.solid.bc_base.apply(res_u)
+
+    # Set tolerances for the fixed point iterations
+    nit = 0
+    abs_err, rel_err = np.inf, np.inf
+    abs_err0 = res_u.norm('l2')
+    while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
+        # calculate residuals for the iteration
+        res_u = dfn.assemble(model.solid.f1)
+        model.solid.bc_base.apply(res_u)
+        res_p = p1 - model.fluid.solve_qp1()[1]
+
+        # assemble forms needed to form the residual jacobian
+        dfu_du = model.solid.assem_df_du()
+        dfu_dpsolid = dfn.assemble(model.solid.forms['form.bi.df1_dp1'])
+
+        solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
+        dfu_dpsolid = dfn.as_backend_type(dfu_dpsolid).mat()
+        dfu_dp = linalg.reorder_mat_cols(dfu_dpsolid, solid_dofs, fluid_dofs, model.fluid.p1.size)
+
+        _, dp_du = model.solve_dqp1_du1_solid(adjoint=False)
+        dfp_du = 0 - dp_du
+
+        model.solid.bc_base.apply(dfu_du, res_u)
+        bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
+        dfu_dp.zeroRows(bc_dofs, diag=0.0)
+
+        # solve for the increment in the solution
+        dfup_dup = linalg.form_block_matrix([[dfu_du, dfu_dp], [dfp_du, 1.0]])
+        res_up, dup = dfup_dup.getVecLeft(), dfup_dup.getVecRight()
+        res_up[:res_u.size()] = res_u
+        res_up[res_u.size():] = res_p
+
+        ksp = PETSc.KSP().create()
+        ksp.setType(ksp.Type.PREONLY)
+
+        pc = ksp.getPC()
+        pc.setType(pc.Type.LU)
+
+        ksp.setOperators(dfup_dup)
+        ksp.solve(dup, dfup_dup)
+
+        # increment the solution to start the next iteration
+        u1[:] += dup[:u1.size()]
+        v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
+        a1[:] = solids.newmark_a(u1, u0, v0, a0, dt)
+
+        p1[:] += dup[u1.size():]
+
+        # Calculate the error in the solid residual with the updated disp/pressure
+        model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
+        res = dfn.assemble(solid.f1)
+        solid.bc_base.apply(res)
+
+        abs_err = res.norm('l2')
+        rel_err = abs_err/abs_err0
+
+        nit += 1
+
+    model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
+    res = dfn.assemble(model.solid.forms['form.un.f1'])
+    model.solid.bc_base.apply(res)
+
+    q1, p1, fluid_info = model.fluid.solve_qp1()
+
+    step_info = {'fluid_info': fluid_info,
+                 'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
+
+    return (u1, v1, a1), (q1, p1), step_info
+
 
 def newton_solve(u, du, jac, res, bcs, **kwargs):
     """
