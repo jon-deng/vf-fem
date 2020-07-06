@@ -4,6 +4,8 @@ Forward model
 Uses CGS (cm-g-s) units unless otherwise stated
 """
 
+from functools import partial
+
 import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
@@ -22,7 +24,8 @@ FIXEDPOINT_SOLVER_PRM = {
     'relative_tolerance': 1e-11}
 
 def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
-              h5file='tmp.h5', h5group='/', newton_solver_prm=None, coupling='implicit'):
+              h5file='tmp.h5', h5group='/', newton_solver_prm=None,
+              coupling='implicit', coupling_method='newton'):
     """
     Integrate the model over each time in `times` for the specified parameters
     """
@@ -31,7 +34,7 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
 
     increment_forward = None
     if coupling == 'implicit':
-        increment_forward = implicit_increment
+        increment_forward = partial(implicit_increment, method=coupling_method)
     elif coupling == 'explicit':
         increment_forward = explicit_increment
     else:
@@ -181,7 +184,7 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
 
     return (u1, v1, a1), (q1, p1), step_info
 
-def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='fp'):
+def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='newton'):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -309,17 +312,14 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
     res_u = dfn.assemble(model.solid.f1)
     model.solid.bc_base.apply(res_u)
 
+    res_p = p1 - model.fluid.solve_qp1()[1]
+
     # Set tolerances for the fixed point iterations
     nit = 0
     abs_err, rel_err = np.inf, np.inf
     abs_err0 = res_u.norm('l2')
     while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
-        # calculate residuals for the iteration
-        res_u = dfn.assemble(model.solid.f1)
-        model.solid.bc_base.apply(res_u)
-        res_p = p1 - model.fluid.solve_qp1()[1]
-
-        # assemble forms needed to form the residual jacobian
+        # assemble blocks of the residual jacobian
         dfu_du = model.assem_df1_du1()
         dfu_dpsolid = dfn.assemble(model.solid.forms['form.bi.df1_dp1'])
 
@@ -334,12 +334,15 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
         bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
         dfu_dp.zeroRows(bc_dofs, diag=0.0)
 
-        # solve for the increment in the solution
-        dfup_dup = linalg.form_block_matrix([[dfu_du, dfu_dp], [dfp_du, 1.0]])
+        # form the block matrix/vector representing the residual jacobian/vector
+        dfup_dup = linalg.form_block_matrix(
+            [[dfn.as_backend_type(dfu_du).mat(), dfu_dp],
+             [                           dfp_du,    1.0]])
         res_up, dup = dfup_dup.getVecLeft(), dfup_dup.getVecRight()
         res_up[:res_u.size()] = res_u
         res_up[res_u.size():] = res_p
 
+        # solve for the increment in the solution
         ksp = PETSc.KSP().create()
         ksp.setType(ksp.Type.PREONLY)
 
@@ -347,7 +350,7 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
         pc.setType(pc.Type.LU)
 
         ksp.setOperators(dfup_dup)
-        ksp.solve(dup, dfup_dup)
+        ksp.solve(-res_up, dup)
 
         # increment the solution to start the next iteration
         u1[:] += dup[:u1.size()]
@@ -356,12 +359,14 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
 
         p1[:] += dup[u1.size():]
 
-        # Calculate the error in the solid residual with the updated disp/pressure
-        model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
-        res = dfn.assemble(solid.f1)
-        solid.bc_base.apply(res)
+        # Calculate the new solid/fluid residuals with the updated disp/pressure
+        model.set_iter_params(uva0=uva0, dt=dt, uva1=(u1, v1, a1), qp1=(q1, p1))
+        res_u = dfn.assemble(solid.f1)
+        solid.bc_base.apply(res_u)
 
-        abs_err = res.norm('l2')
+        res_p = p1 - model.fluid.solve_qp1()[1]
+
+        abs_err = res_u.norm('l2')
         rel_err = abs_err/abs_err0
 
         nit += 1

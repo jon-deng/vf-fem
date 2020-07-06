@@ -332,16 +332,20 @@ def reorder_mat_cols(mat, cols_in, cols_out, n_out, finalize=True):
     j_out = []
     v_out = []
     for row in range(m_in):
-        breakpoint()
         idx_start = i_in[row]
         idx_end = i_in[row+1]
 
         j_in_row = j_in[idx_start:idx_end]
         v_in_row = v_in[idx_start:idx_end]
 
-        j_out += [col_in_to_out[j_in] for j_in in j_in_row]
-        v_out += v_in_row.tolist()
-        i_out.append(i_out[-1]+idx_end-idx_start)
+        # build the column and value csr components for the row
+        j_out_row = [col_in_to_out[j] for j in j_in_row if j in col_in_to_out]
+        v_out_row = [v for j, v in zip(j_in_row, v_in_row.tolist()) if j in col_in_to_out]
+
+        # add them to the global j, v csr arrays
+        j_out += j_out_row
+        v_out += v_out_row
+        i_out.append(i_out[-1] + len(j_out_row))
 
     i_out = np.array(i_out, dtype=np.int32)
     j_out = np.array(j_out, dtype=np.int32)
