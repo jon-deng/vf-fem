@@ -390,6 +390,8 @@ class Rayleigh(Solid):
         df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)
         df1_du1 = df1_du1_linear + df1_du1_nonlin
 
+        df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
+
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
@@ -414,7 +416,7 @@ class Rayleigh(Solid):
         df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
-        df1_dp1_adj = dfn.adjoint(ufl.derivative(f1, p1, scalar_trial))
+        df1_dp1_adj = dfn.adjoint(df1_dp1)
         df1_dt = ufl.derivative(f1, dt, scalar_trial)
 
         # Also define an 'f0' form that solves for a0, given u0 and v0
@@ -473,6 +475,7 @@ class Rayleigh(Solid):
             'form.un.f0': f0,
 
             'form.bi.df1_du1': df1_du1,
+            'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_du1_adj': df1_du1_adj,
             'form.bi.df1_du0_adj': df1_du0_adj,
             'form.bi.df1_dv0_adj': df1_dv0_adj,
@@ -602,6 +605,8 @@ class KelvinVoigt(Solid):
         df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)
         df1_du1 = df1_du1_linear + df1_du1_nonlin
 
+        df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
+
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
@@ -625,7 +630,7 @@ class KelvinVoigt(Solid):
         df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
-        df1_dp1_adj = dfn.adjoint(ufl.derivative(f1, p1, scalar_trial))
+        df1_dp1_adj = dfn.adjoint(df1_dp1)
         df1_dt = ufl.derivative(f1, dt, scalar_trial)
 
         f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
@@ -679,6 +684,7 @@ class KelvinVoigt(Solid):
             'form.un.f1': f1,
             'form.un.f0': f0,
             'form.bi.df1_du1': df1_du1,
+            'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_du1_adj': df1_du1_adj,
             'form.bi.df1_du0_adj': df1_du0_adj,
             'form.bi.df1_dv0_adj': df1_dv0_adj,

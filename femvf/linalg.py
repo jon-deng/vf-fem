@@ -301,7 +301,63 @@ def reorder_mat_rows(mat, rows_in, rows_out, m_out, finalize=True):
 
     return mat_out
 
-def reorder_mat_cols(mat, cols_in, cols_out, m_out, finalize=True):
+def reorder_mat_cols(mat, cols_in, cols_out, n_out, finalize=True):
     """
-    Reorder columns of a new matrix with a possibly different number of rows
+    Reorder columns of a matrix to a new one with a possibly different number of columns
+
+    Parameters
+    ----------
+    mat : Petsc.Mat
+    cols_in : array[]
+        columns indices of input matrix
+    cols_out : array
+        column indices of output matrix
+    n_out :
+        number of columns in output matrix
     """
+    # Sort the column index permutations
+    # is_sort = np.argsort(cols_out)
+    # cols_in = cols_in[is_sort]
+    # cols_out = cols_out[is_sort]
+    col_in_to_out = dict([(j_in, j_out) for j_in, j_out in zip(cols_in, cols_out)])
+
+    # insert them into a dummy size array that's used to
+
+    m_in, n_in = mat.getSize()
+    i_in, j_in, v_in = mat.getValuesCSR()
+    # breakpoint()
+    # assert n_out >= n_in
+
+    i_out = [0]
+    j_out = []
+    v_out = []
+    for row in range(m_in):
+        breakpoint()
+        idx_start = i_in[row]
+        idx_end = i_in[row+1]
+
+        j_in_row = j_in[idx_start:idx_end]
+        v_in_row = v_in[idx_start:idx_end]
+
+        j_out += [col_in_to_out[j_in] for j_in in j_in_row]
+        v_out += v_in_row.tolist()
+        i_out.append(i_out[-1]+idx_end-idx_start)
+
+    i_out = np.array(i_out, dtype=np.int32)
+    j_out = np.array(j_out, dtype=np.int32)
+    v_out = np.array(v_out, dtype=np.float64)
+
+    mat_out = PETSc.Mat()
+    mat_out.create(PETSc.COMM_SELF)
+    mat_out.setSizes([m_in, n_out])
+
+    nnz = i_out[1:]-i_out[:-1]
+    mat_out.setUp()
+    mat_out.setPreallocationNNZ(nnz)
+
+    mat_out.setValuesCSR(i_out, j_out, v_out)
+
+    if finalize:
+        mat_out.assemble()
+
+    return mat_out

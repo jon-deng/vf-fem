@@ -181,7 +181,7 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
 
     return (u1, v1, a1), (q1, p1), step_info
 
-def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
+def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='fp'):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
@@ -206,6 +206,19 @@ def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
     fluid_info : dict
         A dictionary containing information on the fluid solution. These include the flow rate,
         surface pressure, etc.
+    """
+    if method == 'newton':
+        return implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5)
+    elif method == 'fp':
+        return implicit_increment_fp(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5)
+    else:
+        raise ValueError("'method' must be one of 'newton' or 'fp'")
+
+def implicit_increment_fp(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5):
+    """
+    Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
+
+    Uses a fixed point type iterative method.
     """
     solid = model.solid
     u0, v0, a0 = uva0
@@ -307,7 +320,7 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
         res_p = p1 - model.fluid.solve_qp1()[1]
 
         # assemble forms needed to form the residual jacobian
-        dfu_du = model.solid.assem_df_du()
+        dfu_du = model.assem_df1_du1()
         dfu_dpsolid = dfn.assemble(model.solid.forms['form.bi.df1_dp1'])
 
         solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
