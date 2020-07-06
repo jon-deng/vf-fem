@@ -24,8 +24,9 @@ from femvf.fluids import Bernoulli
 
 class TestForward(unittest.TestCase):
     def setUp(self):
-        """Set the mesh to be used"""
-
+        """
+        Set the solid mesh
+        """
         dfn.set_log_level(30)
         np.random.seed(123)
 
@@ -35,10 +36,8 @@ class TestForward(unittest.TestCase):
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     def test_forward(self):
-        ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
+        ## Configure the model and model parameters
         model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
-
-        dt = 5e-5
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -74,27 +73,24 @@ class TestForward(unittest.TestCase):
         if os.path.isfile(save_path):
             os.remove(save_path)
 
+        ## Run the simulation
         print("Running forward model")
-        # adaptive_step_prm = {'abs_tol': None}
-        # runtime_start = perf_counter()
-        # info = integrate(model, (u0, 0, 0), solid_props, fluid_props, timing_props,
-        #                h5file=save_path, h5group='/', adaptive_step_prm=adaptive_step_prm,
-        #                show_figure=False)
-        # runtime_end = perf_counter()
-
         runtime_start = perf_counter()
         info = integrate(model, (u0, 0, 0), solid_props, fluid_props, times,
-                         h5file=save_path, h5group='/', coupling='explicit')
+                         h5file=save_path, h5group='/', coupling='implicit')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
+        ## Plot the resulting glottal width
         fig, ax = plt.subplots(1, 1)
         ax.plot(info['time'], info['glottal_width'])
+        ax.set_xlabel("Time [s]")
+        ax.set_ylabel("Glottal width [cm]")
 
         plt.show()
 
-    def plot(self):
-        pass
-
 if __name__ == '__main__':
-    unittest.main()
+    test = TestForward()
+    test.setUp()
+    test.test_forward()
+    # unittest.main()
