@@ -2,6 +2,7 @@
 # misc log
 *.lprof
 *.prof
+*.profile
 *.out
 *.txt
 *.log

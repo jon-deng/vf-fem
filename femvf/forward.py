@@ -184,7 +184,7 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
 
     return (u1, v1, a1), (q1, p1), step_info
 
-def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='newton'):
+def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='fp'):
     """
     Return the state at the end of `dt` `uva1 = (u1, v1, a1)`.
 
