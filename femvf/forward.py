@@ -28,6 +28,26 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
               coupling='implicit', coupling_method='newton'):
     """
     Integrate the model over each time in `times` for the specified parameters
+
+    Parameters
+    ----------
+    model : .model.ForwardModel
+    uva : tuple of dfn.Vector
+        Initial solid state (displacement, velocity, acceleration)
+    solid_props, fluid_props : femvf.Properties
+        Solid / fluid parameter vectors
+    times : array of float
+        Array of discrete integration times. Each time point is one integration point so the time
+        between successive time points is a time step.
+    idx_meas : array of int
+        Array marking which integration points correspond to something (usu. measurements)
+    h5file : str
+        Path to h5 file where states should be saved
+
+    Returns
+    -------
+    info : dict
+        Info about the run
     """
     if idx_meas is None:
         idx_meas = np.array([])
@@ -112,8 +132,8 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
             q0 = qp1[0]
             p0 = qp1[1]
 
-        # Write out the quantities fo interest to the h5file
-        f.file[f'{h5group}/gaw'] = np.array(glottal_width)
+        # Write out the quantities of interest to the h5file
+        f.file[f'{h5group}/gw'] = np.array(glottal_width)
 
         info['meas_ind'] = f.get_meas_indices()
         info['time'] = f.get_times()

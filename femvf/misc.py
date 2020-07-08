@@ -30,6 +30,37 @@ def get_dynamic_fluid_props(fluid_props, time):
 
     return out
 
+def get_fundamental_freq_phase_amp(f, sample_freq):
+    """
+    Return an estimate of fundamental frequency and phase using DFT
+
+    Parameters
+    ----------
+    f : array_like of float
+        Discrete (real) signals sampled at certain frequency.
+    sample_freq : float
+        Sampling frequency in [Hz]
+
+    Returns
+    -------
+    freq0, phi0, a0 : float
+        Fundamental frequency [Hz], phase shift [time], and amplitude [signal] estimates
+    """
+    N = f.size
+
+    dft_f = np.fft.rfft(f)
+    freq = np.arange(N//2+1) / (N/sample_freq)
+    phase = np.angle(dft_f)
+    mag = np.abs(dft_f)
+
+    idx_f0 = np.argmax(mag)
+
+    f0 = freq[idx_f0]
+    tphase0 = phase[idx_f0]/(2*np.pi) * 1/f0
+    amp0 = 2*mag[idx_f0]/N
+
+    return f0, tphase0, amp0
+
 ## Below are a collection of smoothened discrete operators. These are used in the bernoulli code
 # def smooth_minimum(x, alpha=-1000):
 #     """
