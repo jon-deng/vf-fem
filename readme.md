@@ -3,6 +3,9 @@ models that can be coupled together to simulated VF flow induced self-oscillatio
 
 Todo
 --------
+- [] Refactor logging. I'm pretty sure the way logging is currently used is not proper and will lead
+     to weird behaviour.
+
 - [] Implement a block vector to store tuples of states, for example, (u, v, a) or (q, p)
 - [] Speed up block matrix formation/matrix permutation methods
 - [x] Implement a newton method for solving the fully coupled FSI problem
@@ -12,6 +15,10 @@ Todo
 - [] Implement functionality to allow functional objects to be added/multiplied/etc. together. This is
   commonly used, for example, in forming penalty functional when one functional is the objective
   and another functional acts as a penalty.
+
+- [] Create a generic parameterization that includes all variable parameters. Other parameterizations
+     can then be derived from this generic one by removing known parameters, or specifying constant
+     values.
 
 - [] Add post-processing functionality to quickly evaluate optimization results
 - [] Formalize/refactor how optimization progress is saved
