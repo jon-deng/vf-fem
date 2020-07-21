@@ -26,3 +26,9 @@ Todo
 - [] Fix bug where exceptions are 'hidden' somehow in the optimization loop; this occurs when an
      exception such as accessing missing keys just gets ignored and doesn't cause the optimization
      code to throw an error and stop. This one is very confusing.
+     - The source of the bug is the fact that cyipopt does ignores exceptions. If cyipopt calls the
+     `objective` method and an exception is raised, cyipopt will internally just try the next
+     thing according to what ipopt want. I believe in this case, the function that was called
+     counts as returning `None` and ipopt considers this to be a bad point and tries something else.
+     I think to fix this bug, you need to return a special value that notifies ipopt that something
+     is very wrong, not just that the function couldn't compute at a bad point.

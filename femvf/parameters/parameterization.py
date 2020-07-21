@@ -187,7 +187,7 @@ class NodalElasticModuli(FullParameterization):
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
     PARAM_TYPES = OrderedDict(
-        {'elastic_moduli': ('field', ())}
+        {'emod': ('field', ())}
     )
 
     CONSTANT_LABELS = ('default_solid_props',
@@ -199,7 +199,7 @@ class NodalElasticModuli(FullParameterization):
         fluid_props = self.constants['default_fluid_props'].copy()
         timing_props = self.constants['default_timing_props'].copy()
 
-        solid_props['emod'][:] = self['elastic_moduli']
+        solid_props['emod'][:] = self['emod']
 
         return (0.0, 0.0, 0.0), solid_props, fluid_props, timing_props
 
@@ -212,7 +212,7 @@ class NodalElasticModuli(FullParameterization):
         """
         out = self.copy()
         out.vector[:] = 0.0
-        out['elastic_moduli'][:] = grad_solid['emod']
+        out['emod'][:] = grad_solid['emod']
 
         return out
 
@@ -222,7 +222,7 @@ class KelvinVoigtNodalConstants(FullParameterization):
     for the Kelvin-Voigt constitutive model.
     """
     PARAM_TYPES = OrderedDict({
-        'elastic_moduli': ('field', ()),
+        'emod': ('field', ()),
         'eta': ('field', ())
         })
 
@@ -235,7 +235,7 @@ class KelvinVoigtNodalConstants(FullParameterization):
         fluid_props = self.constants['default_fluid_props'].copy()
         timing_props = self.constants['default_timing_props'].copy()
 
-        solid_props['emod'][:] = self['elastic_moduli']
+        solid_props['emod'][:] = self['emod']
         solid_props['eta'][:] = self['eta']
 
         return (0, 0, 0), solid_props, fluid_props, timing_props
@@ -249,7 +249,7 @@ class KelvinVoigtNodalConstants(FullParameterization):
         """
         out = self.copy()
         out.vector[:] = 0.0
-        out['elastic_moduli'][:] = 1.0*grad_solid['emod']
+        out['emod'][:] = 1.0*grad_solid['emod']
         out['eta'][:] = grad_solid['eta']
 
         return out
@@ -261,7 +261,7 @@ class PeriodicKelvinVoigt(FullParameterization):
     PARAM_TYPES = OrderedDict(
         {'u0': ('field', (2,)),
          'v0': ('field', (2,)),
-        #  'elastic_moduli': ('field', ()),
+        #  'emod': ('field', ()),
         #  'eta': ('field', ()),
          'period': ('const', ())})
 
@@ -317,7 +317,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
     PARAM_TYPES = OrderedDict(
         {'u0': ('field', (2,)),
          'v0': ('field', (2,)),
-         'elastic_moduli': ('field', ())
+         'emod': ('field', ())
         })
 
     CONSTANT_LABELS = ('default_solid_props',
@@ -328,7 +328,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
     def convert(self):
         ## Convert solid properties
         solid_props = self.constants['default_solid_props'].copy()
-        solid_props['emod'][:] = self['elastic_moduli']
+        solid_props['emod'][:] = self['emod']
 
         ## Convert fluid properties
         fluid_props = self.constants['default_fluid_props'].copy()
@@ -371,7 +371,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
         # df0_deta_adj = dfn.assemble(df0_deta_adj_frm)
 
         df0_demod_adj = dfn.assemble(df0_demod_adj_frm)
-        out['elastic_moduli'][:] = grad_solid['emod'] - df0_demod_adj*adj_a0
+        out['emod'][:] = grad_solid['emod'] - df0_demod_adj*adj_a0
 
         return out
 
@@ -382,7 +382,7 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
     PARAM_TYPES = OrderedDict({
         'u0': ('field', (2,)),
         'v0': ('field', (2,)),
-        'elastic_moduli': ('field', ()),
+        'emod': ('field', ()),
         'eta': ('field', ())
         })
 
@@ -394,7 +394,7 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
     def convert(self):
         ## Convert solid properties
         solid_props = self.constants['default_solid_props'].copy()
-        solid_props['emod'][:] = self['elastic_moduli']
+        solid_props['emod'][:] = self['emod']
         solid_props['eta'][:] = self['eta']
 
         ## Convert fluid properties
@@ -438,7 +438,7 @@ class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
 
         df0_demod_adj = dfn.assemble(df0_demod_adj_frm)
         df0_deta_adj = dfn.assemble(df0_deta_adj_frm)
-        out['elastic_moduli'][:] = grad_solid['emod'] - df0_demod_adj*adj_a0
+        out['emod'][:] = grad_solid['emod'] - df0_demod_adj*adj_a0
         out['eta'][:] = grad_solid['eta'] - df0_deta_adj*adj_a0
 
         return out

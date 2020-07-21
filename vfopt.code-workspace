@@ -10,5 +10,7 @@
 			"path": "../vf-experiments"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"python.pythonPath": "/home/j8deng/anaconda3/envs/fenics/bin/python"
+	}
 }
