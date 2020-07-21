@@ -1273,43 +1273,37 @@ class AcousticPower(Functional):
     """
     func_types = ()
     default_constants = {
-        'm_start': 0,
+        'n_start': 0,
 
         # The constants below are density, sound speed, and piston radius (mouth opening)
         'rho': 0.001225,
         'c': 350*1e2,
         'a': 0.5,
-        'tukey_alpha': 0.2
+        'tukey_alpha': 0.1
     }
 
     def eval(self, f):
-        # Get the flow rate at measured indices
-        meas_ind = f.get_meas_indices()
-        meas_times = f.get_solution_times()[meas_ind]
+        ## Load the flow rate vector
+        n_start = self.constants['n_start']
+        n_final = f.size-1
 
-        M_START = self.constants['m_start']
-        M_FINAL = meas_ind.size
+        time = f.get_times()[n_start:n_final]
 
-        time = meas_times[M_START:M_FINAL]
+        q = []
+        for n in range(n_start, n_final):
+            qn, pn = f.get_fluid_state(n)
+            q.append(qn)
+        q = np.array(q)
 
-        # Note that we loop through measured indices
-        # you should space these at equal time intervals for a valid DFT result
-        flow_rate = []
-        for m in range(M_START, M_FINAL):
-            self.model.set_params_fromfile(f, meas_ind[m])
-            flow_rate.append(self.model.get_pressure()['flow_rate'])
-        flow_rate = np.array(flow_rate)
+        ## Multiply the flow rate vector data by a tukey window
+        tukey_window = sig.tukey(q.size, alpha=self.constants['tukey_alpha'])
+        q_tukey = tukey_window * q
 
-        # Multiply the raw flow rate data by a tukey window
-        M = M_FINAL - M_START
-        tukey_window = sig.tukey(M, alpha=self.constants['tukey_alpha'])
-        flow_rate_tukey = flow_rate * tukey_window
+        ## Calculate the DFT of flow rate
+        dft_q_tukey = np.fft.fft(q_tukey, n=q.size)
+        dft_freq = np.fft.fftfreq(q.size, d=time[1]-time[0])
 
-        # Calculate the DFT of flow rate
-        dft_flow_rate_tukey = np.fft.fft(flow_rate_tukey, n=M)
-        dft_freq = np.fft.fftfreq(M, d=time[1]-time[0])
-
-        # Calculate the normalized radiation impedance, so it's equal to pressure/flow rate
+        ## Calculate the normalized radiation impedance, so it's equal to pressure/flow rate
         rho = self.constants['rho']
         c = self.constants['c']
         a = self.constants['a']
@@ -1318,69 +1312,60 @@ class AcousticPower(Functional):
         z = 1/2*(k*a)**2 + 1j*8*k*a/3/np.pi
         z_radiation = z * rho*c/(np.pi*a**2)
 
-        # Compute power spectral density of acoustic power
-        # psd_acoustic_power = np.real(z_radiation) * (dft_u * np.conj(dft_u))
-        psd_acoustic_power = np.real(z_radiation) * np.abs(dft_flow_rate_tukey)**2
+        ## Compute power spectral density of acoustic power
+        # psd_acoustic = np.real(z_radiation) * (dft_q * np.conj(dft_q))
+        psd_acoustic = np.real(z_radiation) * np.abs(dft_q_tukey)**2
 
-        self.cache.update({'M': M, 'dft_flow_rate_tukey': dft_flow_rate_tukey,
+        self.cache.update({'q': q, 'dft_q_tukey': dft_q_tukey, 'dft_freq': dft_freq,
                            'z_radiation': z_radiation,
-                           'psd_acoustic_power': psd_acoustic_power, 'dft_freq': dft_freq,
-                           'tukey_window': tukey_window, 'meas_ind': meas_ind})
+                           'psd_acoustic': psd_acoustic,
+                           'tukey_window': tukey_window})
 
-        res = np.sum(psd_acoustic_power) / M**2
+        res = np.sum(psd_acoustic) / q.size**2
         return res
 
     def eval_duva(self, f, n):
         """
         Return the sensitivity of mean acoustic power to a state.
         """
-        M_START = self.constants['m_start']
-
-        M = self.cache['M']
-        meas_ind = self.cache['meas_ind']
-
-        # Index `n` is for all states, so calculate the equivalent index for only measured states
-        m = np.where(meas_ind == n)[0]
-        if m.size == 0:
-            return dfn.Function(self.model.solid.vector_fspace).vector()
-        else:
-            # np.where returns an array of indices, so get rid of the singular size
-            assert m.size == 1
-            m = m[0]
-
-        if m < M_START:
-            return dfn.Function(self.model.solid.vector_fspace).vector()
-
-        # Get the discrete radiation impedances at every n frequency
-        z_rad = self.cache['z_radiation']
-
-        # Get the discrete fourier coefficient of flow rate
-        dft_flow_rate_tukey = self.cache['dft_flow_rate_tukey']
-        m_meas = m - M_START
-
-        # psd_acoustic_power = 1/n_sample**2 * np.real(z_radiation) * (dft_flow_rate * np.conj(dft_flow_rate))
-        dft_factor = np.exp(1j*2*np.pi*m_meas*np.arange(M)/M)
-        dpsd_dflow_rate_tukey = np.real(z_rad) * 2 * np.real(dft_flow_rate_tukey * dft_factor)
-        dpsd_dflow_rate = dpsd_dflow_rate_tukey * self.cache['tukey_window'][m_meas]
-        dmean_power_dflow_rate = np.sum(dpsd_dflow_rate) / M**2
-
-        self.model.set_iter_params(**iter_params1)
-        dflow_rate_du = self.model.get_flow_sensitivity()[1]
-
-        # print(dflow_rate_du.norm('l2'))
-
-        # self.model.set_params_fromfile(f, n)
-        # dflow_rate_du = self.model.get_flow_sensitivity()[1]
-
-        return dmean_power_dflow_rate * dflow_rate_du, 0.0, 0.0
+        return 0.0, 0.0, 0.0
 
     def eval_dqp(self, f, n):
+        dq, dp = self.model.fluid.get_state_vecs()
+
+        ## Load cached value DFT quantities
+        n_start = self.constants['n_start']
+        q = self.cache['q']
+        z_rad = self.cache['z_radiation']
+        dft_q_tukey = self.cache['dft_q_tukey']
+
+        ## Calculate the needed derivative terms (if applicable)
+        N = q.size
+        n_ = n-n_start
+        if n_ >= 0 and n_ < q.size:
+            # dft_q[n_] = sum(dft_factor * q)
+            # psd_acoustic = np.real(z_radiation) * np.abs(dft_q_tukey)**2
+            dft_factor = np.exp(1j*2*np.pi*n_*np.arange(N)/N)
+            dpsd_dq_tukey = np.real(z_rad) * 2 * np.real(dft_q_tukey * dft_factor)
+            dpsd_dq = dpsd_dq_tukey * self.cache['tukey_window'][n_]
+
+            dq[:] = np.sum(dpsd_dq) / N**2
+
+        return dq, dp
 
     def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
 
     def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
 
     def eval_ddt(self, f, n):
+        # TODO: This should be non-zer0
+        return 0.0
 
     def eval_dp(self, f):
         return None
@@ -1397,27 +1382,17 @@ class AcousticEfficiency(Functional):
     Therefore, you have to be careful whether you are working with an index numbering all the
     intermediate states, or an index that counts only the measured states.
     """
-    func_types = (AcousticPower, basic.SubglottalWork)
-    default_constants = {
-        'm_start': 0,
-        'tukey_alpha': 0.2,
-        'rho': 0.001225,
-        'c': 350*1e2,
-        'a': 0.5}
+    func_types = (AcousticPower, SubglottalWork)
 
     def eval(self, f):
-        meas_ind = f.get_meas_indices()
-        ini_time = f.get_time(meas_ind[self.constants['m_start']])
-        fin_time = f.get_time(-1)
+        time = f.get_times()
+        ini_time = time[self.funcs[0].constants['n_start']]
+        fin_time = time[-1]
 
         acoustic_power = self.funcs[0](f)
-
         acoustic_work = acoustic_power * (fin_time-ini_time)
 
         input_work = self.funcs[1](f)
-
-        self.cache.update({'acoustic_work': acoustic_work, 'input_work': input_work,
-                           'ini_time': ini_time, 'fin_time': fin_time, 'meas_ind': meas_ind})
 
         return acoustic_work / input_work
 
@@ -1425,16 +1400,16 @@ class AcousticEfficiency(Functional):
         """
         Returns the sensitivity of the acoustic efficiency to a state.
         """
-        ini_time = self.cache['ini_time']
-        fin_time = self.cache['fin_time']
+        time = f.get_times()
+        ini_time = time[self.funcs[0].constants['n_start']]
+        fin_time = time[-1]
 
-        dacoustic_power_du = self.funcs['AcousticPower'].duva(f, n)
-
-        acoustic_work = self.cache['acoustic_work']
+        acoustic_work = self.funcs[0](f)*(fin_time-ini_time)
+        dacoustic_power_du = self.funcs[0].duva(f, n)
         dacoustic_work_duva = dacoustic_power_du * (fin_time-ini_time)
 
-        input_work = self.cache['input_work']
-        dinput_work_du = self.funcs['SubglottalWork'].duva(f, n)
+        input_work = self.funcs[1](f)
+        dinput_work_du = self.funcs[1].duva(f, n)
 
         duva = tuple([-dcomp0/input_work - acoustic_work/input_work**2*dcomp1
                       for dcomp0, dcomp1 in zip(dacoustic_work_duva, dinput_work_du)])
@@ -1442,12 +1417,35 @@ class AcousticEfficiency(Functional):
         return duva
 
     def eval_dqp(self, f, n):
+        time = f.get_times()
+        ini_time = time[self.funcs[0].constants['n_start']]
+        fin_time = time[-1]
 
+        acoustic_work = self.funcs[0](f)*(fin_time-ini_time)
+        dacoustic_power_dqp = self.funcs[0].dqp(f, n)
+        dacoustic_work_dqp = dacoustic_power_dqp * (fin_time-ini_time)
+
+        input_work = self.funcs[1](f)
+        dinput_work_dqp = self.funcs[1].dqp(f, n)
+
+        dqp = tuple([-dcomp0/input_work - acoustic_work/input_work**2*dcomp1
+                      for dcomp0, dcomp1 in zip(dacoustic_work_dqp, dinput_work_dqp)])
+        return dqp
+
+    # TODO: dsolid though dfluid are not really correct. You should fix these if they are relevant
+    # to the problem
     def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0.0
+        return dsolid
 
     def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0.0
+        return dfluid
 
     def eval_ddt(self, f, n):
+        return 0.0
 
     def eval_dp(self, f):
         return None

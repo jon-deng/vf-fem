@@ -149,7 +149,7 @@ class TaylorTestUtils(unittest.TestCase):
 
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'implicit'
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    OVERWRITE_FORWARD_SIMULATIONS = True
     # FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
@@ -159,6 +159,7 @@ class TestBasicGradient(TaylorTestUtils):
     # FUNCTIONAL = basic.TransferWorkbyVelocity
     # FUNCTIONAL = basic.FinalFlowRateNorm
     # FUNCTIONAL = basic.TransferEfficiency
+    FUNCTIONAL = basic.AcousticPower
 
     def setUp(self):
         """
@@ -177,7 +178,7 @@ class TestBasicGradient(TaylorTestUtils):
         self.uva0 = (0, 0, 0)
 
         self.functional = self.FUNCTIONAL(self.model)
-        self.functional.constants['n_start'] = 64
+        self.functional.constants['n_start'] = 0
         # self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
 
     def get_taylor_order(self, save_path, hs,
@@ -202,9 +203,9 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = orders
         (grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd = grads
 
-        # self.plot_taylor_convergence(grad_step, hs, gs)
-        # self.plot_grad_uva(self.model, grad_uva)
-        # plt.show()
+        self.plot_taylor_convergence(grad_step, hs, gs)
+        self.plot_grad_uva(self.model, grad_uva)
+        plt.show()
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
@@ -213,7 +214,7 @@ class TestBasicGradient(TaylorTestUtils):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-11)), axis=0)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dsolid = self.solid_props.copy()
