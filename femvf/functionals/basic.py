@@ -1405,14 +1405,14 @@ class AcousticEfficiency(Functional):
         fin_time = time[-1]
 
         acoustic_work = self.funcs[0](f)*(fin_time-ini_time)
-        dacoustic_power_du = self.funcs[0].duva(f, n)
-        dacoustic_work_duva = dacoustic_power_du * (fin_time-ini_time)
+        dacoustic_power_duva = self.funcs[0].duva(f, n)
+        dacoustic_work_duva = [dx*(fin_time-ini_time) for dx in dacoustic_power_duva]
 
         input_work = self.funcs[1](f)
         dinput_work_du = self.funcs[1].duva(f, n)
 
-        duva = tuple([-dcomp0/input_work - acoustic_work/input_work**2*dcomp1
-                      for dcomp0, dcomp1 in zip(dacoustic_work_duva, dinput_work_du)])
+        duva = tuple([dx0/input_work - acoustic_work/input_work**2*dx1
+                      for dx0, dx1 in zip(dacoustic_work_duva, dinput_work_du)])
 
         return duva
 
@@ -1423,13 +1423,13 @@ class AcousticEfficiency(Functional):
 
         acoustic_work = self.funcs[0](f)*(fin_time-ini_time)
         dacoustic_power_dqp = self.funcs[0].dqp(f, n)
-        dacoustic_work_dqp = dacoustic_power_dqp * (fin_time-ini_time)
+        dacoustic_work_dqp = [dx*(fin_time-ini_time) for dx in dacoustic_power_dqp]
 
         input_work = self.funcs[1](f)
         dinput_work_dqp = self.funcs[1].dqp(f, n)
 
-        dqp = tuple([-dcomp0/input_work - acoustic_work/input_work**2*dcomp1
-                      for dcomp0, dcomp1 in zip(dacoustic_work_dqp, dinput_work_dqp)])
+        dqp = tuple([dx0/input_work - acoustic_work/input_work**2*dx1
+                     for dx0, dx1 in zip(dacoustic_work_dqp, dinput_work_dqp)])
         return dqp
 
     # TODO: dsolid though dfluid are not really correct. You should fix these if they are relevant
