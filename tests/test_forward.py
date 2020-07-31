@@ -2,7 +2,6 @@
 A basic test to see if forward.forward will actually run
 """
 
-# import sys
 import os
 import unittest
 from time import perf_counter

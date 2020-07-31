@@ -32,7 +32,6 @@ from femvf.functionals import basic
 
 from femvf.utils import line_search, line_search_p
 
-# sys.path.append(path.expanduser('~/lib/vf-optimization'))
 # from optvf import functionals as extra_funcs
 
 dfn.set_log_level(30)

@@ -2,7 +2,6 @@
 This modules implements tests for functionals
 """
 
-# import sys
 import os
 import os.path as path
 # from time import perf_counter
@@ -30,12 +29,11 @@ class TestFunctionals(unittest.TestCase):
 
     def setUp(self):
         """
-        Generates the forward model run data
+        Sets base parameters, generates the forward model state history, and computes the gradient
         """
         dfn.set_log_level(30)
 
-        #### Test setup
-        # To setup the test, first generate a set of states by solving the forward model
+        ## Load the model
         mesh_dir = '../meshes'
         mesh_base_filename = 'geometry2'
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
@@ -127,7 +125,6 @@ class TestFunctionals(unittest.TestCase):
 
         alpha = 1e-8
 
-        #############################################
         idx_meas = None
         with sf.StateFile(self.model, self.h5file, mode='r') as f:
             idx_meas = f.get_meas_indices()

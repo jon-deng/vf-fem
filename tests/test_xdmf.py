@@ -3,7 +3,6 @@ Playing around with making an xmf file to read results in paraview
 
 Writes out vertex values from the statefile
 """
-# import sys
 # import os
 from os import path
 

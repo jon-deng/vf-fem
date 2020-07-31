@@ -1,7 +1,7 @@
 """
 Writes out vertex values from a statefile to xdmf
 """
-import sys
+
 import os
 from os import path
 
@@ -12,10 +12,8 @@ from lxml import etree
 import h5py
 import numpy as np
 import dolfin as dfn
-# import xml
 
-sys.path.append('../')
-from femvf import statefile as sf
+from .. import statefile as sf
 
 def export_vertex_values(model, statefile_path, export_path):
     """

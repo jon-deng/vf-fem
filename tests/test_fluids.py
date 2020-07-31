@@ -2,7 +2,6 @@
 Tests fluids.py module
 """
 
-# import sys
 import unittest
 
 import dolfin as dfn

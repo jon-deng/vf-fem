@@ -2,7 +2,6 @@
 Test linalg functions
 """
 
-# import sys, os
 import unittest
 
 import numpy as np
