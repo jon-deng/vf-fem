@@ -21,11 +21,11 @@ import matplotlib.pyplot as plt
 import dolfin as dfn
 
 from femvf import statefile as sf, linalg
-from femvf.forward import implicit_increment
+from femvf.model import load_fsi_model
+from femvf.forward import implicit_increment, integrate
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
-from femvf.model import load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
 from femvf.functionals import basic
@@ -44,7 +44,7 @@ def get_starting_rayleigh_model():
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
+    model = fvf.load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -156,12 +156,15 @@ class TestBasicGradient(TaylorTestUtils):
 
     def setUp(self):
         """
-        Set the model, parameters, and functional to test with
+        Set the model, parameters, functional to test, and the gradient/forward model at the
+        baseline parameter set
 
         This should set the starting point of the line search; all the parameters needed to solve
         a single simulation are given by this set up.
         """
         self.CASE_NAME = 'singleperiod'
+
+        # Load the model and set baseline parameters
         self.model, self.solid_props, self.fluid_props = get_starting_kelvinvoigt_model()
 
         t_start, t_final = 0, 0.01
@@ -170,9 +173,22 @@ class TestBasicGradient(TaylorTestUtils):
 
         self.uva0 = (0, 0, 0)
 
+        # Specify the functional to test
         self.functional = self.FUNCTIONAL(self.model)
         self.functional.constants['n_start'] = 50
-        # self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
+
+        # Compute the baseline simulation and gradient
+        base_path = f"out/{self.CASE_NAME}-0.h5"
+        if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.isfile(base_path):
+            if os.path.isfile(base_path):
+                os.remove(base_path)
+            integrate(self.model, self.uva0, self.solid_props, self.fluid_props, self.times,
+                      h5file=base_path)
+
+        grads = None
+        with sf.StateFile(self.model, base_path, mode='r') as f:
+            _, *grads = adjoint(self.model, f, self.functional, coupling=self.COUPLING)
+        self.grads = grads
 
     def get_taylor_order(self, save_path, hs,
                          duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None):

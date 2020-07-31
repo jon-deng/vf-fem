@@ -29,7 +29,7 @@ class TestFunctionals(unittest.TestCase):
 
     def setUp(self):
         """
-        Sets base parameters, generates the forward model state history, and computes the gradient
+        Sets base parameters, generates the forward model state history
         """
         dfn.set_log_level(30)
 
