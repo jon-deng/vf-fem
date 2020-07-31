@@ -11,24 +11,17 @@ References
     https://arxiv.org/pdf/1204.5577.pdf
 """
 
-import sys
 import os
-from os import path
 from time import perf_counter
-import pickle
 
 import unittest
 
-# from math import round
 import numpy as np
-# import pandas as pd
 import matplotlib.pyplot as plt
-# import h5py
 import dolfin as dfn
 
-sys.path.append('../')
 from femvf import statefile as sf, linalg
-from femvf.forward import integrate, implicit_increment
+from femvf.forward import implicit_increment
 from femvf.adjoint import adjoint
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
@@ -148,18 +141,19 @@ class TaylorTestUtils(unittest.TestCase):
         return fig, axs
 
 class TestBasicGradient(TaylorTestUtils):
-    COUPLING = 'implicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    COUPLING = 'explicit'
+    OVERWRITE_FORWARD_SIMULATIONS = False
     # FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
     # FUNCTIONAL = basic.SubglottalWork
-    FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
+    # FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
     # FUNCTIONAL = basic.TransferWorkbyVelocity
     # FUNCTIONAL = basic.FinalFlowRateNorm
     # FUNCTIONAL = basic.TransferEfficiency
     FUNCTIONAL = basic.AcousticPower
+    # FUNCTIONAL = basic.AcousticEfficiency
 
     def setUp(self):
         """
@@ -178,7 +172,7 @@ class TestBasicGradient(TaylorTestUtils):
         self.uva0 = (0, 0, 0)
 
         self.functional = self.FUNCTIONAL(self.model)
-        self.functional.constants['n_start'] = 0
+        self.functional.constants['n_start'] = 50
         # self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
 
     def get_taylor_order(self, save_path, hs,
@@ -203,9 +197,9 @@ class TestBasicGradient(TaylorTestUtils):
         order_1, order_2 = orders
         (grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd = grads
 
-        self.plot_taylor_convergence(grad_step, hs, gs)
-        self.plot_grad_uva(self.model, grad_uva)
-        plt.show()
+        # self.plot_taylor_convergence(grad_step, hs, gs)
+        # self.plot_grad_uva(self.model, grad_uva)
+        # plt.show()
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)

@@ -3,16 +3,15 @@ Playing around with making an xmf file to read results in paraview
 
 Writes out vertex values from the statefile
 """
-import sys
-import os
+# import sys
+# import os
 from os import path
 
-import h5py
-import numpy as np
-import dolfin as dfn
+# import h5py
+# import numpy as np
+# import dolfin as dfn
 # import xml
 
-sys.path.append('../')
 from femvf.model import load_fsi_model
 from femvf.solids import Rayleigh
 from femvf.fluids import Bernoulli

@@ -2,21 +2,20 @@
 A basic test to see if forward.forward will actually run
 """
 
-import sys
+# import sys
 import os
 import unittest
 from time import perf_counter
 
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import matplotlib.pyplot as plt
 import dolfin as dfn
-import h5py
+# import h5py
 
-sys.path.append('../')
 from femvf.forward import integrate
-from femvf.model import ForwardModel, load_fsi_model
-from femvf.parameters.properties import SolidProperties, FluidProperties
+from femvf.model import load_fsi_model
+# from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.solids import Rayleigh, KelvinVoigt

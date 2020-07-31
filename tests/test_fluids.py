@@ -2,7 +2,7 @@
 Tests fluids.py module
 """
 
-import sys
+# import sys
 import unittest
 
 import dolfin as dfn
@@ -16,7 +16,6 @@ import autograd.numpy as np
 import petsc4py
 petsc4py.init()
 
-sys.path.append('../')
 from femvf.model import load_fsi_model
 from femvf import fluids
 from femvf.constants import PASCAL_TO_CGS

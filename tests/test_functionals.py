@@ -2,30 +2,28 @@
 This modules implements tests for functionals
 """
 
-import sys
+# import sys
 import os
 import os.path as path
-from time import perf_counter
+# from time import perf_counter
 import unittest
 
 from tabulate import tabulate
 
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import dolfin as dfn
 
-sys.path.append('../')
-from femvf import statefile as sf, meshutils
+from femvf import statefile as sf
 from femvf.forward import integrate
 from femvf.fluids import Bernoulli
 from femvf.solids import KelvinVoigt, Rayleigh
-from femvf.model import ForwardModel, load_fsi_model
+from femvf.model import load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functionals import basic
 
-sys.path.append(path.expanduser('~/lib/vf-optimization'))
-from optvf import functionals
+# from optvf import functionals
 
 class TestFunctionals(unittest.TestCase):
     OVERWRITE_FORWARD_SIMULATIONS = False

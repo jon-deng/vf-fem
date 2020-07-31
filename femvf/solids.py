@@ -322,7 +322,7 @@ class Rayleigh(Solid):
         emod.vector()[:] = 1.0
 
         # NOTE: Fenics doesn't support form derivatives w.r.t Constant. This is a hack making time step
-        # vary in space so you can take derivative. You *must* set the time step equal at every DOF
+        # vary in space so you can take the derivative. You *must* set the time step equal at every DOF
         # dt = dfn.Constant(1e-4)
         dt = dfn.Function(scalar_fspace)
         dt.vector()[:] = 1e-4
@@ -349,11 +349,11 @@ class Rayleigh(Solid):
             return rayleigh_m * biform_m(trial, test, rho) \
                    + rayleigh_k * biform_k(trial, test, emod, nu)
 
-        inertia = inertia_2form(a1_nmk, vector_test, rho)
+        inertia = inertia_2form(a1, vector_test, rho)
 
         stiffness = stiffness_2form(u1, vector_test, emod, nu)
 
-        damping = damping_2form(v1_nmk, vector_test)
+        damping = damping_2form(v1, vector_test)
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
@@ -384,11 +384,11 @@ class Rayleigh(Solid):
 
         f1_linear = inertia + stiffness + damping
         f1_nonlin = -traction - penalty
-        f1 = f1_linear + f1_nonlin
+        f1_uva = f1_linear + f1_nonlin
 
-        df1_du1_linear = ufl.derivative(f1_linear, u1, vector_trial)
-        df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)
-        df1_du1 = df1_du1_linear + df1_du1_nonlin
+        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1:a1_nmk})
+
+        df1_du1 = ufl.derivative(f1, u1, vector_trial)
 
         df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
 
@@ -398,22 +398,13 @@ class Rayleigh(Solid):
                                   facet_function, facet_labels['fixed'])
 
         ## Adjoint forms
-        df1_du0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, u0, vector_trial))
-        # df1_du0_adj_nonlin = dfn.adjoint(ufl.derivative(f1_nonlin, u0, vector_trial))
-        df1_du0_adj_nonlin = 0
-        df1_du0_adj = df1_du0_adj_linear + df1_du0_adj_nonlin
+        df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))
 
-        df1_dv0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, v0, vector_trial))
-        df1_dv0_adj_nonlin = 0
-        df1_dv0_adj = df1_dv0_adj_linear + df1_dv0_adj_nonlin
+        df1_dv0_adj = dfn.adjoint(ufl.derivative(f1, v0, vector_trial))
 
-        df1_da0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, a0, vector_trial))
-        df1_da0_adj_nonlin = 0
-        df1_da0_adj = df1_da0_adj_linear + df1_da0_adj_nonlin
+        df1_da0_adj = dfn.adjoint(ufl.derivative(f1, a0, vector_trial))
 
-        df1_du1_adj_linear = dfn.adjoint(df1_du1_linear)
-        df1_du1_adj_nonlin = dfn.adjoint(df1_du1_nonlin)
-        df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
+        df1_du1_adj = dfn.adjoint(df1_du1)
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
         df1_dp1_adj = dfn.adjoint(df1_dp1)
@@ -471,6 +462,7 @@ class Rayleigh(Solid):
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
 
+            'form.un.f1_uva': f1_uva,
             'form.un.f1': f1,
             'form.un.f0': f0,
 
@@ -566,9 +558,9 @@ class KelvinVoigt(Solid):
             kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * ufl.dx
             return kv_damping
 
-        inertia = inertia_2form(a1_nmk, vector_test, rho)
+        inertia = inertia_2form(a1, vector_test, rho)
         stiffness = stiffness_2form(u1, vector_test, emod, nu)
-        kv_damping = damping_2form(v1_nmk, vector_test)
+        kv_damping = damping_2form(v1, vector_test)
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
@@ -599,11 +591,11 @@ class KelvinVoigt(Solid):
 
         f1_linear = inertia + stiffness + kv_damping
         f1_nonlin = -traction - penalty
-        f1 = f1_linear + f1_nonlin
+        f1_uva = f1_linear + f1_nonlin
 
-        df1_du1_linear = ufl.derivative(f1_linear, u1, vector_trial)
-        df1_du1_nonlin = ufl.derivative(f1_nonlin, u1, vector_trial)
-        df1_du1 = df1_du1_linear + df1_du1_nonlin
+        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
+
+        df1_du1 = ufl.derivative(f1, u1, vector_trial)
 
         df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
 
@@ -613,21 +605,15 @@ class KelvinVoigt(Solid):
                                   facet_function, facet_labels['fixed'])
 
         ## Adjoint forms
-        df1_du0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, u0, vector_trial))
-        df1_du0_adj_nonlin = 0
-        df1_du0_adj = df1_du0_adj_linear + df1_du0_adj_nonlin
+        df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))
 
-        df1_dv0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, v0, vector_trial))
-        df1_dv0_adj_nonlin = 0
-        df1_dv0_adj = df1_dv0_adj_linear + df1_dv0_adj_nonlin
+        df1_dv0_adj = dfn.adjoint(ufl.derivative(f1, v0, vector_trial))
 
-        df1_da0_adj_linear = dfn.adjoint(ufl.derivative(f1_linear, a0, vector_trial))
-        df1_da0_adj_nonlin = 0
-        df1_da0_adj = df1_da0_adj_linear + df1_da0_adj_nonlin
+        df1_da0_adj = dfn.adjoint(ufl.derivative(f1, a0, vector_trial))
 
-        df1_du1_adj_linear = dfn.adjoint(df1_du1_linear)
-        df1_du1_adj_nonlin = dfn.adjoint(df1_du1_nonlin)
-        df1_du1_adj = df1_du1_adj_linear + df1_du1_adj_nonlin
+        # df1_du1_adj_linear = dfn.adjoint(df1_du1_linear)
+        # df1_du1_adj_nonlin = dfn.adjoint(df1_du1_nonlin)
+        df1_du1_adj = dfn.adjoint(df1_du1)
 
         df1_demod = ufl.derivative(f1, emod, scalar_trial)
         df1_dp1_adj = dfn.adjoint(df1_dp1)
@@ -681,8 +667,10 @@ class KelvinVoigt(Solid):
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
 
+            'form.un.f1_uva': f1_uva,
             'form.un.f1': f1,
             'form.un.f0': f0,
+
             'form.bi.df1_du1': df1_du1,
             'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_du1_adj': df1_du1_adj,

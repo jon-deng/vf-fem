@@ -2,13 +2,12 @@
 Test linalg functions
 """
 
-import sys, os
+# import sys, os
 import unittest
 
 import numpy as np
 from petsc4py import PETSc
 
-sys.path.append('../')
 from femvf import linalg
 
 class Test_form_block_matrix(unittest.TestCase):
