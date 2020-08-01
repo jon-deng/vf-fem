@@ -676,6 +676,7 @@ class KVDampingWork(Functional):
         forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
         return forms
 
+
     def eval(self, f):
         N_START = 0
         N_STATE = f.get_num_states()
@@ -687,7 +688,7 @@ class KVDampingWork(Functional):
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
-            self.model.set_params_fromfile(f, ii)
+            self.model.set_params_fromfile(f, ii, update_props=False)
             power_right = dfn.assemble(self.forms['damping_power'])
             res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
             power_left = power_right
@@ -1281,6 +1282,7 @@ class AcousticPower(Functional):
         'a': 0.5,
         'tukey_alpha': 0.1
     }
+
 
     def eval(self, f):
         ## Load the flow rate vector

@@ -379,6 +379,7 @@ class ForwardModel:
         return verts
 
     ## Methods for setting model parameters
+
     def set_ini_solid_state(self, u0, v0, a0):
         """
         Sets the state variables u, v, and a at the start of the step.
@@ -455,6 +456,7 @@ class ForwardModel:
         """
         self.fluid.set_properties(fluid_props)
 
+
     def set_ini_params(self, uva0=None, qp0=None, solid_props=None, fluid_props=None):
         """
         Sets all properties at the initial time.
@@ -528,6 +530,7 @@ class ForwardModel:
         if dt is not None:
             self.set_time_step(dt)
 
+
     def set_params_fromfile(self, statefile, n, update_props=True):
         """
         Set all parameters needed to integrate the model from a recorded value.
@@ -546,8 +549,8 @@ class ForwardModel:
         # Get data from the state file
         solid_props, fluid_props = None, None
         if update_props:
-            fluid_props = statefile.get_fluid_props(n)
-            solid_props = statefile.get_solid_props(n)
+            fluid_props = statefile.get_fluid_props(0)
+            solid_props = statefile.get_solid_props(0)
 
         uva0 = statefile.get_state(n)
         qp0 = statefile.get_fluid_state(n)

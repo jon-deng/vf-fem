@@ -17,6 +17,7 @@ from .newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmark_v_da0
                       newmark_a_du1, newmark_a_du0, newmark_a_dv0, newmark_a_da0, newmark_a_dt)
 from . import linalg
 
+
 def adjoint(model, f, functional, coupling='explicit'):
     """
     Returns the gradient of the cost function using the adjoint model.
@@ -132,6 +133,8 @@ def adjoint(model, f, functional, coupling='explicit'):
             qp1_ = qp1
         iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
 
+        # All the calculations are based on the state of the model at iter_params1, so you only have
+        # to set it once here
         model.set_iter_params(**iter_params1)
         res = dfn.assemble(model.solid.forms['form.un.f1'])
         model.solid.bc_base.apply(res)
@@ -214,7 +217,7 @@ def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_for
     """
     Update the gradient wrt solid parameters
     """
-    model.set_iter_params(**iter_params1)
+    # model.set_iter_params(**iter_params1)
     for key, vector in grad_solid.items():
         if vector is not None:
             df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
@@ -225,7 +228,7 @@ def solve_grad_dt(model, adj_state1, iter_params1):
     """
     Calculate the gradietn wrt dt
     """
-    model.set_iter_params(**iter_params1)
+    # model.set_iter_params(**iter_params1)
     uva0 = iter_params1['uva0']
     uva1 = iter_params1['uva1']
     dt1 = iter_params1['dt']
@@ -249,7 +252,7 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     -------
     """
     ## Assemble sensitivity matrices
-    model.set_iter_params(**it_params)
+    # model.set_iter_params(**it_params)
     dt = it_params['dt']
 
     dfu2_du2 = model.assem_df1_du1_adj()
@@ -333,7 +336,7 @@ def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
 
     ## Assemble sensitivity matrices
     dt2 = it_params2['dt']
-    model.set_iter_params(**it_params2)
+    # model.set_iter_params(**it_params2)
 
     dfu2_du1 = model.assem_df1_du0_adj()
     dfu2_dv1 = model.assem_df1_dv0_adj()
@@ -368,7 +371,7 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
     -------
     """
     ## Assemble sensitivity matrices
-    model.set_iter_params(**it_params)
+    # model.set_iter_params(**it_params)
     dt = it_params['dt']
 
     dfu2_du2 = model.assem_df1_du1_adj()
@@ -424,7 +427,7 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
 
     ## Assemble sensitivity matrices
     dt2 = it_params2['dt']
-    model.set_iter_params(**it_params2)
+    # model.set_iter_params(**it_params2)
 
     dfu2_du1 = model.assem_df1_du0_adj()
     dfu2_dv1 = model.assem_df1_dv0_adj()

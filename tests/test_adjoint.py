@@ -151,8 +151,9 @@ class TestBasicGradient(TaylorTestUtils):
     # FUNCTIONAL = basic.TransferWorkbyVelocity
     # FUNCTIONAL = basic.FinalFlowRateNorm
     # FUNCTIONAL = basic.TransferEfficiency
-    FUNCTIONAL = basic.AcousticPower
+    # FUNCTIONAL = basic.AcousticPower
     # FUNCTIONAL = basic.AcousticEfficiency
+    FUNCTIONAL = basic.KVDampingWork
 
     def setUp(self):
         """

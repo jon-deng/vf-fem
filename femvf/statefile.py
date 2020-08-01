@@ -2,6 +2,11 @@
 Module to work with state values from a forward pass stored in an hdf5 file.
 """
 
+# TODO: Note that the solid and fluid parameters are assumed to be stationary so some codes are
+# hard-coded around this (which is not good). The current code doesn't really handle this explicitly
+# so you may have to fix bugs that are associated with this if you want to use time-varying
+# fluid/solid parameters
+
 from os.path import join
 from collections import OrderedDict
 
@@ -68,7 +73,7 @@ class StateFile:
         Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, model, name, group='/', mode='r', NCHUNK=100, cache_size=5,
+    def __init__(self, model, name, group='/', mode='r', NCHUNK=100,
                  **kwargs):
         self.model = model
         self.file = h5py.File(name, mode=mode, **kwargs)
@@ -80,6 +85,10 @@ class StateFile:
         self.cache = {}
         for name in ['uva', 'qp', 'solid', 'fluid']:
             self.cache[name] = Cache(5)
+
+        self.dset_chunk_cache = {}
+        for name in ['u', 'v', 'a', 'q', 'p']:
+            self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[name])
 
     ## Implement an h5 group interface to the underlying root group
     def __enter__(self):
@@ -457,7 +466,7 @@ class StateFile:
                 'solid_props': solid_props, 'fluid_props': fluid_props}
 
     # these read functions are cached for performance reasons
-    @get_from_cache('uva')
+    # @get_from_cache('uva')
     def get_state(self, n):
         """
         Return form coefficient vectors for states (u, v, a) at index n.
@@ -472,12 +481,14 @@ class StateFile:
         labels = ('u', 'v', 'a')
         ret = []
         for label in labels:
-            dset = self.root_group[label]
-            ret.append(dset[n])
+            # dset = self.root_group[label]
+            # ret.append(dset[n])
+
+            ret.append(self.dset_chunk_cache[label].get(n))
 
         return tuple(ret)
 
-    @get_from_cache('qp')
+    # @get_from_cache('qp')
     def get_fluid_state(self, n):
         """
         Return fluid states q, p at index n.
@@ -490,9 +501,14 @@ class StateFile:
             A set of functions to set vector values for.
         """
 
-        labels = ('q', 'p')
-        q = self.root_group['q'][n, 0]
-        p = self.root_group['p'][n, :]
+        # labels = ('q', 'p')
+        # q = self.root_group['q'][n, 0]
+        # p = self.root_group['p'][n, :]
+        # breakpoint()
+
+        q = self.dset_chunk_cache['q'].get(n)[0]
+        p = self.dset_chunk_cache['p'].get(n)
+        # print(q, q2)
 
         return (q, p)
 
@@ -501,6 +517,9 @@ class StateFile:
         """
         Return the fluid properties dictionary at index n.
         """
+        # There can only be stationary properties right now
+        assert n == 0
+
         fluid_props = self.model.fluid.get_properties()
         fluid_group = self.root_group['fluid_properties']
 
@@ -523,6 +542,9 @@ class StateFile:
         """
         Returns the solid properties
         """
+        # There can only be stationary properties right now
+        assert n == 0
+
         solid_props = self.model.solid.get_properties()
         solid_group = self.root_group['solid_properties']
         for label, shape in self.model.solid.PROPERTY_TYPES.items():
@@ -583,3 +605,66 @@ class Cache:
             return self.data[key]
         else:
             return None
+
+class DatasetChunkCache:
+    """
+    Cache of chunked datasets
+
+    The dataset must contain full chunks along the last dimensions
+
+    Reading values from this class will load entire chunks at a time. Reading slices that are
+    already loaded in a chunk will use the cached chunk
+    """
+
+    def __init__(self, dset, num_chunks=1):
+        # Don't allow scalar datasets
+        assert len(dset.shape) > 0
+
+        # Check that dataset is chunked properly
+        assert dset.shape[1:] == dset.chunks[1:]
+
+        self.dset = dset
+
+        self.chunk_size = dset.chunks[0]
+        self.M = dset.shape[0]
+
+        self.num_chunks = num_chunks
+
+        self.cache = OrderedDict()
+
+    def get(self, m):
+        """
+        Parameters
+        ----------
+        m : int
+            Index along the chunk dimension
+        """
+        m_chunk = m//self.chunk_size
+
+        if m_chunk in self.cache:
+            self.cache.move_to_end(m_chunk, last=False)
+        else:
+            self.load(m)
+
+        m_local = m - m_chunk*self.chunk_size
+        return self.cache[m_chunk][m_local, ...].copy()
+
+    def load(self, m):
+        """
+        Loads the chunk containing index m
+
+        Parameters
+        ----------
+        m : int
+            Index along the chunk dimension
+        """
+        m_chunk = m//self.chunk_size
+
+        if len(self.cache) == self.num_chunks:
+            self.cache.popitem(last=True)
+
+        m_start = m_chunk*self.chunk_size
+        m_end = min((m_chunk+1)*self.chunk_size, self.dset.shape[0])
+        self.cache[m_chunk] = self.dset[m_start:m_end, ...]
+
+        assert len(self.cache) <= self.num_chunks

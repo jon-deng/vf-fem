@@ -145,6 +145,7 @@ class Solid:
         """
         return NotImplementedError("Subclasses must implement this function")
 
+
     def set_ini_state(self, u0, v0, a0):
         """
         Sets the initial state variables, (u, v, a)
