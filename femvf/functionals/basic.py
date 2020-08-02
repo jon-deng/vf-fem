@@ -1131,10 +1131,13 @@ class SubglottalWork(Functional):
     func_types = ()
     default_constants = {'n_start': 0}
 
+    # @profile
     def eval(self, f):
         # meas_ind = f.get_meas_indices()
         N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
+
+        time = f.get_times()
 
         ret = 0
         fluid_props = f.get_fluid_props(0)
@@ -1142,7 +1145,7 @@ class SubglottalWork(Functional):
             # Set form coefficients to represent the equation mapping state ii->ii+1
             qp0 = f.get_fluid_state(ii-1)
             qp1 = f.get_fluid_state(ii)
-            dt = f.get_time(ii) - f.get_time(ii-1)
+            dt = time[ii] - time[ii-1]
 
             ret += 0.5*(qp0[0]+qp1[0])*fluid_props['p_sub']*dt
 
