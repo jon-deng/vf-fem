@@ -657,7 +657,9 @@ class KVDampingWork(Functional):
     Returns the work dissipated in the tissue due to damping
     """
     func_types = ()
-    default_constants = {}
+    default_constants = {
+        'n_start': 0
+    }
 
     @staticmethod
     def form_definitions(model):
@@ -676,15 +678,14 @@ class KVDampingWork(Functional):
         forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
         return forms
 
-
     def eval(self, f):
-        N_START = 0
+        N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
 
         res = 0
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        self.model.set_params_fromfile(f, 0)
+        self.model.set_params_fromfile(f, N_START)
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
@@ -696,7 +697,7 @@ class KVDampingWork(Functional):
         return res
 
     def eval_duva(self, f, n):
-        N_START = 0
+        N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
         time = f.get_times()
 
@@ -722,7 +723,7 @@ class KVDampingWork(Functional):
         dsolid = self.model.solid.get_properties()
         dsolid.vector[:] = 0.0
 
-        N_START = 0
+        N_START = N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
 
         dwork_deta = dfn.Function(self.model.solid.scalar_fspace).vector()
@@ -774,7 +775,7 @@ class KVDampingWork(Functional):
 
     def eval_ddt(self, f, n):
         ddt = 0
-        N_START = 0
+        N_START = N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
         if n >= N_START+1:
             # Calculate damped work over n-1 -> n
@@ -1285,7 +1286,6 @@ class AcousticPower(Functional):
         'a': 0.5,
         'tukey_alpha': 0.1
     }
-
 
     def eval(self, f):
         ## Load the flow rate vector
