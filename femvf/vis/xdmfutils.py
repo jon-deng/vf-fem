@@ -51,6 +51,7 @@ def export_vertex_values(model, statefile_path, export_path):
 
             for ii in range(N_TIME):
                 u, v, a = fi.get_state(ii)
+                # breakpoint()
                 for label, vector in zip(['u', 'v', 'a'], [u, v, a]):
                     vector_func.vector()[:] = vector
                     fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VALUE_SHAPE)
@@ -58,23 +59,26 @@ def export_vertex_values(model, statefile_path, export_path):
             ## Write (q, p) vertex values (pressure only defined)
             VALUE_SHAPE = tuple(scalar_func.value_shape())
 
-            for label in ['pressure']:
+            for label in ['p']:
                 fo.create_dataset(label, shape=(N_TIME, N_VERT, *VALUE_SHAPE), dtype=np.float64)
 
             for ii in range(N_TIME):
                 _, p = fi.get_fluid_state(ii)
 
-                for label, vector in zip(['pressure'], [p]):
-                    scalar_func.vector()[:] = model.pressure_fluidord_to_solidord(p)
+                for label, vector in zip(['p'], [p]):
+                    scalar_func.vector()[:] = model.map_fsi_scalar_from_fluid_to_solid(p)
                     fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *VALUE_SHAPE))
 
-def write_xdmf(model, h5file_path, xdmf_path=None):
+def write_xdmf(model, h5file_path, xdmf_name=None):
     """
     Parameters
     ----------
     h5file_path : str
         path to a file with exported vertex values
     """
+
+    root_dir = path.split(h5file_path)[0]
+    h5file_name = path.split(h5file_path)[1]
 
     with h5py.File(h5file_path, mode='r') as f:
 
@@ -106,7 +110,7 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                 'NumberType': 'Int',
                 'Format': 'HDF',
                 'Dimensions': tuple_shape_to_xdmf(f['mesh/solid/connectivity'].shape)})
-            conn.text = f'{h5file_path}:/mesh/solid/connectivity'
+            conn.text = f'{h5file_name}:/mesh/solid/connectivity'
 
             geom = SubElement(grid, 'Geometry', {'GeometryType': 'XY'})
 
@@ -118,7 +122,7 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                 'Format': 'HDF',
                 'Dimensions': tuple_shape_to_xdmf(f['mesh/solid/coordinates'].shape)
             })
-            coords.text = f'{h5file_path}:/mesh/solid/coordinates'
+            coords.text = f'{h5file_name}:/mesh/solid/coordinates'
 
             ## Write u, v, a data to xdmf
             for label in ['u', 'v', 'a']:
@@ -142,10 +146,10 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                 slice_data = SubElement(slice, 'DataItem', {
                     'Dimensions': tuple_shape_to_xdmf(f[label].shape),
                     'Format': 'HDF'})
-                slice_data.text = f'{h5file_path}:{label}'
+                slice_data.text = f'{h5file_name}:{label}'
 
             # Write q, p data to xdmf
-            for label in ['pressure']:
+            for label in ['p']:
                 comp = SubElement(grid, 'Attribute', {
                     'Name': label,
                     'AttributeType': 'Scalar',
@@ -166,17 +170,17 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
                 slice_data = SubElement(slice, 'DataItem', {
                     'Dimensions': tuple_shape_to_xdmf(f[label].shape),
                     'Format': 'HDF'})
-                slice_data.text = f'{h5file_path}:{label}'
+                slice_data.text = f'{h5file_name}:{label}'
 
     ## Write the Xdmf file
     lxml_root = etree.fromstring(ElementTree.tostring(root))
     etree.indent(lxml_root, space="    ")
     pretty_xml = etree.tostring(lxml_root, pretty_print=True)
 
-    if xdmf_path is None:
-        xdmf_path = f'{path.splitext(h5file_path)[0]}.xdmf'
+    if xdmf_name is None:
+        xdmf_name = f'{path.splitext(h5file_name)[0]}.xdmf'
 
-    with open(xdmf_path, 'wb') as fxml:
+    with open(path.join(root_dir, xdmf_name), 'wb') as fxml:
         fxml.write(pretty_xml)
 
 # def export_vertex_values_from_opt(model, p, opt_path, export_path):
@@ -236,5 +240,5 @@ def write_xdmf(model, h5file_path, xdmf_path=None):
 #         'Format': 'HDF'})
 #     slice_data.text = f'{h5file_path}:{label}'
 
-# def tuple_shape_to_xdmf(shape):
-#             return r' '.join(str(dim) for dim in shape)
+def tuple_shape_to_xdmf(shape):
+    return r' '.join(str(dim) for dim in shape)

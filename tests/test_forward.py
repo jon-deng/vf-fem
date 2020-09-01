@@ -34,7 +34,7 @@ class TestForward(unittest.TestCase):
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     def test_forward(self):
-        ## Configure the model and model parameters
+        ## Configure the model and its parameters
         model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
         y_gap = 0.01

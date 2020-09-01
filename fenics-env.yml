@@ -17,4 +17,5 @@ dependicies:
     - nlopt
     - ipdb
     - autograd
+    - lxml
 

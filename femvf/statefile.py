@@ -86,9 +86,11 @@ class StateFile:
         for name in ['uva', 'qp', 'solid', 'fluid']:
             self.cache[name] = Cache(5)
 
+        # TODO: This is porbably buggy
         self.dset_chunk_cache = {}
-        for name in ['u', 'v', 'a', 'q', 'p']:
-            self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[name])
+        if mode == 'r' or mode == 'a':
+            for name in ['u', 'v', 'a', 'q', 'p']:
+                self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[name])
 
     ## Implement an h5 group interface to the underlying root group
     def __enter__(self):

@@ -19,7 +19,7 @@ from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
 
 mesh_dir = '../meshes'
 
-mesh_base_filename = 'geometry2'
+mesh_base_filename = 'M5-3layers'
 mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
 ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)

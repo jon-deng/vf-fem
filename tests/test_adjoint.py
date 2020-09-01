@@ -146,14 +146,14 @@ class TestBasicGradient(TaylorTestUtils):
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
-    FUNCTIONAL = basic.SubglottalWork
+    # FUNCTIONAL = basic.SubglottalWork
     # FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
     # FUNCTIONAL = basic.TransferWorkbyVelocity
     # FUNCTIONAL = basic.FinalFlowRateNorm
     # FUNCTIONAL = basic.TransferEfficiency
     # FUNCTIONAL = basic.AcousticPower
     # FUNCTIONAL = basic.AcousticEfficiency
-    # FUNCTIONAL = basic.KVDampingWork
+    FUNCTIONAL = basic.KVDampingWork
 
     def setUp(self):
         """
