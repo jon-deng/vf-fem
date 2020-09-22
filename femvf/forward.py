@@ -91,7 +91,7 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
         raise ValueError("There must be atleast 2 time integration points.")
 
     ## Initialize datasets to save in h5 file
-    with sf.StateFile(model, h5file, group=h5group, mode='w') as f:
+    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
         f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0), fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(times[0])
         if 0 in idx_meas:

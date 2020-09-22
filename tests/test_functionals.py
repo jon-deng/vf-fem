@@ -22,14 +22,15 @@ from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functionals import basic
 
-# from optvf import functionals
-
 class TestFunctionals(unittest.TestCase):
     OVERWRITE_FORWARD_SIMULATIONS = False
 
     def setUp(self):
         """
-        Sets base parameters, generates the forward model state history
+        Solves the forward model about a base parameterization
+
+        This generates a history of model states. Functionals are then tested by finite differences
+        around the history of model states.
         """
         dfn.set_log_level(30)
 
@@ -40,7 +41,7 @@ class TestFunctionals(unittest.TestCase):
 
         model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
-        ## Set the solution parameters
+        ## Set time integration / fluid / solid parameters
         dt_max = 1e-4
         t0 = 0.0
 
@@ -49,9 +50,9 @@ class TestFunctionals(unittest.TestCase):
 
         # Set a tmeas for FFT
         tmeas = np.linspace(t_start, t_final, 512)
+        timing_props = tmeas
 
         # Set parameters for the simulation
-        timing_props = tmeas
         solid_props = model.solid.get_properties()
         fluid_props = model.fluid.get_properties()
 
@@ -89,7 +90,7 @@ class TestFunctionals(unittest.TestCase):
             print("Running forward model to generate data.")
             adaptive_step_prm = {'abs_tol': None}
             info = integrate(model, (0, 0, 0), solid_props, fluid_props, timing_props,
-                                     h5file=h5file, adaptive_step_prm=adaptive_step_prm)
+                             h5file=h5file, adaptive_step_prm=adaptive_step_prm)
 
         self.h5file = h5file
         self.model = model

@@ -77,6 +77,11 @@ class StateFile:
                  **kwargs):
         self.model = model
         self.file = h5py.File(name, mode=mode, **kwargs)
+
+        # Create the root group if applicable
+        if (mode == 'w' or mode == 'a') and group not in self.file:
+            self.file.create_group(group)
+
         self.root_group_name = group
 
         self.NCHUNK = NCHUNK
@@ -86,9 +91,9 @@ class StateFile:
         for name in ['uva', 'qp', 'solid', 'fluid']:
             self.cache[name] = Cache(5)
 
-        # TODO: This is porbably buggy
+        # TODO: This is probably buggy
         self.dset_chunk_cache = {}
-        if mode == 'r' or mode == 'a':
+        if mode == 'r':
             for name in ['u', 'v', 'a', 'q', 'p']:
                 self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[name])
 
@@ -138,9 +143,6 @@ class StateFile:
         Set the root group path and creates the group if it doesn't exist
         """
         self._root_group_name = name
-
-        if name not in self.file:
-            self.file.create_group(name)
 
     @property
     def root_group(self):

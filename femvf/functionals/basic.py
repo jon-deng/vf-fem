@@ -46,7 +46,18 @@ class Functional(AbstractFunctional):
 
     def __init__(self, model):
         funcs = tuple(Func(model) for Func in type(self).func_types)
+
         super().__init__(model, *funcs)
+
+        self._forms = self.form_definitions(model)
+
+    @property
+    def forms(self):
+        """
+        Return a dictionary of UFL variational forms.
+        """
+        return self._forms
+
 
 class PeriodicError(Functional):
     r"""

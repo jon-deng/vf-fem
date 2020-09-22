@@ -1,7 +1,7 @@
 """
-Compare gradient computed via adjoint method with gradient computed via FD.
+This module tests the adjoint method by comparing with gradients computed from finite differences
 
-To verify accuracy of the gradient, use the Taylor remainder convergence test [1, 2].
+Specifically, the Taylor remainder convergence test is used [1, 2].
 
 References
 ----------
@@ -28,7 +28,7 @@ from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import basic
+from femvf.functionals import basic, math as fmath
 
 from femvf.utils import line_search, line_search_p
 
@@ -142,7 +142,7 @@ class TaylorTestUtils(unittest.TestCase):
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    # FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
@@ -153,7 +153,7 @@ class TestBasicGradient(TaylorTestUtils):
     # FUNCTIONAL = basic.TransferEfficiency
     # FUNCTIONAL = basic.AcousticPower
     # FUNCTIONAL = basic.AcousticEfficiency
-    FUNCTIONAL = basic.KVDampingWork
+    # FUNCTIONAL = basic.KVDampingWork
 
     def setUp(self):
         """
@@ -175,10 +175,17 @@ class TestBasicGradient(TaylorTestUtils):
         self.uva0 = (0, 0, 0)
 
         # Specify the functional to test
-        self.functional = self.FUNCTIONAL(self.model)
-        self.functional.constants['n_start'] = 50
+        # self.functional = fmath.add(basic.FinalDisplacementNorm(self.model),
+        #                             basic.FinalVelocityNorm(self.model))
 
-        # Compute the baseline simulation and gradient
+        self.functional = fmath.add(
+            fmath.product(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
+                          basic.FinalVelocityNorm(self.model))
+
+        # self.functional = self.FUNCTIONAL(self.model)
+        # self.functional.constants['n_start'] = 50
+
+        # Compute the baseline simulation and gradient (via adjoint)
         base_path = f"out/{self.CASE_NAME}-0.h5"
         if self.OVERWRITE_FORWARD_SIMULATIONS or not os.path.isfile(base_path):
             if os.path.isfile(base_path):
@@ -188,6 +195,7 @@ class TestBasicGradient(TaylorTestUtils):
 
         grads = None
         with sf.StateFile(self.model, base_path, mode='r') as f:
+            # breakpoint()
             _, *grads = adjoint(self.model, f, self.functional, coupling=self.COUPLING)
         self.grads = grads
 

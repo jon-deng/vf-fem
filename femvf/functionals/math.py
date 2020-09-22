@@ -4,117 +4,225 @@ Implements some basic math operations tha can be used to combine functionals int
 import numpy as np
 from .abstract import AbstractFunctional
 
-def add(funca, funcb):
+from ..parameters.properties import SolidProperties, FluidProperties
+
+def add(funa, funb):
     """
     Add functionals
     """
-    if funca.model != funcb.model:
-        raise ValueError("Functionals must use the same model")
+    funa, funb = _convert_float(funa, funb)
+    _validate(funa, funb)
 
-    return Sum(funca.model, funca, funcb)
+    return Sum(funa.model, funa, funb)
 
-def product(funca, funcb):
-    if funca.model != funcb.model:
-        raise ValueError("Functionals must use the same model")
+def product(funa, funb):
+    funa, funb = _convert_float(funa, funb)
+    _validate(funa, funb)
 
-    return Product(funca.model, funca, funcb)
+    return Product(funa.model, funa, funb)
+
+def power(funa, funb):
+    funa, funb = _convert_float(funa, funb)
+    _validate(funa, funb)
+
+    return Power(funa.model, funa, funb)
+
+def _validate(*funs):
+    _model = funs[0].model
+
+    for fun in funs[1:]:
+        if fun.model != _model:
+            raise ValueError("Functionals must use the same model")
+
+def _convert_float(funa, funb):
+    """
+    Convert and floats to scalar functionals
+    """
+    funa_isfunc = isinstance(funa, AbstractFunctional)
+    funb_isfunc = isinstance(funb, AbstractFunctional)
+
+    if funa_isfunc and funb_isfunc:
+        pass
+    elif funa_isfunc and isinstance(funb, float):
+        funb = Scalar(funa.model, funb)
+    elif funb_isfunc and isinstance(funa, float):
+        funa = Scalar(funb.model, funa)
+    else:
+        raise TypeError("something went wrong")
+
+    return funa, funb
+
 
 class Sum(AbstractFunctional):
     """
-    A functional formed from a sum of two other functionals
+    A functional representing a + b, where a and b are functionals
     """
+    def __init__(self, model, funa, funb):
+        super().__init__(model, funa, funb)
+
     def eval(self, f):
-        funca, funcb = self.funcs
-        return funca(f) + funcb(f)
+        funa, funb = self.funcs
+        return funa(f) + funb(f)
 
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        funca, funcb = self.funcs
-        fa_duva = funca.duva(f, n, iter_params0, iter_params1)
-        fb_duva = funcb.duva(f, n, iter_params0, iter_params1)
-        return fa_duva + fb_duva
+    @staticmethod
+    def _sum_drule(funa, funb, dname, *args):
+        dfuna = getattr(funa, dname)
+        dfunb = getattr(funb, dname)
 
-    def eval_dqp(self, f, n, iter_params0, iter_params1):
-        funca, funcb = self.funcs
-        fa_dqp = funca.dqp(f, n, iter_params0, iter_params1)
-        fb_dqp = funcb.dqp(f, n, iter_params0, iter_params1)
-        return fa_dqp + fb_dqp
+        # a, b = funa(*args), funb(*args)
+        da, db = dfuna(*args), dfunb(*args)
 
-    def eval_dp(self, f):
-        funca, funcb = self.funcs
+        # TODO: Block vectors are stored as tuples so this code is a hack to add 'block' vectors
+        if isinstance(da, tuple) and isinstance(db, tuple):
+            return tuple([_da + _db for _da, _db in zip(da, db)])
+        elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
+            out = da.copy()
+            out.vector[:] = da.vector + db.vector
+            return out
+        else:
+            return da + db
 
-        fa_dp = funca.dp(f)
-        fb_dp = funcb.dp(f)
-        return fa_dp + fb_dp
+    def eval_duva(self, f, n):
+        return self._sum_drule(*self.funcs, 'duva', f, n)
+
+    def eval_dqp(self, f, n):
+        return self._sum_drule(*self.funcs, 'dqp', f, n)
+
+    def eval_dsolid(self, f):
+        return self._sum_drule(*self.funcs, 'dsolid', f)
+
+    def eval_dfluid(self, f):
+        return self._sum_drule(*self.funcs, 'dfluid', f)
+
+    def eval_ddt(self, f, n):
+        return self._sum_drule(*self.funcs, 'ddt', f, n)
+
+    def eval_dt0(self, f, n):
+        return self._sum_drule(*self.funcs, 'dt0', f, n)
 
 class Product(AbstractFunctional):
     """
-    A functional formed from a product of two other functionals
+    A functional representing a * b, where a and b are functionals
     """
+    def __init__(self, model, funa, funb):
+        super().__init__(model, funa, funb)
+
     def eval(self, f):
-        funca, funcb = self.funcs
-        return funca(f) * funcb(f)
+        funa, funb = self.funcs
+        return funa(f) * funb(f)
 
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        funca, funcb = self.funcs
-        fa_duva = funca.duva(f, n, iter_params0, iter_params1)
-        fb_duva = funcb.duva(f, n, iter_params0, iter_params1)
-        return fa_duva*funcb(f) + funca(f)*fb_duva
+    @staticmethod
+    def _product_drule(funa, funb, dname, *args):
+        dfuna = getattr(funa, dname)
+        dfunb = getattr(funb, dname)
 
-    def eval_dqp(self, f, n, iter_params0, iter_params1):
-        funca, funcb = self.funcs
-        fa_dqp = funca.dqp(f, n, iter_params0, iter_params1)
-        fb_dqp = funcb.dqp(f, n, iter_params0, iter_params1)
-        return fa_dqp*funcb(f) + funca(f)*fb_dqp
+        a, b = funa(args[0]), funb(args[0])
+        da, db = dfuna(*args), dfunb(*args)
 
-    def eval_dp(self, f):
-        funca, funcb = self.funcs
+        if isinstance(da, tuple) and isinstance(db, tuple):
+            return tuple([_da*b + a*_db for _da, _db in zip(da, db)])
+        elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
+            out = da.copy()
+            out.vector[:] = da.vector*b + a*db.vector
+            return out
+        else:
+            return da*b + a*db
 
-        fa_dp = funca.dp(f)
-        fb_dp = funcb.dp(f)
-        return fa_dp*funcb(f) + funca(f)*fb_dp
+    def eval_duva(self, f, n):
+        return self._product_drule(*self.funcs, 'duva', f, n)
+
+    def eval_dqp(self, f, n):
+        return self._product_drule(*self.funcs, 'dqp', f, n)
+
+    def eval_dsolid(self, f):
+        return self._product_drule(*self.funcs, 'dsolid', f)
+
+    def eval_dfluid(self, f):
+        return self._product_drule(*self.funcs, 'dfluid', f)
+
+    def eval_ddt(self, f, n):
+        return self._product_drule(*self.funcs, 'ddt', f, n)
+
+    def eval_dt0(self, f, n):
+        return self._product_drule(*self.funcs, 'dt0', f, n)
 
 class Power(AbstractFunctional):
     """
-    A functional formed by raising a functional to the power of another
+    A functional representing a ** b, where a and b are functionals
     """
     def eval(self, f):
-        funca, funcb = self.funcs
-        return funca(f) ** funcb(f)
+        funa, funb = self.funcs
+        return funa(f) ** funb(f)
 
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        funca, funcb = self.funcs
-        fa, fb = funca(f), funcb(f)
-        fa_duva = funca.duva(f, n, iter_params0, iter_params1)
-        fb_duva = funcb.duva(f, n, iter_params0, iter_params1)
-        return fb*fa**(fb-1) * fa_duva + np.log(fa)*fa**fb*fb_duva
+    @staticmethod
+    def _power_drule(funa, funb, dname, *args):
+        dfuna = getattr(funa, dname)
+        dfunb = getattr(funb, dname)
 
-    def eval_dqp(self, f, n, iter_params0, iter_params1):
-        funca, funcb = self.funcs
-        fa_dqp = funca.dqp(f, n, iter_params0, iter_params1)
-        fb_dqp = funcb.dqp(f, n, iter_params0, iter_params1)
-        return fa_dqp*funcb(f) + funca(f)*fb_dqp
+        a, b = funa(args[0]), funb(args[0])
+        da, db = dfuna(*args), dfunb(*args)
 
-    def eval_dp(self, f):
-        funca, funcb = self.funcs
+        if isinstance(da, tuple) and isinstance(db, tuple):
+            return tuple([b*a**(b-1)*_da + np.log(a)*a**b*_db] for _da, _db in zip(da, db))
+        elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
+            out = da.copy()
+            out.vector[:] = b*a**(b-1)*da.vector + np.log(a)*a**b*db.vector
+            return out
+        else:
+            return b*a**(b-1)*da + np.log(a)*a**b*db
 
-        fa_dp = funca.dp(f)
-        fb_dp = funcb.dp(f)
-        return fa_dp*funcb(f) + funca(f)*fb_dp
+    def eval_duva(self, f, n):
+        return self._power_drule(*self.funcs, 'duva', f, n)
 
-class Constant(AbstractFunctional):
+    def eval_dqp(self, f, n):
+        return self._power_drule(*self.funcs, 'dqp', f, n)
+
+    def eval_dsolid(self, f):
+        return self._power_drule(*self.funcs, 'dsolid', f)
+
+    def eval_dfluid(self, f):
+        return self._power_drule(*self.funcs, 'dfluid', f)
+
+    def eval_ddt(self, f, n):
+        return self._power_drule(*self.funcs, 'ddt', f, n)
+
+    def eval_dt0(self, f, n):
+        return self._power_drule(*self.funcs, 'dt0', f, n)
+
+class Scalar(AbstractFunctional):
     """
-    Functional that always evaluates to a constant
+    Functional that always evaluates to a constant scalar
     """
     func_types = ()
     default_constants = {
         'value': 0.0
     }
 
+    def __init__(self, model, val):
+        self._val = val
+        super().__init__(model)
+
     def eval(self, f):
-        return self.constants['value']
+        return self._val
 
-    def eval_duva(self, f, n, iter_params0, iter_params1):
-        return (0.0, 0.0, 0.0)
+    def eval_duva(self, f, n):
+        return 0.0, 0.0, 0.0
 
-    def eval_dp(self, f):
-        return None
+    def eval_dqp(self, f, n):
+        return 0.0, 0.0
+
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties()
+        dsolid.vector[:] = 0
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties()
+        dfluid.vector[:] = 0
+        return dfluid
+
+    def eval_ddt(self, f, n):
+        return 0.0
+
+    def eval_dt0(self, f, n):
+        return 0.0

@@ -64,7 +64,7 @@ class AbstractFunctional:
     """
     # TODO : The code for functionals is quite hard to follow.
     # Rethink what are the basic things that are required. Not all the things in __init__
-    # are likely needed so you can get rid of relevant stuff
+    # are likely needed so you can get rid of irrelevant stuff
     CACHE = True
 
     ## Subclasses should also add a `default_constants` class attribute
@@ -72,7 +72,7 @@ class AbstractFunctional:
 
     def __init__(self, model, *funcs):
         self.model = model
-        self._forms = self.form_definitions(model)
+
         self.funcs = tuple(funcs)
 
         import copy
@@ -91,13 +91,6 @@ class AbstractFunctional:
 
         self._f = f
         return self._value
-
-    @property
-    def forms(self):
-        """
-        Return a dictionary of UFL variational forms.
-        """
-        return self._forms
 
     @update_cache
     def duva(self, f, n):
@@ -159,18 +152,6 @@ class AbstractFunctional:
         return self.eval_dt0(f, n)
 
     ## Subclasses have to implement these methods
-    # optional
-    # TODO: Don't think think form_definitions needs to be a part of the base class
-    @staticmethod
-    def form_definitions(model):
-        """
-        Return a dictionary of form definitions needed for computing the functional
-
-        Only need to implement if the function relies of some forms defined in UFL
-        """
-        return {}
-
-    # mandatory
     def eval(self, f):
         """
         Return the value of the objective function for the state history in `f`
