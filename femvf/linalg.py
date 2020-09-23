@@ -2,6 +2,8 @@
 This module contains various utilities for sparse linear algebra
 """
 
+from collections import OrderedDict
+
 import numpy as np
 from petsc4py import PETSc
 
@@ -365,3 +367,156 @@ def reorder_mat_cols(mat, cols_in, cols_out, n_out, finalize=True):
         mat_out.assemble()
 
     return mat_out
+
+
+def add(a, b):
+    """
+    Add block vectors a and b
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([ai+bi for ai, bi in zip(a, b)]))
+
+def sub(a, b):
+    """
+    Subtract block vectors a and b
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([ai-bi for ai, bi in zip(a, b)]))
+
+def mul(a, b):
+    """
+    Elementwise multiplication of block vectors a and b
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([ai*bi for ai, bi in zip(a, b)]))
+
+def div(a, b):
+    """
+    Elementwise division of block vectors a and b
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([ai/bi for ai, bi in zip(a, b)]))
+
+def pow(a, b):
+    """
+    Elementwise power of block vector a to b
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([ai**bi for ai, bi in zip(a, b)]))
+
+def neg(a):
+    """
+    Negate block vector a
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([-ai for ai in a]))
+
+def pos(a):
+    """
+    Positifiy block vector a
+    """
+    labels = a.labels
+    return BlockVector(labels, tuple([+ai for ai in a]))
+
+class BlockVector:
+    """
+    A block vector (collection of multiple vectors)
+
+    Parameters
+    ----------
+    labels : tuple(str)
+    vecs : tuple(PETsc.Vec or np.ndarray or dolfin.cpp.la.PETScVec)
+    """
+    def __init__(self, labels, vecs):
+        self.labels = tuple(labels)
+        self.data = dict(zip(self.labels, vecs))
+
+    @property
+    def size(self):
+        return tuple([self.data[label].size for label in self.labels])
+
+    @property
+    def labels(self):
+        return self.labels
+
+    @property
+    def vecs(self):
+        return tuple([self.data[label] for label in self.labels])
+
+    def __contains__(self, key):
+        return key in self.data
+
+    def __getitem__(self, key):
+        """
+        Return the vector corresponding to the labelled block
+
+        A slice references the memory of the original array, so the returned slice can be used to
+        set values.
+
+        Parameters
+        ----------
+        key : str
+            A block label
+        """
+        try:
+            return self.data[key]
+        except KeyError:
+            raise KeyError(f"`{key}` is not a valid block label")
+
+    def __iter__(self):
+        for label in self.labels:
+            yield self.data[label]
+
+    def set(self, val):
+        """
+        Set a constant value for the block vector
+        """
+        for vec in self:
+            vec[:] = val
+
+    def __add__(self, other):
+        try:
+            return add(self, other)
+        except TypeError:
+            return NotImplemented
+
+    def __sub__(self, other):
+        try:
+            return sub(self, other)
+        except TypeError:
+            return NotImplemented
+
+    def __mul__(self, other):
+        try:
+            return mul(self, other)
+        except TypeError:
+            return NotImplemented
+
+    def __div__(self, other):
+        try:
+            return div(self, other)
+        except TypeError:
+            return NotImplemented
+
+    def __neg__(self):
+        return neg(self)
+
+    def __pos__(self):
+        return pos(self)
+
+    def __radd__(self, other):
+        return add(self, other)
+
+    def __rsub__(self, other):
+        return sub(self, other)
+
+    def __rmul(self, other):
+        return mul(self, other)
+
+    def __rdiv__(self, other):
+        return div(self, other)
+
+class BlockMatrix:
+    """
+    A block matrix
+    """
