@@ -436,10 +436,6 @@ class BlockVector:
         return tuple([self.data[label].size for label in self.labels])
 
     @property
-    def labels(self):
-        return self.labels
-
-    @property
     def vecs(self):
         return tuple([self.data[label] for label in self.labels])
 
@@ -492,7 +488,7 @@ class BlockVector:
         except TypeError:
             return NotImplemented
 
-    def __div__(self, other):
+    def __truediv__(self, other):
         try:
             return div(self, other)
         except TypeError:
@@ -505,16 +501,16 @@ class BlockVector:
         return pos(self)
 
     def __radd__(self, other):
-        return add(self, other)
+        return add(other, self)
 
     def __rsub__(self, other):
-        return sub(self, other)
+        return sub(other, self)
 
     def __rmul(self, other):
-        return mul(self, other)
+        return mul(other, self)
 
-    def __rdiv__(self, other):
-        return div(self, other)
+    def __rtruediv__(self, other):
+        return div(other, self)
 
 class BlockMatrix:
     """

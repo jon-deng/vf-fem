@@ -3,6 +3,7 @@ Test linalg functions
 """
 
 import unittest
+import operator
 
 import numpy as np
 from petsc4py import PETSc
@@ -96,9 +97,63 @@ class Test_reorder_mat_rows(unittest.TestCase):
         self.assertTrue(np.all(A_reorder[:, :] == np.array(B)))
         # print(A_reorder[:, :])
 
-if __name__ == '__main__':
-    test = Test_form_block_matrix()
-    test.runTest()
 
-    test = Test_reorder_mat_rows()
-    test.runTest()
+class TestBlockVector(unittest.TestCase):
+    def setUp(self):
+        ## Create two block vectors to test
+        self.labels = ('sally', 'bob')
+        self.a_vecs = (np.arange(5), np.arange(5, 20))
+        self.b_vecs = (2*np.arange(5), 2*np.arange(5, 20))
+
+    def test_init(self):
+        try:
+            a = linalg.BlockVector(self.labels, self.a_vecs)
+        except:
+            assert False
+
+    def test_basic(self):
+        a = linalg.BlockVector(self.labels, self.a_vecs)
+        assert a.labels == self.labels
+        assert np.all(a.vecs[0] == self.a_vecs[0])
+        assert np.all(a.vecs[1] == self.a_vecs[1])
+
+class TestBlockVectorBinaryOps(TestBlockVector):
+    def setUp(self):
+        super().setUp()
+        self.a = linalg.BlockVector(self.labels, self.a_vecs)
+        self.b = linalg.BlockVector(self.labels, self.b_vecs)
+
+    @staticmethod
+    def _test_op(a, b, op):
+        c = op(a, b)
+        for label in c.labels:
+            assert np.all(c[label] == op(a[label], b[label]))
+
+    def test_add(self):
+        self._test_op(self.a, self.b, operator.add)
+
+    def test_sub(self):
+        self._test_op(self.a, self.b, operator.sub)
+
+    def test_mul(self):
+        self._test_op(self.a, self.b, operator.mul)
+
+    def test_div(self):
+        self._test_op(self.a, self.b, operator.truediv)
+
+if __name__ == '__main__':
+    # test = Test_form_block_matrix()
+    # test.runTest()
+
+    # test = Test_reorder_mat_rows()
+    # test.runTest()
+    test = TestBlockVector()
+    test.setUp()
+    test.test_init()
+
+    test = TestBlockVectorBinaryOps()
+    test.setUp()
+    test.test_add()
+    test.test_sub()
+    test.test_mul()
+    test.test_div()
