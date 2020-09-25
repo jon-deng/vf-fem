@@ -51,6 +51,10 @@ class Functional(AbstractFunctional):
 
         self._forms = self.form_definitions(model)
 
+    @staticmethod
+    def form_definitions(model):
+        return None
+
     @property
     def forms(self):
         """

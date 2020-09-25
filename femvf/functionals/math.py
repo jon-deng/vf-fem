@@ -15,7 +15,16 @@ def add(funa, funb):
 
     return Sum(funa.model, funa, funb)
 
-def product(funa, funb):
+def sub(funa, funb):
+    """
+    Add functionals
+    """
+    funa, funb = _convert_float(funa, funb)
+    _validate(funa, funb)
+
+    return Sum(funa.model, funa, mul(-1.0, funb))
+
+def mul(funa, funb):
     funa, funb = _convert_float(funa, funb)
     _validate(funa, funb)
 
@@ -163,7 +172,7 @@ class Power(AbstractFunctional):
         da, db = dfuna(*args), dfunb(*args)
 
         if isinstance(da, tuple) and isinstance(db, tuple):
-            return tuple([b*a**(b-1)*_da + np.log(a)*a**b*_db] for _da, _db in zip(da, db))
+            return tuple([b*a**(b-1)*_da + np.log(a)*a**b*_db for _da, _db in zip(da, db)])
         elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
             out = da.copy()
             out.vector[:] = b*a**(b-1)*da.vector + np.log(a)*a**b*db.vector
