@@ -427,7 +427,7 @@ class BlockVec:
     labels : tuple(str)
     vecs : tuple(PETsc.Vec or np.ndarray or dolfin.cpp.la.PETScVec)
     """
-    def __init__(self, labels, vecs):
+    def __init__(self, vecs, labels=None):
         self.labels = tuple(labels)
         self.data = dict(zip(self.labels, vecs))
 
