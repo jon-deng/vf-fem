@@ -15,6 +15,7 @@ from .parameters.properties import SolidProperties
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from .newmark import *
+from .linalg import BlockVec
 
 
 def cauchy_stress(u, emod, nu):
@@ -145,6 +146,14 @@ class Solid:
         """
         return NotImplementedError("Subclasses must implement this function")
 
+    def get_state(self):
+        """
+        Return an empty BlockVector representing the state
+        """
+        u = dfn.Function(self.vector_fspace).vector()
+        v = dfn.Function(self.vector_fspace).vector()
+        a = dfn.Function(self.vector_fspace).vector()
+        return BlockVec((u, v, a), ('u', 'v', 'a'))
 
     def set_ini_state(self, u0, v0, a0):
         """
