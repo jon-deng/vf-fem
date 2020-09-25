@@ -397,7 +397,7 @@ def div(a, b):
     labels = a.labels
     return BlockVec(labels, tuple([ai/bi for ai, bi in zip(a, b)]))
 
-def pow(a, b):
+def power(a, b):
     """
     Elementwise power of block vector a to b
     """
