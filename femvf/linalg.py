@@ -374,51 +374,51 @@ def add(a, b):
     Add block vectors a and b
     """
     labels = a.labels
-    return BlockVector(labels, tuple([ai+bi for ai, bi in zip(a, b)]))
+    return BlockVec(labels, tuple([ai+bi for ai, bi in zip(a, b)]))
 
 def sub(a, b):
     """
     Subtract block vectors a and b
     """
     labels = a.labels
-    return BlockVector(labels, tuple([ai-bi for ai, bi in zip(a, b)]))
+    return BlockVec(labels, tuple([ai-bi for ai, bi in zip(a, b)]))
 
 def mul(a, b):
     """
     Elementwise multiplication of block vectors a and b
     """
     labels = a.labels
-    return BlockVector(labels, tuple([ai*bi for ai, bi in zip(a, b)]))
+    return BlockVec(labels, tuple([ai*bi for ai, bi in zip(a, b)]))
 
 def div(a, b):
     """
     Elementwise division of block vectors a and b
     """
     labels = a.labels
-    return BlockVector(labels, tuple([ai/bi for ai, bi in zip(a, b)]))
+    return BlockVec(labels, tuple([ai/bi for ai, bi in zip(a, b)]))
 
 def pow(a, b):
     """
     Elementwise power of block vector a to b
     """
     labels = a.labels
-    return BlockVector(labels, tuple([ai**bi for ai, bi in zip(a, b)]))
+    return BlockVec(labels, tuple([ai**bi for ai, bi in zip(a, b)]))
 
 def neg(a):
     """
     Negate block vector a
     """
     labels = a.labels
-    return BlockVector(labels, tuple([-ai for ai in a]))
+    return BlockVec(labels, tuple([-ai for ai in a]))
 
 def pos(a):
     """
     Positifiy block vector a
     """
     labels = a.labels
-    return BlockVector(labels, tuple([+ai for ai in a]))
+    return BlockVec(labels, tuple([+ai for ai in a]))
 
-class BlockVector:
+class BlockVec:
     """
     A block vector (collection of multiple vectors)
 
@@ -512,7 +512,7 @@ class BlockVector:
     def __rtruediv__(self, other):
         return div(other, self)
 
-class BlockMatrix:
+class BlockMat:
     """
     A block matrix
     """

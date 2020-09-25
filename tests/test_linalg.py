@@ -98,7 +98,7 @@ class Test_reorder_mat_rows(unittest.TestCase):
         # print(A_reorder[:, :])
 
 
-class TestBlockVector(unittest.TestCase):
+class TestBlockVec(unittest.TestCase):
     def setUp(self):
         ## Create two block vectors to test
         self.labels = ('sally', 'bob')
@@ -107,21 +107,21 @@ class TestBlockVector(unittest.TestCase):
 
     def test_init(self):
         try:
-            a = linalg.BlockVector(self.labels, self.a_vecs)
+            a = linalg.BlockVec(self.labels, self.a_vecs)
         except:
             assert False
 
     def test_basic(self):
-        a = linalg.BlockVector(self.labels, self.a_vecs)
+        a = linalg.BlockVec(self.labels, self.a_vecs)
         assert a.labels == self.labels
         assert np.all(a.vecs[0] == self.a_vecs[0])
         assert np.all(a.vecs[1] == self.a_vecs[1])
 
-class TestBlockVectorBinaryOps(TestBlockVector):
+class TestBlockVecBinaryOps(TestBlockVec):
     def setUp(self):
         super().setUp()
-        self.a = linalg.BlockVector(self.labels, self.a_vecs)
-        self.b = linalg.BlockVector(self.labels, self.b_vecs)
+        self.a = linalg.BlockVec(self.labels, self.a_vecs)
+        self.b = linalg.BlockVec(self.labels, self.b_vecs)
 
     @staticmethod
     def _test_op(a, b, op):
@@ -147,11 +147,11 @@ if __name__ == '__main__':
 
     # test = Test_reorder_mat_rows()
     # test.runTest()
-    test = TestBlockVector()
+    test = TestBlockVec()
     test.setUp()
     test.test_init()
 
-    test = TestBlockVectorBinaryOps()
+    test = TestBlockVecBinaryOps()
     test.setUp()
     test.test_add()
     test.test_sub()
