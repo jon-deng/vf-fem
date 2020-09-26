@@ -140,7 +140,7 @@ class TaylorTestUtils(unittest.TestCase):
         return fig, axs
 
 class TestBasicGradient(TaylorTestUtils):
-    COUPLING = 'explicit'
+    COUPLING = 'implicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference

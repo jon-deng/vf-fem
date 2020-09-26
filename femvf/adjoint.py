@@ -260,23 +260,25 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     dfp2_du2 = 0 - dp_du
 
     ## Do the linear algebra that solves for the adjoint states
-    if out is None:
-        out = tuple([vec.copy() for vec in adj_rhs])
-    adj_u, adj_v, adj_a, adj_q, adj_p = out
+    adj_uva = model.solid.get_state()
+    adj_qp = model.fluid.get_state()
+    # if out is None:
+    #     out = tuple([vec.copy() for vec in adj_rhs])
+    # adj_u, adj_v, adj_a, adj_q, adj_p = out
 
     adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
 
     # adjoint states for v, a, and q are explicit so we can solve for them
     model.solid.bc_base.apply(adj_v_rhs)
-    adj_v[:] = adj_v_rhs
+    adj_uva['v'][:] = adj_v_rhs
 
     model.solid.bc_base.apply(adj_a_rhs)
-    adj_a[:] = adj_a_rhs
+    adj_uva['a'][:] = adj_a_rhs
 
     # TODO: how to apply fluid boundary conditions in a generic way?
-    adj_q[:] = adj_q_rhs
+    adj_qp['q'][:] = adj_q_rhs
 
-    adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q
+    adj_u_rhs -= dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q']
 
     bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
@@ -304,10 +306,10 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     ksp.setOperators(dfup2_dup2)
     ksp.solve(rhs, adj_up)
 
-    adj_u[:] = adj_up[:adj_u_rhs.size()]
-    adj_p[:] = adj_up[adj_u_rhs.size():]
+    adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
+    adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
 
-    return adj_u, adj_v, adj_a, adj_q, adj_p
+    return adj_uva, adj_qp
 
 def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     """
