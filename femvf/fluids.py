@@ -371,7 +371,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'a_sep': a_sep,
                 'area': area_safe,
                 'pressure': p}
-        return flow_rate, p, info
+        return (flow_rate, p), info
 
     def flow_sensitivity(self, surface_state, fluid_props):
         """

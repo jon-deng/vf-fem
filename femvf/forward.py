@@ -68,7 +68,7 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
     u0[:], v0[:], a0[:] = uva
 
     model.set_ini_solid_state((u0, v0, a0))
-    q0, p0, info = model.solve_qp0()
+    qp0, info = model.solve_qp0()
 
     ## Record things of interest
     # TODO: This should be removed. If you want to calculate a functional to record
@@ -90,7 +90,7 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
 
     ## Initialize datasets to save in h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        f.init_layout(uva0=(u0, v0, a0), qp0=(q0, p0), fluid_props=fluid_props, solid_props=solid_props)
+        f.init_layout(uva0=(u0, v0, a0), qp0=qp0, fluid_props=fluid_props, solid_props=solid_props)
         f.append_time(times[0])
         if 0 in idx_meas:
             f.append_meas_index(0)
@@ -102,7 +102,6 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
         for n in range(times.size-1):
             dt = times[n+1] - times[n]
             uva0 = (u0, v0, a0)
-            qp0 = (q0, p0)
 
             # Increment the state
             uva1, qp1, step_info = None, None, None
@@ -320,14 +319,14 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
     u1[:] = u0
     # v1[:] = v0
     # a1[:] = a0
-    q1, p1 = qp0
+    qp1 = qp0
 
     # Calculate the initial residual
-    model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, uva1=(u1, 0.0, 0.0), qp1=(q1, p1))
+    model.set_iter_params(uva0=uva0, qp0=qp0, dt=dt, uva1=(u1, 0.0, 0.0), qp1=qp1)
     res_u = dfn.assemble(model.solid.f1)
     model.solid.bc_base.apply(res_u)
 
-    res_p = p1 - model.fluid.solve_qp1()[1]
+    res_p = qp1[1] - model.fluid.solve_qp1()[0][1]
 
     # Set tolerances for the fixed point iterations
     nit = 0
@@ -372,30 +371,30 @@ def implicit_increment_newton(model, uva0, qp0, dt, newton_solver_prm=None, max_
         v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
         a1[:] = solids.newmark_a(u1, u0, v0, a0, dt)
 
-        p1[:] += dup[u1.size():]
+        qp1[1][:] += dup[u1.size():]
 
         # Calculate the new solid/fluid residuals with the updated disp/pressure
-        model.set_iter_params(uva0=uva0, dt=dt, uva1=(u1, v1, a1), qp1=(q1, p1))
+        model.set_iter_params(uva0=uva0, dt=dt, uva1=(u1, v1, a1), qp1=qp1)
         res_u = dfn.assemble(solid.f1)
         solid.bc_base.apply(res_u)
 
-        res_p = p1 - model.fluid.solve_qp1()[1]
+        res_p = qp1[1] - model.fluid.solve_qp1()[0][1]
 
         abs_err = res_u.norm('l2')
         rel_err = abs_err/abs_err0
 
         nit += 1
 
-    model.set_iter_params(uva0=uva0, dt=dt, qp1=(q1, p1))
+    model.set_iter_params(uva0=uva0, dt=dt, qp1=qp1)
     res = dfn.assemble(model.solid.forms['form.un.f1'])
     model.solid.bc_base.apply(res)
 
-    q1, p1, fluid_info = model.fluid.solve_qp1()
+    qp1, fluid_info = model.fluid.solve_qp1()
 
     step_info = {'fluid_info': fluid_info,
                  'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
-    return (u1, v1, a1), (q1, p1), step_info
+    return (u1, v1, a1), qp1, step_info
 
 
 def newton_solve(u, du, jac, res, bcs, **kwargs):
