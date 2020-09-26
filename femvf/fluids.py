@@ -58,19 +58,19 @@ class QuasiSteady1DFluid:
         ds = (dx**2+dy**2)**0.5
         self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
 
-    def set_ini_state(self, q0, p0):
+    def set_ini_state(self, qp0):
         """
         Set the initial fluid state
         """
-        self.q0[:] = q0
-        self.p0[:] = p0
+        self.q0[:] = qp0[0]
+        self.p0[:] = qp0[1]
 
-    def set_fin_state(self, q1, p1):
+    def set_fin_state(self, qp1):
         """
         Set the final fluid state
         """
-        self.q1[:] = q1
-        self.p1[:] = p1
+        self.q1[:] = qp1[0]
+        self.p1[:] = qp1[1]
 
     def set_ini_surf_state(self, u0, v0):
         """
@@ -163,8 +163,8 @@ class QuasiSteady1DFluid:
         """
         Set all parameters needed to define an iteration/time step of the model
         """
-        self.set_ini_state(*qp0)
-        self.set_fin_state(*qp1)
+        self.set_ini_state(qp0)
+        self.set_fin_state(qp1)
 
         self.set_ini_surf_state(*uvsurf0)
         self.set_fin_surf_state(*uvsurf1)

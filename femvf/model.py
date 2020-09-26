@@ -411,16 +411,16 @@ class ForwardModel:
         v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
         self.fluid.set_fin_surf_state(u1_fluid, v1_fluid)
 
-    def set_ini_fluid_state(self, q0, p0):
-        self.fluid.set_ini_state(q0, p0)
+    def set_ini_fluid_state(self, qp0):
+        self.fluid.set_ini_state(qp0)
 
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(p0)
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
         self.solid.set_ini_surf_pressure(p0_solid)
 
-    def set_fin_fluid_state(self, q1, p1):
-        self.fluid.set_fin_state(q1, p1)
+    def set_fin_fluid_state(self, qp1):
+        self.fluid.set_fin_state(qp1)
 
-        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(p1)
+        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
         self.solid.set_fin_surf_pressure(p1_solid)
 
     def set_time_step(self, dt):
@@ -473,7 +473,7 @@ class ForwardModel:
             self.set_ini_solid_state(uva0)
 
         if qp0 is not None:
-            self.set_ini_fluid_state(*qp0)
+            self.set_ini_fluid_state(qp0)
 
         if fluid_props is not None:
             self.set_fluid_props(fluid_props)
@@ -496,7 +496,7 @@ class ForwardModel:
             self.set_fin_solid_state(uva1)
 
         if qp1 is not None:
-            self.set_fin_fluid_state(*qp1)
+            self.set_fin_fluid_state(qp1)
 
         if fluid_props is not None:
             self.set_fluid_props(fluid_props)
