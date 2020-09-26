@@ -470,7 +470,6 @@ class StateFile:
                 'solid_props': solid_props, 'fluid_props': fluid_props}
 
     # these read functions are cached for performance reasons
-    # @get_from_cache('uva')
     def get_state(self, n):
         """
         Return form coefficient vectors for states (u, v, a) at index n.
@@ -483,16 +482,12 @@ class StateFile:
             A set of functions to set vector values for.
         """
         labels = ('u', 'v', 'a')
-        ret = []
-        for label in labels:
-            # dset = self.root_group[label]
-            # ret.append(dset[n])
+        uva = self.model.solid.get_state()
+        for ii, label in enumerate(labels):
+            uva[ii][:] = self.dset_chunk_cache[label].get(n)
 
-            ret.append(self.dset_chunk_cache[label].get(n))
+        return uva
 
-        return tuple(ret)
-
-    # @get_from_cache('qp')
     def get_fluid_state(self, n):
         """
         Return fluid states q, p at index n.
@@ -504,17 +499,12 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
+        qp = self.model.fluid.get_state()
 
-        # labels = ('q', 'p')
-        # q = self.root_group['q'][n, 0]
-        # p = self.root_group['p'][n, :]
-        # breakpoint()
+        qp[0][:] = self.dset_chunk_cache['q'].get(n)[0]
+        qp[1][:] = self.dset_chunk_cache['p'].get(n)
 
-        q = self.dset_chunk_cache['q'].get(n)[0]
-        p = self.dset_chunk_cache['p'].get(n)
-        # print(q, q2)
-
-        return (q, p)
+        return qp
 
     @get_from_cache('fluid')
     def get_fluid_props(self, n):
