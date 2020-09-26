@@ -451,13 +451,21 @@ class BlockVec:
 
         Parameters
         ----------
-        key : str
+        key : str or int
             A block label
         """
-        try:
-            return self.data[key]
-        except KeyError:
-            raise KeyError(f"`{key}` is not a valid block label")
+        if isinstance(key, str):
+            try:
+                return self.data[key]
+            except KeyError:
+                raise KeyError(f"`{key}` is not a valid block label")
+        elif isinstance(key, int):
+            try:
+                return self.vecs[key]
+            except IndexError as e:
+                raise e
+        else:
+            raise TypeError(f"`{key}` must be either str or int")
 
     def __iter__(self):
         for label in self.labels:
