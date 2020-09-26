@@ -374,49 +374,49 @@ def add(a, b):
     Add block vectors a and b
     """
     labels = a.labels
-    return BlockVec(labels, tuple([ai+bi for ai, bi in zip(a, b)]))
+    return BlockVec(tuple([ai+bi for ai, bi in zip(a, b)]), labels)
 
 def sub(a, b):
     """
     Subtract block vectors a and b
     """
     labels = a.labels
-    return BlockVec(labels, tuple([ai-bi for ai, bi in zip(a, b)]))
+    return BlockVec(tuple([ai-bi for ai, bi in zip(a, b)]), labels)
 
 def mul(a, b):
     """
     Elementwise multiplication of block vectors a and b
     """
     labels = a.labels
-    return BlockVec(labels, tuple([ai*bi for ai, bi in zip(a, b)]))
+    return BlockVec(tuple([ai*bi for ai, bi in zip(a, b)]), labels)
 
 def div(a, b):
     """
     Elementwise division of block vectors a and b
     """
     labels = a.labels
-    return BlockVec(labels, tuple([ai/bi for ai, bi in zip(a, b)]))
+    return BlockVec(tuple([ai/bi for ai, bi in zip(a, b)]), labels)
 
 def power(a, b):
     """
     Elementwise power of block vector a to b
     """
     labels = a.labels
-    return BlockVec(labels, tuple([ai**bi for ai, bi in zip(a, b)]))
+    return BlockVec(tuple([ai**bi for ai, bi in zip(a, b)]), labels)
 
 def neg(a):
     """
     Negate block vector a
     """
     labels = a.labels
-    return BlockVec(labels, tuple([-ai for ai in a]))
+    return BlockVec(tuple([-ai for ai in a]), labels)
 
 def pos(a):
     """
     Positifiy block vector a
     """
     labels = a.labels
-    return BlockVec(labels, tuple([+ai for ai in a]))
+    return BlockVec(tuple([+ai for ai in a]), labels)
 
 class BlockVec:
     """
@@ -428,6 +428,9 @@ class BlockVec:
     vecs : tuple(PETsc.Vec or np.ndarray or dolfin.cpp.la.PETScVec)
     """
     def __init__(self, vecs, labels=None):
+        if labels is None:
+            labels = tuple(range(len(vecs)))
+
         self.labels = tuple(labels)
         self.data = dict(zip(self.labels, vecs))
 
@@ -451,7 +454,7 @@ class BlockVec:
 
         Parameters
         ----------
-        key : str or int
+        key : str, int, or slice
             A block label
         """
         if isinstance(key, str):
@@ -464,6 +467,10 @@ class BlockVec:
                 return self.vecs[key]
             except IndexError as e:
                 raise e
+        elif isinstance(key, slice):
+            vecs = [vec for vec in self.vecs[key]]
+            labels = [label for label in self.labels[key]]
+            return BlockVec(vecs, labels)
         else:
             raise TypeError(f"`{key}` must be either str or int")
 
