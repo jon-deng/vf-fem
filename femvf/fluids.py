@@ -11,6 +11,7 @@ from petsc4py import PETSc
 
 from .parameters.properties import FluidProperties
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+from .linalg import BlockVec
 
 ## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
@@ -132,6 +133,13 @@ class QuasiSteady1DFluid:
 
         surf_state = (xy, dxy_dt)
         return surf_state
+
+    def get_state(self):
+        """
+        Return the state
+        """
+        vecs = (np.zeros((1,)), np.zeros(self.x_vertices.size))
+        return BlockVec(vecs, ('q', 'p'))
 
     def get_state_vecs(self):
         """
