@@ -72,19 +72,19 @@ class QuasiSteady1DFluid:
         self.q1[:] = qp1[0]
         self.p1[:] = qp1[1]
 
-    def set_ini_surf_state(self, u0, v0):
+    def set_ini_surf_state(self, uv0):
         """
         Set the initial surface displacement and velocity
         """
-        self.u0surf[:] = u0
-        self.v0surf[:] = v0
+        self.u0surf[:] = uv0[0]
+        self.v0surf[:] = uv0[1]
 
-    def set_fin_surf_state(self, u1, v1):
+    def set_fin_surf_state(self, uv1):
         """
         Set the final surface displacement and velocity
         """
-        self.u1surf[:] = u1
-        self.v1surf[:] = v1
+        self.u1surf[:] = uv1[0]
+        self.v1surf[:] = uv1[1]
 
     def set_time_step(self, dt):
         """
@@ -166,8 +166,8 @@ class QuasiSteady1DFluid:
         self.set_ini_state(qp0)
         self.set_fin_state(qp1)
 
-        self.set_ini_surf_state(*uvsurf0)
-        self.set_fin_surf_state(*uvsurf1)
+        self.set_ini_surf_state(uvsurf0)
+        self.set_fin_surf_state(uvsurf1)
 
         self.set_properties(fluid_props)
 

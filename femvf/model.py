@@ -392,7 +392,7 @@ class ForwardModel:
 
         u0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[0])
         v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
-        self.fluid.set_ini_surf_state(u0_fluid, v0_fluid)
+        self.fluid.set_ini_surf_state((u0_fluid, v0_fluid))
 
     def set_fin_solid_state(self, uva1):
         """

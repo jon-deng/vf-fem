@@ -163,9 +163,9 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
 
     Returns
     -------
-    tuple of dfn.Function
+    BlockVec
         The next state (u1, v1, a1) of the forward model
-    tuple of (float, array_like)
+    BlockVec
         The next fluid state (q1, p1) of the forward model
     fluid_info : dict
         A dictionary containing information on the fluid solution. These include the flow rate,
@@ -174,10 +174,6 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     solid = model.solid
     uva1 = model.solid.get_state()
     u0, v0, a0 = uva0.vecs
-
-    u1 = dfn.Function(solid.vector_fspace).vector()
-    v1 = dfn.Function(solid.vector_fspace).vector()
-    a1 = dfn.Function(solid.vector_fspace).vector()
 
     # Update form coefficients and initial guess
     model.set_iter_params(uva0=uva0.vecs, dt=dt, uva1=(u0, 0.0, 0.0), qp1=qp0)
@@ -196,12 +192,12 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     uva1.vecs[1] = solids.newmark_v(uva1.vecs[0], u0, v0, a0, dt)
     uva1.vecs[2] = solids.newmark_a(uva1.vecs[0], u0, v0, a0, dt)
 
-    model.set_fin_solid_state((u1, v1, a1))
-    q1, p1, fluid_info = model.solve_qp1()
+    model.set_fin_solid_state(uva1.vecs)
+    qp1, fluid_info = model.solve_qp1()
 
     step_info = {'fluid_info': fluid_info}
 
-    return uva1, (q1, p1), step_info
+    return uva1, qp1, step_info
 
 def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='fp'):
     """

@@ -173,7 +173,7 @@ class TestBernoulli(CommonSetup):
         u0 = fluid.get_surf_vector()
         u0[:] = 0.1
 
-        fluid.set_ini_surf_state(u0, 0.0)
+        fluid.set_ini_surf_state((u0, 0.0))
         qp0 = fluid.solve_qp0()
 
     def test_solve_qp1(self):
@@ -214,7 +214,7 @@ class TestQuasiSteady1DFluid(CommonSetup):
         surf_config_ref = (x_surf.reshape(-1) + u0, v0)
 
         ## Calculate the initial surface state through the Bernoulli fluid model
-        fluid.set_ini_surf_state(u0, v0)
+        fluid.set_ini_surf_state((u0, v0))
         surf_config = fluid.get_ini_surf_state()
 
         self.assertTrue(np.all(surf_config_ref[0] == surf_config[0]))
