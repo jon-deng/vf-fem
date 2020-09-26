@@ -179,7 +179,7 @@ class TestBasicGradient(TaylorTestUtils):
         #                             basic.FinalVelocityNorm(self.model))
 
         self.functional = fmath.add(
-            fmath.product(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
+            fmath.mul(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
                           basic.FinalVelocityNorm(self.model))
 
         # self.functional = self.FUNCTIONAL(self.model)
