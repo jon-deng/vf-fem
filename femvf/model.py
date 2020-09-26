@@ -380,7 +380,7 @@ class ForwardModel:
 
     ## Methods for setting model parameters
 
-    def set_ini_solid_state(self, u0, v0, a0):
+    def set_ini_solid_state(self, uva0):
         """
         Sets the state variables u, v, and a at the start of the step.
 
@@ -388,13 +388,13 @@ class ForwardModel:
         ----------
         u0, v0, a0 : array_like
         """
-        self.solid.set_ini_state(u0, v0, a0)
+        self.solid.set_ini_state(uva0)
 
-        u0_fluid = self.map_fsi_vector_from_solid_to_fluid(u0)
-        v0_fluid = self.map_fsi_vector_from_solid_to_fluid(v0)
+        u0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[0])
+        v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
         self.fluid.set_ini_surf_state(u0_fluid, v0_fluid)
 
-    def set_fin_solid_state(self, u1, v1, a1):
+    def set_fin_solid_state(self, uva1):
         """
         Sets the displacement at the end of the time step.
 
@@ -405,10 +405,10 @@ class ForwardModel:
         ----------
         uva1 : tuple of array_like
         """
-        self.solid.set_fin_state(u1, v1, a1)
+        self.solid.set_fin_state(uva1)
 
-        u1_fluid = self.map_fsi_vector_from_solid_to_fluid(u1)
-        v1_fluid = self.map_fsi_vector_from_solid_to_fluid(v1)
+        u1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[0])
+        v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
         self.fluid.set_fin_surf_state(u1_fluid, v1_fluid)
 
     def set_ini_fluid_state(self, q0, p0):
@@ -470,7 +470,7 @@ class ForwardModel:
         solid_props : dict
         """
         if uva0 is not None:
-            self.set_ini_solid_state(*uva0)
+            self.set_ini_solid_state(uva0)
 
         if qp0 is not None:
             self.set_ini_fluid_state(*qp0)
@@ -493,7 +493,7 @@ class ForwardModel:
         solid_props : dict
         """
         if uva1 is not None:
-            self.set_fin_solid_state(*uva1)
+            self.set_fin_solid_state(uva1)
 
         if qp1 is not None:
             self.set_fin_fluid_state(*qp1)

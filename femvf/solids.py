@@ -155,7 +155,7 @@ class Solid:
         a = dfn.Function(self.vector_fspace).vector()
         return BlockVec((u, v, a), ('u', 'v', 'a'))
 
-    def set_ini_state(self, u0, v0, a0):
+    def set_ini_state(self, uva0):
         """
         Sets the initial state variables, (u, v, a)
 
@@ -163,11 +163,11 @@ class Solid:
         ----------
         u0, v0, a0 : array_like
         """
-        self.forms['coeff.state.u0'].vector()[:] = u0
-        self.forms['coeff.state.v0'].vector()[:] = v0
-        self.forms['coeff.state.a0'].vector()[:] = a0
+        self.forms['coeff.state.u0'].vector()[:] = uva0[0]
+        self.forms['coeff.state.v0'].vector()[:] = uva0[1]
+        self.forms['coeff.state.a0'].vector()[:] = uva0[2]
 
-    def set_fin_state(self, u1, v1, a1):
+    def set_fin_state(self, uva1):
         """
         Sets the final state variables.
 
@@ -179,9 +179,9 @@ class Solid:
         ----------
         u1, v1, a1 : array_like
         """
-        self.forms['coeff.state.u1'].vector()[:] = u1
-        self.forms['coeff.state.v1'].vector()[:] = v1
-        self.forms['coeff.state.a1'].vector()[:] = a1
+        self.forms['coeff.state.u1'].vector()[:] = uva1[0]
+        self.forms['coeff.state.v1'].vector()[:] = uva1[1]
+        self.forms['coeff.state.a1'].vector()[:] = uva1[2]
 
     def set_ini_surf_pressure(self, p0):
         self.forms['coeff.fsi.p0'].vector()[:] = p0
@@ -231,8 +231,8 @@ class Solid:
         dt : float
         props : dict_like
         """
-        self.set_ini_state(*uva0)
-        self.set_fin_state(*uva1)
+        self.set_ini_state(uva0)
+        self.set_fin_state(uva1)
 
         self.set_ini_surf_pressure(p0)
         self.set_fin_surf_pressure(p1)

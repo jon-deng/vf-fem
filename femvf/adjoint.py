@@ -175,7 +175,7 @@ def adjoint(model, f, functional, coupling='explicit'):
     grad_a0 = adj_a0
 
     if coupling == 'explicit':
-        # model.set_ini_state(*uva0)
+        # model.set_ini_state(uva0)
         dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
         adj_p0_ = dp_du.getVecRight()
         adj_p0_[:] = adj_p0
@@ -378,7 +378,7 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
     dfv2_du2 = 0 - newmark_v_du1(dt)
     dfa2_du2 = 0 - newmark_a_du1(dt)
 
-    # model.set_ini_state(it_params['u1'], 0, 0)
+    # model.set_ini_state((it_params['u1'], 0, 0))
     dq_du, dp_du = model.solve_dqp1_du1_solid(adjoint=True)
     dfq2_du2 = 0 - dq_du
     dfp2_du2 = 0 - dp_du

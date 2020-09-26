@@ -142,7 +142,7 @@ class TestFunctionals(unittest.TestCase):
         with sf.StateFile(self.model, self.h5file, mode='a') as f:
             x_0 = f.get_state(n)
 
-            model.set_ini_solid_state(x_0[0], x_0[1], x_0[2])
+            model.set_ini_solid_state((x_0[0], x_0[1], x_0[2]))
             alpha_u = alpha * min(x_0[0].max(), model.get_collision_gap())
             alpha_v = alpha * x_0[1].max()
             alpha_a = alpha * x_0[2].max()

@@ -64,12 +64,10 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
     model.set_solid_props(solid_props)
 
     # Allocate functions to store states
-    u0 = dfn.Function(model.solid.vector_fspace).vector()
-    v0 = dfn.Function(model.solid.vector_fspace).vector()
-    a0 = dfn.Function(model.solid.vector_fspace).vector()
+    u0, v0, a0 = model.solid.get_state().vecs
     u0[:], v0[:], a0[:] = uva
 
-    model.set_ini_solid_state(u0, v0, a0)
+    model.set_ini_solid_state((u0, v0, a0))
     q0, p0, info = model.solve_qp0()
 
     ## Record things of interest
@@ -154,7 +152,7 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     Parameters
     ----------
     model : model.ForwardModel
-    uva0 : tuple of dfn.Function
+    uva0, qp0 : BlockVec
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
@@ -174,14 +172,15 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
         surface pressure, etc.
     """
     solid = model.solid
-    u0, v0, a0 = uva0
+    uva1 = model.solid.get_state()
+    u0, v0, a0 = uva0.vecs
 
     u1 = dfn.Function(solid.vector_fspace).vector()
     v1 = dfn.Function(solid.vector_fspace).vector()
     a1 = dfn.Function(solid.vector_fspace).vector()
 
     # Update form coefficients and initial guess
-    model.set_iter_params(uva0=uva0, dt=dt, uva1=(u0, 0.0, 0.0), qp1=qp0)
+    model.set_iter_params(uva0=uva0.vecs, dt=dt, uva1=(u0, 0.0, 0.0), qp1=qp0)
 
     # TODO: You could implement this to use the non-linear solver only when collision is happening
     if newton_solver_prm is None:
@@ -193,16 +192,16 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     res = dfn.assemble(model.solid.forms['form.un.f1'])
     model.solid.bc_base.apply(res)
 
-    u1[:] = solid.u1.vector()
-    v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
-    a1[:] = solids.newmark_a(u1, u0, v0, a0, dt)
+    uva1.vecs[0] = solid.u1.vector()
+    uva1.vecs[1] = solids.newmark_v(uva1.vecs[0], u0, v0, a0, dt)
+    uva1.vecs[2] = solids.newmark_a(uva1.vecs[0], u0, v0, a0, dt)
 
     model.set_fin_solid_state(u1, v1, a1)
     q1, p1, fluid_info = model.solve_qp1()
 
     step_info = {'fluid_info': fluid_info}
 
-    return (u1, v1, a1), (q1, p1), step_info
+    return uva1, (q1, p1), step_info
 
 def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, method='fp'):
     """
@@ -211,7 +210,7 @@ def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, 
     Parameters
     ----------
     model : model.ForwardModel
-    uva0 : tuple of dfn.Function
+    uva0, qp0 : BlockVec
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
@@ -280,7 +279,7 @@ def implicit_increment_fp(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=
         q1, p1, fluid_info = model.solve_qp1()
 
         # Set the state to calculate the pressure, but you have to set it back after
-        # model.set_ini_solid_state(u1, v1, a1)
+        # model.set_ini_solid_state((u1, v1, a1))
         # q1, p1, fluid_info = model.get_pressure()
 
         # Calculate the error in the solid residual with the updated pressures
