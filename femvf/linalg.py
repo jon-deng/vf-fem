@@ -368,6 +368,22 @@ def reorder_mat_cols(mat, cols_in, cols_out, n_out, finalize=True):
 
     return mat_out
 
+# BlockVec methods
+def concatenate(*args):
+    """
+    Concatenate a series of BlockVecs into a single BlockVec
+
+    Parameters
+    ----------
+    args : BlockVec
+    """
+    vecs = []
+    labels = []
+    for bvec in args:
+        vecs += bvec.vecs
+        labels += bvec.labels
+
+    return BlockVec(vecs, labels)
 
 def add(a, b):
     """
@@ -441,6 +457,12 @@ class BlockVec:
     @property
     def vecs(self):
         return tuple([self.data[label] for label in self.labels])
+
+    # def __repr__(self):
+
+    def __str__(self):
+        desc = ", ".join([f"{label}: {len(vec)}" for label, vec in zip(self.labels, self.vecs)])
+        return f"({desc})"
 
     def __contains__(self, key):
         return key in self.data
