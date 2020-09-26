@@ -196,7 +196,7 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
     uva1.vecs[1] = solids.newmark_v(uva1.vecs[0], u0, v0, a0, dt)
     uva1.vecs[2] = solids.newmark_a(uva1.vecs[0], u0, v0, a0, dt)
 
-    model.set_fin_solid_state(u1, v1, a1)
+    model.set_fin_solid_state((u1, v1, a1))
     q1, p1, fluid_info = model.solve_qp1()
 
     step_info = {'fluid_info': fluid_info}
@@ -275,7 +275,7 @@ def implicit_increment_fp(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=
         v1[:] = solids.newmark_v(u1, u0, v0, a0, dt)
         a1[:] = solids.newmark_a(u1, u0, v0, a0, dt)
 
-        model.set_fin_solid_state(u1, v1, a1)
+        model.set_fin_solid_state((u1, v1, a1))
         q1, p1, fluid_info = model.solve_qp1()
 
         # Set the state to calculate the pressure, but you have to set it back after
