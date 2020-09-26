@@ -12,6 +12,7 @@ dependicies:
     - tabulate
     - tqdm
     - ipython
+    
     - cyipopt
     - fenics
     - nlopt
