@@ -36,9 +36,8 @@ def adjoint(model, f, functional, coupling='explicit'):
     -------
     float
         The value of the functional
-    dict(str: dfn.Vector)
-        The gradient of the functional wrt parameter labelled by `str`
-        # TODO: Only gradient wrt. solid properties are included right now
+    grad_uva, grad_solid, grad_fluid, grad_times
+        Gradients with respect to initial state, solid, fluid, and integration time points
     """
     solve_adj, solve_adj_rhs = None, None
     if coupling == 'explicit':
@@ -81,18 +80,11 @@ def adjoint(model, f, functional, coupling='explicit'):
     # adj_fluid = ....
 
     ## Load states/parameters
-    uva0 = tuple([dfn.Function(solid.vector_fspace).vector() for i in range(3)])
-    uva1 = tuple([dfn.Function(solid.vector_fspace).vector() for i in range(3)])
     N = f.size
     times = f.get_times()
 
-    _uva1 = f.get_state(N-1)
-    _uva0 = f.get_state(N-2)
-    for i in range(3):
-        uva0[i][:] = _uva0[i]
-        uva1[i][:] = _uva1[i]
-    qp1 = f.get_fluid_state(N-1)
-    qp0 = f.get_fluid_state(N-2)
+    uva0, uva1 = f.get_state(N-2), f.get_state(N-1)
+    qp0, qp1 = f.get_fluid_state(N-2), f.get_fluid_state(N-1)
     dt1 = times[N-1] - times[N-2]
 
     qp1_ = None
@@ -113,16 +105,12 @@ def adjoint(model, f, functional, coupling='explicit'):
     for ii in range(N-1, 0, -1):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to read
         # index 0
-        _uva1 = f.get_state(ii)
-        for i in range(3):
-            uva1[i][:] = _uva1[i]
+        uva1 = f.get_state(ii)
         qp1 = f.get_fluid_state(ii)
 
         dt1 = times[ii] - times[ii-1]
 
-        _uva0 = f.get_state(ii-1)
-        for i in range(3):
-            uva0[i][:] = _uva0[i]
+        uva0 = f.get_state(ii-1)
         qp0 = f.get_fluid_state(ii-1)
 
         # Set the iter params
@@ -139,7 +127,8 @@ def adjoint(model, f, functional, coupling='explicit'):
         res = dfn.assemble(model.solid.forms['form.un.f1'])
         model.solid.bc_base.apply(res)
 
-        adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
+        adj_uva, adj_qp = solve_adj(model, adj_state1_rhs, iter_params1)
+        adj_state1 = linalg.concatenate(adj_uva, adj_qp)
 
         # Update gradients wrt parameters using the adjoint
         adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj)
@@ -150,6 +139,7 @@ def adjoint(model, f, functional, coupling='explicit'):
         dcost_duva0 = functional.duva(f, ii-1)
         dcost_dqp0 = functional.dqp(f, ii-1)
         dcost_dstate0 = (*dcost_duva0, *dcost_dqp0)
+
         adj_state0_rhs = solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
 
         # Set initial states to the previous states for the start of the next iteration
@@ -384,31 +374,31 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
     dfp2_du2 = 0 - dp_du
 
     ## Do the linear algebra that solves for the adjoint states
-    if out is None:
-        out = tuple([vec.copy() for vec in adj_rhs])
-    adj_u, adj_v, adj_a, adj_q, adj_p = out
+    adj_uva = model.solid.get_state()
+    adj_qp = model.fluid.get_state()
 
     adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
 
     model.solid.bc_base.apply(adj_a_rhs)
-    adj_a[:] = adj_a_rhs
+    adj_uva['a'][:] = adj_a_rhs
 
     model.solid.bc_base.apply(adj_v_rhs)
-    adj_v[:] = adj_v_rhs
+    adj_uva['v'][:] = adj_v_rhs
 
     # TODO: Think of how to apply fluid boundary conditions in a generic way.
     # There are no boundary conditions for the Bernoulli case because of the way it's coded but
     # this will be needed for different models
-    adj_q[:] = adj_q_rhs
+    adj_qp['q'][:] = adj_q_rhs
+    adj_qp['p'][:] = adj_p_rhs
 
-    adj_p = dfp2_du2.getVecRight()
-    adj_p[:] = adj_p_rhs
+    _adj_p = dfp2_du2.getVecRight()
+    _adj_p[:] = adj_qp['p']
 
-    adj_u_rhs -= dfv2_du2*adj_v + dfa2_du2*adj_a + dfq2_du2*adj_q + dfn.PETScVector(dfp2_du2*adj_p)
+    adj_u_rhs -= dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q'] + dfn.PETScVector(dfp2_du2*_adj_p)
     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-    dfn.solve(dfu2_du2, adj_u, adj_u_rhs, 'petsc')
+    dfn.solve(dfu2_du2, adj_uva['u'], adj_u_rhs, 'petsc')
 
-    return adj_u, adj_v, adj_a, adj_q, adj_p
+    return adj_uva, adj_qp
 
 def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     """
