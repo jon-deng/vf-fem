@@ -44,7 +44,7 @@ def get_starting_rayleigh_model():
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = fvf.load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
+    model = femvf.load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -140,7 +140,7 @@ class TaylorTestUtils(unittest.TestCase):
         return fig, axs
 
 class TestBasicGradient(TaylorTestUtils):
-    COUPLING = 'implicit'
+    COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
