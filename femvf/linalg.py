@@ -385,44 +385,110 @@ def concatenate(*args):
 
     return BlockVec(vecs, labels)
 
+def validate_blockvec_size(*args):
+    """
+    Check if a collection of BlockVecs have compatible block sizes
+    """
+    size = args[0].size
+    for arg in args:
+        if arg.size != size:
+            return False
+
+    return True
+
+def handle_floats(bvec_op):
+    """
+    Decorator to handle float inputs to BlockVec functions
+    """
+    def wrapped_bvec_op(*args):
+        # Find all input BlockVec arguments and check if they have compatible sizes
+        bvecs = [arg for arg in args if isinstance(arg, BlockVec)]
+        if not validate_blockvec_size(*bvecs):
+            raise ValueError("BlockVecs have incompatible sizes")
+
+        bsize = len(bvecs[0].size)
+        labels = bvecs[0].labels
+
+        # Convert all floats to scalar BlockVecs in a new argument list
+        new_args = []
+        for arg in args:
+            if isinstance(arg, float):
+                _vecs = tuple([arg]*bsize)
+                new_args.append(BlockVec(_vecs, labels))
+            else:
+                new_args.append(arg)
+
+        return bvec_op(*new_args)
+    return wrapped_bvec_op
+
+@handle_floats
 def add(a, b):
     """
     Add block vectors a and b
+
+    Parameters
+    ----------
+    a, b: BlockVec or float
     """
     labels = a.labels
     return BlockVec(tuple([ai+bi for ai, bi in zip(a, b)]), labels)
 
+@handle_floats
 def sub(a, b):
     """
     Subtract block vectors a and b
+
+    Parameters
+    ----------
+    a, b: BlockVec or float
     """
     labels = a.labels
     return BlockVec(tuple([ai-bi for ai, bi in zip(a, b)]), labels)
 
+@handle_floats
 def mul(a, b):
     """
     Elementwise multiplication of block vectors a and b
+
+    Parameters
+    ----------
+    a, b: BlockVec or float
     """
     labels = a.labels
     return BlockVec(tuple([ai*bi for ai, bi in zip(a, b)]), labels)
 
+@handle_floats
 def div(a, b):
     """
     Elementwise division of block vectors a and b
+
+    Parameters
+    ----------
+    a, b: BlockVec or float
     """
     labels = a.labels
     return BlockVec(tuple([ai/bi for ai, bi in zip(a, b)]), labels)
 
+@handle_floats
 def power(a, b):
     """
     Elementwise power of block vector a to b
+
+    Parameters
+    ----------
+    a, b: BlockVec or float
     """
     labels = a.labels
     return BlockVec(tuple([ai**bi for ai, bi in zip(a, b)]), labels)
 
+@handle_floats
 def neg(a):
     """
     Negate block vector a
+
+    Parameters
+    ----------
+    a: BlockVec
     """
     labels = a.labels
     return BlockVec(tuple([-ai for ai in a]), labels)
@@ -452,7 +518,7 @@ class BlockVec:
 
     @property
     def size(self):
-        return tuple([self.data[label].size for label in self.labels])
+        return tuple([len(vec) for vec in self.vecs])
 
     @property
     def vecs(self):
@@ -508,28 +574,16 @@ class BlockVec:
             vec[:] = val
 
     def __add__(self, other):
-        try:
-            return add(self, other)
-        except TypeError:
-            return NotImplemented
+        return add(self, other)
 
     def __sub__(self, other):
-        try:
-            return sub(self, other)
-        except TypeError:
-            return NotImplemented
+        return sub(self, other)
 
     def __mul__(self, other):
-        try:
-            return mul(self, other)
-        except TypeError:
-            return NotImplemented
+        return mul(self, other)
 
     def __truediv__(self, other):
-        try:
-            return div(self, other)
-        except TypeError:
-            return NotImplemented
+        return div(self, other)
 
     def __neg__(self):
         return neg(self)
@@ -543,7 +597,7 @@ class BlockVec:
     def __rsub__(self, other):
         return sub(other, self)
 
-    def __rmul(self, other):
+    def __rmul__(self, other):
         return mul(other, self)
 
     def __rtruediv__(self, other):

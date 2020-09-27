@@ -108,6 +108,7 @@ class TestBlockVec(unittest.TestCase):
     def test_init(self):
         try:
             a = linalg.BlockVec(self.a_vecs, self.labels)
+            print(a.size)
         except:
             assert False
 

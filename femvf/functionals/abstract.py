@@ -104,17 +104,7 @@ class AbstractFunctional:
         f : statefile.StateFile
             The history of states to compute it over
         """
-        in_duva = self.eval_duva(f, n)
-
-        ret_duva = []
-        for dz in in_duva:
-            if isinstance(dz, float):
-                _dz = dfn.Function(self.model.solid.vector_fspace).vector()
-                _dz[:] = dz
-                ret_duva.append(_dz)
-            else:
-                ret_duva.append(dz)
-        return tuple(ret_duva)
+        return self.eval_duva(f, n)
 
     @update_cache
     def dqp(self, f, n):

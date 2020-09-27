@@ -3,8 +3,10 @@ Implements some basic math operations tha can be used to combine functionals int
 """
 import numpy as np
 from .abstract import AbstractFunctional
+from .basic import Scalar
 
 from ..parameters.properties import SolidProperties, FluidProperties
+
 
 def add(funa, funb):
     """
@@ -45,7 +47,7 @@ def _validate(*funs):
 
 def _convert_float(funa, funb):
     """
-    Convert and floats to scalar functionals
+    Converts floats to scalar functionals
     """
     funa_isfunc = isinstance(funa, AbstractFunctional)
     funb_isfunc = isinstance(funb, AbstractFunctional)
@@ -80,11 +82,7 @@ class Sum(AbstractFunctional):
 
         # a, b = funa(*args), funb(*args)
         da, db = dfuna(*args), dfunb(*args)
-
-        # TODO: Block vectors are stored as tuples so this code is a hack to add 'block' vectors
-        if isinstance(da, tuple) and isinstance(db, tuple):
-            return tuple([_da + _db for _da, _db in zip(da, db)])
-        elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
+        if isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
             out = da.copy()
             out.vector[:] = da.vector + db.vector
             return out
@@ -128,9 +126,7 @@ class Product(AbstractFunctional):
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
 
-        if isinstance(da, tuple) and isinstance(db, tuple):
-            return tuple([_da*b + a*_db for _da, _db in zip(da, db)])
-        elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
+        if isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
             out = da.copy()
             out.vector[:] = da.vector*b + a*db.vector
             return out
@@ -171,9 +167,7 @@ class Power(AbstractFunctional):
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
 
-        if isinstance(da, tuple) and isinstance(db, tuple):
-            return tuple([b*a**(b-1)*_da + np.log(a)*a**b*_db for _da, _db in zip(da, db)])
-        elif isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
+        if isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
             out = da.copy()
             out.vector[:] = b*a**(b-1)*da.vector + np.log(a)*a**b*db.vector
             return out
@@ -197,41 +191,3 @@ class Power(AbstractFunctional):
 
     def eval_dt0(self, f, n):
         return self._power_drule(*self.funcs, 'dt0', f, n)
-
-class Scalar(AbstractFunctional):
-    """
-    Functional that always evaluates to a constant scalar
-    """
-    func_types = ()
-    default_constants = {
-        'value': 0.0
-    }
-
-    def __init__(self, model, val):
-        self._val = val
-        super().__init__(model)
-
-    def eval(self, f):
-        return self._val
-
-    def eval_duva(self, f, n):
-        return 0.0, 0.0, 0.0
-
-    def eval_dqp(self, f, n):
-        return 0.0, 0.0
-
-    def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
-        dsolid.vector[:] = 0
-        return dsolid
-
-    def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
-        dfluid.vector[:] = 0
-        return dfluid
-
-    def eval_ddt(self, f, n):
-        return 0.0
-
-    def eval_dt0(self, f, n):
-        return 0.0
