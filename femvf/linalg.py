@@ -506,8 +506,8 @@ class BlockVec:
 
     Parameters
     ----------
+    vecs : tuple(PETsc.Vec or np.ndarray or dolfin.cpp.la.PETScVec or float)
     labels : tuple(str)
-    vecs : tuple(PETsc.Vec or np.ndarray or dolfin.cpp.la.PETScVec)
     """
     def __init__(self, vecs, labels=None):
         if labels is None:
