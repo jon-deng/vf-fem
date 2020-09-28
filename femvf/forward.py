@@ -127,7 +127,7 @@ def integrate(model, uva, solid_props, fluid_props, times, idx_meas=None,
             uva0.vecs[0][:] = uva1[0]
             uva0.vecs[1][:] = uva1[1]
             uva0.vecs[2][:] = uva1[2]
-            qp0.vecs[0][:] = qp1[0]
+            qp0.vecs[0][()] = qp1[0]
             qp0.vecs[1][:] = qp1[1]
 
         # Write out the quantities of interest to the h5file

@@ -9,9 +9,9 @@ import autograd.numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
-from .parameters.properties import FluidProperties
+from .parameters.properties import FluidProperties, property_size
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
-from .linalg import BlockVec
+from .linalg import BlockVec, general_vec_set
 
 ## 1D Bernoulli approximation codes
 SEPARATION_FACTOR = 1.0
@@ -30,7 +30,8 @@ class QuasiSteady1DFluid:
         y_surface: np.ndarray
             Array of y surface locations numbered in steamwise increasing order.
         """
-        self.properties = FluidProperties(self)
+        self.properties = self.get_properties_vec(set_default=True)
+        # self.properties = FluidProperties(self)
 
         # the 'mesh' (also the x coordinates in the reference configuration)
         self.x_vertices = x_vertices
@@ -94,15 +95,34 @@ class QuasiSteady1DFluid:
         # you were to use a unsteady fluid.
         pass
 
+    def get_properties_vec(self, set_default=True):
+        """
+        Return a BlockVec representing the properties of the fluid
+        """
+        field_size = 1
+        labels = tuple(self.PROPERTY_TYPES.keys())
+        vecs = [np.zeros(property_size(field_size, prop_descr)) for _, prop_descr in self.PROPERTY_TYPES.items()]
+
+        if set_default:
+            for label, vec in zip(labels, vecs):
+                if vec.shape == ():
+                    vec[()] = self.PROPERTY_DEFAULTS[label]
+                else:
+                    vec[:] = self.PROPERTY_DEFAULTS[label]
+
+        return BlockVec(vecs, labels)
+
     def set_properties(self, props):
         """
         Set the fluid properties
         """
-        for key in props:
-            if self.properties[key].shape == ():
-                self.properties[key][()] = props[key]
-            else:
-                self.properties[key][:] = props[key]
+        for key in props.labels:
+            vec = self.properties[key]
+            general_vec_set(vec, props[key])
+            # if vec.shape == ():
+            #     vec[()] = props[key]
+            # else:
+            #     vec[:] = props[key]
 
     def get_properties(self):
         """
@@ -371,7 +391,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'a_sep': a_sep,
                 'area': area_safe,
                 'pressure': p}
-        return BlockVec((np.array([flow_rate]), p), ('q', 'p')), info
+        return BlockVec((np.array(flow_rate), p), ('q', 'p')), info
 
     def flow_sensitivity(self, surface_state, fluid_props):
         """

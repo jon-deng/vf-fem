@@ -2,6 +2,7 @@
 This module contains various utilities for sparse linear algebra
 """
 
+import operator
 from collections import OrderedDict
 
 import numpy as np
@@ -369,6 +370,24 @@ def reorder_mat_cols(mat, cols_in, cols_out, n_out, finalize=True):
     return mat_out
 
 # BlockVec methods
+def general_vec_set(vec, vals):
+    """
+    Set the specified values to a vector
+
+    This handles the different indexing notations that vectors can have based on the type, shape,
+    etc.
+
+    Parameters
+    ----------
+    vec : PETScVec, PETsc.Vec, np.ndarray
+        One of the valid types that can be contained in a BlockVec
+    vals : float, array_like, etc.
+    """
+    if isinstance(vec, np.ndarray) and vec.shape == ():
+        vec[()] = vals
+    else:
+        vec[:] = vals
+
 def concatenate(*args):
     """
     Concatenate a series of BlockVecs into a single BlockVec
@@ -396,9 +415,9 @@ def validate_blockvec_size(*args):
 
     return True
 
-def handle_floats(bvec_op):
+def handle_scalars(bvec_op):
     """
-    Decorator to handle float inputs to BlockVec functions
+    Decorator to handle scalar inputs to BlockVec functions
     """
     def wrapped_bvec_op(*args):
         # Find all input BlockVec arguments and check if they have compatible sizes
@@ -409,11 +428,14 @@ def handle_floats(bvec_op):
         bsize = len(bvecs[0].size)
         labels = bvecs[0].labels
 
-        # Convert all floats to scalar BlockVecs in a new argument list
+        # Convert floats to scalar BlockVecs in a new argument list
         new_args = []
         for arg in args:
             if isinstance(arg, float):
                 _vecs = tuple([arg]*bsize)
+                new_args.append(BlockVec(_vecs, labels))
+            elif isinstance(arg, np.ndarray) and arg.shape == ():
+                _vecs = tuple([float(arg)]*bsize)
                 new_args.append(BlockVec(_vecs, labels))
             else:
                 new_args.append(arg)
@@ -421,7 +443,7 @@ def handle_floats(bvec_op):
         return bvec_op(*new_args)
     return wrapped_bvec_op
 
-@handle_floats
+@handle_scalars
 def add(a, b):
     """
     Add block vectors a and b
@@ -433,7 +455,7 @@ def add(a, b):
     labels = a.labels
     return BlockVec(tuple([ai+bi for ai, bi in zip(a, b)]), labels)
 
-@handle_floats
+@handle_scalars
 def sub(a, b):
     """
     Subtract block vectors a and b
@@ -445,7 +467,7 @@ def sub(a, b):
     labels = a.labels
     return BlockVec(tuple([ai-bi for ai, bi in zip(a, b)]), labels)
 
-@handle_floats
+@handle_scalars
 def mul(a, b):
     """
     Elementwise multiplication of block vectors a and b
@@ -457,7 +479,7 @@ def mul(a, b):
     labels = a.labels
     return BlockVec(tuple([ai*bi for ai, bi in zip(a, b)]), labels)
 
-@handle_floats
+@handle_scalars
 def div(a, b):
     """
     Elementwise division of block vectors a and b
@@ -469,7 +491,7 @@ def div(a, b):
     labels = a.labels
     return BlockVec(tuple([ai/bi for ai, bi in zip(a, b)]), labels)
 
-@handle_floats
+@handle_scalars
 def power(a, b):
     """
     Elementwise power of block vector a to b
@@ -481,7 +503,7 @@ def power(a, b):
     labels = a.labels
     return BlockVec(tuple([ai**bi for ai, bi in zip(a, b)]), labels)
 
-@handle_floats
+@handle_scalars
 def neg(a):
     """
     Negate block vector a
@@ -499,6 +521,12 @@ def pos(a):
     """
     labels = a.labels
     return BlockVec(tuple([+ai for ai in a]), labels)
+
+def _len(vec):
+    if isinstance(vec, np.ndarray):
+        return vec.size
+    else:
+        return len(vec)
 
 class BlockVec:
     """
@@ -518,16 +546,26 @@ class BlockVec:
 
     @property
     def size(self):
-        return tuple([len(vec) for vec in self.vecs])
+        """Return sizes of each block"""
+        return tuple([_len(vec) for vec in self.vecs])
 
     @property
     def vecs(self):
+        """Return tuple of vectors from each block"""
         return tuple([self.data[label] for label in self.labels])
 
+    def copy(self):
+        """Return a copy of the block vector"""
+        labels = self.labels
+        vecs = tuple([vec.copy() for vec in self.vecs])
+        return type(self)(vecs, labels)
+
+    def __copy__(self):
+        return self.copy()
     # def __repr__(self):
 
     def __str__(self):
-        desc = ", ".join([f"{label}: {len(vec)}" for label, vec in zip(self.labels, self.vecs)])
+        desc = ", ".join([f"{label}: {_len(vec)}" for label, vec in zip(self.labels, self.vecs)])
         return f"({desc})"
 
     def __contains__(self, key):
@@ -566,12 +604,12 @@ class BlockVec:
         for label in self.labels:
             yield self.data[label]
 
-    def set(self, val):
+    def set(self, scalar):
         """
         Set a constant value for the block vector
         """
         for vec in self:
-            vec[:] = val
+            general_vec_set(vec, scalar)
 
     def __add__(self, other):
         return add(self, other)

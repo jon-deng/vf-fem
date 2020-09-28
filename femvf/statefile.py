@@ -514,7 +514,7 @@ class StateFile:
         # There can only be stationary properties right now
         assert n == 0
 
-        fluid_props = self.model.fluid.get_properties()
+        fluid_props = self.model.fluid.get_properties_vec()
         fluid_group = self.root_group['fluid_properties']
 
         # Correct for constant fluid properties in time
@@ -523,7 +523,7 @@ class StateFile:
         if self.root_group['fluid_properties/p_sub'].size == 1:
             m = 0
 
-        for label in fluid_props:
+        for label in fluid_props.labels:
             if fluid_props[label].shape == ():
                 fluid_props[label][()] = fluid_group[label][m]
             else:

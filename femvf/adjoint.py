@@ -56,6 +56,8 @@ def adjoint(model, f, functional, coupling='explicit'):
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
 
+    # breakpoint()
+
     # run the functional once to initialize any cached values
     functional_value = functional(f)
 
@@ -187,7 +189,7 @@ def adjoint(model, f, functional, coupling='explicit'):
 
     # Calculate sensitivties w.r.t fluid properties
     grad_fluid = model.fluid.get_properties()
-    grad_fluid.vector[:] = 0
+    grad_fluid.set(0)
 
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)
