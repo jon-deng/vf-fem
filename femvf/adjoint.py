@@ -68,15 +68,6 @@ def adjoint(model, f, functional, coupling='explicit'):
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
     adj_solid = model.solid.get_properties_vecs(set_default=False)
-    # adj_solid = {}
-    # for key in solid_props:
-    #     field_or_const, value_shape = solid_props.TYPES[key]
-    #     if field_or_const == 'const':
-    #         adj_solid[key] = None
-    #     elif value_shape == ():
-    #         adj_solid[key] = dfn.Function(solid.scalar_fspace).vector()
-    #     else:
-    #         adj_solid[key] = dfn.Function(solid.vector_fspace).vector()
     # adj_fluid = ....
 
     ## Load states/parameters
@@ -97,7 +88,7 @@ def adjoint(model, f, functional, coupling='explicit'):
     ## Initialize the adj rhs
     dcost_duva1 = functional.duva(f, N-1)
     dcost_dqp1 = functional.dqp(f, N-1)
-    adj_state1_rhs = (*dcost_duva1, *dcost_dqp1)
+    adj_state1_rhs = linalg.concatenate(dcost_duva1, dcost_dqp1)
 
     ## Loop through states for adjoint computation
     # Note that ii corresponds to the time index of the adjoint state we are solving for.
@@ -127,8 +118,7 @@ def adjoint(model, f, functional, coupling='explicit'):
         res = dfn.assemble(model.solid.forms['form.un.f1'])
         model.solid.bc_base.apply(res)
 
-        adj_uva, adj_qp = solve_adj(model, adj_state1_rhs, iter_params1)
-        adj_state1 = linalg.concatenate(adj_uva, adj_qp)
+        adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
 
         # Update gradients wrt parameters using the adjoint
         adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj)
@@ -154,36 +144,19 @@ def adjoint(model, f, functional, coupling='explicit'):
 
     ## Calculate gradients
     # Calculate sensitivities wrt initial states
-    adj_u0, adj_v0, adj_a0, adj_q0, adj_p0 = adj_state1_rhs
-    model.solid.bc_base.apply(adj_u0)
-    model.solid.bc_base.apply(adj_v0)
-    model.solid.bc_base.apply(adj_a0)
-
-    grad = {}
-    grad_u0 = adj_u0
-    grad_v0 = adj_v0
-    grad_a0 = adj_a0
+    grad_uva, adj_qp = adj_state1_rhs[:3], adj_state1_rhs[3:]
+    model.solid.bc_base.apply(grad_uva['u'])
+    model.solid.bc_base.apply(grad_uva['v'])
+    model.solid.bc_base.apply(grad_uva['a'])
 
     if coupling == 'explicit':
         # model.set_ini_state(uva0)
         dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
         adj_p0_ = dp_du.getVecRight()
-        adj_p0_[:] = adj_p0
+        adj_p0_[:] = adj_qp['p']
 
         # have to convert (dp_du*adj_p0_) to dfn.PETScVector to add left and right terms
-        grad_u0 += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_q0
-
-    grad_uva = (grad_u0, grad_v0, grad_a0)
-
-    # Calculate sensitivities w.r.t solid properties
-    # grad_solid = model.solid.get_properties()
-    # grad_solid.vector[:] = 0
-    # for key, vector in adj_solid.items():
-    #     if vector is not None:
-    #         if grad_solid[key].shape == ():
-    #             grad_solid[key][()] = vector
-    #         else:
-    #             grad_solid[key][:] = vector
+        grad_uva['u'][:] += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_qp['q']
 
     # Calculate sensitivties w.r.t fluid properties
     grad_fluid = model.fluid.get_properties()
@@ -267,9 +240,6 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     ## Do the linear algebra that solves for the adjoint states
     adj_uva = model.solid.get_state()
     adj_qp = model.fluid.get_state()
-    # if out is None:
-    #     out = tuple([vec.copy() for vec in adj_rhs])
-    # adj_u, adj_v, adj_a, adj_q, adj_p = out
 
     adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
 
@@ -314,7 +284,7 @@ def solve_adj_imp(model, adj_rhs, it_params, out=None):
     adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
     adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
 
-    return adj_uva, adj_qp
+    return linalg.concatenate(adj_uva, adj_qp)
 
 def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     """
@@ -355,7 +325,9 @@ def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     adj_q1_rhs = dcost_dq1 - 0
     adj_p1_rhs = dcost_dp1 - 0
 
-    return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
+    labels = adj_state2.labels
+    vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
+    return linalg.BlockVec(vecs, labels)
 
 def solve_adj_exp(model, adj_rhs, it_params, out=None):
     """
@@ -405,7 +377,7 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
     dfn.solve(dfu2_du2, adj_uva['u'], adj_u_rhs, 'petsc')
 
-    return adj_uva, adj_qp
+    return linalg.concatenate(adj_uva, adj_qp)
 
 def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     """
@@ -420,6 +392,7 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     -------
     """
     adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
+    # adj_uva2, adj_qp2 = adj_state2[:3], adj_state2[3:]
     dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
 
     ## Assemble sensitivity matrices
@@ -453,7 +426,9 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     adj_q1_rhs = dcost_dq1 - 0
     adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
 
-    return adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs
+    labels = adj_state2.labels
+    vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
+    return linalg.BlockVec(vecs, labels)
 
 def get_df1_dsolid_forms(solid):
     """
