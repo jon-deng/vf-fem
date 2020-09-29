@@ -156,10 +156,6 @@ def explicit_increment(model, uva0, qp0, dt, newton_solver_prm=None):
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
-    solid_props : properties.SolidProperties, optional
-        A dictionary of solid properties
-    fluid_props : properties.FluidProperties, optional
-        A dictionary of fluid properties.
 
     Returns
     -------
@@ -210,10 +206,6 @@ def implicit_increment(model, uva0, qp0, dt, newton_solver_prm=None, max_nit=5, 
         Initial states (u0, v0, a0) for the forward model
     dt : float
         The time step to increment over
-    solid_props : properties.SolidProperties, optional
-        A dictionary of solid properties
-    fluid_props : properties.FluidProperties, optional
-        A dictionary of fluid properties.
 
     Returns
     -------

@@ -15,7 +15,6 @@ import dolfin as dfn
 import numpy as np
 
 from . import constants
-from .parameters.properties import FluidProperties
 
 def get_from_cache(cache_name):
     """

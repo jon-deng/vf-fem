@@ -10,9 +10,7 @@ import dolfin as dfn
 # from petsc4py import PETSc as pc
 
 from . import solids, fluids
-# from . import constants as const
 from . import meshutils
-# from .parameters.properties import FluidProperties
 
 def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli):
     """
@@ -440,7 +438,7 @@ class ForwardModel:
 
         Parameters
         ----------
-        solid_props : properties.SolidProperties
+        solid_props : BlockVec
         """
         self.solid.set_properties(solid_props)
 
@@ -452,7 +450,7 @@ class ForwardModel:
 
         Parameters
         ----------
-        fluid_props : properties.FluidProperties
+        fluid_props : BlockVec
         """
         self.fluid.set_properties(fluid_props)
 
@@ -521,8 +519,8 @@ class ForwardModel:
         qp0, qp1 : tuple of array_like
             Initial and final fluid states
         dt : float
-        fluid_props : FluidProperties
-        solid_props : SolidProperties
+        fluid_props : BlockVec
+        solid_props : BlockVec
         """
         self.set_ini_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
         self.set_fin_params(uva1=uva1, qp1=qp1)

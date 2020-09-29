@@ -9,7 +9,7 @@ import autograd.numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
-from .parameters.properties import FluidProperties, property_size, property_vecs
+from .parameters.properties import property_vecs
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 from .linalg import BlockVec, general_vec_set
 
@@ -31,7 +31,6 @@ class QuasiSteady1DFluid:
             Array of y surface locations numbered in steamwise increasing order.
         """
         self.properties = self.get_properties_vec(set_default=True)
-        # self.properties = FluidProperties(self)
 
         # the 'mesh' (also the x coordinates in the reference configuration)
         self.x_vertices = x_vertices
@@ -323,7 +322,7 @@ class Bernoulli(QuasiSteady1DFluid):
         ----------
         surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
             States of the surface vertices, ordered following the flow (increasing x coordinate).
-        fluid_props : properties.FluidProperties
+        fluid_props : BlockVec
             A dictionary of fluid properties.
 
         Returns
@@ -396,7 +395,7 @@ class Bernoulli(QuasiSteady1DFluid):
         ----------
         surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
             States of the surface vertices, ordered following the flow (increasing x coordinate).
-        fluid_props : properties.FluidProperties
+        fluid_props : BlockVec
             A dictionary of fluid property keyword arguments.
         """
         assert surface_state[0].size%2 == 0

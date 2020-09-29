@@ -5,8 +5,6 @@ import numpy as np
 from .abstract import AbstractFunctional
 from .basic import Scalar
 
-from ..parameters.properties import SolidProperties, FluidProperties
-
 
 def add(funa, funb):
     """
@@ -82,12 +80,7 @@ class Sum(AbstractFunctional):
 
         # a, b = funa(*args), funb(*args)
         da, db = dfuna(*args), dfunb(*args)
-        if isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
-            out = da.copy()
-            out.vector[:] = da.vector + db.vector
-            return out
-        else:
-            return da + db
+        return da + db
 
     def eval_duva(self, f, n):
         return self._sum_drule(*self.funcs, 'duva', f, n)
@@ -126,12 +119,7 @@ class Product(AbstractFunctional):
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
 
-        if isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
-            out = da.copy()
-            out.vector[:] = da.vector*b + a*db.vector
-            return out
-        else:
-            return da*b + a*db
+        return da*b + a*db
 
     def eval_duva(self, f, n):
         return self._product_drule(*self.funcs, 'duva', f, n)
@@ -167,12 +155,7 @@ class Power(AbstractFunctional):
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
 
-        if isinstance(da, (SolidProperties, FluidProperties)) and isinstance(db, (SolidProperties, FluidProperties)):
-            out = da.copy()
-            out.vector[:] = b*a**(b-1)*da.vector + np.log(a)*a**b*db.vector
-            return out
-        else:
-            return b*a**(b-1)*da + np.log(a)*a**b*db
+        return b*a**(b-1)*da + np.log(a)*a**b*db
 
     def eval_duva(self, f, n):
         return self._power_drule(*self.funcs, 'duva', f, n)

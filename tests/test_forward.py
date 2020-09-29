@@ -14,7 +14,6 @@ import dolfin as dfn
 
 from femvf.forward import integrate
 from femvf.model import load_fsi_model
-# from femvf.parameters.properties import SolidProperties, FluidProperties
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.solids import Rayleigh, KelvinVoigt

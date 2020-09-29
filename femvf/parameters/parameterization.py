@@ -155,9 +155,9 @@ class FullParameterization:
         -------
         uva : tuple
             Initial state
-        solid_props : properties.SolidProperties
+        solid_props : BlockVec
             A collection of solid properties
-        fluid_props : properties.FluidProperties
+        fluid_props : BlockVec
             A collection of fluid properties
         timing_props :
         """

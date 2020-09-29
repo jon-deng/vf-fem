@@ -11,7 +11,7 @@ and what types of forms are always generated the same way, and refactor accordin
 import dolfin as dfn
 import ufl
 
-from .parameters.properties import SolidProperties, property_vecs
+from .parameters.properties import property_vecs
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from .newmark import *
