@@ -201,7 +201,7 @@ class TestBasicGradient(TaylorTestUtils):
         self.grads = grads
 
     def get_taylor_order(self, save_path, hs,
-                         duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None):
+                         duva=None, dsolid_props=None, dfluid_props=None, dtimes=None):
         """
         Runs a line search of simulations along a specified direction
         """
@@ -272,8 +272,8 @@ class TestBasicGradient(TaylorTestUtils):
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
         self.model.solid.bc_base.apply(step_dir)
-
-        duva = (step_dir*0.01, 0.0, 0.0)
+        duva = self.model.solid.get_state()
+        duva['u'][:] = step_dir*0.01
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -295,7 +295,8 @@ class TestBasicGradient(TaylorTestUtils):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = (0.0, step_dir*0.1, 0.0)
+        duva = self.model.solid.get_state()
+        duva['v'][:] = step_dir*0.1
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -316,7 +317,8 @@ class TestBasicGradient(TaylorTestUtils):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = (0.0, 0.0, step_dir)
+        duva = self.model.solid.get_state()
+        duva['a'][:] = step_dir
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -568,10 +570,20 @@ class TestPeriodicKelvinVoigtGradient(TaylorTestUtils):
         # self.assertTrue(np.all(order_2 == 2.0))
 
 def grad_and_taylor_order(filepath, functional, hs, model,
-                          duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
+                          duva=None, dsolid_props=None, dfluid_props=None, dtimes=None,
                           coupling='explicit'):
     """
     """
+    if duva is None:
+        duva = model.solid.get_state()
+    if dsolid_props is None:
+        dsolid_props = model.solid.get_properties_vecs(set_default=False)
+    if dfluid_props is None:
+        dfluid_props = model.fluid.get_properties_vec(set_default=False)
+    if dtimes is None:
+        with sf.StateFile(model, filepath, group='0', mode='r') as f:
+            dtimes = np.zeros(f.size)
+
     ## Calculate the functional value at each point along the line search
     total_runtime = 0
     functionals = list()
@@ -598,27 +610,10 @@ def grad_and_taylor_order(filepath, functional, hs, model,
     print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
     ## Project the gradient along the step direction
-    directions = [duva, dsolid_props, dfluid_props, dtimes]
-    gradients = [grad_uva, grad_solid, grad_fluid, grad_times]
-    grad_step = 0
+    directions = la.concatenate(duva, dsolid_props, dfluid_props, la.BlockVec([dtimes], ['t']))
+    gradients = la.concatenate(grad_uva, grad_solid, grad_fluid, la.BlockVec([grad_times], ['t']))
 
-    # grad_step += la.dot(grad_uva, duva)
-    for ii in range(3):
-        # Make sure the direction is a vector since sometimes it's a float = 0, representing no
-        # displacement
-        _direction = np.zeros(grad_uva[ii].size())
-        _direction[:] = duva[ii]
-        grad_step += np.dot(grad_uva[ii], _direction)
-
-    if dfluid_props is not None:
-        grad_step += la.dot(grad_fluid, dfluid_props)
-
-    if dsolid_props is not None:
-        grad_step += la.dot(grad_solid, dsolid_props)
-
-    if dtimes is not None:
-        grad_step += np.dot(grad_times, dtimes)
-
+    grad_step = la.dot(directions, gradients)
     grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
 
     ## Compare the adjoint and finite difference projected gradients
