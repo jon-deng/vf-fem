@@ -56,8 +56,6 @@ def adjoint(model, f, functional, coupling='explicit'):
     model.set_fluid_props(fluid_props)
     model.set_solid_props(solid_props)
 
-    # breakpoint()
-
     # run the functional once to initialize any cached values
     functional_value = functional(f)
 
@@ -128,7 +126,7 @@ def adjoint(model, f, functional, coupling='explicit'):
         # Find the RHS for the next iteration
         dcost_duva0 = functional.duva(f, ii-1)
         dcost_dqp0 = functional.dqp(f, ii-1)
-        dcost_dstate0 = (*dcost_duva0, *dcost_dqp0)
+        dcost_dstate0 = linalg.concatenate(dcost_duva0, dcost_dqp0)
 
         adj_state0_rhs = solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
 
@@ -139,8 +137,6 @@ def adjoint(model, f, functional, coupling='explicit'):
     # components once
     dfunc_dsolid = functional.dsolid(f)
     grad_solid = adj_solid + dfunc_dsolid
-    # for label, vec in zip(adj_solid.labels, adj_solid.vecs):
-    #     vec[:] += dfunc_dsolid[label]
 
     ## Calculate gradients
     # Calculate sensitivities wrt initial states
@@ -169,10 +165,6 @@ def adjoint(model, f, functional, coupling='explicit'):
     # the conversion below is becase dt = t1 - t0
     grad_times[1:] = grad_dt
     grad_times[:-1] -= grad_dt
-
-    # for key, vector in adj_solid.items():
-    #     if vector is not None:
-    #         grad[key] = vector
 
     return functional_value, grad_uva, grad_solid, grad_fluid, grad_times
 
