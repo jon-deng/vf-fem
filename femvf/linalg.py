@@ -444,6 +444,20 @@ def handle_scalars(bvec_op):
     return wrapped_bvec_op
 
 @handle_scalars
+def dot(a, b):
+    """
+    Return the dot product of a and b
+    """
+    c = a*b
+    ret = 0
+    for vec in c:
+        if isinstance(vec, float):
+            ret += vec
+        else:
+            ret += sum(vec)
+    return ret
+
+@handle_scalars
 def add(a, b):
     """
     Add block vectors a and b
@@ -525,6 +539,8 @@ def pos(a):
 def _len(vec):
     if isinstance(vec, np.ndarray):
         return vec.size
+    elif isinstance(vec, float):
+        return 1
     else:
         return len(vec)
 

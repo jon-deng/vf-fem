@@ -66,19 +66,17 @@ def adjoint(model, f, functional, coupling='explicit'):
     df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
 
     ## Allocate space for the adjoints of all the parameters
-    # TODO: This is kind of an ugly hardcoded solution. You should come up with a way to encapsulate
-    # solid properties as a collection of vector/array objects. Since this is a gradient,
-    # it can use the same data structure as the properties are stored in
     adj_dt = []
-    adj_solid = {}
-    for key in solid_props:
-        field_or_const, value_shape = solid_props.TYPES[key]
-        if field_or_const == 'const':
-            adj_solid[key] = None
-        elif value_shape == ():
-            adj_solid[key] = dfn.Function(solid.scalar_fspace).vector()
-        else:
-            adj_solid[key] = dfn.Function(solid.vector_fspace).vector()
+    adj_solid = model.solid.get_properties_vecs(set_default=False)
+    # adj_solid = {}
+    # for key in solid_props:
+    #     field_or_const, value_shape = solid_props.TYPES[key]
+    #     if field_or_const == 'const':
+    #         adj_solid[key] = None
+    #     elif value_shape == ():
+    #         adj_solid[key] = dfn.Function(solid.scalar_fspace).vector()
+    #     else:
+    #         adj_solid[key] = dfn.Function(solid.vector_fspace).vector()
     # adj_fluid = ....
 
     ## Load states/parameters
@@ -150,9 +148,9 @@ def adjoint(model, f, functional, coupling='explicit'):
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
     dfunc_dsolid = functional.dsolid(f)
-    for key, vector in adj_solid.items():
-        if vector is not None:
-            vector[:] += dfunc_dsolid[key]
+    grad_solid = adj_solid + dfunc_dsolid
+    # for label, vec in zip(adj_solid.labels, adj_solid.vecs):
+    #     vec[:] += dfunc_dsolid[label]
 
     ## Calculate gradients
     # Calculate sensitivities wrt initial states
@@ -178,14 +176,14 @@ def adjoint(model, f, functional, coupling='explicit'):
     grad_uva = (grad_u0, grad_v0, grad_a0)
 
     # Calculate sensitivities w.r.t solid properties
-    grad_solid = model.solid.get_properties()
-    grad_solid.vector[:] = 0
-    for key, vector in adj_solid.items():
-        if vector is not None:
-            if grad_solid[key].shape == ():
-                grad_solid[key][()] = vector
-            else:
-                grad_solid[key][:] = vector
+    # grad_solid = model.solid.get_properties()
+    # grad_solid.vector[:] = 0
+    # for key, vector in adj_solid.items():
+    #     if vector is not None:
+    #         if grad_solid[key].shape == ():
+    #             grad_solid[key][()] = vector
+    #         else:
+    #             grad_solid[key][:] = vector
 
     # Calculate sensitivties w.r.t fluid properties
     grad_fluid = model.fluid.get_properties()
@@ -199,9 +197,9 @@ def adjoint(model, f, functional, coupling='explicit'):
     grad_times[1:] = grad_dt
     grad_times[:-1] -= grad_dt
 
-    for key, vector in adj_solid.items():
-        if vector is not None:
-            grad[key] = vector
+    # for key, vector in adj_solid.items():
+    #     if vector is not None:
+    #         grad[key] = vector
 
     return functional_value, grad_uva, grad_solid, grad_fluid, grad_times
 
@@ -210,10 +208,15 @@ def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_for
     Update the gradient wrt solid parameters
     """
     # model.set_iter_params(**iter_params1)
-    for key, vector in grad_solid.items():
-        if vector is not None:
-            df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
-            vector -= df1_dkey*adj_state1[0]
+    for key, vec in zip(grad_solid.labels, grad_solid.vecs):
+        df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
+        val = df1_dkey*adj_state1[0]
+        if vec.shape == ():
+            # Note this is a hack because some properties are scalar values but stored as vectors
+            # throughout the domain
+            vec -= sum(val)
+        else:
+            vec -= val
     return grad_solid
 
 def solve_grad_dt(model, adj_state1, iter_params1):

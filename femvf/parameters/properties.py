@@ -26,8 +26,9 @@ import numpy as np
 
 from .base import KeyIndexedArray
 from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+from ..linalg import general_vec_set
 
-def property_size(field_size, property_type):
+def property_size(field_size, prop_type):
     """
     Return the size of a vector for a fluid model
 
@@ -36,7 +37,7 @@ def property_size(field_size, property_type):
     field_size : int
     property_type : tuple
     """
-    field_or_const, data_shape = property_type
+    field_or_const, data_shape = prop_type
 
     shape = None
     if field_or_const == 'field':
@@ -52,6 +53,15 @@ def property_size(field_size, property_type):
         shape = ()
     return shape
 
+def property_vecs(field_size, prop_types, prop_defaults=None):
+    labels = tuple(prop_types.keys())
+    vecs = [np.zeros(property_size(field_size, prop_descr)) for _, prop_descr in prop_types.items()]
+
+    if prop_defaults is not None:
+        for label, vec in zip(labels, vecs):
+            general_vec_set(vec, prop_defaults[label])
+
+    return vecs, labels
 
 class Properties:
     """

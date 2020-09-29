@@ -11,11 +11,11 @@ and what types of forms are always generated the same way, and refactor accordin
 import dolfin as dfn
 import ufl
 
-from .parameters.properties import SolidProperties
+from .parameters.properties import SolidProperties, property_vecs
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from .newmark import *
-from .linalg import BlockVec
+from .linalg import BlockVec, general_vec_set
 
 
 def cauchy_stress(u, emod, nu):
@@ -130,7 +130,7 @@ class Solid:
         self.bc_base = self.forms['bcs.base']
 
         # Set property values to defaults
-        self.set_properties(SolidProperties(self))
+        self.set_properties(self.get_properties_vecs(set_default=True))
 
     @property
     def forms(self):
@@ -209,7 +209,7 @@ class Solid:
         ----------
         props : Property / dict-like
         """
-        for key in props:
+        for key in props.labels:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
@@ -251,6 +251,17 @@ class Solid:
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
 
+    def get_properties_vecs(self, set_default=True):
+        field_size = self.scalar_fspace.dim()
+
+        prop_defaults = None
+        if set_default:
+            prop_defaults = self.PROPERTY_DEFAULTS
+
+        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
+
+        return BlockVec(vecs, labels)
+
     def get_properties(self):
         """
         Returns the current values of the properties
@@ -259,24 +270,25 @@ class Solid:
         -------
         properties : Properties
         """
-        properties = SolidProperties(self)
+        properties = self.get_properties_vecs()
 
-        for key in properties:
+        for key in properties.labels:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
             if properties[key].shape == ():
                 if isinstance(coefficient, dfn.function.constant.Constant):
                     # If the coefficient is a constant, then the property must be a float
-                    properties[key][()] = coefficient.values()[0]
+                    general_vec_set(properties[key], coefficient.values()[0])
                 else:
                     # If a vector, it's possible it's the 'hacky' version for a time step, where the
                     # actual property is a float but the coefficient is assigned to be a vector
                     # (which is done so you can differentiate it)
                     assert coefficient.vector().max() == coefficient.vector().min()
-                    properties[key][()] = coefficient.vector().max()
+                    general_vec_set(properties[key], coefficient.vector().max())
             else:
-                coefficient.vector()[:] = properties[key]
+                # coefficient.vector()[:] = properties[key]
+                properties[key][:] = coefficient.vector()[:]
 
         return properties
 

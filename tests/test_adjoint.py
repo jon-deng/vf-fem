@@ -29,6 +29,7 @@ from femvf.fluids import Bernoulli
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
 from femvf.functionals import basic, math as fmath
+import femvf.linalg as la
 
 from femvf.utils import line_search, line_search_p
 
@@ -236,7 +237,7 @@ class TestBasicGradient(TaylorTestUtils):
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dsolid = self.solid_props.copy()
-        dsolid.vector[:] = 0
+        dsolid.set(0.0)
         dsolid['emod'][:] = 1.0*step_size*10
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
@@ -601,6 +602,7 @@ def grad_and_taylor_order(filepath, functional, hs, model,
     gradients = [grad_uva, grad_solid, grad_fluid, grad_times]
     grad_step = 0
 
+    # grad_step += la.dot(grad_uva, duva)
     for ii in range(3):
         # Make sure the direction is a vector since sometimes it's a float = 0, representing no
         # displacement
@@ -609,10 +611,10 @@ def grad_and_taylor_order(filepath, functional, hs, model,
         grad_step += np.dot(grad_uva[ii], _direction)
 
     if dfluid_props is not None:
-        grad_step += np.dot(grad_fluid.vector, dfluid_props.vector)
+        grad_step += la.dot(grad_fluid, dfluid_props)
 
     if dsolid_props is not None:
-        grad_step += np.dot(grad_solid.vector, dsolid_props.vector)
+        grad_step += la.dot(grad_solid, dsolid_props)
 
     if dtimes is not None:
         grad_step += np.dot(grad_times, dtimes)

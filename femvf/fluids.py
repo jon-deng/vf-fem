@@ -9,7 +9,7 @@ import autograd.numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
-from .parameters.properties import FluidProperties, property_size
+from .parameters.properties import FluidProperties, property_size, property_vecs
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 from .linalg import BlockVec, general_vec_set
 
@@ -100,15 +100,10 @@ class QuasiSteady1DFluid:
         Return a BlockVec representing the properties of the fluid
         """
         field_size = 1
-        labels = tuple(self.PROPERTY_TYPES.keys())
-        vecs = [np.zeros(property_size(field_size, prop_descr)) for _, prop_descr in self.PROPERTY_TYPES.items()]
-
+        prop_defaults = None
         if set_default:
-            for label, vec in zip(labels, vecs):
-                if vec.shape == ():
-                    vec[()] = self.PROPERTY_DEFAULTS[label]
-                else:
-                    vec[:] = self.PROPERTY_DEFAULTS[label]
+            prop_defaults = self.PROPERTY_DEFAULTS
+        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, self.PROPERTY_DEFAULTS)
 
         return BlockVec(vecs, labels)
 
