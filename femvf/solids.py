@@ -130,7 +130,7 @@ class Solid:
         self.bc_base = self.forms['bcs.base']
 
         # Set property values to defaults
-        self.set_properties(self.get_properties_vecs(set_default=True))
+        self.set_properties(self.get_properties_vec(set_default=True))
 
     @property
     def forms(self):
@@ -251,7 +251,7 @@ class Solid:
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
 
-    def get_properties_vecs(self, set_default=True):
+    def get_properties_vec(self, set_default=True):
         field_size = self.scalar_fspace.dim()
 
         prop_defaults = None
@@ -270,7 +270,7 @@ class Solid:
         -------
         properties : Properties
         """
-        properties = self.get_properties_vecs()
+        properties = self.get_properties_vec()
 
         for key in properties.labels:
             # TODO: Check types to make sure the input property is compatible with the solid type

@@ -102,7 +102,7 @@ class QuasiSteady1DFluid:
         prop_defaults = None
         if set_default:
             prop_defaults = self.PROPERTY_DEFAULTS
-        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, self.PROPERTY_DEFAULTS)
+        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
 
         return BlockVec(vecs, labels)
 
