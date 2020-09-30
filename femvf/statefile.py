@@ -522,7 +522,7 @@ class StateFile:
         if self.root_group['fluid_properties/p_sub'].size == 1:
             m = 0
 
-        for label in fluid_props.labels:
+        for label in fluid_props.keys:
             if fluid_props[label].shape == ():
                 fluid_props[label][()] = fluid_group[label][m]
             else:

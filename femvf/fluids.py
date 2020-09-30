@@ -110,7 +110,7 @@ class QuasiSteady1DFluid:
         """
         Set the fluid properties
         """
-        for key in props.labels:
+        for key in props.keys:
             vec = self.properties[key]
             general_vec_set(vec, props[key])
             # if vec.shape == ():

@@ -397,12 +397,12 @@ def concatenate(*args):
     args : BlockVec
     """
     vecs = []
-    labels = []
+    keys = []
     for bvec in args:
         vecs += bvec.vecs
-        labels += bvec.labels
+        keys += bvec.keys
 
-    return BlockVec(vecs, labels)
+    return BlockVec(vecs, keys)
 
 def validate_blockvec_size(*args):
     """
@@ -426,17 +426,17 @@ def handle_scalars(bvec_op):
             raise ValueError("BlockVecs have incompatible sizes")
 
         bsize = len(bvecs[0].size)
-        labels = bvecs[0].labels
+        keys = bvecs[0].keys
 
         # Convert floats to scalar BlockVecs in a new argument list
         new_args = []
         for arg in args:
             if isinstance(arg, float):
                 _vecs = tuple([arg]*bsize)
-                new_args.append(BlockVec(_vecs, labels))
+                new_args.append(BlockVec(_vecs, keys))
             elif isinstance(arg, np.ndarray) and arg.shape == ():
                 _vecs = tuple([float(arg)]*bsize)
-                new_args.append(BlockVec(_vecs, labels))
+                new_args.append(BlockVec(_vecs, keys))
             else:
                 new_args.append(arg)
 
@@ -466,8 +466,8 @@ def add(a, b):
     ----------
     a, b: BlockVec or float
     """
-    labels = a.labels
-    return BlockVec(tuple([ai+bi for ai, bi in zip(a, b)]), labels)
+    keys = a.keys
+    return BlockVec(tuple([ai+bi for ai, bi in zip(a, b)]), keys)
 
 @handle_scalars
 def sub(a, b):
@@ -478,8 +478,8 @@ def sub(a, b):
     ----------
     a, b: BlockVec or float
     """
-    labels = a.labels
-    return BlockVec(tuple([ai-bi for ai, bi in zip(a, b)]), labels)
+    keys = a.keys
+    return BlockVec(tuple([ai-bi for ai, bi in zip(a, b)]), keys)
 
 @handle_scalars
 def mul(a, b):
@@ -490,8 +490,8 @@ def mul(a, b):
     ----------
     a, b: BlockVec or float
     """
-    labels = a.labels
-    return BlockVec(tuple([ai*bi for ai, bi in zip(a, b)]), labels)
+    keys = a.keys
+    return BlockVec(tuple([ai*bi for ai, bi in zip(a, b)]), keys)
 
 @handle_scalars
 def div(a, b):
@@ -502,8 +502,8 @@ def div(a, b):
     ----------
     a, b: BlockVec or float
     """
-    labels = a.labels
-    return BlockVec(tuple([ai/bi for ai, bi in zip(a, b)]), labels)
+    keys = a.keys
+    return BlockVec(tuple([ai/bi for ai, bi in zip(a, b)]), keys)
 
 @handle_scalars
 def power(a, b):
@@ -514,8 +514,8 @@ def power(a, b):
     ----------
     a, b: BlockVec or float
     """
-    labels = a.labels
-    return BlockVec(tuple([ai**bi for ai, bi in zip(a, b)]), labels)
+    keys = a.keys
+    return BlockVec(tuple([ai**bi for ai, bi in zip(a, b)]), keys)
 
 @handle_scalars
 def neg(a):
@@ -526,15 +526,15 @@ def neg(a):
     ----------
     a: BlockVec
     """
-    labels = a.labels
-    return BlockVec(tuple([-ai for ai in a]), labels)
+    keys = a.keys
+    return BlockVec(tuple([-ai for ai in a]), keys)
 
 def pos(a):
     """
     Positifiy block vector a
     """
-    labels = a.labels
-    return BlockVec(tuple([+ai for ai in a]), labels)
+    keys = a.keys
+    return BlockVec(tuple([+ai for ai in a]), keys)
 
 def _len(vec):
     if isinstance(vec, np.ndarray):
@@ -546,19 +546,19 @@ def _len(vec):
 
 class BlockVec:
     """
-    A block vector (collection of multiple vectors)
+    Represents a block vector with blocks indexed by keys
 
     Parameters
     ----------
-    vecs : tuple(PETsc.Vec or np.ndarray or dolfin.cpp.la.PETScVec or float)
-    labels : tuple(str)
+    vecs : tuple(PETsc.Vec or dolfin.cpp.la.PETScVec or np.ndarray or float)
+    keys : tuple(str)
     """
-    def __init__(self, vecs, labels=None):
-        if labels is None:
-            labels = tuple(range(len(vecs)))
+    def __init__(self, vecs, keys=None):
+        if keys is None:
+            keys = tuple(range(len(vecs)))
 
-        self.labels = tuple(labels)
-        self.data = dict(zip(self.labels, vecs))
+        self.keys = tuple(keys)
+        self.data = dict(zip(self.keys, vecs))
 
     @property
     def size(self):
@@ -568,20 +568,20 @@ class BlockVec:
     @property
     def vecs(self):
         """Return tuple of vectors from each block"""
-        return tuple([self.data[label] for label in self.labels])
+        return tuple([self.data[key] for key in self.keys])
 
     def copy(self):
         """Return a copy of the block vector"""
-        labels = self.labels
+        keys = self.keys
         vecs = tuple([vec.copy() for vec in self.vecs])
-        return type(self)(vecs, labels)
+        return type(self)(vecs, keys)
 
     def __copy__(self):
         return self.copy()
     # def __repr__(self):
 
     def __str__(self):
-        desc = ", ".join([f"{label}: {_len(vec)}" for label, vec in zip(self.labels, self.vecs)])
+        desc = ", ".join([f"{key}:{_len(vec)}" for key, vec in zip(self.keys, self.vecs)])
         return f"({desc})"
 
     def __contains__(self, key):
@@ -603,22 +603,22 @@ class BlockVec:
             try:
                 return self.data[key]
             except KeyError:
-                raise KeyError(f"`{key}` is not a valid block label")
+                raise KeyError(f"`{key}` is not a valid block key")
         elif isinstance(key, int):
             try:
                 return self.vecs[key]
             except IndexError as e:
                 raise e
         elif isinstance(key, slice):
-            vecs = [vec for vec in self.vecs[key]]
-            labels = [label for label in self.labels[key]]
-            return BlockVec(vecs, labels)
+            vecs = self.vecs[key]
+            keys = self.keys[key]
+            return BlockVec(vecs, keys)
         else:
-            raise TypeError(f"`{key}` must be either str or int")
+            raise TypeError(f"`{key}` must be either str, int or slice")
 
     def __iter__(self):
-        for label in self.labels:
-            yield self.data[label]
+        for key in self.keys:
+            yield self.data[key]
 
     def set(self, scalar):
         """

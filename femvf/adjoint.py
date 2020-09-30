@@ -65,7 +65,7 @@ def adjoint(model, f, functional, coupling='explicit'):
 
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
-    adj_solid = model.solid.get_properties_vecs(set_default=False)
+    adj_solid = model.solid.get_properties_vec(set_default=False)
     # adj_fluid = ....
 
     ## Load states/parameters
@@ -173,7 +173,7 @@ def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_for
     Update the gradient wrt solid parameters
     """
     # model.set_iter_params(**iter_params1)
-    for key, vec in zip(grad_solid.labels, grad_solid.vecs):
+    for key, vec in zip(grad_solid.keys, grad_solid.vecs):
         df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
         val = df1_dkey*adj_state1[0]
         if vec.shape == ():
@@ -418,9 +418,9 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     adj_q1_rhs = dcost_dq1 - 0
     adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
 
-    labels = adj_state2.labels
+    keys = adj_state2.keys
     vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
-    return linalg.BlockVec(vecs, labels)
+    return linalg.BlockVec(vecs, keys)
 
 def get_df1_dsolid_forms(solid):
     """

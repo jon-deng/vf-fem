@@ -577,7 +577,7 @@ def grad_and_taylor_order(filepath, functional, hs, model,
     if duva is None:
         duva = model.solid.get_state()
     if dsolid_props is None:
-        dsolid_props = model.solid.get_properties_vecs(set_default=False)
+        dsolid_props = model.solid.get_properties_vec(set_default=False)
     if dfluid_props is None:
         dfluid_props = model.fluid.get_properties_vec(set_default=False)
     if dtimes is None:

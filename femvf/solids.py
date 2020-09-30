@@ -209,7 +209,7 @@ class Solid:
         ----------
         props : Property / dict-like
         """
-        for key in props.labels:
+        for key in props.keys:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
@@ -272,7 +272,7 @@ class Solid:
         """
         properties = self.get_properties_vec()
 
-        for key in properties.labels:
+        for key in properties.keys:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
