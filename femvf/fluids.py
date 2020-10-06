@@ -424,14 +424,19 @@ class Bernoulli(QuasiSteady1DFluid):
         # Calculate the flow rate using Bernoulli equation
         p_sep = p_sup
         coeff = 2*(p_sep - p_sub)/rho
+        dcoeff_dpsub = -2/rho
+
         flow_rate_sqr = coeff/(a_sub**-2 - a_sep**-2)
         dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
+        dflow_rate_sqr_dpsub = dcoeff_dpsub/(a_sub**-2 - a_sep**-2)
 
         # Find Bernoulli pressure
         p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
+        
         dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area_safe**3) * darea_safe_darea
         dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area_safe**-2) * dflow_rate_sqr_da_sep
         dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
+        dp_bernoulli_dpsub = 1.0 + 1/2*rho*dflow_rate_sqr_dpsub*(a_sub**-2 - area_safe**-2)
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
         # x_sep = smooth_selection(x, area, a_sep, self.s_vertices, sigma)
@@ -451,6 +456,9 @@ class Bernoulli(QuasiSteady1DFluid):
         # p = sep_multiplier * p_bernoulli
         dp_dy = sep_multiplier[:, None]*dp_bernoulli_dy + dsep_multiplier_dy*p_bernoulli[:, None]
 
+        dp_dpsub = sep_multiplier*dp_bernoulli_dpsub
+        dq_dpsub = 0.5*flow_rate_sqr**-0.5  * dflow_rate_sqr_dpsub
+
         dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
         dp_du[:, :-1:2] = 0
         dp_du[:, 1::2] = dp_dy
@@ -460,7 +468,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) \
                               * da_sep_da_min * da_min_darea * darea_dy
 
-        return dflow_rate_du, dp_du
+        return dflow_rate_du, dp_du, dq_dpsub, dp_dpsub
 
     def flow_sensitivity_solid(self, model, surface_state, fluid_props, adjoint=False):
         """

@@ -97,9 +97,9 @@ class TestBernoulli(CommonSetup):
         ps, qs = [], []
         for h in hs:
             x1 = (surface_coordinates + h*du.reshape(-1, 2), np.zeros(surface_coordinates.shape))
-            q, p, _ = fluid.fluid_pressure(x1, self.fluid_properties)
-            ps.append(p)
-            qs.append(q)
+            qp, _ = fluid.fluid_pressure(x1, self.fluid_properties)
+            ps.append(qp[1])
+            qs.append(qp[0])
         ps = np.array(ps)
         qs = np.array(qs)
 
@@ -108,11 +108,60 @@ class TestBernoulli(CommonSetup):
 
         ## Calculate pressure sensitivity using the flow_sensitivity function (the one being tested)
         x0 = (surface_coordinates, 0)
-        dq_du, dp_du = fluid.flow_sensitivity(x0, self.fluid_properties)
+        dq_du, dp_du, *_ = fluid.flow_sensitivity(x0, self.fluid_properties)
 
         ## Calculate the predicted change in pressure and compare the two quantities
         dp = dp_du@du
         dq = dq_du.dot(du)
+
+        taylor_remainder_2 = np.abs(ps[1:, :] - ps[0, :] - hs[1:][:, None]*dp)
+        p_order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
+        print("2nd order Taylor (p)", p_order_2)
+
+        taylor_remainder_2 = np.abs(qs[1:] - qs[0] - hs[1:]*dq)
+        q_order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
+        print("2nd order Taylor (q)", q_order_2)
+
+        error = dp - dp_true
+        breakpoint()
+        print(p_order_2[:, 25])
+        self.assertTrue((error))
+
+    def test_flow_sensitivity_psub(self):
+        """
+        Test if derivatives of the flow quantities/residuals are correct using finite differences
+        """
+        np.random.seed(0)
+        fluid = self.fluid
+        props = self.fluid_properties.copy()
+        p_sub0 = props['p_sub'][()]
+
+        surface_coordinates = self.surface_coordinates
+        x0 = (surface_coordinates, np.zeros(self.surface_coordinates.shape))
+
+        ## Set a surface state step direction and step sizes
+        hs = np.concatenate([[0], 2**np.arange(0, 5, dtype=np.float)])
+        dpsub = 1.0
+
+        ## Calculate p/q sensitivity and convergence order using FD
+        # Calculate perturbed flow states
+        ps, qs = [], []
+        for h in hs:
+            props['p_sub'][()] = p_sub0 + h*dpsub
+            qp, _ = fluid.fluid_pressure(x0, props)
+            ps.append(qp[1])
+            qs.append(qp[0])
+        ps = np.array(ps)
+        qs = np.array(qs)
+
+        dp_true = ps[1]-ps[0]
+        dq_true = qs[1]-qs[0]
+
+        ## Calculate pressure sensitivity using the flow_sensitivity function (the one being tested)
+        # x0 = (surface_coordinates, 0)
+        *_, dq, dp = fluid.flow_sensitivity(x0, self.fluid_properties)
+
+        ## Calculate the predicted change in pressure and compare the two quantities
 
         taylor_remainder_2 = np.abs(ps[1:, :] - ps[0, :] - hs[1:][:, None]*dp)
         p_order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
@@ -381,7 +430,8 @@ if __name__ == '__main__':
     test = TestBernoulli()
     test.setUp()
     # test.test_fluid_pressure()
-    test.test_flow_sensitivity()
+    # test.test_flow_sensitivity()
+    test.test_flow_sensitivity_psub()
     # test.test_get_ini_surf_config()
     # test.test_get_fin_surf_config()
     # test.test_get_flow_sensitivity_solid()
