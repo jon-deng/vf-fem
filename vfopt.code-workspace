@@ -11,6 +11,6 @@
 		}
 	],
 	"settings": {
-		"python.pythonPath": "/home/jonathan/anaconda3/envs/fenics/bin/python"
+		"python.pythonPath": "C:\\Users\\j8deng\\anaconda3\\python.exe"
 	}
 }

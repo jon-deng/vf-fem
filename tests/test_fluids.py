@@ -39,7 +39,7 @@ class CommonSetup(unittest.TestCase):
 
         self.fluid_properties['y_midline'][()] = self.surface_coordinates[..., 1].max()+1e-3
         self.fluid_properties['y_gap_min'][()] = 1e-3
-        self.fluid_properties['beta'][()] = 10
+        self.fluid_properties['beta'][()] = 100
 
         self.area = 2*(self.fluid_properties['y_midline'] - self.surface_coordinates[..., 1])
         self.p_sub = 800.0*PASCAL_TO_CGS
@@ -59,10 +59,11 @@ class TestBernoulli(CommonSetup):
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
 
         surf_state = (xy_surf, np.zeros(xy_surf.shape), np.zeros(xy_surf.shape))
-        q_test, p_test, info = fluid.fluid_pressure(surf_state, fluid_props)
+        qp_test, info = fluid.fluid_pressure(surf_state, fluid_props)
+        q_test, p_test = qp_test['q'], qp_test['p']
 
         area = 2*(fluid_props['y_midline'] - xy_surf[..., 1])
-        p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*info['flow_rate']**2*(1/fluid_props['a_sub']**2 - 1/area**2)
+        p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*q_test**2*(1/fluid_props['a_sub']**2 - 1/area**2)
 
         # Plot the pressures computed from Bernoulli
         fig, ax = plt.subplots(1, 1)
@@ -70,12 +71,14 @@ class TestBernoulli(CommonSetup):
         ax.plot(xy_surf[:, 0], p_verify/10)
         ax.set_xlabel("x [cm]")
         ax.set_ylabel("Pressure [Pa]")
+        ax.set_ylim(-fluid_props['p_sub']/10/5, fluid_props['p_sub']/10*1.1)
 
         ax_surf = ax.twinx()
         ax_surf.plot(xy_surf[:, 0], xy_surf[:, 1], ls='-.', c='k')
         ax_surf.set_ylabel("y [cm]")
 
         plt.show()
+        breakpoint()
 
     def test_flow_sensitivity(self):
         """
@@ -88,7 +91,7 @@ class TestBernoulli(CommonSetup):
         surface_coordinates = self.surface_coordinates
 
         ## Set a surface state step direction and step sizes
-        hs = np.concatenate([[0], 2**np.arange(-6, 30, dtype=np.float)])
+        hs = np.concatenate([[0], 2**np.arange(-6, 1, dtype=np.float)])
         du = np.zeros(fluid.u1surf.size)
         du[:] = np.random.rand(du.size)*1e-5
 
@@ -430,8 +433,8 @@ if __name__ == '__main__':
     test = TestBernoulli()
     test.setUp()
     # test.test_fluid_pressure()
-    # test.test_flow_sensitivity()
-    test.test_flow_sensitivity_psub()
+    test.test_flow_sensitivity()
+    # test.test_flow_sensitivity_psub()
     # test.test_get_ini_surf_config()
     # test.test_get_fin_surf_config()
     # test.test_get_flow_sensitivity_solid()

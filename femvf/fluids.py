@@ -339,6 +339,7 @@ class Bernoulli(QuasiSteady1DFluid):
         rho = fluid_props['rho']
         a_sub = fluid_props['a_sub']
         alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
+        s = self.s_vertices
 
         x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
 
@@ -347,9 +348,15 @@ class Bernoulli(QuasiSteady1DFluid):
         dt_area = -2 * surface_state[1].reshape(-1, 2)[:, 1]
 
         # Calculate minimum and separation areas/locations
-        a_min = smooth_minimum(area_safe, self.s_vertices, alpha)
-        dt_a_min = np.sum(dsmooth_minimum_df(area_safe, self.s_vertices, alpha) * dt_area)
+        w_min = smooth_minmax_weight(area_safe, alpha)
+        a_min = w_average(s, area_safe, w_min)
+        s_min = w_average(s, s, w_min)
+        dt_a_min = np.sum(dsmooth_minimum_df(area_safe, s, alpha) * dt_area)
+
         a_sep = SEPARATION_FACTOR * a_min
+        # this ensures the separation area is selected at a point past the minimum area
+        w_sep = smooth_cutoff(s, s_min, k) * gaussian(area_safe, a_sep, sigma)
+        s_sep = w_average(s, s, w_sep)
         dt_a_sep = SEPARATION_FACTOR * dt_a_min
 
         # 1D Bernoulli approximation of the flow
@@ -405,6 +412,7 @@ class Bernoulli(QuasiSteady1DFluid):
         rho = fluid_props['rho']
         a_sub = fluid_props['a_sub']
         alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
+        s = self.s_vertices
 
         x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
 
@@ -414,8 +422,14 @@ class Bernoulli(QuasiSteady1DFluid):
         area_safe = smooth_lower_bound(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
         darea_safe_darea = dsmooth_lower_bound_df(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
 
-        a_min = smooth_minimum(area_safe, self.s_vertices, alpha)
-        da_min_darea = dsmooth_minimum_df(area_safe, self.s_vertices, alpha) * darea_safe_darea
+        w_min = smooth_minmax_weight(area_safe, alpha)
+        dw_min_darea = dsmooth_minmax_weight_df(area_safe, alpha) * darea_safe_darea
+
+        a_min = w_average(s, area_safe, w_min)
+        da_min_darea = dw_average_df(s, area_safe, w_min)*darea_safe_darea + \
+                       dw_average_dw(s, area_safe, w_min)*dw_min_darea
+        s_min = w_average(s, s, w_min)
+        ds_min_darea = dw_average_dw(s, s, w_min)*dw_min_darea
 
         a_sep = SEPARATION_FACTOR * a_min
         da_sep_da_min = SEPARATION_FACTOR
@@ -439,16 +453,13 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_bernoulli_dpsub = 1.0 + 1/2*rho*dflow_rate_sqr_dpsub*(a_sub**-2 - area_safe**-2)
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
-        # x_sep = smooth_selection(x, area, a_sep, self.s_vertices, sigma)
-        # dx_sep_dx = dsmooth_selection_dx(x, area, a_sep, self.s_vertices, sigma)
-        # dx_sep_dy = dsmooth_selection_dy(x, area, a_sep, self.s_vertices, sigma)*darea_dy \
-        #             + dsmooth_selection_dy0(x, area, a_sep, self.s_vertices, sigma)*da_sep_dy
-
-        s_sep = smooth_selection(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma=sigma)
-        ds_sep_dy = dsmooth_selection_dy(self.s_vertices, area_safe, a_sep, self.s_vertices,
-                                         sigma) * darea_safe_darea * darea_dy \
-                    + dsmooth_selection_dy0(self.s_vertices, area_safe, a_sep, self.s_vertices,
-                                            sigma) * da_sep_dy
+        # this ensures the separation area is selected at a point past the minimum area
+        w_sep = smooth_cutoff(s, s_min, k) * gaussian(area_safe, a_sep, sigma)
+        dw_sep_darea = dsmooth_cutoff_dx0(s, s_min, k) * ds_min_darea * gaussian(area_safe, a_sep, sigma) + \
+                       smooth_cutoff(s, s_min, k) * (dgaussian_dx(area_safe, a_sep, sigma)*darea_safe_darea + 
+                                                     dgaussian_dx0(area_safe, a_sep, sigma)*da_sep_da_min*da_min_darea)
+        s_sep = w_average(s, s, w_sep)
+        ds_sep_dy = dw_average_dw(s, s, w_sep) * dw_sep_darea * darea_dy
 
         sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
         dsep_multiplier_dy = dsmooth_cutoff_dx0(self.s_vertices, s_sep, k=k)[:, None] * ds_sep_dy
@@ -489,7 +500,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dq_du : PETSc.Vec
             Sensitivity of flow rate with respect to displacement
         """
-        _dq_du, _dp_du = self.flow_sensitivity(surface_state, fluid_props)
+        _dq_du, _dp_du, *_ = self.flow_sensitivity(surface_state, fluid_props)
 
         dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
         dp_du.setType('aij')
@@ -638,6 +649,50 @@ def dsmooth_lower_bound_df(f, f_lb, beta=100):
     out[idx_normal] = np.exp(exponent[idx_normal]) / (1+np.exp(exponent[idx_normal]))
     out[idx_overflow] = 1.0
     return out
+
+def smooth_minmax_weight(f, alpha=-1000.0):
+    """
+    Return exponential weights computing a 'smooth' min or max
+    """
+    # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
+    # being too large (overflow). This constant factors out due to the division.
+    K_STABILITY = np.max(alpha*f)
+    w = np.exp(alpha*f - K_STABILITY)
+    return w
+
+def dsmooth_minmax_weight_df(f, alpha=-1000.0):
+    K_STABILITY = np.max(alpha*f)
+    # w = np.exp(alpha*f - K_STABILITY)
+    dw_df = alpha*np.exp(alpha*f - K_STABILITY)
+    return dw_df
+
+def w_average(s, f, w):
+    """
+    Return the weighted average of 'f(s)' with weights 'w(s)'
+    """
+    return trapz(f*w, s) / trapz(w, s)
+
+def dw_average_df(s, f, w):
+    # trapz(f*w, s) / trapz(w, s)
+
+    # num = trapz(f*w, s)
+    den = trapz(w, s)
+
+    dnum_df = dtrapz_df(f*w, s)*w
+    # dden_df = 0.0
+
+    return dnum_df/den
+
+def dw_average_dw(s, f, w):
+    trapz(f*w, s) / trapz(w, s)
+
+    num = trapz(f*w, s)
+    den = trapz(w, s)
+
+    dnum_dw = dtrapz_df(f*w, s)*f
+    dden_dw = dtrapz_df(w, s)
+
+    return dnum_dw/den - num/den**2 * dden_dw
 
 def smooth_minimum(f, s, alpha=-1000):
     """
