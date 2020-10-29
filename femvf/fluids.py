@@ -14,7 +14,6 @@ from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 from .linalg import BlockVec, general_vec_set
 
 ## 1D Bernoulli approximation codes
-SEPARATION_FACTOR = 1.0
 
 class QuasiSteady1DFluid:
     """
@@ -250,6 +249,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sup': ('const', ()),
         'rho': ('const', ()),
         'y_midline': ('const', ()),
+        'r_sep': ('const', ()),
         'alpha': ('const', ()),
         'k': ('const', ()),
         'sigma': ('const', ()),
@@ -261,6 +261,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'p_sup': 0 * PASCAL_TO_CGS,
         'a_sub': 100000,
         'a_sup': 0.6,
+        'r_sep': 1.0,
         'rho': 1.1225 * SI_DENSITY_TO_CGS,
         'y_midline': 0.61,
         'alpha': -3/0.002,
@@ -309,6 +310,25 @@ class Bernoulli(QuasiSteady1DFluid):
                                            adjoint)
 
     ## internal methods
+    def separation_point(self, s, area, dt_area, fluid_props):
+        rsep = fluid_props['r_sep']
+        w_min = smooth_minmax_weight(area, fluid_props['alpha'])
+        a_min = w_average(s, area, w_min)
+        s_min = w_average(s, s, w_min)
+        dt_a_min = np.sum(dsmooth_minimum_df(area, s, fluid_props['alpha']) * dt_area)
+
+        a_sep = rsep * a_min
+
+        # this ensures the separation area is selected at a point past the minimum area
+        log_w_sep = np.log(1-smooth_cutoff(s, s_min, fluid_props['k'])) +  log_gaussian(area, a_sep, fluid_props['sigma'])
+        w_sep = np.exp(log_w_sep - log_w_sep.max())
+        s_sep = w_average(s, s, w_sep)
+        dt_a_sep = rsep * dt_a_min
+
+        # assert s_sep >= s_min
+
+        return s_sep, a_sep, dt_a_sep
+
     def fluid_pressure(self, surface_state, fluid_props):
         """
         Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
@@ -353,12 +373,8 @@ class Bernoulli(QuasiSteady1DFluid):
         s_min = w_average(s, s, w_min)
         dt_a_min = np.sum(dsmooth_minimum_df(area_safe, s, alpha) * dt_area)
 
-        a_sep = SEPARATION_FACTOR * a_min
-        # this ensures the separation area is selected at a point past the minimum area
-        w_sep = smooth_cutoff(s, s_min, k) * gaussian(area_safe, a_sep, sigma)
-        s_sep = w_average(s, s, w_sep)
-        dt_a_sep = SEPARATION_FACTOR * dt_a_min
-
+        s_sep, a_sep, dt_a_sep = self.separation_point(s, area_safe, dt_area, fluid_props)
+        
         # 1D Bernoulli approximation of the flow
         p_sep = p_sup
         flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
@@ -367,9 +383,6 @@ class Bernoulli(QuasiSteady1DFluid):
 
         p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
 
-        # Calculate x_sep for plotting/information purposes
-        x_sep = smooth_selection(x, area_safe, a_sep, self.s_vertices, sigma)
-        s_sep = smooth_selection(self.s_vertices, area_safe, a_sep, self.s_vertices, sigma=sigma)
         sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
 
         p = sep_multiplier * p_bernoulli
@@ -377,17 +390,20 @@ class Bernoulli(QuasiSteady1DFluid):
         flow_rate = flow_rate_sqr**0.5
         dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
 
-        idx_min = 0
-        idx_sep = 0
-        xy_min = surface_state[0][idx_min]
-        xy_sep = surface_state[0][idx_sep]
+        # Find the first point where s passes s_min/s_sep, then we can linearly interpolate
+        idx_min = np.argmax(s>s_min)
+        idx_sep = np.argmax(s>s_sep)
+        xy_min = surface_state[0].reshape(-1, 2)[idx_min]
+        xy_sep = surface_state[0].reshape(-1, 2)[idx_sep]
+        # breakpoint()
         info = {'flow_rate': flow_rate,
                 'dt_flow_rate': dt_flow_rate,
-                'idx_min': idx_min,
                 'idx_sep': idx_sep,
+                'idx_min': idx_min,
+                's_sep': s_sep,
+                's_min': s_min,
                 'xy_min': xy_min,
                 'xy_sep': xy_sep,
-                'x_sep': x_sep,
                 'a_min': a_min,
                 'a_sep': a_sep,
                 'area': area_safe,
@@ -406,7 +422,7 @@ class Bernoulli(QuasiSteady1DFluid):
             A dictionary of fluid property keyword arguments.
         """
         assert surface_state[0].size%2 == 0
-
+        SEPARATION_FACTOR = fluid_props['r_sep']
         y_midline = fluid_props['y_midline']
         p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
         rho = fluid_props['rho']
@@ -835,8 +851,11 @@ def gaussian(x, x0, sigma=1.0):
     """
     Return the gaussian with mean `x0` and variance `sigma`
     """
-    return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
+    log_w = log_gaussian(x, x0, sigma)
+    return np.exp(log_w - np.max(log_w))
+    # return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
 
+# TODO: Need to update
 def dgaussian_dx(x, x0, sigma=1.0):
     """
     Return the sensitivity of `gaussian` to `x`

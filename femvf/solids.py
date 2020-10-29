@@ -87,17 +87,23 @@ class Solid:
     PROPERTY_TYPES = None
     DEFAULTS = None
 
-    def __init__(self, mesh, facet_function, facet_labels, cell_function, cell_labels):
+    def __init__(self, mesh, facet_func, facet_labels, cell_func, cell_labels, 
+                 fsi_facet_labels, fixed_facet_labels):
 
-        self._forms = self.form_definitions(mesh, facet_function, facet_labels,
-                                            cell_function, cell_labels)
+        assert isinstance(fsi_facet_labels, (list, tuple))
+        assert isinstance(fixed_facet_labels, (list, tuple))
+        self._forms = self.form_definitions(mesh, facet_func, facet_labels,
+                                            cell_func, cell_labels, fsi_facet_labels, fixed_facet_labels)
 
         ## Store mesh related quantities
         self.mesh = mesh
-        self.facet_function = facet_function
-        self.cell_function = cell_function
+        self.facet_func = facet_func
+        self.cell_func = cell_func
         self.facet_labels = facet_labels
         self.cell_labels = cell_labels
+
+        self.fsi_facet_labels = fsi_facet_labels
+        self.fixed_facet_labels = fixed_facet_labels
 
         ## Store some key quantites related to the forms
         self.vector_fspace = self.forms['fspace.vector']
@@ -137,7 +143,8 @@ class Solid:
         return self._forms
 
     @staticmethod
-    def form_definitions(mesh, facet_function, facet_labels, cell_function, cell_labels):
+    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels, 
+                         fsi_facet_labels, fixed_facet_labels):
         """
         Return a dictionary of ufl forms representing the solid in Fenics.
 
@@ -315,9 +322,10 @@ class Rayleigh(Solid):
         'k_collision': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_function, facet_labels, cell_function, cell_labels):
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_function)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels, 
+                         fsi_facet_labels, fixed_facet_labels):
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
         scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
         vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
@@ -379,10 +387,13 @@ class Rayleigh(Solid):
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
+        # breakpoint()
         facet_normal = dfn.FacetNormal(mesh)
-        traction_ds = ds(facet_labels['pressure'])
+        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
+        for fsi_edge in fsi_facet_labels[1:]:
+            traction_ds += ds(facet_labels[fsi_edge])
         traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
 
         # Use the penalty method to account for collision
@@ -398,7 +409,7 @@ class Rayleigh(Solid):
 
             # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
             penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) \
-                      * ds(facet_labels['pressure'])
+                      * traction_ds
 
             return penalty
 
@@ -417,7 +428,7 @@ class Rayleigh(Solid):
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_function, facet_labels['fixed'])
+                                  facet_func, facet_labels['fixed'])
 
         ## Adjoint forms
         df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))
@@ -529,9 +540,10 @@ class KelvinVoigt(Solid):
         'k_collision': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_function, facet_labels, cell_function, cell_labels):
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_function)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels,
+                         fsi_facet_labels, fixed_facet_labels):
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
         scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
         vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
@@ -586,10 +598,12 @@ class KelvinVoigt(Solid):
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_function)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
         facet_normal = dfn.FacetNormal(mesh)
-        traction_ds = ds(facet_labels['pressure'])
+        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
+        for fsi_edge in fsi_facet_labels[1:]:
+            traction_ds += ds(facet_labels[fsi_edge])
         traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
 
         # Use the penalty method to account for collision
@@ -605,7 +619,7 @@ class KelvinVoigt(Solid):
 
             # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
             penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
-                    * ds(facet_labels['pressure'])
+                      * traction_ds
             return penalty
 
         # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
@@ -624,7 +638,7 @@ class KelvinVoigt(Solid):
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_function, facet_labels['fixed'])
+                                  facet_func, facet_labels['fixed'])
 
         ## Adjoint forms
         df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))

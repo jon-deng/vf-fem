@@ -81,14 +81,17 @@ def parse_2d_msh(mesh_path):
                 cell_labels[name] = val
     return facet_labels, cell_labels
 
-def streamwise1dmesh_from_edges(mesh, edge_function, n):
+def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     """
     Returns a list of x, y coordinates of the surface corresponding to edges numbered 'n'.
 
+    f_edges: list or tuple of int
+        edge function values to extract
+
     It is assumed that the beginning of the stream is at the leftmost x-coordinate
     """
-    edges = edge_function.where_equal(n)
-
+    assert isinstance(f_edges, (list, tuple))
+    edges = [n_edge for n_edge, f_edge in enumerate(edge_function.array()) if f_edge in set(f_edges)]
     vertices = vertices_from_edges(edges, mesh)
 
     surface_coordinates = mesh.coordinates()[vertices]
