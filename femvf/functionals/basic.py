@@ -24,7 +24,7 @@ import dolfin as dfn
 import ufl
 
 from .abstract import AbstractFunctional
-from ..fluids import smooth_minimum, dsmooth_minimum_df
+from ..fluids import smoothmin, dsmoothmin_df
 from ..solids import strain
 
 class Functional(AbstractFunctional):
@@ -107,7 +107,7 @@ class PeriodicError(Functional):
         return alphau**2*erru + errv
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         alphau = self.constants['alpha']
         if n == 0:
             duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
@@ -118,7 +118,7 @@ class PeriodicError(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         dqp.set(0.0)
         return dqp
 
@@ -188,7 +188,7 @@ class PeriodicEnergyError(Functional):
         return alphau**2*erru + errv
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
 
         alphau = self.constants['alpha']
         if n == 0:
@@ -200,7 +200,7 @@ class PeriodicEnergyError(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.solid.get_state()
+        dqp = self.model.solid.get_state_vec()
         dqp.set(0.0)
         return dqp
 
@@ -254,7 +254,7 @@ class FinalDisplacementNorm(Functional):
         return dfn.assemble(self.forms['res'])
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
 
         if n == f.size-1:
             self.forms['u'].vector()[:] = f.get_state(n)[0]
@@ -263,7 +263,7 @@ class FinalDisplacementNorm(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         dqp.set(0.0)
         return dqp
 
@@ -307,7 +307,7 @@ class FinalVelocityNorm(Functional):
         return dfn.assemble(self.forms['res'])
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
 
         if n == f.size-1:
             self.forms['v'].vector()[:] = f.get_state(n)[1]
@@ -316,7 +316,7 @@ class FinalVelocityNorm(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         dqp.set(0.0)
         return dqp
 
@@ -361,7 +361,7 @@ class FinalSurfaceDisplacementNorm(Functional):
         return dfn.assemble(self.forms['res'])
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
 
         if n == f.size-1:
             self.forms['u'].vector()[:] = f.get_state(n)[0]
@@ -370,7 +370,7 @@ class FinalSurfaceDisplacementNorm(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         dqp.set(0.0)
         return dqp
 
@@ -416,12 +416,12 @@ class FinalSurfacePressureNorm(Functional):
         return dfn.assemble(self.forms['res'])
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
 
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
 
         if n == f.size-1:
             self.model.set_params_fromfile(f, f.size-1)
@@ -486,7 +486,7 @@ class FinalSurfacePower(Functional):
         return fluid_power
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
 
@@ -500,7 +500,7 @@ class FinalSurfacePower(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
 
         if n == f.size-1:
             self.model.set_params_fromfile(f, n)
@@ -536,10 +536,10 @@ class FinalFlowRateNorm(Functional):
         return qp[0]**2
 
     def eval_duva(self, f, n):
-        return self.model.solid.get_state()
+        return self.model.solid.get_state_vec()
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
 
         if n == f.size-1:
             qp = f.get_fluid_state(n)
@@ -606,7 +606,7 @@ class ElasticEnergyDifference(Functional):
         return (en_elastic_fin - en_elastic_ini)**2
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         if n == 0 or n == f.size-1:
             u_ini_vec = f.get_state(0)[0]
             u_fin_vec = f.get_state(-1)[0]
@@ -630,7 +630,7 @@ class ElasticEnergyDifference(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         return dqp
 
     def eval_dsolid(self, f):
@@ -711,7 +711,7 @@ class KVDampingWork(Functional):
         return res
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
         time = f.get_times()
@@ -730,7 +730,7 @@ class KVDampingWork(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         return dqp
 
     def eval_dsolid(self, f):
@@ -848,13 +848,13 @@ class RayleighDampingWork(Functional):
         return res
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
 
         duva['v'][:] = dfn.assemble(self.forms['ddamping_power_dv']) * self.model.solid.dt.vector()[0]
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         return dqp
 
     def eval_dsolid(self, f):
@@ -947,7 +947,7 @@ class TransferWorkbyVelocity(Functional):
         return work
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
         N_START = self.constants['n_start']
@@ -976,7 +976,7 @@ class TransferWorkbyVelocity(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
 
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
@@ -1091,7 +1091,7 @@ class TransferWorkbyDisplacementIncrement(Functional):
         return res
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         N_START = self.constants['n_start']
         N_STATE = f.get_num_states()
 
@@ -1110,7 +1110,7 @@ class TransferWorkbyDisplacementIncrement(Functional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
         N_START = self.constants['n_start']
         # N_STATE = f.get_num_states()
 
@@ -1170,11 +1170,11 @@ class SubglottalWork(Functional):
 
     def eval_duva(self, f, n):
 
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
 
         N_START = self.constants['n_start']
         N_STATE = self.cache['N_STATE']
@@ -1349,11 +1349,11 @@ class AcousticPower(Functional):
         """
         Return the sensitivity of mean acoustic power to a state.
         """
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
 
         ## Load cached value DFT quantities
         n_start = self.constants['n_start']
@@ -1495,13 +1495,13 @@ class GlottalWidthErrorNorm(Functional):
             u = f.get_state(n)[0]
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
             y_surf = xy_surf[1::2]
-            gw = smooth_minimum(y_surf, alpha=self.constants['smooth_min_alpha'])
+            gw = smoothmin(y_surf, alpha=self.constants['smooth_min_alpha'])
             gw_model.append(gw)
 
         return np.sum((np.array(gw_model) - self.constants['gw_meas'])**2)
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         model = self.model
 
         # Get the initial locations of the nodes
@@ -1524,12 +1524,12 @@ class GlottalWidthErrorNorm(Functional):
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
             y_surf = xy_surf[1::2]
 
-            duva['u'][Y_DOF] = dsmooth_minimum_df(y_surf, self.model.fluid.s_vertices, alpha=self.constants['smooth_min_alpha'])
+            duva['u'][Y_DOF] = dsmoothmin_df(y_surf, self.model.fluid.s_vertices, alpha=self.constants['smooth_min_alpha'])
 
         return duva
 
     def eval_dqp(self, f, n):
-        return self.model.fluid.get_state()
+        return self.model.fluid.get_state_vec()
 
     def eval_dsolid(self, f):
         dsolid = self.model.solid.get_properties()
@@ -1564,10 +1564,10 @@ class Scalar(AbstractFunctional):
         return self._val
 
     def eval_duva(self, f, n):
-        return self.model.solid.get_state()
+        return self.model.solid.get_state_vec()
 
     def eval_dqp(self, f, n):
-        return self.model.fluid.get_state()
+        return self.model.fluid.get_state_vec()
 
     def eval_dsolid(self, f):
         dsolid = self.model.solid.get_properties()

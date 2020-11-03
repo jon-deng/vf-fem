@@ -492,10 +492,10 @@ def dconvert_uv0(model, grad_uva0, uva0, solid_props, fluid_props):
     model.set_ini_params(qp0=(q0, p0))
 
     ## Assemble needed adjoint matrices
-    df0_du0_adj = dfn.assemble(model.forms['form.bi.df0_du0_adj'])
-    df0_dv0_adj = dfn.assemble(model.forms['form.bi.df0_dv0_adj'])
-    df0_da0_adj = dfn.assemble(model.forms['form.bi.df0_da0_adj'])
-    df0_dp0_adj = dfn.as_backend_type(dfn.assemble(model.forms['form.bi.df0_dp0_adj'])).mat()
+    df0_du0_adj = dfn.assemble(model.solid.forms['form.bi.df0_du0_adj'])
+    df0_dv0_adj = dfn.assemble(model.solid.forms['form.bi.df0_dv0_adj'])
+    df0_da0_adj = dfn.assemble(model.solid.forms['form.bi.df0_da0_adj'])
+    df0_dp0_adj = dfn.as_backend_type(dfn.assemble(model.solid.forms['form.bi.df0_dp0_adj'])).mat()
 
     # map dfu0_dp0 to have p on the fluid domain
     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()

@@ -95,6 +95,7 @@ def get_starting_kelvinvoigt_model():
     fluid_props = model.fluid.get_properties()
     fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
     fluid_props['p_sub'][()] = 800 * PASCAL_TO_CGS
+    fluid_props['p_sub'][()] = 100.0 * PASCAL_TO_CGS
     fluid_props['alpha'][()] = alpha
     fluid_props['k'][()] = k
     fluid_props['sigma'][()] = sigma
@@ -143,13 +144,14 @@ class TaylorTestUtils(unittest.TestCase):
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
     # FUNCTIONAL = basic.SubglottalWork
     # FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
-    # FUNCTIONAL = basic.TransferWorkbyVelocity
+    # FUNCTIONAL = basic.TransferWorkbyVelocityl
     # FUNCTIONAL = basic.FinalFlowRateNorm
     # FUNCTIONAL = basic.TransferEfficiency
     # FUNCTIONAL = basic.AcousticPower
@@ -173,15 +175,19 @@ class TestBasicGradient(TaylorTestUtils):
         times_meas = np.linspace(t_start, t_final, 128)
         self.times = times_meas
 
-        self.uva0 = (0, 0, 0)
+        self.uva0 = self.model.solid.get_state_vec() # (0, 0, 0)
+        self.uva0['v'][:] = 1e-3
+        self.model.solid.bc_base.apply(self.uva0['v'])
 
         # Specify the functional to test
         # self.functional = fmath.add(basic.FinalDisplacementNorm(self.model),
         #                             basic.FinalVelocityNorm(self.model))
 
-        self.functional = fmath.add(
-            fmath.mul(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
-                          basic.FinalVelocityNorm(self.model))
+        self.functional = self.FUNCTIONAL(self.model)
+
+        # self.functional = fmath.add(
+        #     fmath.mul(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
+        #                   basic.FinalVelocityNorm(self.model))
 
         # self.functional = self.FUNCTIONAL(self.model)
         # self.functional.constants['n_start'] = 50
@@ -217,7 +223,7 @@ class TestBasicGradient(TaylorTestUtils):
         gs, remainders, orders, grads = grad_and_taylor_order(
             save_path, self.functional, hs, self.model, duva=duva, dsolid_props=dsolid_props,
             dfluid_props=dfluid_props, dtimes=dtimes, coupling=self.COUPLING)
-
+        
         remainder_1, remainder_2 = remainders
         order_1, order_2 = orders
         (grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd = grads
@@ -228,6 +234,7 @@ class TestBasicGradient(TaylorTestUtils):
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
+        breakpoint()
 
         return (order_1, order_2)
 
@@ -272,7 +279,7 @@ class TestBasicGradient(TaylorTestUtils):
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         duva['u'][:] = step_dir*0.01
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
@@ -295,7 +302,7 @@ class TestBasicGradient(TaylorTestUtils):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         duva['v'][:] = step_dir*0.1
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
@@ -317,7 +324,7 @@ class TestBasicGradient(TaylorTestUtils):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = self.model.solid.get_state()
+        duva = self.model.solid.get_state_vec()
         duva['a'][:] = step_dir
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
@@ -337,7 +344,7 @@ class TestBasicGradient(TaylorTestUtils):
 
 class TestBasicGradientSingleStep(TestBasicGradient):
     COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = True
+    OVERWRITE_FORWARD_SIMULATIONS = False
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
@@ -362,18 +369,19 @@ class TestBasicGradientSingleStep(TestBasicGradient):
         times_meas = np.linspace(t_start, t_final, 2)
         self.times = times_meas
 
-        self.uva0 = (0, 0, 0)
+        self.uva0 = self.model.solid.get_state_vec()
 
         # Step sizes and scale factor
         self.hs = np.concatenate(([0], 2.0**np.arange(-8, 1)), axis=0)
+        self.functional = self.FUNCTIONAL(self.model)
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-6)), axis=0)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dsolid = self.solid_props.copy()
-        dsolid.vector[:] = 0
+        dsolid.set(0.0)
         dsolid['emod'][:] = 1.0*step_size/5
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
@@ -382,7 +390,7 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
     def test_u0(self):
         save_path = f'out/linesearch_u0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-16)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-13)), axis=0)
 
         ## Pick a step direction
         # Increment `u` linearly as a function of x and y in the y direction
@@ -408,8 +416,11 @@ class TestBasicGradientSingleStep(TestBasicGradient):
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
         self.model.solid.bc_base.apply(step_dir)
+        duva = self.model.solid.get_state_vec()
 
-        duva = (step_dir*0.00005, 0.0, 0.0)
+        duva['u'][:] = step_dir*0.00005
+        duva['v'][:] = 0.0
+        duva['a'][:] = 0.0
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -417,7 +428,7 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
     def test_v0(self):
         save_path = f'out/linesearch_v0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-6)), axis=0)
 
         xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
         y = xy[:, 1]
@@ -431,7 +442,10 @@ class TestBasicGradientSingleStep(TestBasicGradient):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = (0.0, step_dir*1e-5, 0.0)
+        duva = self.model.solid.get_state_vec()
+        duva['u'][:] = 0
+        duva['v'][:] = step_dir*1e-5
+        duva['a'][:] = 0.0
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -439,7 +453,7 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
     def test_a0(self):
         save_path = f'out/linesearch_a0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9))), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
 
         xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
         y = xy[:, 1]
@@ -452,7 +466,10 @@ class TestBasicGradientSingleStep(TestBasicGradient):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        duva = (0.0, 0.0, step_dir*1e-4)
+        duva = self.model.solid.get_state_vec()
+        duva['u'][:] = 0.0
+        duva['v'][:] = 0.0
+        duva['a'][:] = step_dir*1e-5
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, duva=duva)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -575,7 +592,8 @@ def grad_and_taylor_order(filepath, functional, hs, model,
     """
     """
     if duva is None:
-        duva = model.solid.get_state()
+        duva = model.solid.get_state_vec()
+        duva.set(0.0)
     if dsolid_props is None:
         dsolid_props = model.solid.get_properties_vec(set_default=False)
     if dfluid_props is None:
@@ -702,7 +720,7 @@ class TestResidualJacobian(unittest.TestCase):
 
         # Set up the block matrix dFup_dup_adj and dFup_dup
         model.set_iter_params(uva0=uva0, dt=dt, uva1=uva1, qp1=qp1)
-        dfu_du_adj = model.assem_df1_du1_adj()
+        dfu_du_adj = model.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
         model.solid.bc_base.apply(dfu_du_adj)
         dfu_du_adj = dfn.as_backend_type(dfu_du_adj).mat()
 

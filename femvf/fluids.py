@@ -29,27 +29,19 @@ class QuasiSteady1DFluid:
         y_surface: np.ndarray
             Array of y surface locations numbered in steamwise increasing order.
         """
-        self.properties = self.get_properties_vec(set_default=True)
 
+        NVERT = x_vertices.size
         # the 'mesh' (also the x coordinates in the reference configuration)
         self.x_vertices = x_vertices
 
         # the surface y coordinates of the solid
         self.y_surface = y_surface
 
-        # form type quantities associated with the mesh
-        # displacement and velocity along the surface at state 0 and 1
-        self.u0surf = np.zeros(2*x_vertices.size)
-        self.u1surf = np.zeros(2*x_vertices.size)
+        # self.p1 = np.zeros(x_vertices.shape)
+        # self.p0 = np.zeros(x_vertices.shape)
 
-        self.v0surf = np.zeros(2*x_vertices.size)
-        self.v1surf = np.zeros(2*x_vertices.size)
-
-        self.p1 = np.zeros(x_vertices.shape)
-        self.p0 = np.zeros(x_vertices.shape)
-
-        self.q0 = np.zeros((1,))
-        self.q1 = np.zeros((1,))
+        # self.q0 = np.zeros((1,))
+        # self.q1 = np.zeros((1,))
 
         # Calculate surface coordinates which are needed to compute surface integrals
         dx = self.x_vertices[1:] - self.x_vertices[:-1]
@@ -57,33 +49,53 @@ class QuasiSteady1DFluid:
         ds = (dx**2+dy**2)**0.5
         self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
 
+        p0 = np.zeros(NVERT)
+        q0 = np.zeros((1,))
+        self.state0 = BlockVec((q0, p0), ('q', 'p'))
+
+        p1 = np.zeros(NVERT)
+        q1 = np.zeros((1,))
+        self.state1 = BlockVec((q1, p1), ('q', 'p'))
+
+        # form type quantities associated with the mesh
+        # displacement and velocity along the surface at state 0 and 1
+        u0surf = np.zeros(2*NVERT)
+        v0surf = np.zeros(2*NVERT)
+        self.control0 = BlockVec((u0surf, v0surf), ('usurf', 'vsurf'))
+
+        u1surf = np.zeros(2*NVERT)
+        v1surf = np.zeros(2*NVERT)
+        self.control1 = BlockVec((u1surf, v1surf), ('usurf', 'vsurf'))
+
+        self.properties = self.get_properties_vec(set_default=True)
+
     def set_ini_state(self, qp0):
         """
         Set the initial fluid state
         """
-        self.q0[:] = qp0[0]
-        self.p0[:] = qp0[1]
+        self.state0['q'][()] = qp0[0]
+        self.state0['p'][:] = qp0[1]
 
     def set_fin_state(self, qp1):
         """
         Set the final fluid state
         """
-        self.q1[:] = qp1[0]
-        self.p1[:] = qp1[1]
+        self.state1['q'][()] = qp1[0]
+        self.state1['p'][:] = qp1[1]
 
-    def set_ini_surf_state(self, uv0):
+    def set_ini_control(self, uv0):
         """
         Set the initial surface displacement and velocity
         """
-        self.u0surf[:] = uv0[0]
-        self.v0surf[:] = uv0[1]
+        self.control0['usurf'][:] = uv0[0]
+        self.control0['vsurf'][:] = uv0[1]
 
-    def set_fin_surf_state(self, uv1):
+    def set_fin_control(self, uv1):
         """
         Set the final surface displacement and velocity
         """
-        self.u1surf[:] = uv1[0]
-        self.v1surf[:] = uv1[1]
+        self.control1['usurf'][:] = uv1[0]
+        self.control1['vsurf'][:] = uv1[1]
 
     def set_time_step(self, dt):
         """
@@ -123,42 +135,24 @@ class QuasiSteady1DFluid:
         """
         return self.properties.copy()
 
-    def get_ini_surf_state(self):
+    def get_ini_control(self):
         """
         Return the initial surface displacement and velocity
         """
-        xy = self.u0surf.copy()
-        dxy_dt = self.v0surf
-        xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
-        xy[1::2] = self.u0surf[1::2] + self.y_surface
+        return self.control0.copy()
 
-        surf_state = (xy, dxy_dt)
-        return surf_state
-
-    def get_fin_surf_state(self):
+    def get_fin_control(self):
         """
         Return the final surface displacement and velocity
         """
-        xy = self.u1surf.copy()
-        dxy_dt = self.v1surf
-        xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
-        xy[1::2] = self.u1surf[1::2] + self.y_surface
+        return self.control1.copy()
 
-        surf_state = (xy, dxy_dt)
-        return surf_state
-
-    def get_state(self):
-        """
-        Return the state
-        """
-        vecs = (np.zeros((1,)), np.zeros(self.x_vertices.size))
-        return BlockVec(vecs, ('q', 'p'))
-
-    def get_state_vecs(self):
+    def get_state_vec(self):
         """
         Return empty flow speed and pressure state vectors
         """
-        return np.zeros((1,)), np.zeros(self.x_vertices.size)
+        q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
+        return BlockVec((q, p), ('q', 'p'))
 
     def get_surf_vector(self):
         """
@@ -179,12 +173,15 @@ class QuasiSteady1DFluid:
         self.set_ini_state(qp0)
         self.set_fin_state(qp1)
 
-        self.set_ini_surf_state(uvsurf0)
-        self.set_fin_surf_state(uvsurf1)
+        self.set_ini_control(uvsurf0)
+        self.set_fin_control(uvsurf1)
 
         self.set_properties(fluid_props)
 
     ## Methods that subclasses must implement
+    def res(self):
+        pass
+
     def solve_qp1(self):
         """
         Return the final flow and pressure
@@ -220,6 +217,32 @@ class QuasiSteady1DFluid:
         Return sensitivities of the initial flow and pressure
         """
         raise NotImplementedError("Fluid models have to implement this")
+    
+    ## Solver functions
+    # def res(self):
+    #     """
+    #     Return the residual vector, F
+    #     """
+    #     return res
+
+    # def solve_dres_dstate1(self, b):
+    #     """
+    #     Solve, dF/du x = f
+    #     """
+    #     return x
+
+    # def solve_dres_dstate1_adj(self, b):
+    #     """
+    #     Solve, dF/du^T x = f
+    #     """
+
+    #     return x
+
+    # def apply_dres_dstate0_adj(self, x):
+
+    # def apply_dres_dp_adj(self, x):
+
+    # def apply_dres_dcontrol_adj(self, x):
 
 
 class Bernoulli(QuasiSteady1DFluid):
@@ -243,12 +266,12 @@ class Bernoulli(QuasiSteady1DFluid):
         the sharpness will approach an instantaneous jump from 1 to 0
     """
     PROPERTY_TYPES = {
+        'y_midline': ('const', ()),
         'p_sub': ('const', ()),
         'p_sup': ('const', ()),
         'a_sub': ('const', ()),
         'a_sup': ('const', ()),
         'rho': ('const', ()),
-        'y_midline': ('const', ()),
         'r_sep': ('const', ()),
         'alpha': ('const', ()),
         'k': ('const', ()),
@@ -257,13 +280,13 @@ class Bernoulli(QuasiSteady1DFluid):
         'y_gap_min': ('const', ())}
 
     PROPERTY_DEFAULTS = {
+        'y_midline': 1e6,
         'p_sub': 800 * PASCAL_TO_CGS,
         'p_sup': 0 * PASCAL_TO_CGS,
         'a_sub': 100000,
         'a_sup': 0.6,
         'r_sep': 1.0,
         'rho': 1.1225 * SI_DENSITY_TO_CGS,
-        'y_midline': 0.61,
         'alpha': -3/0.002,
         'k': 3/0.002,
         'sigma': 2.5*0.002,
@@ -274,60 +297,87 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return self.fluid_pressure(self.get_fin_surf_config(), self.properties)
+        return self.fluid_pressure(self.get_fin_control(), self.properties)
 
     def solve_qp0(self):
         """
         Return the initial flow state
         """
-        return self.fluid_pressure(self.get_ini_surf_config(), self.properties)
+        return self.fluid_pressure(self.get_ini_control(), self.properties)
 
     def solve_dqp1_du1(self, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(self.get_fin_surf_config(), self.properties)
+        return self.flow_sensitivity(self.get_fin_control(), self.properties)
 
     def solve_dqp0_du0(self, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(self.get_ini_surf_config(), self.properties)
+        return self.flow_sensitivity(self.get_ini_control(), self.properties)
 
     # TODO: Refactor to use the DOF map from solid to fluid rather than `ForwardModel`
     def solve_dqp1_du1_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity_solid(model, self.get_fin_surf_config(), self.properties,
+        return self.flow_sensitivity_solid(model, self.get_fin_control(), self.properties,
                                            adjoint)
 
     def solve_dqp0_du0_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity_solid(model, self.get_ini_surf_config(), self.properties,
+        return self.flow_sensitivity_solid(model, self.get_ini_control(), self.properties,
                                            adjoint)
 
     ## internal methods
-    def separation_point(self, s, area, dt_area, fluid_props):
-        rsep = fluid_props['r_sep']
-        w_min = smooth_minmax_weight(area, fluid_props['alpha'])
-        a_min = w_average(s, area, w_min)
-        s_min = w_average(s, s, w_min)
-        dt_a_min = np.sum(dsmooth_minimum_df(area, s, fluid_props['alpha']) * dt_area)
+    def separation_point(self, s, amin, smin, area, fluid_props):
+        asep = fluid_props['r_sep'] * amin
 
-        a_sep = rsep * a_min
-
-        # this ensures the separation area is selected at a point past the minimum area
-        log_w_sep = np.log(1-smooth_cutoff(s, s_min, fluid_props['k'])) +  log_gaussian(area, a_sep, fluid_props['sigma'])
-        w_sep = np.exp(log_w_sep - log_w_sep.max())
-        s_sep = w_average(s, s, w_sep)
-        dt_a_sep = rsep * dt_a_min
+        # This ensures the separation area is selected at a point past the minimum area
+        log_wsep = np.log(1-smoothstep(s, smin, fluid_props['k'])) +  log_gaussian(area, asep, fluid_props['sigma'])
+        wsep = np.exp(log_wsep - log_wsep.max())
+        ssep = wavg(s, s, wsep)
 
         # assert s_sep >= s_min
 
-        return s_sep, a_sep, dt_a_sep
+        return ssep, asep
+
+    def dseparation_point(self, s, amin, smin, a, fluid_props):
+        # breakpoint()
+        asep = fluid_props['r_sep'] * amin
+        dasep_damin = fluid_props['r_sep']
+        dasep_dsmin = 0.0 
+        dasep_da = 0.0
+
+        # This ensures the separation area is selected at a point past the minimum area
+        wpostsep = 1-smoothstep(s, smin, fluid_props['k'])
+        dwpostsep_dsmin = -dsmoothstep_dx0(s, smin, fluid_props['k'])
+
+        wgaussian = gaussian(a, asep, fluid_props['sigma'])
+        dwgaussian_da = dgaussian_dx(a, asep, fluid_props['sigma'])
+        dwgaussian_damin = dgaussian_dx0(a, asep, fluid_props['sigma']) * dasep_damin
+
+        # wsep = wpostsep * wgaussian
+        log_wsep = np.log(wpostsep) +  log_gaussian(a, asep, fluid_props['sigma'])
+        wsep = np.exp(log_wsep - log_wsep.max())
+
+        dwsep_dsmin = dwpostsep_dsmin * wgaussian
+        dwsep_damin = wpostsep * dwgaussian_damin 
+        dwsep_da = wpostsep * dwgaussian_da
+
+        # ssep = wavg(s, s, wsep)
+        # the factor below is because a scaled wsep was used for numerical stability
+        # TODO: Make weighted averages accept log weights to automatically account for numerical stability
+        # issues?
+        dssep_dwsep = dwavg_dw(s, s, wsep)*np.exp(-log_wsep.max())
+        dssep_da = dssep_dwsep*dwsep_da
+        dssep_damin = np.dot(dssep_dwsep, dwsep_damin)
+        dssep_dsmin = np.dot(dssep_dwsep, dwsep_dsmin)
+
+        return dssep_damin, dssep_dsmin, dssep_da, dasep_damin, dasep_dsmin, dasep_da
 
     def fluid_pressure(self, surface_state, fluid_props):
         """
@@ -340,7 +390,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         Parameters
         ----------
-        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        surface_state : tuple of (u, v) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
             States of the surface vertices, ordered following the flow (increasing x coordinate).
         fluid_props : BlockVec
             A dictionary of fluid properties.
@@ -354,61 +404,54 @@ class Bernoulli(QuasiSteady1DFluid):
         xy_min, xy_sep: (2,) np.ndarray
             The coordinates of the vertices at minimum and separation areas
         """
-        y_midline = fluid_props['y_midline']
-        p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
+        psup, psub = fluid_props['p_sup'], fluid_props['p_sub']
         rho = fluid_props['rho']
-        a_sub = fluid_props['a_sub']
-        alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
+        asub = fluid_props['a_sub']
+        alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
 
-        x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
+        # x = surface_state[0][:-1:2]
+        y = surface_state[0][1::2]
 
-        area = 2 * (y_midline - y)
-        area_safe = smooth_lower_bound(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
-        dt_area = -2 * surface_state[1].reshape(-1, 2)[:, 1]
+        a = 2 * (fluid_props['y_midline'] - y)
+        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
 
         # Calculate minimum and separation areas/locations
-        w_min = smooth_minmax_weight(area_safe, alpha)
-        a_min = w_average(s, area_safe, w_min)
-        s_min = w_average(s, s, w_min)
-        dt_a_min = np.sum(dsmooth_minimum_df(area_safe, s, alpha) * dt_area)
+        wmin = expweight(asafe, alpha)
+        amin = wavg(s, asafe, wmin)
+        smin = wavg(s, s, wmin)
 
-        s_sep, a_sep, dt_a_sep = self.separation_point(s, area_safe, dt_area, fluid_props)
+        ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
         
         # 1D Bernoulli approximation of the flow
-        p_sep = p_sup
-        flow_rate_sqr = 2/rho*(p_sep - p_sub)/(a_sub**-2 - a_sep**-2)
-        dt_flow_rate_sqr = 2/rho*(p_sep - p_sub)*-1*(a_sub**-2 - a_sep**-2)**-2 \
-                           * (2*a_sep**-3 * dt_a_sep)
+        psep = psup
+        flow_rate_sqr = 2/rho*(psep - psub)/(asub**-2 - asep**-2)
 
-        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
+        pbern = psub + 1/2*rho*flow_rate_sqr*(asub**-2 - asafe**-2)
 
-        sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
+        sep_multiplier = smoothstep(self.s_vertices, ssep, k=k)
 
-        p = sep_multiplier * p_bernoulli
-
-        flow_rate = flow_rate_sqr**0.5
-        dt_flow_rate = 0.5*flow_rate_sqr**(-0.5) * dt_flow_rate_sqr
+        p = sep_multiplier * pbern
+        q = flow_rate_sqr**0.5
 
         # Find the first point where s passes s_min/s_sep, then we can linearly interpolate
-        idx_min = np.argmax(s>s_min)
-        idx_sep = np.argmax(s>s_sep)
+        idx_min = np.argmax(s>smin)
+        idx_sep = np.argmax(s>ssep)
         xy_min = surface_state[0].reshape(-1, 2)[idx_min]
         xy_sep = surface_state[0].reshape(-1, 2)[idx_sep]
         # breakpoint()
-        info = {'flow_rate': flow_rate,
-                'dt_flow_rate': dt_flow_rate,
+        info = {'flow_rate': q,
                 'idx_sep': idx_sep,
                 'idx_min': idx_min,
-                's_sep': s_sep,
-                's_min': s_min,
+                's_sep': ssep,
+                's_min': smin,
                 'xy_min': xy_min,
                 'xy_sep': xy_sep,
-                'a_min': a_min,
-                'a_sep': a_sep,
-                'area': area_safe,
+                'a_min': amin,
+                'a_sep': asep,
+                'area': asafe,
                 'pressure': p}
-        return BlockVec((np.array(flow_rate), p), ('q', 'p')), info
+        return BlockVec((np.array(q), p), ('q', 'p')), info
 
     def flow_sensitivity(self, surface_state, fluid_props):
         """
@@ -422,80 +465,70 @@ class Bernoulli(QuasiSteady1DFluid):
             A dictionary of fluid property keyword arguments.
         """
         assert surface_state[0].size%2 == 0
-        SEPARATION_FACTOR = fluid_props['r_sep']
-        y_midline = fluid_props['y_midline']
-        p_sup, p_sub = fluid_props['p_sup'], fluid_props['p_sub']
+        psup, psub = fluid_props['p_sup'], fluid_props['p_sub']
         rho = fluid_props['rho']
-        a_sub = fluid_props['a_sub']
-        alpha, k, sigma = fluid_props['alpha'], fluid_props['k'], fluid_props['sigma']
+        asub = fluid_props['a_sub']
+        alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
 
-        x, y = surface_state[0].reshape(-1, 2)[:, 0], surface_state[0].reshape(-1, 2)[:, 1]
+        # x = surface_state[0][:-1:2]
+        y = surface_state[0][1::2]
 
-        area = 2 * (y_midline - y)
-        darea_dy = -2 # darea_dx = 0
+        a = 2 * (fluid_props['y_midline'] - y)
+        da_dy = -2
 
-        area_safe = smooth_lower_bound(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
-        darea_safe_darea = dsmooth_lower_bound_df(area, 2*fluid_props['y_gap_min'], fluid_props['beta'])
+        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
+        dasafe_da = dsmoothlb_df(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
 
-        w_min = smooth_minmax_weight(area_safe, alpha)
-        dw_min_darea = dsmooth_minmax_weight_df(area_safe, alpha) * darea_safe_darea
+        wmin = expweight(asafe, alpha)
+        dwmin_da = dexpweight_df(asafe, alpha) * dasafe_da
 
-        a_min = w_average(s, area_safe, w_min)
-        da_min_darea = dw_average_df(s, area_safe, w_min)*darea_safe_darea + \
-                       dw_average_dw(s, area_safe, w_min)*dw_min_darea
-        s_min = w_average(s, s, w_min)
-        ds_min_darea = dw_average_dw(s, s, w_min)*dw_min_darea
+        amin = wavg(s, asafe, wmin)
+        damin_da = dwavg_df(s, asafe, wmin)*dasafe_da + \
+                   dwavg_dw(s, asafe, wmin)*dwmin_da
+        smin = wavg(s, s, wmin)
+        dsmin_da = dwavg_dw(s, s, wmin)*dwmin_da
 
-        a_sep = SEPARATION_FACTOR * a_min
-        da_sep_da_min = SEPARATION_FACTOR
-        da_sep_dy = da_sep_da_min * da_min_darea * darea_dy
+        ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
+        dssep_damin, dssep_dsmin, dssep_dasafe, dasep_damin, dasep_dsmin, dasep_dasafe = \
+            self.dseparation_point(s, amin, smin, asafe, fluid_props)
+        dssep_dy = (dssep_damin*damin_da + dssep_dsmin*dsmin_da + dssep_dasafe*dasafe_da) * da_dy
+        dasep_dy = (dasep_damin*damin_da + dasep_dsmin*dsmin_da + dasep_dasafe*dasafe_da) * da_dy
 
-        # Calculate the flow rate using Bernoulli equation
-        p_sep = p_sup
-        coeff = 2*(p_sep - p_sub)/rho
+        # Calculate the flow rate using Bernoulli
+        coeff = 2*(psup - psub)/rho
         dcoeff_dpsub = -2/rho
 
-        flow_rate_sqr = coeff/(a_sub**-2 - a_sep**-2)
-        dflow_rate_sqr_da_sep = -coeff/(a_sub**-2 - a_sep**-2)**2 * (2/a_sep**3)
-        dflow_rate_sqr_dpsub = dcoeff_dpsub/(a_sub**-2 - a_sep**-2)
+        qsqr = coeff/(asub**-2 - asep**-2)
+        dqsqr_dasep = -coeff/(asub**-2 - asep**-2)**2 * (2/asep**3)
+        dqsqr_dpsub = dcoeff_dpsub/(asub**-2 - asep**-2)
 
         # Find Bernoulli pressure
-        p_bernoulli = p_sub + 1/2*rho*flow_rate_sqr*(a_sub**-2 - area_safe**-2)
-        
-        dp_bernoulli_darea = 1/2*rho*flow_rate_sqr*(2/area_safe**3) * darea_safe_darea
-        dp_bernoulli_da_sep = 1/2*rho*(a_sub**-2 - area_safe**-2) * dflow_rate_sqr_da_sep
-        dp_bernoulli_dy = np.diag(dp_bernoulli_darea*darea_dy) + dp_bernoulli_da_sep[:, None]*da_sep_dy
-        dp_bernoulli_dpsub = 1.0 + 1/2*rho*dflow_rate_sqr_dpsub*(a_sub**-2 - area_safe**-2)
+        pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
+        dpbern_da = 1/2*rho*qsqr*(2/asafe**3) * dasafe_da
+        dpbern_dasep = 1/2*rho*(asub**-2 - asafe**-2) * dqsqr_dasep
+        dpbern_dy = np.diag(dpbern_da*da_dy) + dpbern_dasep[:, None]*dasep_dy
+        dpbern_dpsub = 1.0 + 1/2*rho*dqsqr_dpsub*(asub**-2 - asafe**-2)
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
-        # this ensures the separation area is selected at a point past the minimum area
-        w_sep = smooth_cutoff(s, s_min, k) * gaussian(area_safe, a_sep, sigma)
-        dw_sep_darea = dsmooth_cutoff_dx0(s, s_min, k) * ds_min_darea * gaussian(area_safe, a_sep, sigma) + \
-                       smooth_cutoff(s, s_min, k) * (dgaussian_dx(area_safe, a_sep, sigma)*darea_safe_darea + 
-                                                     dgaussian_dx0(area_safe, a_sep, sigma)*da_sep_da_min*da_min_darea)
-        s_sep = w_average(s, s, w_sep)
-        ds_sep_dy = dw_average_dw(s, s, w_sep) * dw_sep_darea * darea_dy
+        sepweight = smoothstep(self.s_vertices, ssep, k=k)
+        dsepweight_dy = dsmoothstep_dx0(self.s_vertices, ssep, k=k)[:, None] * dssep_dy
 
-        sep_multiplier = smooth_cutoff(self.s_vertices, s_sep, k=k)
-        dsep_multiplier_dy = dsmooth_cutoff_dx0(self.s_vertices, s_sep, k=k)[:, None] * ds_sep_dy
+        # p = sepweight * pbern
+        dp_dy = sepweight[:, None]*dpbern_dy + dsepweight_dy*pbern[:, None]
 
-        # p = sep_multiplier * p_bernoulli
-        dp_dy = sep_multiplier[:, None]*dp_bernoulli_dy + dsep_multiplier_dy*p_bernoulli[:, None]
-
-        dp_dpsub = sep_multiplier*dp_bernoulli_dpsub
-        dq_dpsub = 0.5*flow_rate_sqr**-0.5  * dflow_rate_sqr_dpsub
+        dp_dpsub = sepweight*dpbern_dpsub
+        dq_dpsub = 0.5*qsqr**-0.5 * dqsqr_dpsub
 
         dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
         dp_du[:, :-1:2] = 0
         dp_du[:, 1::2] = dp_dy
 
         ## Calculate the flow rate sensitivity
-        dflow_rate_du = np.zeros(surface_state[0].size)
-        dflow_rate_du[1::2] = dflow_rate_sqr_da_sep/(2*flow_rate_sqr**(1/2)) \
-                              * da_sep_da_min * da_min_darea * darea_dy
+        dq_du = np.zeros(surface_state[0].size)
+        dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_dy
 
-        return dflow_rate_du, dp_du, dq_dpsub, dp_dpsub
+        return dq_du, dp_du, dq_dpsub, dp_dpsub
 
     def flow_sensitivity_solid(self, model, surface_state, fluid_props, adjoint=False):
         """
@@ -523,9 +556,9 @@ class Bernoulli(QuasiSteady1DFluid):
 
         shape = None
         if not adjoint:
-            shape = (self.p1.size, model.solid.vert_to_vdof.size)
+            shape = (self.state1['p'].size, model.solid.vert_to_vdof.size)
         else:
-            shape = (model.solid.vert_to_vdof.size, self.p1.size)
+            shape = (model.solid.vert_to_vdof.size, self.state1['p'].size)
         dp_du.setSizes(shape)
         dp_du.setUp()
 
@@ -534,11 +567,11 @@ class Bernoulli(QuasiSteady1DFluid):
         # ()
         rows, cols = None, None
         if not adjoint:
-            rows = np.arange(self.p1.size, dtype=np.int32)
+            rows = np.arange(self.state1['p'].size, dtype=np.int32)
             cols = solid_dofs
         else:
             rows = solid_dofs
-            cols = np.arange(self.p1.size, dtype=np.int32)
+            cols = np.arange(self.state1['p'].size, dtype=np.int32)
 
         nnz = np.zeros(dp_du.size[0], dtype=np.int32)
         nnz[rows] = cols.size
@@ -567,50 +600,25 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dq_du, dp_du
 
-    def get_glottal_width(self, surface_state):
-        """
-        Return the non smoothed, glottal width
-        """
-        _, y = surface_state[0][:, 0], surface_state[0][:, 1]
+    def apply_dres_dp_adj(self, x):
+        b = self.get_properties_vec()
+        b.set(0.0)
+        return b
 
-        area = 2 * (self.properties['y_midline'] - y)
-        a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
-        return a_min
+    # def get_glottal_width(self, surface_state):
+    #     """
+    #     Return the non smoothed, glottal width
+    #     """
+    #     _, y = surface_state[0][:, 0], surface_state[0][:, 1]
 
-    def get_ini_surf_config(self):
-        """
-        Return the initial surface configuration
-
-        This is the surface state, but the displacements are converted to current configuration
-        positions
-        """
-        xy = self.u0surf.copy()
-        dxy_dt = self.v0surf
-        xy[:-1:2] = self.u0surf[:-1:2] + self.x_vertices
-        xy[1::2] = self.u0surf[1::2] + self.y_surface
-
-        surf_state = (xy, dxy_dt)
-        return surf_state
-
-    def get_fin_surf_config(self):
-        """
-        Return the final surface configuration
-
-        This is the surface state, but the displacements are converted to current configuration
-        positions
-        """
-        xy = self.u1surf.copy()
-        dxy_dt = self.v1surf
-        xy[:-1:2] = self.u1surf[:-1:2] + self.x_vertices
-        xy[1::2] = self.u1surf[1::2] + self.y_surface
-
-        surf_state = (xy, dxy_dt)
-        return surf_state
+    #     area = 2 * (self.properties['y_midline'] - y)
+    #     a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
+    #     return a_min
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation
 
-def smooth_lower_bound(f, f_lb, beta=100):
+def smoothlb(f, f_lb, beta=100):
     """
     Return the value of `f` subject to a smooth lower bound `f_lb`
 
@@ -641,7 +649,7 @@ def smooth_lower_bound(f, f_lb, beta=100):
     out[idx_overflow] = f[idx_overflow]
     return out
 
-def dsmooth_lower_bound_df(f, f_lb, beta=100):
+def dsmoothlb_df(f, f_lb, beta=100):
     """
     Return the sensitivity of `smooth_lower_bound` to `f`
 
@@ -666,29 +674,29 @@ def dsmooth_lower_bound_df(f, f_lb, beta=100):
     out[idx_overflow] = 1.0
     return out
 
-def smooth_minmax_weight(f, alpha=-1000.0):
+def expweight(f, alpha=-1000.0):
     """
-    Return exponential weights computing a 'smooth' min or max
+    Return exponential weights as exp(alpha*f) 
     """
     # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
-    # being too large (overflow). This constant factors out due to the division.
+    # being too large (overflow). This constant factors when you weights in an average
     K_STABILITY = np.max(alpha*f)
     w = np.exp(alpha*f - K_STABILITY)
     return w
 
-def dsmooth_minmax_weight_df(f, alpha=-1000.0):
+def dexpweight_df(f, alpha=-1000.0):
     K_STABILITY = np.max(alpha*f)
     # w = np.exp(alpha*f - K_STABILITY)
     dw_df = alpha*np.exp(alpha*f - K_STABILITY)
     return dw_df
 
-def w_average(s, f, w):
+def wavg(s, f, w):
     """
-    Return the weighted average of 'f(s)' with weights 'w(s)'
+    Return the weighted average of 'f(s)' with weight 'w(s)'
     """
     return trapz(f*w, s) / trapz(w, s)
 
-def dw_average_df(s, f, w):
+def dwavg_df(s, f, w):
     # trapz(f*w, s) / trapz(w, s)
 
     # num = trapz(f*w, s)
@@ -699,8 +707,8 @@ def dw_average_df(s, f, w):
 
     return dnum_df/den
 
-def dw_average_dw(s, f, w):
-    trapz(f*w, s) / trapz(w, s)
+def dwavg_dw(s, f, w):
+    # trapz(f*w, s) / trapz(w, s)
 
     num = trapz(f*w, s)
     den = trapz(w, s)
@@ -708,9 +716,9 @@ def dw_average_dw(s, f, w):
     dnum_dw = dtrapz_df(f*w, s)*f
     dden_dw = dtrapz_df(w, s)
 
-    return dnum_dw/den - num/den**2 * dden_dw
+    return (dnum_dw*den - num*dden_dw)/den**2
 
-def smooth_minimum(f, s, alpha=-1000):
+def smoothmin(f, s, alpha=-1000):
     """
     Return the smooth approximation to the minimum element of f integrated over s.
 
@@ -736,7 +744,7 @@ def smooth_minimum(f, s, alpha=-1000):
 
 # dsmooth_minimum_df = autograd.grad(smooth_minimum, 0)
 
-def dsmooth_minimum_df(f, s, alpha=-1000):
+def dsmoothmin_df(f, s, alpha=-1000):
     """
     Return the derivative of the smooth minimum with respect to x.
 
@@ -803,9 +811,11 @@ def dsigmoid_dx(x):
     sig = sigmoid(x)
     return sig * (1-sig)
 
-def smooth_cutoff(x, x0, k=100):
+def smoothstep(x, x0, k=100):
     """
     Return the mirrored logistic function evaluated at x-x0
+
+    This steps from 1.0 when x << x0 to 0.0 when x >> x0.
 
     The 'region' of smoothness is roughly characterized by dx. If x = x0 + dx, the cutoff function
     will drop to just 5% if k*dx = 3.
@@ -813,7 +823,7 @@ def smooth_cutoff(x, x0, k=100):
     arg = -k*(x-x0)
     return sigmoid(arg)
 
-def dsmooth_cutoff_dx(x, x0, k=100):
+def dsmoothstep_dx(x, x0, k=100):
     """
     Return the logistic function evaluated at x-xref
     """
@@ -821,7 +831,7 @@ def dsmooth_cutoff_dx(x, x0, k=100):
     darg_dx = -k
     return dsigmoid_dx(arg) * darg_dx
 
-def dsmooth_cutoff_dx0(x, x0, k=100):
+def dsmoothstep_dx0(x, x0, k=100):
     """
     Return the logistic function evaluated at x-xref
     """
@@ -833,143 +843,22 @@ def log_gaussian(x, x0, sigma=1.0):
     """
     Return the log of the gaussian with mean `x0` and variance `sigma`
     """
-    return np.log(1/(sigma*(2*np.pi)**0.5)) + -0.5*((x-x0)/sigma)**2
-
-def log_dgaussian_dx(x, x0, sigma=1.0):
-    """
-    Return the sensitivity of `log_gaussian` to `x`
-    """
-    return log_gaussian(x, x0, sigma) * -(x-x0)/sigma**2
-
-def log_dgaussian_dx0(x, x0, sigma=1.0):
-    """
-    Return the sensitivity of `log_gaussian` to `x0`
-    """
-    return log_gaussian(x, x0, sigma) * -(x-x0)/sigma**2
+    return -((x-x0)/sigma)**2
 
 def gaussian(x, x0, sigma=1.0):
     """
-    Return the gaussian with mean `x0` and variance `sigma`
+    Return the 'gaussian' with mean `x0` and variance `sigma`
     """
-    log_w = log_gaussian(x, x0, sigma)
-    return np.exp(log_w - np.max(log_w))
-    # return 1/(sigma*(2*np.pi)**0.5) * np.exp(-0.5*((x-x0)/sigma)**2)
+    return np.exp(-((x-x0)/sigma)**2)
 
-# TODO: Need to update
 def dgaussian_dx(x, x0, sigma=1.0):
     """
     Return the sensitivity of `gaussian` to `x`
     """
-    return gaussian(x, x0, sigma) * -(x-x0)/sigma**2
+    return gaussian(x, x0, sigma) * -2*((x-x0)/sigma) / sigma
 
 def dgaussian_dx0(x, x0, sigma=1.0):
     """
     Return the sensitivity of `gaussian` to `x0`
     """
-    return gaussian(x, x0, sigma) * (x-x0)/sigma**2
-
-def smooth_selection(x, y, y0, s, sigma=1.0):
-    """
-    Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
-
-    Weights are computed according to a gaussian distribution. The 'region' of smoothness is roughly
-    characterized by 'sigma'. If y = y0 +- 2.5*sigma, it's weight will be about 5% of the weight
-    corresponding to y = y0.
-
-    Parameters
-    ----------
-    x, y : array_like
-        Paired array of values
-    sigma : float
-        Standard deviation of the selection criteria
-    """
-    # assert x.size == y.size
-    # Use the log density for a numerically stable computation. Subtracting off a constant from the
-    # exponentiation doesn't change anything in the final ratio of weights
-    log_w = log_gaussian(y, y0, sigma)
-    w = np.exp(log_w - np.max(log_w))
-
-    return trapz(x*w, s) / trapz(w, s)
-
-# dsmooth_selection_dx = autograd.grad(smooth_selection, 0)
-# dsmooth_selection_dy = autograd.grad(smooth_selection, 1)
-# dsmooth_selection_dy0 = autograd.grad(smooth_selection, 2)
-def dsmooth_selection_dx(x, y, y0, s, sigma=1.0):
-    """
-    Return the derivative of `gaussian_selection` w.r.t `x`.
-
-    Weights are computed according to a gaussian distribution.
-
-    Parameters
-    ----------
-    x, y : array_like
-        Paired array of values
-    sigma : float
-        Standard deviation of the selection criteria
-    """
-    # assert x.size == y.size
-    log_w = log_gaussian(y, y0, sigma)
-    w = np.exp(log_w - np.max(log_w))
-
-    # The returned value would be
-    # return np.sum(x*weights) / np.sum(weights)
-    # so the derivative is given by
-    return dtrapz_df(x*w, s) / trapz(w, s) * w
-
-def dsmooth_selection_dy(x, y, y0, s, sigma=1.0):
-    """
-    Return the derivative of `gaussian_selection` w.r.t `y`.
-
-    Weights are computed according to a gaussian distribution.
-
-    Parameters
-    ----------
-    x, y : array_like
-        Paired array of values
-    sigma : float
-        Standard deviation of the selection criteria
-    """
-    # assert x.size == y.size
-    # log_w = log_gaussian(y, y0, sigma)
-    w = gaussian(y, y0, sigma)
-    dw_dy = dgaussian_dx(y, y0, sigma)
-
-    num = trapz(x*w, s)
-    dnum_dy = dtrapz_df(x*w, s) * x*dw_dy
-
-    den = trapz(w, s)
-    dden_dy = dtrapz_df(w, s) * dw_dy
-
-    # out = num/den
-    dout_dy = dnum_dy/den - num/den**2*dden_dy
-
-    return dout_dy
-
-def dsmooth_selection_dy0(x, y, y0, s, sigma=1.0):
-    """
-    Return the `x` value from an `(x, y)` pair where `y` equals `y0`.
-
-    Weights are computed according to a gaussian distribution.
-
-    Parameters
-    ----------
-    x, y : array_like
-        Paired array of values
-    sigma : float
-        Standard deviation of the selection criteria
-    """
-    # assert x.size == y.size
-    # log_w = log_gaussian(y, y0, sigma)
-    w = gaussian(y, y0, sigma)
-    dw_dy0 = dgaussian_dx0(y, y0, sigma)
-
-    num = trapz(x*w, s)
-    dnum_dy0 = np.dot(dtrapz_df(x*w, s), x*dw_dy0)
-
-    den = trapz(w, s)
-    dden_dy0 = np.dot(dtrapz_df(w, s), dw_dy0)
-
-    # out = num/den
-    dout_dy0 = dnum_dy0/den - num/den**2*dden_dy0
-
-    return dout_dy0
+    return gaussian(x, x0, sigma) * -2*((x-x0)/sigma) / -sigma

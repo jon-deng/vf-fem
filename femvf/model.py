@@ -6,14 +6,20 @@ from os import path
 
 import numpy as np
 import dolfin as dfn
+from petsc4py import PETSc
 # import ufl
-# from petsc4py import PETSc as pc
 
 from . import solids, fluids
 from . import meshutils
+from . import linalg
+
+DEFAULT_NEWTON_SOLVER_PRM = {
+    'linear_solver': 'petsc',
+    'absolute_tolerance': 1e-7,
+    'relative_tolerance': 1e-9}
 
 def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli, 
-                   fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)):
+                   fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     """
     Factory function that loads a model based on input solid/fluid meshes.
 
@@ -48,14 +54,17 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluid
         raise ValueError(f"`fluid_mesh` cannot be `None` if the fluid is not 1D")
     else:
         raise ValueError(f"This function does not yet support input fluid meshes.")
-
-    model = ForwardModel(solid, fluid)
+    
+    if coupling == 'explicit':
+        model = ExplicitFSIModel(solid, fluid)
+    elif coupling == 'implicit':
+        model = ImplicitFSIModel(solid, fluid)
 
     return model
 
-class ForwardModel:
+class FSIModel:
     """
-    Stores all the things related to the vocal fold forward model solved thru fenics.
+    Represents a coupled system of models
 
     TODO: Instantiation is kind of messy and ugly. Prettify/clean it up.
         Class contains alot of extra, non-essential stuff. Think about what are the essential
@@ -88,10 +97,6 @@ class ForwardModel:
     surface_vertices : array_like
         A list of vertex numbers on the pressure surface. They are ordered in increasing streamwise
         direction.
-
-    form coefficients and states
-
-    main forms for solving
     """
     def __init__(self, solid, fluid):
         self.solid = solid
@@ -124,16 +129,17 @@ class ForwardModel:
         self.fixed_vertices = fixed_vertices
         self.fixed_corodinates = self.solid.mesh.coordinates()[fixed_vertices]
 
-        self.cached_form_assemblers = {
-            'bilin.df1_du1_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du1_adj']),
-            'bilin.df1_du0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du0_adj']),
-            'bilin.df1_dv0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_dv0_adj']),
-            'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_da0_adj'])
-        }
+    # def set_ini_state():
 
-    @property
-    def forms(self):
-        return self.solid.forms
+    # def set_fin_state():
+
+    # def set_ini_control():
+    
+    # def set_fin_control():
+
+    # def set_ini_properties():
+
+    # def set_fin_properties():
 
     # Solid / fluid interfacing functions
     def get_fsi_scalar_dofs(self):
@@ -259,76 +265,11 @@ class ForwardModel:
     # Fluid 'residuals'
     # These are designed for quasi-steady, Bernoulli fluids where you don't need any iterative
     # methods to solve.
-    def solve_qp1(self):
-        return self.fluid.solve_qp1()
-
-    def solve_qp0(self):
-        return self.fluid.solve_qp0()
-
-    def solve_dqp1_du1(self, adjoint=False):
-        return self.fluid.solve_dqp1_du1(adjoint)
-
-    def solve_dqp0_du0(self, adjoint=False):
-        return self.fluid.solve_dqp0_du0(adjoint)
-
     def solve_dqp1_du1_solid(self, adjoint=False):
         return self.fluid.solve_dqp1_du1_solid(self, adjoint)
 
     def solve_dqp0_du0_solid(self, adjoint=False):
         return self.fluid.solve_dqp0_du0_solid(self, adjoint)
-
-    # Solid residuals
-    def assem_f1(self):
-        """
-        Return the residual vector
-
-        Parameters
-        ----------
-        u1 : dfn.cpp.la.Vector
-        """
-        return dfn.assemble(self.forms['form.un.f1'])
-        # M = self.assem_cache['M']
-        # K = self.assem_cache['K']
-
-        # dt = self.dt.values()[0]
-        # gamma, beta = self.gamma.values()[0], self.beta.values()[0]
-
-        # rm = self.rayleigh_m.values()[0]
-        # rk = self.rayleigh_k.values()[0]
-
-        # u0 = self.u0.vector()
-        # v0 = self.v0.vector()
-        # a0 = self.a0.vector()
-
-        # if u1 is None:
-        #     u1 = self.u1.vector()
-
-        # v1 = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        # a1 = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-        # return M*(a1 + rm*v1) + K*(u1 + rk*v1) + dfn.assemble(self.f1_nonlin)
-
-    def assem_df1_du1(self):
-        """
-        Return the residual vector jacobian
-
-        Parameters
-        ----------
-        u1 : dfn.cpp.la.Vector
-        """
-        return dfn.assemble(self.forms['form.bi.df1_du1'])
-
-    def assem_df1_du1_adj(self):
-        return self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-
-    def assem_df1_du0_adj(self):
-        return self.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-
-    def assem_df1_dv0_adj(self):
-        return self.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-
-    def assem_df1_da0_adj(self):
-        return self.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
 
     ## Convenience functions
     def get_triangulation(self, config='ref'):
@@ -386,7 +327,6 @@ class ForwardModel:
         return verts
 
     ## Methods for setting model parameters
-
     def set_ini_solid_state(self, uva0):
         """
         Sets the state variables u, v, and a at the start of the step.
@@ -396,10 +336,11 @@ class ForwardModel:
         u0, v0, a0 : array_like
         """
         self.solid.set_ini_state(uva0)
-
-        u0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[0])
+        
+        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
+        u0_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva0[0])
         v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
-        self.fluid.set_ini_surf_state((u0_fluid, v0_fluid))
+        self.fluid.set_ini_control((u0_fluid, v0_fluid))
 
     def set_fin_solid_state(self, uva1):
         """
@@ -414,21 +355,23 @@ class ForwardModel:
         """
         self.solid.set_fin_state(uva1)
 
-        u1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[0])
+        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
+        
+        u1_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva1[0])
         v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
-        self.fluid.set_fin_surf_state((u1_fluid, v1_fluid))
+        self.fluid.set_fin_control((u1_fluid, v1_fluid))
 
     def set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
 
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        self.solid.set_ini_surf_pressure(p0_solid)
+        self.solid.set_ini_control(p0_solid)
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
         p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        self.solid.set_fin_surf_pressure(p1_solid)
+        self.solid.set_fin_control(p1_solid)
 
     def set_time_step(self, dt):
         """
@@ -537,7 +480,6 @@ class ForwardModel:
         if dt is not None:
             self.set_time_step(dt)
 
-
     def set_params_fromfile(self, statefile, n, update_props=True):
         """
         Set all parameters needed to integrate the model from a recorded value.
@@ -605,32 +547,471 @@ class ForwardModel:
         return {'uva0': uva0, 'uva1': uva1, 'qp0': qp0, 'qp1': qp1, 'dt': dt,
                 'solid_props': solid_props, 'fluid_props': fluid_props, }
 
-class CachedBiFormAssembler:
-    """
-    Assembles a bilinear form using a cached sparsity pattern
+    def set_ini_state(self, state):
+        self.solid.set_ini_state(state[:3])
+        self.fluid.set_ini_state(state[3:])
 
-    Parameters
-    ----------
-    form : ufl.Form
-    keep_diagonal : bool, optional
-        Whether to preserve diagonals in the form
-    """
+    def set_fin_state(self, state):
+        self.solid.set_fin_state(state[:3])
+        self.fluid.set_fin_state(state[3:])
 
-    def __init__(self, form, keep_diagonal=True):
-        self._form = form
+    def set_properties(self, props):
+        N = len(self.solid.properties.size)
+        self.solid.set_properties(props[:N])
+        self.fluid.set_properties(props[N:])
 
-        self._tensor = dfn.assemble(form, keep_diagonal=keep_diagonal)
-        self._tensor.zero()
+    def get_state_vec(self):
+        return linalg.concatenate(self.solid.get_state_vec(), self.fluid.get_state_vec())
+    
+    def get_properties_vec(self):
+        return linalg.concatenate(self.solid.get_properties_vec(), self.fluid.get_properties_vec())
 
-    @property
-    def tensor(self):
-        return self._tensor
+    ## Solver functions
+    ## Specific models have to implement these
+    def res(self):
+        """
+        Return the residual vector, F
+        """
+        dt = self.solid.dt.vector()[0]
+        u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
+        u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
+        res = self.get_state_vec()
 
-    @property
-    def form(self):
-        return self._form
+        res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
+        self.solid.bc_base.apply(res['u'])
+        res['v'][:] = v1 - solids.newmark_v(u1, u0, v0, a0, dt)
+        res['a'][:] = a1 - solids.newmark_a(u1, u0, v0, a0, dt)
 
-    def assemble(self):
-        out = self.tensor.copy()
-        return dfn.assemble(self.form, tensor=out)
+        qp, *_ = self.fluid.solve_qp1()
+        res['q'][:] = self.fluid.state1['q'] - qp['q']
+        res['p'][:] = self.fluid.state1['p'] - qp['p']
+        return res
+    
+    # Forward solver methods
+    def solve_state1(self, ini_state, newton_solver_prm=None):
+        """
+        Solve for the final state given an initial guess
+        """
+        raise NotImplementedError
 
+    def solve_dres_dstate1(self, b):
+        """
+        Solve, dF/du x = f
+        """
+        raise NotImplementedError
+
+    # Adjoint solver methods
+    def solve_dres_dstate1_adj(self, b):
+        """
+        Solve, dF/du^T x = f
+        """
+        raise NotImplementedError
+
+    def apply_dres_dstate0_adj(self, x):
+        raise NotImplementedError
+
+    def apply_dres_dp_adj(self, x):
+        raise NotImplementedError
+
+    def apply_dres_dcontrol_adj(self, x):
+        raise NotImplementedError
+
+class ExplicitFSIModel(FSIModel):
+
+    def res(self):
+        """
+        Return the residual vector, F
+        """
+        dt = self.solid.dt.vector()[0]
+        u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
+        u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
+        res = self.get_state_vec()
+
+        res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
+        self.solid.bc_base.apply(res['u'])
+        res['v'][:] = v1 - solids.newmark_v(u1, u0, v0, a0, dt)
+        res['a'][:] = a1 - solids.newmark_a(u1, u0, v0, a0, dt)
+
+        qp, *_ = self.fluid.solve_qp1()
+        res['q'][:] = self.fluid.state1['q'] - qp['q']
+        res['p'][:] = self.fluid.state1['p'] - qp['p']
+        return res
+    
+    # Forward solver methods
+    def solve_state1(self, ini_state, newton_solver_prm=None):
+        """
+        Solve for the final state given an initial guess
+        """
+        dt = self.solid.dt.vector()[0]
+        solid = self.solid
+        uva0 = self.solid.state0
+
+        uva1 = self.solid.get_state_vec()
+
+        # Update form coefficients and initial guess
+        self.set_iter_params(uva1=ini_state.vecs[:3], qp1=ini_state.vecs[3:])
+
+        # TODO: You could implement this to use the non-linear solver only when collision is happening
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+
+        dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
+                  solver_parameters={"newton_solver": newton_solver_prm})
+
+        res = dfn.assemble(self.solid.forms['form.un.f1'])
+        self.solid.bc_base.apply(res)
+
+        uva1['u'][:] = solid.u1.vector()
+        uva1['v'][:] = solids.newmark_v(uva1['u'], *uva0, dt)
+        uva1['a'][:] = solids.newmark_a(uva1['u'], *uva0, dt)
+
+        self.set_fin_solid_state(uva1)
+        qp1, fluid_info = self.fluid.solve_qp1()
+
+        step_info = {'fluid_info': fluid_info}
+
+        return linalg.concatenate(uva1, qp1), step_info
+
+    def solve_dres_dstate1(self, b):
+        """
+        Solve, dF/du x = f
+        """
+        dt = self.solid.dt.vector()[0]
+        x = self.get_state_vec()
+
+        solid = self.solid
+
+        dfu1_du1 = dfn.assemble(solid.df1_du1)
+        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
+        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+
+        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
+        dfq2_du2 = 0 - dq_du
+        dfp2_du2 = 0 - dp_du
+
+        self.solid.bc_base.apply(dfu1_du1)
+        dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
+        x['v'][:] = b['v'] - dfv2_du2*x['u']
+        x['a'][:] = b['a'] - dfa2_du2*x['u']
+
+        # qp1, fluid_info = self.fluid.solve_qp1()
+        
+        # breakpoint()
+        x['q'][:] = b['q'] - dfq2_du2.inner(x['u'])
+        x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
+        return x
+
+    # Adjoint solver methods
+    def solve_dres_dstate1_adj(self, b):
+        """
+        Solve, dF/du^T x = f
+        """
+        ## Assemble sensitivity matrices
+        # model.set_iter_params(**it_params)
+        dt = self.solid.dt.vector()[0]
+
+        dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
+        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+
+        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
+        dfq2_du2 = 0 - dq_du
+        dfp2_du2 = 0 - dp_du
+
+        ## Do the linear algebra that solves for the adjoint states
+        x = self.get_state_vec()
+        adj_uva = x[:3]
+        adj_qp = x[3:]
+
+        adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
+
+        # self.solid.bc_base.apply(adj_a_rhs)
+        # self.solid.bc_base.apply(adj_v_rhs)
+        adj_uva['a'][:] = adj_a_rhs
+        adj_uva['v'][:] = adj_v_rhs
+
+        # TODO: Think of how to apply fluid boundary conditions in a generic way.
+        # There are no boundary conditions for the Bernoulli case because of the way it's coded but
+        # this will be needed for different models
+        adj_qp['q'][:] = adj_q_rhs
+        adj_qp['p'][:] = adj_p_rhs
+
+        _adj_p = dfp2_du2.getVecRight()
+        _adj_p[:] = adj_qp['p']
+
+        adj_u_rhs = adj_u_rhs - (
+            dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q'] 
+            + dfn.PETScVector(dfp2_du2*_adj_p))
+        # print(adj_u_rhs.norm('l2'))
+        # breakpoint()
+        self.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
+        dfn.solve(dfu2_du2, adj_uva['u'], adj_u_rhs, 'petsc')
+
+        return x
+
+    def apply_dres_dstate0_adj(self, x):
+        dt2 = self.solid.dt.vector()[0]
+        dfu2_du1 = self.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
+        dfu2_dv1 = self.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
+        dfu2_da1 = self.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
+        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+
+        dfv2_du1 = 0 - solids.newmark_v_du0(dt2)
+        dfv2_dv1 = 0 - solids.newmark_v_dv0(dt2)
+        dfv2_da1 = 0 - solids.newmark_v_da0(dt2)
+
+        dfa2_du1 = 0 - solids.newmark_a_du0(dt2)
+        dfa2_dv1 = 0 - solids.newmark_a_dv0(dt2)
+        dfa2_da1 = 0 - solids.newmark_a_da0(dt2)
+
+        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
+        dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
+        dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
+        matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(x['u']).vec()
+
+        b = self.get_state_vec()
+        b['u'][:] = dfu2_du1*x['u'] + dfv2_du1*x['v'] + dfa2_du1*x['a']
+        b['v'][:] = dfu2_dv1*x['u'] + dfv2_dv1*x['v'] + dfa2_dv1*x['a']
+        b['a'][:] = dfu2_da1*x['u'] + dfv2_da1*x['v'] + dfa2_da1*x['a']
+        b['q'][:] = 0.0
+        b['p'][:] = matvec_adj_p_rhs
+        return b
+
+    def apply_dres_dp_adj(self, x):
+        # bsolid = self.solid.get_properties_vec()
+        # bfluid = self.fluid.get_properties_vec()
+        bsolid = self.solid.apply_dres_dp_adj(x[:3])
+        bfluid = self.fluid.apply_dres_dp_adj(x[3:])
+        return linalg.concatenate(bsolid, bfluid)
+
+    def apply_dres_dcontrol_adj(self, x):
+        # b = self.get_properties_vec()
+        pass
+
+class ImplicitFSIModel(FSIModel):
+    
+    def res(self):
+        """
+        Return the residual vector, F
+        """
+        dt = self.solid.dt.vector()[0]
+        u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
+        u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
+        res = self.get_state_vec()
+
+        res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
+        self.solid.bc_base.apply(res['u'])
+        res['v'][:] = v1 - solids.newmark_v(u1, u0, v0, a0, dt)
+        res['a'][:] = a1 - solids.newmark_a(u1, u0, v0, a0, dt)
+
+        qp, *_ = self.fluid.solve_qp1()
+        res['q'][:] = self.fluid.state1['q'] - qp['q']
+        res['p'][:] = self.fluid.state1['p'] - qp['p']
+        return res
+    
+    # Forward solver methods
+    def solve_state1(self, ini_state, newton_solver_prm=None):
+        """
+        Solve for the final state given an initial guess
+        """
+        dt = self.solid.dt.vector()[0]
+        solid = self.solid
+
+        # Set initial guesses for the states at the next time
+        # uva1 = solid.get_state_vec()
+        uva1 = ini_state[:3].copy()
+        qp1 = ini_state[3:].copy()
+
+        # Solve the coupled problem using fixed point iterations between the fluid and solid
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+
+        # Calculate the initial residual
+        self.set_fin_solid_state(uva1)
+        self.set_fin_fluid_state(qp1)
+        res0 = dfn.assemble(self.solid.f1)
+        self.solid.bc_base.apply(res0)
+
+        # Set tolerances for the fixed point iterations
+        nit = 0
+        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
+        max_nit = 10
+        abs_err_prev, abs_err, rel_err = 1.0, np.inf, np.inf
+        # *_, fluid_info = self.fluid.solve_qp0() 
+        fluid_info = None
+        while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
+            dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
+                      solver_parameters={"newton_solver": newton_solver_prm})
+
+            uva1['u'][:] = solid.u1.vector()
+            uva1['v'][:] = solids.newmark_v(uva1['u'], *self.solid.state0, dt)
+            uva1['a'][:] = solids.newmark_a(uva1['u'], *self.solid.state0, dt)
+            # print(uva0['u'].norm('l2'))
+
+            self.set_fin_solid_state(uva1)
+            qp1, fluid_info = self.fluid.solve_qp1()
+
+            self.set_fin_fluid_state(qp1)
+
+            # Calculate the error in the solid residual with the updated pressures
+            # self.set_iter_params(uva1=uva1, qp1=qp1)
+            res = dfn.assemble(solid.f1)
+            solid.bc_base.apply(res)
+            # breakpoint()
+
+            abs_err = res.norm('l2')
+            rel_err = abs_err/abs_err_prev
+
+            # breakpoint()
+            nit += 1
+        res = dfn.assemble(self.solid.forms['form.un.f1'])
+        self.solid.bc_base.apply(res)
+        # print(nit, res.norm('l2'))
+
+        step_info = {'fluid_info': fluid_info,
+                     'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
+
+        return linalg.concatenate(uva1, qp1), step_info
+
+    def solve_dres_dstate1(self, b):
+        """
+        Solve, dF/du x = f
+        """
+        dt = self.solid.dt.vector()[0]
+        x = self.get_state_vec()
+
+        solid = self.solid
+
+        dfu1_du1 = dfn.assemble(solid.df1_du1)
+        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
+        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+
+        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
+        dfq2_du2 = 0 - dq_du
+        dfp2_du2 = 0 - dp_du
+
+        self.solid.bc_base.apply(dfu1_du1)
+        dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
+        x['v'][:] = b['v'] - dfv2_du2*x['u']
+        x['a'][:] = b['a'] - dfa2_du2*x['u']
+
+        # qp1, fluid_info = self.fluid.solve_qp1()
+        
+        # breakpoint()
+        x['q'][:] = b['q'] - dfq2_du2.inner(x['u'])
+        x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
+        return x
+
+    # Adjoint solver methods
+    def solve_dres_dstate1_adj(self, b):
+        """
+        Solve, dF/du^T x = f
+        """
+        ## Assemble sensitivity matrices
+        # self.set_iter_params(**it_params)
+        dt = self.solid.dt.vector()[0]
+
+        dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
+        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+        dfu2_dp2 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+
+        # map dfu2_dp2 to have p on the fluid domain
+        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
+        dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
+        dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, self.fluid.state1['p'].size)
+
+        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
+        dfq2_du2 = 0 - dq_du
+        dfp2_du2 = 0 - dp_du
+
+        ## Do the linear algebra that solves for the adjoint states
+        adj_uva = self.solid.get_state_vec()
+        adj_qp = self.fluid.get_state_vec()
+
+        adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
+
+        # adjoint states for v, a, and q are explicit so we can solve for them
+        self.solid.bc_base.apply(adj_v_rhs)
+        adj_uva['v'][:] = adj_v_rhs
+
+        self.solid.bc_base.apply(adj_a_rhs)
+        adj_uva['a'][:] = adj_a_rhs
+
+        # TODO: how to apply fluid boundary conditions in a generic way?
+        adj_qp['q'][:] = adj_q_rhs
+
+        adj_u_rhs -= dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q']
+
+        bc_dofs = np.array(list(self.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
+        self.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
+        dfp2_du2.zeroRows(bc_dofs, diag=0.0)
+        # self.solid.bc_base.zero_columns(dfu2_du2, adj_u_rhs.copy(), diagonal_value=1.0)
+
+        # solve the coupled system for pressure and displacement residuals
+        dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
+        blocks = [[dfu2_du2_mat, dfp2_du2], [dfu2_dp2, 1.0]]
+
+        dfup2_dup2 = linalg.form_block_matrix(blocks)
+        adj_up, rhs = dfup2_dup2.getVecs()
+
+        # calculate rhs vectors
+        rhs[:adj_u_rhs.size()] = adj_u_rhs
+        rhs[adj_u_rhs.size():] = adj_p_rhs
+
+        # Solve the block linear system with LU factorization
+        ksp = PETSc.KSP().create()
+        ksp.setType(ksp.Type.PREONLY)
+
+        pc = ksp.getPC()
+        pc.setType(pc.Type.LU)
+
+        ksp.setOperators(dfup2_dup2)
+        ksp.solve(rhs, adj_up)
+
+        adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
+        adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
+
+        return linalg.concatenate(adj_uva, adj_qp)
+
+    def apply_dres_dstate0_adj(self, x):
+        adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = x
+
+        ## Assemble sensitivity matrices
+        # dt2 = it_params2['dt']
+        solid = self.solid
+        dt2 = self.solid.dt.vector()[0]
+        # model.set_iter_params(**it_params2)
+
+        dfu2_du1 = solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
+        dfu2_dv1 = solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
+        dfu2_da1 = solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
+
+        dfv2_du1 = 0 - solids.newmark_v_du0(dt2)
+        dfv2_dv1 = 0 - solids.newmark_v_dv0(dt2)
+        dfv2_da1 = 0 - solids.newmark_v_da0(dt2)
+        dfa2_du1 = 0 - solids.newmark_a_du0(dt2)
+        dfa2_dv1 = 0 - solids.newmark_a_dv0(dt2)
+        dfa2_da1 = 0 - solids.newmark_a_da0(dt2)
+
+        ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
+        # Allocate a vector the for fluid side mat-vec multiplication
+        b = x.copy()
+        b['u'][:] = (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
+        b['v'][:] = (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
+        b['a'][:] = (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
+        b['q'][()] = 0
+        b['p'][:] = 0
+
+        return b
+
+    def apply_dres_dp_adj(self, x):
+        # bsolid = self.solid.get_properties_vec()
+        # bfluid = self.fluid.get_properties_vec()
+        bsolid = self.solid.apply_dres_dp_adj(x[:3])
+        bfluid = self.fluid.apply_dres_dp_adj(x[3:])
+        return linalg.concatenate(bsolid, bfluid)
+
+    def apply_dres_dcontrol_adj(self, x):
+        # b = self.get_properties_vec()
+        pass

@@ -30,20 +30,28 @@ class CommonSetup(unittest.TestCase):
         """
         mesh_path = '../meshes/M5-3layers.xml'
 
-        self.model = load_fsi_model(mesh_path, None, Fluid=fluids.Bernoulli)
-        self.surface_coordinates = np.stack([self.model.fluid.x_vertices,
-                                             self.model.fluid.y_surface], axis=-1)
+        # self.model = load_fsi_model(mesh_path, None, Fluid=fluids.Bernoulli)
+        # self.surface_coordinates = np.stack([self.model.fluid.x_vertices,
+        #                                      self.model.fluid.y_surface], axis=-1).reshape(-1)
+        # self.fluid = self.model.fluid
 
-        self.fluid = self.model.fluid
+        x = np.linspace(-0.5, 0.5, 50)
+        y = 0.5-x**2
+        # print(y)
+        self.fluid = fluids.Bernoulli(x, y)
+        self.surface_coordinates = np.stack([x, y], axis=-1).reshape(-1)
+        
+        p_sub = 800.0*PASCAL_TO_CGS
+        p_sup = 0*PASCAL_TO_CGS
         self.fluid_properties = self.fluid.get_properties()
-
-        self.fluid_properties['y_midline'][()] = self.surface_coordinates[..., 1].max()+1e-3
+        self.fluid_properties['p_sub'][()] = p_sub
+        self.fluid_properties['p_sup'][()] = p_sup
+        self.fluid_properties['y_midline'][()] = y.max()+1e-3
         self.fluid_properties['y_gap_min'][()] = 1e-3
         self.fluid_properties['beta'][()] = 100
+        self.fluid_properties['r_sep'][()] = 1.0
 
-        self.area = 2*(self.fluid_properties['y_midline'] - self.surface_coordinates[..., 1])
-        self.p_sub = 800.0*PASCAL_TO_CGS
-        self.p_sup = 0*PASCAL_TO_CGS
+        self.area = 2*(self.fluid_properties['y_midline'] - y)
 
 class TestBernoulli(CommonSetup):
 
@@ -58,23 +66,23 @@ class TestBernoulli(CommonSetup):
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
 
-        surf_state = (xy_surf, np.zeros(xy_surf.shape), np.zeros(xy_surf.shape))
+        surf_state = (xy_surf, np.zeros(xy_surf.shape))
         qp_test, info = fluid.fluid_pressure(surf_state, fluid_props)
         q_test, p_test = qp_test['q'], qp_test['p']
 
-        area = 2*(fluid_props['y_midline'] - xy_surf[..., 1])
+        area = 2*(fluid_props['y_midline'] - xy_surf[1::2])
         p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*q_test**2*(1/fluid_props['a_sub']**2 - 1/area**2)
 
         # Plot the pressures computed from Bernoulli
         fig, ax = plt.subplots(1, 1)
-        ax.plot(xy_surf[:, 0], p_test/10)
-        ax.plot(xy_surf[:, 0], p_verify/10)
+        ax.plot(xy_surf[:-1:2], p_test/10)
+        ax.plot(xy_surf[:-1:2], p_verify/10)
         ax.set_xlabel("x [cm]")
         ax.set_ylabel("Pressure [Pa]")
         ax.set_ylim(-fluid_props['p_sub']/10/5, fluid_props['p_sub']/10*1.1)
 
         ax_surf = ax.twinx()
-        ax_surf.plot(xy_surf[:, 0], xy_surf[:, 1], ls='-.', c='k')
+        ax_surf.plot(xy_surf[:-1:2], xy_surf[1::2], ls='-.', c='k')
         ax_surf.set_ylabel("y [cm]")
 
         plt.show()
@@ -91,18 +99,18 @@ class TestBernoulli(CommonSetup):
         surface_coordinates = self.surface_coordinates
 
         ## Set a surface state step direction and step sizes
-        hs = np.concatenate([[0], 2**np.arange(-6, 1, dtype=np.float)])
-        du = np.zeros(fluid.u1surf.size)
+        hs = np.concatenate([[0], 2**np.arange(-5, 5, dtype=np.float)])
+        du = np.zeros(fluid.control1['usurf'].size)
         du[:] = np.random.rand(du.size)*1e-5
 
         ## Calculate p/q sensitivity and convergence order using FD
         # Calculate perturbed flow states
         ps, qs = [], []
         for h in hs:
-            x1 = (surface_coordinates + h*du.reshape(-1, 2), np.zeros(surface_coordinates.shape))
+            x1 = (surface_coordinates + h*du, np.zeros(surface_coordinates.shape))
             qp, _ = fluid.fluid_pressure(x1, self.fluid_properties)
-            ps.append(qp[1])
             qs.append(qp[0])
+            ps.append(qp[1])
         ps = np.array(ps)
         qs = np.array(qs)
 
@@ -114,8 +122,8 @@ class TestBernoulli(CommonSetup):
         dq_du, dp_du, *_ = fluid.flow_sensitivity(x0, self.fluid_properties)
 
         ## Calculate the predicted change in pressure and compare the two quantities
-        dp = dp_du@du
         dq = dq_du.dot(du)
+        dp = dp_du@du
 
         taylor_remainder_2 = np.abs(ps[1:, :] - ps[0, :] - hs[1:][:, None]*dp)
         p_order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
@@ -126,9 +134,9 @@ class TestBernoulli(CommonSetup):
         print("2nd order Taylor (q)", q_order_2)
 
         error = dp - dp_true
-        breakpoint()
-        print(p_order_2[:, 25])
-        self.assertTrue((error))
+        # breakpoint()
+        # print(p_order_2[:, 25])
+        # self.assertTrue((error))
 
     def test_flow_sensitivity_psub(self):
         """
@@ -190,7 +198,7 @@ class TestBernoulli(CommonSetup):
         surface_coordinates = self.surface_coordinates
 
         # Set a displacement change direction
-        du_fluid = np.zeros(fluid.u1surf.size)
+        du_fluid = np.zeros(fluid.control1['usurf'].size)
         du_fluid[:] = np.random.rand(du_fluid.size)*1e-2
 
         du_solid = dfn.Function(self.model.solid.vector_fspace).vector().vec()
@@ -199,7 +207,7 @@ class TestBernoulli(CommonSetup):
 
         # Calculate pressure sensitivity using the `Fluid` function
         x0 = (surface_coordinates, 0, 0)
-        _, dp_du_fluid = fluid.flow_sensitivity(x0, self.fluid_properties)
+        _, dp_du_fluid, *_ = fluid.flow_sensitivity(x0, self.fluid_properties)
         _, dp_du_solid = fluid.flow_sensitivity_solid(self.model, x0, self.fluid_properties)
         _, dp_du_solid_adj = fluid.flow_sensitivity_solid(self.model, x0, self.fluid_properties,
                                                           adjoint=True)
@@ -292,27 +300,28 @@ class TestSmoothApproximations(CommonSetup):
     def setUp(self):
         super().setUp()
 
-        beta = 100.0
-        alpha, k, sigma = -500, 75, 0.005
-        self.fluid_properties['beta'][()] = beta
-        self.fluid_properties['alpha'][()] = alpha
-        self.fluid_properties['k'][()] = k
-        self.fluid_properties['sigma'][()] = sigma
+        self.s = np.linspace(0, 1.0, 50)
+        self.f = s**2
 
-    def test_dsmooth_lower_bound_df(self):
+        self.beta = 100.0
+        self.alpha = 75 
+        self.k =  -500
+        self.sigma = 0.005
+
+    def test_dsmoothlb_df(self):
         a0 = np.array([0.1])
         a_lb = 0.001
 
         da = 1e-6
 
-        df_da = fluids.dsmooth_lower_bound_df(a0, a_lb, beta=self.fluid_properties['beta'])
+        df_da = fluids.dsmoothlb_df(a0, a_lb, beta=self.fluid_properties['beta'])
 
-        f0 = fluids.smooth_lower_bound(a0, a_lb, beta=self.fluid_properties['beta'])
-        f1 = fluids.smooth_lower_bound(a0+da, a_lb, beta=self.fluid_properties['beta'])
+        f0 = fluids.smoothlb(a0, a_lb, beta=self.fluid_properties['beta'])
+        f1 = fluids.smoothlb(a0+da, a_lb, beta=self.fluid_properties['beta'])
         df_da_fd = (f1-f0)/da
         breakpoint()
 
-    def test_smooth_minimum_weights(self):
+    def test_smoothmin(self):
         """
         Plots the values of the smoothing factors
         """
@@ -360,21 +369,13 @@ class TestSmoothApproximations(CommonSetup):
         ax.plot(fluid.x_vertices, w, marker='o', ls='none')
         plt.show()
 
-    def test_smooth_cutoff(self):
+    def test_smoothstep(self):
         """
         Plots the values of the smoothing factors
         """
-        fluid = self.fluid
-        fluid.set_properties(self.fluid_properties)
-
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]
-
-        area = 2 * (fluid_props['y_midline'] - y)
-
-        # print(fluid_props.)
-        print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
-        w = fluids.smooth_cutoff(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['k'])
+        w = fluids.smoothstep(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['k'])
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(fluid.x_vertices, y)
@@ -398,34 +399,15 @@ class TestSmoothApproximations(CommonSetup):
 
         self.assertAlmostEqual(dsigmoid_dx_ad(x), fluids.dsigmoid_dx(x))
 
-    def test_dsmooth_cutoff(self):
-        dsmooth_cutoff_dx_ad = autograd.grad(fluids.smooth_cutoff, 0)
-        dsmooth_cutoff_dx0_ad = autograd.grad(fluids.smooth_cutoff, 1)
+    def test_dsmoothstep(self):
+        dsmooth_cutoff_dx_ad = autograd.grad(fluids.smoothstep, 0)
+        dsmooth_cutoff_dx0_ad = autograd.grad(fluids.smoothstep, 1)
         x, k = 0.1, 100.0
 
-        self.assertAlmostEqual(dsmooth_cutoff_dx_ad(x, k), fluids.dsmooth_cutoff_dx(x, k))
-        self.assertAlmostEqual(dsmooth_cutoff_dx0_ad(x, k), fluids.dsmooth_cutoff_dx0(x, k))
+        self.assertAlmostEqual(dsmooth_cutoff_dx_ad(x, k), fluids.dsmoothstep_dx(x, k))
+        self.assertAlmostEqual(dsmooth_cutoff_dx0_ad(x, k), fluids.dsmoothstep_dx0(x, k))
 
-    def test_smooth_selection(self):
-        dsmooth_selection_dx_ad = autograd.grad(fluids.smooth_selection, 0)
-        dsmooth_selection_dy_ad = autograd.grad(fluids.smooth_selection, 1)
-        dsmooth_selection_dy0_ad = autograd.grad(fluids.smooth_selection, 2)
-        x, y, y0, sigma = 1.0, 2.0, 2.1, 0.1
-
-        x, y, y0, sigma = np.array([1.0, 2.0]), np.array([2.1, 2.2]), 2.1, 0.1
-        s = np.array([0.0, 1.0])
-
-        a = dsmooth_selection_dx_ad(x, y, y0, s, sigma)
-        b = fluids.dsmooth_selection_dx(x, y, y0, s, sigma)
-        self.assertTrue(np.all(np.isclose(a, b)))
-
-        a = dsmooth_selection_dy_ad(x, y, y0, s, sigma)
-        b = fluids.dsmooth_selection_dy(x, y, y0, s, sigma)
-        self.assertTrue(np.all(np.isclose(a, b)))
-
-        a = dsmooth_selection_dy0_ad(x, y, y0, s, sigma)
-        b = fluids.dsmooth_selection_dy0(x, y, y0, s, sigma)
-        self.assertTrue(np.all(np.isclose(a, b)))
+    # def test_wavg(self):
 
 if __name__ == '__main__':
     # unittest.main()
@@ -435,10 +417,6 @@ if __name__ == '__main__':
     # test.test_fluid_pressure()
     test.test_flow_sensitivity()
     # test.test_flow_sensitivity_psub()
-    # test.test_get_ini_surf_config()
-    # test.test_get_fin_surf_config()
-    # test.test_get_flow_sensitivity_solid()
-    # test.test_flow_sensitivity_fd()
     # test.test_flow_sensitivity_solid()
 
     # test = TestSmoothApproximations()

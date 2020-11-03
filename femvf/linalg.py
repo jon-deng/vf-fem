@@ -557,8 +557,9 @@ class BlockVec:
         if keys is None:
             keys = tuple(range(len(vecs)))
 
-        self.keys = tuple(keys)
-        self.data = dict(zip(self.keys, vecs))
+        self._keys = tuple(keys)
+        self._vecs = tuple(vecs)
+        self.data = dict(zip(keys, vecs))
 
     @property
     def size(self):
@@ -566,9 +567,14 @@ class BlockVec:
         return tuple([_len(vec) for vec in self.vecs])
 
     @property
+    def keys(self):
+        return self._keys
+
+    @property
     def vecs(self):
         """Return tuple of vectors from each block"""
-        return tuple([self.data[key] for key in self.keys])
+        return self._vecs
+        # return tuple([self.data[key] for key in self.keys])
 
     def copy(self):
         """Return a copy of the block vector"""

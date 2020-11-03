@@ -481,7 +481,7 @@ class StateFile:
             A set of functions to set vector values for.
         """
         labels = ('u', 'v', 'a')
-        uva = self.model.solid.get_state()
+        uva = self.model.solid.get_state_vec()
         for ii, label in enumerate(labels):
             uva[ii][:] = self.dset_chunk_cache[label].get(n)
 
@@ -498,7 +498,7 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
-        qp = self.model.fluid.get_state()
+        qp = self.model.fluid.get_state_vec()
 
         qp[0][:] = self.dset_chunk_cache['q'].get(n)[0]
         qp[1][:] = self.dset_chunk_cache['p'].get(n)

@@ -13,22 +13,24 @@ import numpy as np
 
 
 def line_search(hs, model, uva, solid_props, fluid_props, times,
-                duva=(0, 0, 0), dsolid_props=None, dfluid_props=None, dtimes=None,
+                duva=None, dsolid_props=None, dfluid_props=None, dtimes=None,
                 coupling='explicit', filepath='temp.h5'):
     if path.exists(filepath):
         os.remove(filepath)
 
     for n, h in enumerate(hs):
         # Increment all the properties along the search direction
-        uva_n = tuple([uva[i] + h*duva[i] for i in range(3)])
+        uva_n = uva
+        if duva is not None:
+            uva_n = uva + h*duva
 
-        solid_props_n = solid_props.copy()
+        solid_props_n = solid_props
         if dsolid_props is not None:
-            solid_props_n.vector[:] += h*dsolid_props.vector
+            solid_props_n = solid_props + h*dsolid_props
 
-        fluid_props_n = fluid_props.copy()
+        fluid_props_n = fluid_props
         if dfluid_props is not None:
-            fluid_props_n.vector[:] += h*dfluid_props.vector
+            fluid_props_n = fluid_props + h*dfluid_props
 
         times_n = np.array(times)
         if dtimes is not None:
@@ -37,7 +39,7 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
 
         runtime_start = perf_counter()
         info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
-                         coupling=coupling, h5file=filepath, h5group=f'{n}')
+                         h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
         print(f"Run duration {runtime_end-runtime_start} s")
@@ -67,7 +69,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
 
         runtime_start = perf_counter()
         info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
-                         coupling=coupling, h5file=filepath, h5group=f'{n}')
+                         h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
         print(f"Run duration {runtime_end-runtime_start} s")

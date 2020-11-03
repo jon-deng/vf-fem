@@ -19,6 +19,8 @@ from femvf.constants import PASCAL_TO_CGS
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
 
+from femvf import linalg
+
 class TestForward(unittest.TestCase):
     def setUp(self):
         """
@@ -34,7 +36,7 @@ class TestForward(unittest.TestCase):
 
     def test_forward(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
+        model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli, coupling='implicit')
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -60,11 +62,23 @@ class TestForward(unittest.TestCase):
         solid_props['rayleigh_k'][()] = 4e-3
         solid_props['k_collision'][()] = 1e11
         solid_props['y_collision'][()] = fluid_props['y_midline'] - y_gap*1/2
+        props = linalg.concatenate(solid_props, fluid_props)
 
         xy = model.solid.vector_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.vector_fspace).vector()
+
+        # model.fluid.set_properties(fluid_props)
+        # qp0, *_ = model.fluid.solve_qp0()
+
+        ini_state = model.get_state_vec()
+        ini_state.set(0.0)
+        ini_state['u'][:] = u0
+        # ini_state['q'][()] = qp0['q']
+        # ini_state['p'][:] = qp0['p']
+
+        controls = linalg.BlockVec(())
 
         save_path = 'test_forward.h5'
         if os.path.isfile(save_path):
@@ -73,18 +87,19 @@ class TestForward(unittest.TestCase):
         ## Run the simulation
         print("Running forward model")
         runtime_start = perf_counter()
-        info = integrate(model, (u0, 0, 0), solid_props, fluid_props, times,
-                         h5file=save_path, h5group='/', coupling='implicit')
+        info = integrate(model, ini_state, controls, props, times,
+                         h5file=save_path, h5group='/')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
         ## Plot the resulting glottal width
         fig, ax = plt.subplots(1, 1)
-        ax.plot(info['time'], info['glottal_width'])
+        ax.plot(times, info['glottal_width'])
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
 
         plt.show()
+        fig.savefig('test_forward.png')
 
 if __name__ == '__main__':
     test = TestForward()

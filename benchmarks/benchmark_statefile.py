@@ -29,7 +29,7 @@ def benchmark_chunksize(ntime_chunks=10):
         _x = dfn.Function(model.solid.vector_fspace).vector()
         uva = (_x, _x.copy(), _x.copy())
 
-        qp = model.fluid.get_state_vecs()
+        qp = model.fluid.get_state_vec()
 
         for i in range(100):
             f.append_time(i)
@@ -67,7 +67,7 @@ def benchmark_chunksize_chunked_read(ntime_chunks=10):
         _x = dfn.Function(model.solid.vector_fspace).vector()
         uva = (_x, _x.copy(), _x.copy())
 
-        qp = model.fluid.get_state_vecs()
+        qp = model.fluid.get_state_vec()
 
         for i in range(100):
             f.append_time(i)

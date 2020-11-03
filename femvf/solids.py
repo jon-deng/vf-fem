@@ -85,11 +85,10 @@ class Solid:
     """
     # Subclasses have to set these values
     PROPERTY_TYPES = None
-    DEFAULTS = None
+    PROPERTY_DEFAULTS = None
 
     def __init__(self, mesh, facet_func, facet_labels, cell_func, cell_labels, 
                  fsi_facet_labels, fixed_facet_labels):
-
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
         self._forms = self.form_definitions(mesh, facet_func, facet_labels,
@@ -114,29 +113,45 @@ class Solid:
         self.scalar_test = self.forms['test.scalar']
         self.vector_test = self.forms['test.vector']
 
-        ## Measures
-        self.dx = self.forms['measure.dx']
-        self.ds = self.forms['measure.ds']
-
-        self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
-        self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
-        self.vdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.vector'])
-        self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
-
         self.u0 = self.forms['coeff.state.u0']
         self.v0 = self.forms['coeff.state.v0']
         self.a0 = self.forms['coeff.state.a0']
         self.u1 = self.forms['coeff.state.u1']
+        self.v1 = self.forms['coeff.state.v1']
+        self.a1 = self.forms['coeff.state.a1']
 
         self.dt = self.forms['coeff.time.dt']
 
         self.f1 = self.forms['form.un.f1']
         self.df1_du1 = self.forms['form.bi.df1_du1']
+        self.df1_dsolid = get_df1_dsolid_forms(self.f1, self.forms, self.PROPERTY_TYPES.keys(), self.scalar_trial)
 
+        ## Measures and boundary conditions
+        self.dx = self.forms['measure.dx']
+        self.ds = self.forms['measure.ds']
         self.bc_base = self.forms['bcs.base']
 
-        # Set property values to defaults
+        ## Index mappings
+        self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
+        self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
+        self.vdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.vector'])
+        self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
+
+        ## Define the state/controls/properties
+        self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
+        self.state1 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
+        self.control0 = BlockVec((self.forms['coeff.fsi.p0'].vector(),), ('p'))
+        self.control1 = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p'))
+        self.properties = self.get_properties_vec(set_default=True)
         self.set_properties(self.get_properties_vec(set_default=True))
+
+        # TODO: You should move this to the solid since it's not the responsibility of this class to do solid specific stuff
+        self.cached_form_assemblers = {
+            'bilin.df1_du1_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du1_adj']),
+            'bilin.df1_du0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du0_adj']),
+            'bilin.df1_dv0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_dv0_adj']),
+            'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_da0_adj'])
+        }
 
     @property
     def forms(self):
@@ -153,14 +168,11 @@ class Solid:
         """
         return NotImplementedError("Subclasses must implement this function")
 
-    def get_state(self):
-        """
-        Return an empty BlockVector representing the state
-        """
+    def get_state_vec(self):
         u = dfn.Function(self.vector_fspace).vector()
         v = dfn.Function(self.vector_fspace).vector()
         a = dfn.Function(self.vector_fspace).vector()
-        return BlockVec((u, v, a), ('u', 'v', 'a'))
+        return BlockVec((u, v, a), ('u', 'v', 'a')) 
 
     def set_ini_state(self, uva0):
         """
@@ -190,10 +202,10 @@ class Solid:
         self.forms['coeff.state.v1'].vector()[:] = uva1[1]
         self.forms['coeff.state.a1'].vector()[:] = uva1[2]
 
-    def set_ini_surf_pressure(self, p0):
+    def set_ini_control(self, p0):
         self.forms['coeff.fsi.p0'].vector()[:] = p0
 
-    def set_fin_surf_pressure(self, p1):
+    def set_fin_control(self, p1):
         self.forms['coeff.fsi.p1'].vector()[:] = p1
 
     def set_time_step(self, dt):
@@ -241,8 +253,8 @@ class Solid:
         self.set_ini_state(uva0)
         self.set_fin_state(uva1)
 
-        self.set_ini_surf_pressure(p0)
-        self.set_fin_surf_pressure(p1)
+        self.set_ini_control(p0)
+        self.set_fin_control(p1)
 
         self.set_properties(props)
         self.set_time_step(dt)
@@ -298,6 +310,20 @@ class Solid:
                 properties[key][:] = coefficient.vector()[:]
 
         return properties
+
+    def apply_dres_dp_adj(self, x):
+        b = self.get_properties_vec(set_default=False)
+        for key, vec in zip(b.keys, b.vecs):
+            df1_dkey = dfn.assemble(self.df1_dsolid[key])
+            val = df1_dkey*x['u']
+            if vec.shape == ():
+                # Note this is a hack because some properties are scalar values but stored as vectors
+                # throughout the domain (specifically, the time step)
+                vec[()] = sum(val)
+            else:
+                vec[:] = val
+        return b
+
 
 class Rayleigh(Solid):
     """
@@ -726,3 +752,50 @@ class KelvinVoigt(Solid):
             'form.bi.df0_da0': df0_da0,
             'form.bi.df0_dp0': df0_dp0}
         return forms
+
+def get_df1_dsolid_forms(f1, forms, property_labels, scalar_trial):
+    """
+    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
+    """
+    df1_dsolid = {}
+    for key in property_labels:
+        try:
+            df1_dsolid[key] = dfn.adjoint(ufl.derivative(f1, forms[f'coeff.prop.{key}'], scalar_trial))
+        except RuntimeError:
+            df1_dsolid[key] = None
+
+        if df1_dsolid[key] is not None:
+            try:
+                dfn.assemble(df1_dsolid[key])
+            except RuntimeError:
+                df1_dsolid[key] = None
+    return df1_dsolid
+
+class CachedBiFormAssembler:
+    """
+    Assembles a bilinear form using a cached sparsity pattern
+
+    Parameters
+    ----------
+    form : ufl.Form
+    keep_diagonal : bool, optional
+        Whether to preserve diagonals in the form
+    """
+
+    def __init__(self, form, keep_diagonal=True):
+        self._form = form
+
+        self._tensor = dfn.assemble(form, keep_diagonal=keep_diagonal)
+        self._tensor.zero()
+
+    @property
+    def tensor(self):
+        return self._tensor
+
+    @property
+    def form(self):
+        return self._form
+
+    def assemble(self):
+        out = self.tensor.copy()
+        return dfn.assemble(self.form, tensor=out)
