@@ -271,7 +271,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'p_sup': ('const', ()),
         'a_sub': ('const', ()),
         'a_sup': ('const', ()),
-        'rho': ('const', ()),
+        'rho_air': ('const', ()),
         'r_sep': ('const', ()),
         'alpha': ('const', ()),
         'k': ('const', ()),
@@ -286,7 +286,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sub': 100000,
         'a_sup': 0.6,
         'r_sep': 1.0,
-        'rho': 1.1225 * SI_DENSITY_TO_CGS,
+        'rho_air': 1.1225 * SI_DENSITY_TO_CGS,
         'alpha': -3/0.002,
         'k': 3/0.002,
         'sigma': 2.5*0.002,
@@ -405,7 +405,7 @@ class Bernoulli(QuasiSteady1DFluid):
             The coordinates of the vertices at minimum and separation areas
         """
         psup, psub = fluid_props['p_sup'], fluid_props['p_sub']
-        rho = fluid_props['rho']
+        rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
         alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
@@ -466,7 +466,7 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         assert surface_state[0].size%2 == 0
         psup, psub = fluid_props['p_sup'], fluid_props['p_sub']
-        rho = fluid_props['rho']
+        rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
         alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices

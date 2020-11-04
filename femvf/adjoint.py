@@ -18,7 +18,7 @@ from .newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmark_v_da0
 from . import linalg
 
 
-def adjoint(model, f, functional, coupling='explicit'):
+def adjoint(model, f, functional):
     """
     Returns the gradient of the cost function using the adjoint model.
 
@@ -27,8 +27,6 @@ def adjoint(model, f, functional, coupling='explicit'):
     model : model.ForwardModel
     f : statefile.StateFile
     functional : functionals.Functional
-    coupling : 'implicit' or 'explicit'
-        How the fluid and structure should be coupled
     show_figures : bool
         Whether to display a figure showing the solution or not.
 
@@ -39,22 +37,9 @@ def adjoint(model, f, functional, coupling='explicit'):
     grad_uva, grad_solid, grad_fluid, grad_times
         Gradients with respect to initial state, solid, fluid, and integration time points
     """
-    solve_adj, solve_adj_rhs = None, None
-    if coupling == 'explicit':
-        solve_adj = solve_adj_exp
-        solve_adj_rhs = solve_adj_rhs_exp
-    elif coupling == 'implicit':
-        solve_adj = solve_adj_imp
-        solve_adj_rhs = solve_adj_rhs_imp
-    else:
-        raise ValueError("`coupling` can only be implicit or explicit you goofball")
-
-    # Assumes fluid and solid properties are constant in time
-    fluid_props = f.get_fluid_props(0)
-    solid_props = f.get_solid_props(0)
-
-    model.set_fluid_props(fluid_props)
-    model.set_solid_props(solid_props)
+    # Set properties
+    props = f.get_properties()
+    model.set_properties(props)
 
     # run the functional once to initialize any cached values
     functional_value = functional(f)
@@ -68,22 +53,14 @@ def adjoint(model, f, functional, coupling='explicit'):
     adj_solid = model.solid.get_properties_vec(set_default=False)
     adj_solid.set(0.0)
     adj_fluid = model.fluid.get_properties_vec(set_default=False)
-    # adj_p = linalg.concatenate(adj_solid, adj_fluid)
+    adj_fluid.set(0.0)
 
     ## Load states/parameters
     N = f.size
     times = f.get_times()
 
-    uva0, uva1 = f.get_state(N-2), f.get_state(N-1)
-    qp0, qp1 = f.get_fluid_state(N-2), f.get_fluid_state(N-1)
-    dt1 = times[N-1] - times[N-2]
-
-    qp1_ = None
-    if coupling == 'explicit':
-        qp1_ = qp0
-    else:
-        qp1_ = qp1
-    iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
+    # state0, state1 = f.get_state(N-2), f.get_state(N-1)
+    # dt1 = times[N-1] - times[N-2]
 
     ## Initialize the adj rhs
     dcost_duva1 = functional.duva(f, N-1)
@@ -96,35 +73,39 @@ def adjoint(model, f, functional, coupling='explicit'):
     for ii in range(N-1, 0, -1):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to read
         # index 0
-        uva1 = f.get_state(ii)
-        qp1 = f.get_fluid_state(ii)
-
+        state1 = f.get_state(ii)
         dt1 = times[ii] - times[ii-1]
+        # uva1 = f.get_state(ii)
+        # qp1 = f.get_fluid_state(ii)
 
-        uva0 = f.get_state(ii-1)
-        qp0 = f.get_fluid_state(ii-1)
+        state0 = f.get_state(ii-1)
+        # uva0 = f.get_state(ii-1)
+        # qp0 = f.get_fluid_state(ii-1)
 
         # Set the iter params
-        qp1_ = None
-        if coupling == 'explicit':
-            qp1_ = qp0
-        else:
-            qp1_ = qp1
-        iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
+        # qp1_ = None
+        # if coupling == 'explicit':
+        #     qp1_ = qp0
+        # else:
+        #     qp1_ = qp1
+        # iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
 
         # All the calculations are based on the state of the model at iter_params1, so you only have
         # to set it once here
-        model.set_iter_params(**iter_params1)
+        model.set_fin_state(state1)
+        model.set_ini_state(state0)
+        model.set_time_step(dt1)
+        # model.set_iter_params(**iter_params1)
 
         # adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
-        adj_state1 = _solve_adj(model, adj_state1_rhs, iter_params1)
+        adj_state1 = _solve_adj(model, adj_state1_rhs)
 
         # Update gradients wrt parameters using the adjoint
         # _adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid.copy(), df1_dsolid_form_adj)
-        adj_p = _solve_grad_solid(model, adj_state1, iter_params1, adj_solid, df1_dsolid_form_adj) 
+        adj_p = _solve_grad_solid(model, adj_state1, adj_solid, df1_dsolid_form_adj) 
         adj_solid = adj_p[:len(adj_solid.size)]
 
-        adj_dt1 = solve_grad_dt(model, adj_state1, iter_params1) + functional.ddt(f, ii)
+        adj_dt1 = solve_grad_dt(model, adj_state1) + functional.ddt(f, ii)
         adj_dt.insert(0, adj_dt1)
 
         # Find the RHS for the next iteration
@@ -133,35 +114,29 @@ def adjoint(model, f, functional, coupling='explicit'):
         dcost_dstate0 = linalg.concatenate(dcost_duva0, dcost_dqp0)
 
         # adj_state0_rhs = solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
-        adj_state0_rhs = _solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
+        adj_state0_rhs = _solve_adj_rhs(model, adj_state1, dcost_dstate0)
 
         # Set initial states to the previous states for the start of the next iteration
         adj_state1_rhs = adj_state0_rhs
+
+    ## Calculate gradients
+    grad_state = adj_state1_rhs
+    # model.solid.bc_base.apply(grad_state['u'])
+    # model.solid.bc_base.apply(grad_state['v'])
+    # model.solid.bc_base.apply(grad_state['a'])
 
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
     dfunc_dsolid = functional.dsolid(f)
     grad_solid = adj_solid + dfunc_dsolid
 
+    dfunc_dfluid = functional.dfluid(f)
+    grad_fluid = adj_fluid + dfunc_dfluid
+
+    grad_props = linalg.concatenate(grad_solid, grad_fluid)
+
     ## Calculate gradients
-    # Calculate sensitivities wrt initial states
-    grad_uva, adj_qp = adj_state1_rhs[:3], adj_state1_rhs[3:]
-    # model.solid.bc_base.apply(grad_uva['u'])
-    # model.solid.bc_base.apply(grad_uva['v'])
-    # model.solid.bc_base.apply(grad_uva['a'])
-
-    # if coupling == 'explicit':
-    #     # model.set_ini_state(uva0)
-    #     dq_du, dp_du = model.solve_dqp0_du0_solid(adjoint=True)
-    #     adj_p0_ = dp_du.getVecRight()
-    #     adj_p0_[:] = adj_qp['p']
-
-    #     # have to convert (dp_du*adj_p0_) to dfn.PETScVector to add left and right terms
-    #     grad_uva['u'][:] += dfn.PETScVector(dp_du*adj_p0_) + dq_du*adj_qp['q']
-
-    # Calculate sensitivties w.r.t fluid properties
-    grad_fluid = model.fluid.get_properties()
-    grad_fluid.set(0)
+    grad_controls = None
 
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)
@@ -171,7 +146,7 @@ def adjoint(model, f, functional, coupling='explicit'):
     grad_times[1:] = grad_dt
     grad_times[:-1] -= grad_dt
 
-    return functional_value, grad_uva, grad_solid, grad_fluid, grad_times
+    return functional_value, grad_state, grad_controls, grad_props, grad_times
 
 def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
     """
@@ -189,20 +164,20 @@ def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_for
             vec -= val
     return grad_solid
 
-def _solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
+def _solve_grad_solid(model, adj_state1, grad_solid, df1_dsolid_form_adj):
     # breakpoint()
     bsize = len(model.solid.get_properties_vec().size)
     adj_solid = model.apply_dres_dp_adj(adj_state1)[:bsize]
     return grad_solid - adj_solid 
 
-def solve_grad_dt(model, adj_state1, iter_params1):
+def solve_grad_dt(model, adj_state1):
     """
     Calculate the gradietn wrt dt
     """
     # model.set_iter_params(**iter_params1)
-    uva0 = iter_params1['uva0']
-    uva1 = iter_params1['uva1']
-    dt1 = iter_params1['dt']
+    dt1 = model.solid.dt.vector()[0]
+    uva0 = model.solid.state0
+    uva1 = model.solid.state1
 
     dfu1_ddt = dfn.assemble(model.solid.forms['form.bi.df1_dt_adj'])
     dfv1_ddt = 0 - newmark_v_dt(uva1[0], *uva0, dt1)
@@ -384,7 +359,7 @@ def solve_adj_exp(model, adj_rhs, it_params, out=None):
 
     return linalg.concatenate(adj_uva, adj_qp)
 
-def _solve_adj(model, adj_rhs, it_params, out=None):
+def _solve_adj(model, adj_rhs, out=None):
     adj = model.solve_dres_dstate1_adj(adj_rhs)
     return adj
 
@@ -439,7 +414,7 @@ def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
     vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
     return linalg.BlockVec(vecs, keys)
 
-def _solve_adj_rhs(model, adj_state2, dcost_dstate1, it_params2, out=None):
+def _solve_adj_rhs(model, adj_state2, dcost_dstate1, out=None):
     b = model.apply_dres_dstate0_adj(adj_state2)
     return dcost_dstate1 - b
 

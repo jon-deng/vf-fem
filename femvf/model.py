@@ -64,18 +64,7 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluid
 
 class FSIModel:
     """
-    Represents a coupled system of models
-
-    TODO: Instantiation is kind of messy and ugly. Prettify/clean it up.
-        Class contains alot of extra, non-essential stuff. Think about what are the essential
-        things that are included, how to compartmentalize the things etc.
-
-    TODO: Improve assembly speed
-        There are a number of ways to speed up assembly. Firstly the bilinear forms have
-        components that remain constant under certain conditions. These could be cached to improved
-        performance. There are some issues here however:
-            adding the constant components incurs overhead due to different sparsity patterns
-            multiplying a matrix by a scalar seems to use 3 threads for some reason
+    Represents a coupled system of a solid and a fluid model
 
     Parameters
     ----------
@@ -129,19 +118,193 @@ class FSIModel:
         self.fixed_vertices = fixed_vertices
         self.fixed_corodinates = self.solid.mesh.coordinates()[fixed_vertices]
 
-    # def set_ini_state():
+        self.state0 = linalg.concatenate(self.solid.state0, self.fluid.state0)
+        self.state1 = linalg.concatenate(self.solid.state1, self.fluid.state1)
+        self.control0 = linalg.BlockVec((), ())
+        self.control1 = linalg.BlockVec((), ())
+        self.properties = linalg.concatenate(self.solid.properties, self.fluid.properties)
 
-    # def set_fin_state():
+    ## Methods for settings parameters of the model
+    def set_ini_state(self, state):
+        self.set_ini_solid_state(state[:3])
+        self.set_ini_fluid_state(state[3:])
 
-    # def set_ini_control():
+    def set_fin_state(self, state):
+        self.set_fin_solid_state(state[:3])
+        self.set_fin_fluid_state(state[3:])
+
+    def set_ini_control(self, control):
+        pass
     
-    # def set_fin_control():
+    def set_fin_control(self, control):
+        pass
 
-    # def set_ini_properties():
+    def set_properties(self, props):
+        self.solid.set_properties(props[:len(self.solid.properties.size)])
+        self.fluid.set_properties(props[len(self.solid.properties.size):])
 
-    # def set_fin_properties():
+    def set_time_step(self, dt):
+        """
+        Sets the time step.
 
-    # Solid / fluid interfacing functions
+        Parameters
+        ----------
+        dt : float
+        """
+        self.solid.set_time_step(dt)
+        self.fluid.set_time_step(dt)
+
+
+    def set_ini_params(self, state0, control0):
+        """
+        Sets all properties at the initial time.
+
+        Parameters
+        ----------
+        uva0 : tuple of array_like
+        qp0 : tuple of array_like
+        dt : float
+        fluid_props : dict
+        solid_props : dict
+        """
+        self.set_ini_state(state0)
+        self.set_ini_control(control0)
+
+    def set_fin_params(self, state1, control1):
+        """
+        Sets all properties at the final time.
+
+        Parameters
+        ----------
+        uva1 : tuple of array_like
+        qp1 : tuple of array_like
+        fluid_props : dict
+        solid_props : dict
+        """
+        self.set_fin_state(state1)
+        self.set_fin_control(control1)
+
+    def set_iter_params(self, state0, control0, state1, control1, dt):
+        """
+        Sets all parameter values needed to integrate the model over a time step.
+
+        The parameter specified at the final time (index 1) are initial guesses for the solution.
+        One can then use a Newton method to iteratively solve for the actual final states.
+
+        Unspecified parameters will have unchanged values.
+
+        Parameters
+        ----------
+        state : tuple of array_like
+            Initial and final solid states
+        dt : float
+        """
+        self.set_ini_params(state0, control0)
+        self.set_fin_params(state1, control1)
+        self.set_time_step(dt)
+
+    def set_params_fromfile(self, f, n, update_props=True):
+        """
+        Set all parameters needed to integrate the model from a recorded value.
+
+        Iteration `n` is the implicit relation
+        :math:`f^{n}(u_n, u_{n-1}, p)`
+        that gives the displacement at index `n`, given the state at `n-1` and all additional
+        parameters.
+
+        Parameters
+        ----------
+        f : statefileutils.StateFile
+        n : int
+            Index of iteration to set
+        """
+        # Get data from the state file
+        if update_props:
+            self.set_properties(f.get_properties())
+
+        state0 = f.get_state(n)
+        control0 = f.get_control(n)
+        self.set_ini_params(state0, control0)
+
+    def set_iter_params_fromfile(self, f, n, update_props=True):
+        """
+        Set all parameters needed to integrate the model and an initial guess, based on a recorded
+        iteration.
+
+        Iteration `n` is the implicit relation
+        :math:`f^{n}(u_n, u_{n-1}, p)`
+        that gives the displacement at index `n`, given the state at `n-1` and all additional
+        parameters.
+
+        Parameters
+        ----------
+        statefile : statefileutils.StateFile
+        n : int
+            Index of iteration to set
+        """
+        # Get data from the state file
+        if update_props:
+            self.set_properties(f.get_properties())
+
+        state0 = f.get_state(n-1)
+        control0 = f.get_control(n-1)
+
+        state1 = f.get_state(n)
+        control1 = f.get_control(n)
+
+        dt = statefile.get_time(n) - statefile.get_time(n-1)
+
+        # Assign the values to the model
+        self.set_iter_params(state0, control0, state1, control1, dt)
+
+    # These must be defined to properly exchange the forcing data between the solid and fluid
+    def set_ini_solid_state(self, uva0):
+        """
+        Sets the state variables u, v, and a at the start of the step.
+
+        Parameters
+        ----------
+        u0, v0, a0 : array_like
+        """
+        self.solid.set_ini_state(uva0)
+        
+        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
+        u0_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva0[0])
+        v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
+        self.fluid.set_ini_control((u0_fluid, v0_fluid))
+
+    def set_fin_solid_state(self, uva1):
+        """
+        Sets the displacement at the end of the time step.
+
+        This could be an initial guess in the case of non-linear governing equations, or a solved
+        state so that the non-linear form can be linearized for the given state.
+
+        Parameters
+        ----------
+        uva1 : tuple of array_like
+        """
+        self.solid.set_fin_state(uva1)
+
+        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
+        
+        u1_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva1[0])
+        v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
+        self.fluid.set_fin_control((u1_fluid, v1_fluid))
+
+    def set_ini_fluid_state(self, qp0):
+        self.fluid.set_ini_state(qp0)
+
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
+        self.solid.set_ini_control(p0_solid)
+
+    def set_fin_fluid_state(self, qp1):
+        self.fluid.set_fin_state(qp1)
+
+        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
+        self.solid.set_fin_control(p1_solid)
+
+    ## Solid / fluid interfacing functions
     def get_fsi_scalar_dofs(self):
         """
         Return dofs of the FSI interface on the solid and fluid
@@ -211,7 +374,7 @@ class FSIModel:
         solid_vector[vdof_solid] = fluid_vector[vdof_fluid]
         return solid_vector
 
-    ## Core solver functions
+    ## Mesh functions
     def get_ref_config(self):
         """
         Returns the current configuration of the body.
@@ -326,243 +489,13 @@ class FSIModel:
         verts = self.surface_vertices[u_surface[..., 1] > self.y_collision.values()[0]]
         return verts
 
-    ## Methods for setting model parameters
-    def set_ini_solid_state(self, uva0):
-        """
-        Sets the state variables u, v, and a at the start of the step.
-
-        Parameters
-        ----------
-        u0, v0, a0 : array_like
-        """
-        self.solid.set_ini_state(uva0)
-        
-        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
-        u0_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva0[0])
-        v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
-        self.fluid.set_ini_control((u0_fluid, v0_fluid))
-
-    def set_fin_solid_state(self, uva1):
-        """
-        Sets the displacement at the end of the time step.
-
-        This could be an initial guess in the case of non-linear governing equations, or a solved
-        state so that the non-linear form can be linearized for the given state.
-
-        Parameters
-        ----------
-        uva1 : tuple of array_like
-        """
-        self.solid.set_fin_state(uva1)
-
-        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
-        
-        u1_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva1[0])
-        v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
-        self.fluid.set_fin_control((u1_fluid, v1_fluid))
-
-    def set_ini_fluid_state(self, qp0):
-        self.fluid.set_ini_state(qp0)
-
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        self.solid.set_ini_control(p0_solid)
-
-    def set_fin_fluid_state(self, qp1):
-        self.fluid.set_fin_state(qp1)
-
-        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        self.solid.set_fin_control(p1_solid)
-
-    def set_time_step(self, dt):
-        """
-        Sets the time step.
-
-        Parameters
-        ----------
-        dt : float
-        """
-        self.solid.set_time_step(dt)
-        self.fluid.set_time_step(dt)
-
-    def set_solid_props(self, solid_props):
-        """
-        Sets solid properties given a dictionary of solid properties.
-
-        Parameters
-        ----------
-        solid_props : BlockVec
-        """
-        self.solid.set_properties(solid_props)
-
-    def set_fluid_props(self, fluid_props):
-        """
-        Sets fluid properties given a dictionary of fluid properties.
-
-        This just sets the pressure vector given the fluid boundary conditions.
-
-        Parameters
-        ----------
-        fluid_props : BlockVec
-        """
-        self.fluid.set_properties(fluid_props)
-
-
-    def set_ini_params(self, uva0=None, qp0=None, solid_props=None, fluid_props=None):
-        """
-        Sets all properties at the initial time.
-
-        Parameters
-        ----------
-        uva0 : tuple of array_like
-        qp0 : tuple of array_like
-        dt : float
-        fluid_props : dict
-        solid_props : dict
-        """
-        if uva0 is not None:
-            self.set_ini_solid_state(uva0)
-
-        if qp0 is not None:
-            self.set_ini_fluid_state(qp0)
-
-        if fluid_props is not None:
-            self.set_fluid_props(fluid_props)
-
-        if solid_props is not None:
-            self.set_solid_props(solid_props)
-
-    def set_fin_params(self, uva1=None, qp1=None, solid_props=None, fluid_props=None):
-        """
-        Sets all properties at the final time.
-
-        Parameters
-        ----------
-        uva1 : tuple of array_like
-        qp1 : tuple of array_like
-        fluid_props : dict
-        solid_props : dict
-        """
-        if uva1 is not None:
-            self.set_fin_solid_state(uva1)
-
-        if qp1 is not None:
-            self.set_fin_fluid_state(qp1)
-
-        if fluid_props is not None:
-            self.set_fluid_props(fluid_props)
-
-        if solid_props is not None:
-            self.set_solid_props(solid_props)
-
-    def set_iter_params(self, uva0=None, qp0=None, dt=None, uva1=None, qp1=None,
-                        solid_props=None, fluid_props=None):
-        """
-        Sets all parameter values needed to integrate the model over a time step.
-
-        The parameter specified at the final time (index 1) are initial guesses for the solution.
-        One can then use a Newton method to iteratively solve for the actual final states.
-
-        Unspecified parameters will have unchanged values.
-
-        Parameters
-        ----------
-        uva0, uva1 : tuple of array_like
-            Initial and final solid states
-        qp0, qp1 : tuple of array_like
-            Initial and final fluid states
-        dt : float
-        fluid_props : BlockVec
-        solid_props : BlockVec
-        """
-        self.set_ini_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
-        self.set_fin_params(uva1=uva1, qp1=qp1)
-
-        if dt is not None:
-            self.set_time_step(dt)
-
-    def set_params_fromfile(self, statefile, n, update_props=True):
-        """
-        Set all parameters needed to integrate the model from a recorded value.
-
-        Iteration `n` is the implicit relation
-        :math:`f^{n}(u_n, u_{n-1}, p)`
-        that gives the displacement at index `n`, given the state at `n-1` and all additional
-        parameters.
-
-        Parameters
-        ----------
-        statefile : statefileutils.StateFile
-        n : int
-            Index of iteration to set
-        """
-        # Get data from the state file
-        solid_props, fluid_props = None, None
-        if update_props:
-            fluid_props = statefile.get_fluid_props(0)
-            solid_props = statefile.get_solid_props(0)
-
-        uva0 = statefile.get_state(n)
-        qp0 = statefile.get_fluid_state(n)
-
-        # Assign the values to the model
-        self.set_ini_params(uva0=uva0, qp0=qp0, solid_props=solid_props, fluid_props=fluid_props)
-        return {'uva0': uva0, 'qp0': qp0, 'solid_props': solid_props, 'fluid_props': fluid_props}
-
-    def set_iter_params_fromfile(self, statefile, n, set_final_state=True, update_props=True):
-        """
-        Set all parameters needed to integrate the model and an initial guess, based on a recorded
-        iteration.
-
-        Iteration `n` is the implicit relation
-        :math:`f^{n}(u_n, u_{n-1}, p)`
-        that gives the displacement at index `n`, given the state at `n-1` and all additional
-        parameters.
-
-        Parameters
-        ----------
-        statefile : statefileutils.StateFile
-        n : int
-            Index of iteration to set
-        """
-        # Get data from the state file
-        solid_props, fluid_props = None, None
-        if update_props:
-            fluid_props = statefile.get_fluid_props(0)
-            solid_props = statefile.get_solid_props(0)
-
-        uva0 = statefile.get_state(n-1)
-        qp0 = statefile.get_fluid_state(n-1)
-
-        uva1 = None
-        qp1 = None
-        if set_final_state:
-            uva1 = statefile.get_state(n)
-            qp1 = statefile.get_fluid_state(n)
-
-        dt = statefile.get_time(n) - statefile.get_time(n-1)
-
-        # Assign the values to the model
-        self.set_iter_params(uva0=uva0, qp0=qp0, uva1=uva1, qp1=qp1, dt=dt,
-                             solid_props=solid_props, fluid_props=fluid_props)
-        return {'uva0': uva0, 'uva1': uva1, 'qp0': qp0, 'qp1': qp1, 'dt': dt,
-                'solid_props': solid_props, 'fluid_props': fluid_props, }
-
-    def set_ini_state(self, state):
-        self.solid.set_ini_state(state[:3])
-        self.fluid.set_ini_state(state[3:])
-
-    def set_fin_state(self, state):
-        self.solid.set_fin_state(state[:3])
-        self.fluid.set_fin_state(state[3:])
-
-    def set_properties(self, props):
-        N = len(self.solid.properties.size)
-        self.solid.set_properties(props[:N])
-        self.fluid.set_properties(props[N:])
-
+    ## Methods for getting vectors
     def get_state_vec(self):
         return linalg.concatenate(self.solid.get_state_vec(), self.fluid.get_state_vec())
-    
+
+    def get_control_vec(self):
+        return self.control0.copy()
+
     def get_properties_vec(self):
         return linalg.concatenate(self.solid.get_properties_vec(), self.fluid.get_properties_vec())
 
@@ -649,7 +582,8 @@ class ExplicitFSIModel(FSIModel):
         uva1 = self.solid.get_state_vec()
 
         # Update form coefficients and initial guess
-        self.set_iter_params(uva1=ini_state.vecs[:3], qp1=ini_state.vecs[3:])
+        self.set_fin_state(ini_state)
+        # self.set_iter_params(uva1=ini_state.vecs[:3], qp1=ini_state.vecs[3:])
 
         # TODO: You could implement this to use the non-linear solver only when collision is happening
         if newton_solver_prm is None:

@@ -34,7 +34,6 @@ def benchmark_chunksize(ntime_chunks=10):
         for i in range(100):
             f.append_time(i)
             f.append_state(uva)
-            f.append_fluid_state(qp)
 
     t_fluid = []
     t_solid = []
@@ -44,15 +43,15 @@ def benchmark_chunksize(ntime_chunks=10):
 
             ts = perf_counter()
             # f.get_fluid_state(i)
-            f.file['q'][i, ...]
-            f.file['p'][i, ...]
+            f.file['state/q'][i, ...]
+            f.file['state/p'][i, ...]
             t_fluid.append(perf_counter()-ts)
 
             ts = perf_counter()
             # f.get_state(i)
-            f.file['u'][i, ...]
-            f.file['v'][i, ...]
-            f.file['a'][i, ...]
+            f.file['state/u'][i, ...]
+            f.file['state/v'][i, ...]
+            f.file['state/a'][i, ...]
             t_solid.append(perf_counter()-ts)
 
     return t_fluid, t_solid
@@ -83,14 +82,14 @@ def benchmark_chunksize_chunked_read(ntime_chunks=10):
             ts = perf_counter()
             start, stop = m*ntime_chunks, min((m+1)*ntime_chunks, 100)
             print(start, stop)
-            f.file['q'][start:stop, ...]
-            f.file['p'][start:stop, ...]
+            f.file['state/q'][start:stop, ...]
+            f.file['state/p'][start:stop, ...]
             t_fluid.append(perf_counter()-ts)
 
             ts = perf_counter()
-            f.file['u'][start:stop, ...]
-            f.file['v'][start:stop, ...]
-            f.file['a'][start:stop, ...]
+            f.file['state/u'][start:stop, ...]
+            f.file['state/v'][start:stop, ...]
+            f.file['state/a'][start:stop, ...]
             t_solid.append(perf_counter()-ts)
 
     return t_fluid, t_solid

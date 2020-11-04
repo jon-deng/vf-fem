@@ -1,5 +1,5 @@
 """
-A basic test to see if forward.forward will actually run
+A basic test to see if forward.integrate will actually run
 """
 
 import os
@@ -34,9 +34,9 @@ class TestForward(unittest.TestCase):
         mesh_base_filename = 'M5-3layers'
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-    def test_forward(self):
+    def test_integrate(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli, coupling='implicit')
+        model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli, coupling='explicit')
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
@@ -87,8 +87,7 @@ class TestForward(unittest.TestCase):
         ## Run the simulation
         print("Running forward model")
         runtime_start = perf_counter()
-        info = integrate(model, ini_state, controls, props, times,
-                         h5file=save_path, h5group='/')
+        info = integrate(model, ini_state, controls, props, times, h5file=save_path, h5group='/')
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
@@ -104,5 +103,5 @@ class TestForward(unittest.TestCase):
 if __name__ == '__main__':
     test = TestForward()
     test.setUp()
-    test.test_forward()
+    test.test_integrate()
     # unittest.main()

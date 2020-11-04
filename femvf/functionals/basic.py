@@ -268,12 +268,12 @@ class FinalDisplacementNorm(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 

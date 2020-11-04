@@ -45,7 +45,7 @@ def get_from_cache(cache_name):
     return decorator
 
 class StateFile:
-    """
+    r"""
     Represents a state file.
 
     # TODO: Add mesh information and vertex/cell/face region information etc...
@@ -53,29 +53,36 @@ class StateFile:
     State information is stored in the hdf5 file under a containing group:
     /.../group
 
-    States are stored under labels:
-    ./u : (N_TIME, N_VECTOR_DOF)
-    ./v : (N_TIME, N_VECTOR_DOF)
-    ./a : (N_TIME, N_VECTOR_DOF)
+    The remaining information is stored as:
+    /mesh/solid/coordinates
+    /mesh/solid/connectivity
 
-    Fluid properties are stored under labels:
-    ./fluid_properties/label : (N_TIME,)
+    /dofmap/scalar
+    /dofmap/vector
 
-    Solid properties are stored under labels:
-    ./solid_properties/label : (N_SCALAR_DOF,) or ()
+    /state/state_name : dataset, (None, N_VECTOR_DOF)
+
+    Controls are stored under labels:
+    /control/control_name
+
+    /properties/property_name : dataset
+
+    /meas_indices : dataset, (None,)
+    /time : dataset, (None,)
+
 
     Parameters
     ----------
-    name : str
+    fname : str
         Path to the hdf5 file.
     group : str
         Group path where states are stored in the hdf5 file.
     """
 
-    def __init__(self, model, name, group='/', mode='r', NCHUNK=100,
+    def __init__(self, model, fname, group='/', mode='r', NCHUNK=100,
                  **kwargs):
         self.model = model
-        self.file = h5py.File(name, mode=mode, **kwargs)
+        self.file = h5py.File(fname, mode=mode, **kwargs)
 
         # Create the root group if applicable
         if (mode == 'w' or mode == 'a') and group not in self.file:
@@ -85,16 +92,15 @@ class StateFile:
 
         self.NCHUNK = NCHUNK
 
-        # create caches to store read values
-        self.cache = {}
-        for name in ['uva', 'qp', 'solid', 'fluid']:
-            self.cache[name] = Cache(5)
-
         # TODO: This is probably buggy
         self.dset_chunk_cache = {}
         if mode == 'r':
-            for name in ['u', 'v', 'a', 'q', 'p']:
-                self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[name])
+            ## Create caches for reading states and controls
+            # TODO: When you implement time-varying controls you should implement
+            # commented line
+            # for name in model.state0.keys + model.control0.keys:
+            for name in model.state0.keys:
+                self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[f'state/{name}'])
 
     ## Implement an h5 group interface to the underlying root group
     def __enter__(self):
@@ -126,7 +132,7 @@ class StateFile:
         """
         Return the number of states in the file.
         """
-        return self.get_num_states()
+        return self.root_group['state/u'].shape[0]
 
     ## Statefile properties related to the root group where things are stored
     @property
@@ -151,35 +157,9 @@ class StateFile:
         return self.file[self.root_group_name]
 
     ## Functions for initializing layout when writing
-    def init_layout(self, uva0=None, qp0=None, fluid_props=None, solid_props=None):
+    def init_layout(self):
         r"""
         Initializes the layout of the state file.
-
-        This creates groups and/or datasets in the hdf5 file:
-        \mesh\solid\coordinates
-        \mesh\solid\connectivity
-        \dofmap\scalar
-        \dofmap\vector
-        \u : dataset, (None, N_VECTOR_DOF)
-        \v : dataset, (None, N_VECTOR_DOF)
-        \a : dataset, (None, N_VECTOR_DOF)
-        \q : dataset, (None, N_VECTOR_DOF)
-        \p : dataset, (None, N_VECTOR_DOF)
-        \solid_properties
-            \solid_property_label : dataset, ()
-        \fluid_properties
-            \fluid_property_label : dataset, (None,)
-        \meas_indices : dataset, (None,)
-        \time : dataset, (None,)
-
-        Parameters
-        ----------
-        u0, v0, a0 : dfn.Function
-            The initial velocity, displacement and acceleration respectively.
-        solid_props : dict
-            A dictionary of solid properties
-        fluid_props : dict
-            A dictionary of fluid properties
         """
         self.root_group.create_dataset('time', (0,), maxshape=(None,), chunks=(self.NCHUNK,),
                                        dtype=np.float64)
@@ -188,16 +168,10 @@ class StateFile:
 
         self.init_mesh()
         self.init_dofmap()
-        self.init_state(uva0=uva0)
-        self.init_fluid_state(qp0=qp0)
 
-        # Fluid properties
-        if 'fluid_properties' not in self.root_group:
-            self.init_fluid_props(fluid_props=fluid_props)
-
-        # Solid properties (assumed to not be time-varying)
-        if 'solid_properties' not in self.root_group:
-            self.init_solid_props(solid_props=solid_props)
+        self.init_state()
+        self.init_control()
+        self.init_properties()
 
     def init_dofmap(self):
         """
@@ -232,155 +206,73 @@ class StateFile:
         self.root_group.create_dataset('mesh/solid/cell_func', data=np.inf,
                                        dtype=np.intp)
 
-    def init_state(self, uva0=None):
-        """
-        Initializes the states layout of the file.
-
-        Parameters
-        ----------
-        model : femvf.ForwardModel
-        """
-        # Kinematic states
-        NDOF = self.model.solid.vector_fspace.dim()
-        for dataset_name in ['u', 'v', 'a']:
-            self.root_group.create_dataset(dataset_name, (0, NDOF), maxshape=(None, NDOF),
-                                           chunks=(self.NCHUNK, NDOF), dtype=np.float64)
-
-        if uva0 is not None:
-            self.append_state(uva0)
-
-    def init_fluid_state(self, qp0=None):
-        """
-        Initializes the states layout of the file.
-
-        Parameters
-        ----------
-        model : femvf.ForwardModel
-        """
-        # For Bernoulli, there is only 1 flow rate/flow velocity vector
-        NQ = 1
-        self.root_group.create_dataset('q', (0, NQ), maxshape=(None, 1),
-                                       chunks=(self.NCHUNK, NQ), dtype=np.float64)
-
-        # For Bernoulli, you only have to store pressure at each of the vertices
-        NDOF = self.model.surface_vertices.size
-        self.root_group.create_dataset('p', (0, NDOF), maxshape=(None, NDOF),
+    def init_state(self):
+        state_group = self.root_group.create_group('state')
+        for name, vec in zip(self.model.state0.keys, self.model.state0.vecs):
+            NDOF = len(vec)
+            # breakpoint()
+            state_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF),
                                        chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
-        if qp0 is not None:
-            self.append_fluid_state(qp0)
+    def init_control(self):
+        # control_group = self.root_group.create_group('control')
 
-    def init_fluid_props(self, fluid_props=None):
-        """
-        Initializes the fluid properties layout of the file.
+        # for name, vec in zip(self.model.control0.keys, self.model.control0.vecs):
+        #     NDOF = vec.size
+        #     control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), dtype=np.float64)
+        pass
 
-        Parameters
-        ----------
-        model : femvf.model.ForwardModel
-            Not really needed for this one but left the arg here since it's in solid properties init
-        """
-        group_fluid = self.root_group.create_group('fluid_properties')
-        for key, prop_desc in self.model.fluid.PROPERTY_TYPES.items():
-            shape = solid_property_shape(prop_desc, self.model.solid)
-            group_fluid.create_dataset(key, shape=(0,)+shape, chunks=(self.NCHUNK,)+shape,
-                                       maxshape=(None,)+shape, dtype=np.float64)
+    def init_properties(self):
+        properties_group = self.root_group.create_group('properties')
 
-        if fluid_props is not None:
-            self.append_fluid_props(fluid_props)
-
-    def init_solid_props(self, solid_props=None):
-        """
-        Initializes the solid properties layout of the file.
-
-        Parameters
-        ----------
-        """
-        solid_group = self.root_group.create_group('solid_properties')
-        for key, prop_desc in self.model.solid.PROPERTY_TYPES.items():
-            shape = solid_property_shape(prop_desc, self.model.solid)
-            solid_group.create_dataset(key, shape, dtype=np.float64)
-
-        if solid_props is not None:
-            self.append_solid_props(solid_props)
+        for name, value in zip(self.model.properties.keys, self.model.properties.vecs):
+            size = None
+            try:
+                size = len(value)
+            except TypeError:
+                size = value.size
+            properties_group.create_dataset(name, (value.size,), dtype=np.float64)
 
     ## Functions for writing by appending
-    def append_meas_index(self, index):
-        """
-        Append measured indices to the file.
-
-        Parameters
-        ----------
-        index : int
-        """
-        dset = self.root_group['meas_indices']
-        dset.resize(dset.shape[0]+1, axis=0)
-        dset[-1] = index
-
-    def append_state(self, uva):
+    def append_state(self, state):
         """
         Append state to the file.
 
         Parameters
         ----------
-        uva : tuple of dfn.Function
-            (u, v, a) states to append
         """
-        for dset_name, value in zip(['u', 'v', 'a'], uva):
-            dset = self.root_group[dset_name]
+        state_group = self.root_group['state']
+        for name, value in zip(state.keys, state.vecs):
+            dset = state_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
-            dset[-1] = value[:]
 
-    def append_fluid_state(self, qp):
-        """
-        Append state to the file.
-
-        Parameters
-        ----------
-        qp : tuple of dfn.Function or array_like and float
-            (q, p) states to append
-        """
-        for dset_name, value in zip(['q', 'p'], qp):
-            dset = self.root_group[dset_name]
-            dset.resize(dset.shape[0]+1, axis=0)
+            if isinstance(value, dfn.GenericVector):
+                # This converts dolfin vector types to numpy arrays which 
+                # allows the h5py to write them much faster
+                value = value[:]
             dset[-1, :] = value
 
-    def append_fluid_props(self, fluid_props):
+    def append_control(self, control):
+        # for name, value in zip(state.keys, state.vecs):
+        #     dset = self.root_group[name]
+        #     dset.resize(dset.shape[0]+1, axis=0)
+        #     dset[-1] = value[:]
+        pass
+
+    def append_properties(self, properties):
         """
-        Append fluid properties to the file.
+        Append properties vector to the file.
 
         Parameters
         ----------
-        fluid_props : dict
-            Dictionary of fluid properties to append
         """
-        fluid_group = self.root_group['fluid_properties']
+        properties_group = self.root_group['properties']
 
-        for label in self.model.fluid.PROPERTY_TYPES:
-            dset = fluid_group[label]
-            dset.resize(dset.shape[0]+1, axis=0)
-            dset[-1] = fluid_props[label]
-
-    def append_solid_props(self, solid_props):
-        """
-        Append solid properties to the file.
-
-        It doesn't actually append, it just rewrites the previous values if they exist.
-
-        Parameters
-        ----------
-        solid_props : dict
-            Dictionary of solid properties to append
-        """
-        solid_group = self.root_group['solid_properties']
-
-        for label, shape in self.model.solid.PROPERTY_TYPES.items():
-            dset = solid_group[label]
-
-            if shape[0] == 'field':
-                dset[:] = solid_props[label]
-            else:
-                dset[()] = solid_props[label]
-
+        for name, value in zip(properties.keys, properties.vecs):
+            dset = properties_group[name]
+            # dset.resize(dset.shape[0]+1, axis=0)
+            dset[:] = value
+    
     def append_time(self, time):
         """
         Append times to the file.
@@ -394,7 +286,19 @@ class StateFile:
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
 
-    ## Functions for reading and writing to specific indices
+    def append_meas_index(self, index):
+        """
+        Append measured indices to the file.
+
+        Parameters
+        ----------
+        index : int
+        """
+        dset = self.root_group['meas_indices']
+        dset.resize(dset.shape[0]+1, axis=0)
+        dset[-1] = index
+
+    ## Functions for reading specific indices
     def get_time(self, n):
         """
         Returns the time at state n.
@@ -413,62 +317,6 @@ class StateFile:
         """
         return self.root_group['meas_indices'][:]
 
-    def get_num_states(self):
-        """
-        Returns the number of states in the solution
-        """
-        return self.root_group['u'].shape[0]
-
-    def set_state(self, n, uva):
-        """
-        Set form coefficient vectors for states `uva=(u, v, a)` at index n.
-
-        Parameters
-        ----------
-        n : int
-            Index to set the functions for.
-        uva : tuple of 3 array_like
-            A set of vectors to assign.
-        """
-        for label, value in zip(('u', 'v', 'a'), uva):
-            self.root_group[label][n] = value
-
-    def set_fluid_state(self, n, qp):
-        """
-        Set form coefficient vectors for states `qp=(q, p)` at index n.
-
-        Parameters
-        ----------
-        n : int
-            Index to set the functions for.
-        q : float
-            the flow rates
-        p : array_like
-            pressures
-        """
-        self.root_group['q'][n, 0] = qp[0]
-        self.root_group['p'][n, :] = qp[1]
-
-    def get_iter_params(self, n):
-        """
-        Return parameter defining iteration `n`
-
-        Parameters
-        ----------
-        n : int
-            Index of the iteration.
-        """
-
-        uva0 = self.get_state(n-1)
-        dt = self.get_time(n) - self.get_time(n-1)
-        solid_props = self.get_solid_props(n-1)
-        fluid_props = self.get_fluid_props(n-1)
-        u1 = self.get_u(n)
-
-        return {'uva0': uva0, 'dt': dt, 'u1': u1,
-                'solid_props': solid_props, 'fluid_props': fluid_props}
-
-    # these read functions are cached for performance reasons
     def get_state(self, n):
         """
         Return form coefficient vectors for states (u, v, a) at index n.
@@ -480,16 +328,19 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
-        labels = ('u', 'v', 'a')
-        uva = self.model.solid.get_state_vec()
-        for ii, label in enumerate(labels):
-            uva[ii][:] = self.dset_chunk_cache[label].get(n)
+        state = self.model.get_state_vec()
+        for vec, key in zip(state.vecs, state.keys):
+            value = self.dset_chunk_cache[key].get(n)
+            try:
+                vec[:] = value
+            except IndexError:
+                vec[()] = value
 
-        return uva
+        return state
 
-    def get_fluid_state(self, n):
+    def get_control(self, n):
         """
-        Return fluid states q, p at index n.
+        Return form coefficient vectors for states (u, v, a) at index n.
 
         Parameters
         ----------
@@ -498,106 +349,42 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
-        qp = self.model.fluid.get_state_vec()
+        pass
+        # state = self.model.get_state_vec()
+        # for vec, key in zip(state.vecs, state.keys):
+        #     value = self.dset_chunk_cache[key].get(n)
+        #     try:
+        #         vec[:] = value
+        #     except IndexError:
+        #         vec[()] = value
 
-        qp[0][:] = self.dset_chunk_cache['q'].get(n)[0]
-        qp[1][:] = self.dset_chunk_cache['p'].get(n)
+        # return state
 
-        return qp
+    def get_properties(self):
+        properties = self.model.get_properties_vec()
 
-    @get_from_cache('fluid')
-    def get_fluid_props(self, n):
+        for name, vec in zip(properties.keys, properties.vecs):
+            dset = self.root_group[f'properties/{name}']
+            try: 
+                vec[:] = dset[:]
+            except IndexError as e:
+                vec[()] = dset[()]
+        return properties
+
+    ## Functions for writing/modifying specific indices
+    def set_state(self, n, state):
         """
-        Return the fluid properties dictionary at index n.
-        """
-        # There can only be stationary properties right now
-        assert n == 0
-
-        fluid_props = self.model.fluid.get_properties_vec()
-        fluid_group = self.root_group['fluid_properties']
-
-        # Correct for constant fluid properties in time
-        # TODO: Refactor how constant fluid/solid properties are defined.
-        m = n
-        if self.root_group['fluid_properties/p_sub'].size == 1:
-            m = 0
-
-        for label in fluid_props.keys:
-            if fluid_props[label].shape == ():
-                fluid_props[label][()] = fluid_group[label][m]
-            else:
-                fluid_props[label][:] = fluid_group[label][m]
-
-        return fluid_props
-
-    @get_from_cache('solid')
-    def get_solid_props(self, n):
-        """
-        Returns the solid properties
-        """
-        # There can only be stationary properties right now
-        assert n == 0
-
-        solid_props = self.model.solid.get_properties()
-        solid_group = self.root_group['solid_properties']
-        for label, shape in self.model.solid.PROPERTY_TYPES.items():
-            data = solid_group[label]
-
-            if solid_props[label].shape == ():
-                # have to index differently for scalar datasets
-                solid_props[label][()] = data[()]
-            else:
-                solid_props[label][:] = data[:]
-
-        return solid_props
-
-def solid_property_shape(property_desc, solid):
-    const_or_field = property_desc[0]
-    data_shape = property_desc[1]
-
-    shape = None
-    if const_or_field == 'field':
-        shape = (solid.mesh.num_vertices(),) + data_shape
-    else:
-        shape = data_shape
-
-    return shape
-
-class Cache:
-    """
-    Represents a cache of arbitrary items
-    """
-    def __init__(self, cache_size):
-        self.N = cache_size
-        self.data = OrderedDict()
-
-    def __len__(self):
-        return len(self.data)
-
-    def put(self, key, val):
-        """
-        Add `key`: `val` to the cache
+        Set form coefficient vectors for states `uva=(u, v, a)` at index n.
 
         Parameters
         ----------
-        key : hashable
-        val : object
+        n : int
+            Index to set the functions for.
+        uva : tuple of 3 array_like
+            A set of vectors to assign.
         """
-        if key in self.data:
-            self.data.move_to_end(key, last=False)
-        else:
-            self.data[key] = val
-
-            # remove the oldest item in the cache if the cache exceeds the cache size
-            if len(self.data) > self.N:
-                self.data.popitem(last=False)
-
-    def get(self, key):
-        if key in self.data:
-            self.data.move_to_end(key, last=False)
-            return self.data[key]
-        else:
-            return None
+        for label, value in zip(state.keys, state.vecs):
+            self.root_group[label][n] = value
 
 class DatasetChunkCache:
     """
@@ -606,7 +393,7 @@ class DatasetChunkCache:
     The dataset must contain full chunks along the last dimensions
 
     Reading values from this class will load entire chunks at a time. Reading slices that are
-    already loaded in a chunk will use the cached chunk
+    already loaded in a chunk will use the data from the cached chunk instead of reading again.
     """
 
     def __init__(self, dset, num_chunks=1):

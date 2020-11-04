@@ -12,25 +12,26 @@ from . import statefile as sf
 import numpy as np
 
 
-def line_search(hs, model, uva, solid_props, fluid_props, times,
-                duva=None, dsolid_props=None, dfluid_props=None, dtimes=None,
-                coupling='explicit', filepath='temp.h5'):
+def line_search(hs, model, ini_state, controls, props, times,
+                dstate=None, dcontrols=None, dprops=None, dtimes=None,
+                filepath='temp.h5'):
     if path.exists(filepath):
         os.remove(filepath)
 
     for n, h in enumerate(hs):
         # Increment all the properties along the search direction
-        uva_n = uva
-        if duva is not None:
-            uva_n = uva + h*duva
+        state_n = ini_state
+        if dstate is not None:
+            state_n = ini_state + h*dstate
 
-        solid_props_n = solid_props
-        if dsolid_props is not None:
-            solid_props_n = solid_props + h*dsolid_props
+        controls_n = controls
+        if dcontrols is not None:
+            for control, dcontrol in zip(controls_n, dcontrols):
+                control = control + h*dcontrol
 
-        fluid_props_n = fluid_props
-        if dfluid_props is not None:
-            fluid_props_n = fluid_props + h*dfluid_props
+        props_n = props
+        if dprops is not None:
+            props_n = props + h*dprops
 
         times_n = np.array(times)
         if dtimes is not None:
@@ -38,7 +39,7 @@ def line_search(hs, model, uva, solid_props, fluid_props, times,
         # timing_props_n = {'t0': times_n[0], 'tmeas': times_n, 'dt_max': np.inf}
 
         runtime_start = perf_counter()
-        info = integrate(model, uva_n, solid_props_n, fluid_props_n, times_n,
+        info = integrate(model, state_n, controls_n, props_n, times_n,
                          h5file=filepath, h5group=f'{n}')
         runtime_end = perf_counter()
 
