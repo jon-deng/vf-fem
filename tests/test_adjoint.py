@@ -142,8 +142,8 @@ class TaylorTestUtils(unittest.TestCase):
         return fig, axs
 
 class TestBasicGradient(TaylorTestUtils):
-    COUPLING = 'explicit'
-    OVERWRITE_FORWARD_SIMULATIONS = False
+    COUPLING = 'implicit'
+    OVERWRITE_FORWARD_SIMULATIONS = True
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
@@ -204,7 +204,7 @@ class TestBasicGradient(TaylorTestUtils):
 
         grads = None
         with sf.StateFile(self.model, base_path, mode='r') as f:
-            _, *grads = adjoint(self.model, f, self.functional, coupling=self.COUPLING)
+            _, *grads = adjoint(self.model, f, self.functional)
         self.grads = grads
 
     def get_taylor_order(self, save_path, hs,
@@ -243,11 +243,11 @@ class TestBasicGradient(TaylorTestUtils):
         hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-11)), axis=0)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
-        dsolid = self.solid_props.copy()
-        dsolid.set(0.0)
-        dsolid['emod'][:] = 1.0*step_size*10
+        dprops = self.props.copy()
+        dprops.set(0.0)
+        dprops['emod'][:] = 1.0*step_size*10
 
-        order_1, order_2 = self.get_taylor_order(save_path, hs, dsolid_props=dsolid)
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
@@ -345,9 +345,10 @@ class TestBasicGradient(TaylorTestUtils):
 
 class TestBasicGradientSingleStep(TestBasicGradient):
     COUPLING = 'explicit'
+    # COUPLING = 'implicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
-    # FUNCTIONAL = basic.FinalDisplacementNorm
-    FUNCTIONAL = basic.FinalVelocityNorm
+    FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
@@ -366,12 +367,17 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
         ## parameter set
         self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
+        self.model.set_properties(self.props)
 
         t_start, t_final = 0, 0.001
-        times_meas = np.linspace(t_start, t_final, 3)
+        times_meas = np.linspace(t_start, t_final, 2)
         self.times = times_meas
 
-        self.state0 = self.model.get_state_vec()
+        uva0 = self.model.solid.get_state_vec()
+        self.model.set_ini_solid_state(uva0)
+        qp0, _ = self.model.fluid.solve_qp0()
+
+        self.state0 = linalg.concatenate(uva0, qp0)
 
         self.controls = None
 
@@ -457,7 +463,7 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
     def test_a0(self):
         save_path = f'out/linesearch_a0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)+5)), axis=0)
 
         xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
         y = xy[:, 1]
@@ -481,7 +487,7 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
     def test_times(self):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9))), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-4)), axis=0)
 
         dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1e-11
