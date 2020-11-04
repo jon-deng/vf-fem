@@ -144,8 +144,8 @@ class TaylorTestUtils(unittest.TestCase):
 class TestBasicGradient(TaylorTestUtils):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = False
-    # FUNCTIONAL = basic.FinalDisplacementNorm
-    FUNCTIONAL = basic.FinalVelocityNorm
+    FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
@@ -346,7 +346,8 @@ class TestBasicGradient(TaylorTestUtils):
 class TestBasicGradientSingleStep(TestBasicGradient):
     COUPLING = 'explicit'
     OVERWRITE_FORWARD_SIMULATIONS = True
-    FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
@@ -393,7 +394,7 @@ class TestBasicGradientSingleStep(TestBasicGradient):
 
     def test_u0(self):
         save_path = f'out/linesearch_u0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-9)), axis=0)
+        hs = np.concatenate(([0], 2.0**(np.arange(2, 9)-12)), axis=0)
 
         ## Pick a step direction
         # Increment `u` linearly as a function of x and y in the y direction

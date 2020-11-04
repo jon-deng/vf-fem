@@ -59,9 +59,6 @@ def adjoint(model, f, functional):
     N = f.size
     times = f.get_times()
 
-    # state0, state1 = f.get_state(N-2), f.get_state(N-1)
-    # dt1 = times[N-1] - times[N-2]
-
     ## Initialize the adj rhs
     dcost_duva1 = functional.duva(f, N-1)
     dcost_dqp1 = functional.dqp(f, N-1)
@@ -73,29 +70,15 @@ def adjoint(model, f, functional):
     for ii in range(N-1, 0, -1):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to read
         # index 0
+        state0 = f.get_state(ii-1)
         state1 = f.get_state(ii)
         dt1 = times[ii] - times[ii-1]
-        # uva1 = f.get_state(ii)
-        # qp1 = f.get_fluid_state(ii)
-
-        state0 = f.get_state(ii-1)
-        # uva0 = f.get_state(ii-1)
-        # qp0 = f.get_fluid_state(ii-1)
-
-        # Set the iter params
-        # qp1_ = None
-        # if coupling == 'explicit':
-        #     qp1_ = qp0
-        # else:
-        #     qp1_ = qp1
-        # iter_params1 = {'uva0': uva0, 'qp0': qp0, 'dt': dt1, 'qp1': qp1_, 'uva1': uva1}
 
         # All the calculations are based on the state of the model at iter_params1, so you only have
         # to set it once here
-        model.set_fin_state(state1)
         model.set_ini_state(state0)
+        model.set_fin_state(state1)
         model.set_time_step(dt1)
-        # model.set_iter_params(**iter_params1)
 
         # adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
         adj_state1 = _solve_adj(model, adj_state1_rhs)
@@ -121,9 +104,6 @@ def adjoint(model, f, functional):
 
     ## Calculate gradients
     grad_state = adj_state1_rhs
-    # model.solid.bc_base.apply(grad_state['u'])
-    # model.solid.bc_base.apply(grad_state['v'])
-    # model.solid.bc_base.apply(grad_state['a'])
 
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
