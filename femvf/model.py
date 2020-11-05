@@ -570,6 +570,22 @@ class ExplicitFSIModel(FSIModel):
         res['p'][:] = self.fluid.state1['p'] - qp['p']
         return res
     
+    # These setting function are overwritten to ensure the explicit coupling of fluid/solid 
+    # states is done 
+    def set_ini_fluid_state(self, qp0):
+        self.fluid.set_ini_state(qp0)
+
+        # Note that setting the initial fluid state sets the final driving pressure
+        # for explicit coupling
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
+        self.solid.set_fin_control(p0_solid)
+
+    def set_fin_fluid_state(self, qp1):
+        self.fluid.set_fin_state(qp1)
+
+        # p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
+        # self.solid.set_fin_control(p1_solid)
+
     # Forward solver methods
     def solve_state1(self, ini_state, newton_solver_prm=None):
         """

@@ -37,6 +37,7 @@ def adjoint(model, f, functional):
     grad_uva, grad_solid, grad_fluid, grad_times
         Gradients with respect to initial state, solid, fluid, and integration time points
     """
+    breakpoint()
     # Set properties
     props = f.get_properties()
     model.set_properties(props)
@@ -46,7 +47,7 @@ def adjoint(model, f, functional):
 
     # Make adjoint forms for sensitivity of parameters
     solid = model.solid
-    df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
+    # df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
 
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
@@ -81,11 +82,11 @@ def adjoint(model, f, functional):
         model.set_time_step(dt1)
 
         # adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
-        adj_state1 = _solve_adj(model, adj_state1_rhs)
+        adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
 
         # Update gradients wrt parameters using the adjoint
         # _adj_solid = solve_grad_solid(model, adj_state1, iter_params1, adj_solid.copy(), df1_dsolid_form_adj)
-        adj_p = _solve_grad_solid(model, adj_state1, adj_solid, df1_dsolid_form_adj) 
+        adj_p = _solve_grad_solid(model, adj_state1, adj_solid) 
         adj_solid = adj_p[:len(adj_solid.size)]
 
         adj_dt1 = solve_grad_dt(model, adj_state1) + functional.ddt(f, ii)
@@ -128,23 +129,23 @@ def adjoint(model, f, functional):
 
     return functional_value, grad_state, grad_controls, grad_props, grad_times
 
-def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
-    """
-    Update the gradient wrt solid parameters
-    """
-    # model.set_iter_params(**iter_params1)
-    for key, vec in zip(grad_solid.keys, grad_solid.vecs):
-        df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
-        val = df1_dkey*adj_state1[0]
-        if vec.shape == ():
-            # Note this is a hack because some properties are scalar values but stored as vectors
-            # throughout the domain
-            vec -= sum(val)
-        else:
-            vec -= val
-    return grad_solid
+# def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
+#     """
+#     Update the gradient wrt solid parameters
+#     """
+#     # model.set_iter_params(**iter_params1)
+#     for key, vec in zip(grad_solid.keys, grad_solid.vecs):
+#         df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
+#         val = df1_dkey*adj_state1[0]
+#         if vec.shape == ():
+#             # Note this is a hack because some properties are scalar values but stored as vectors
+#             # throughout the domain
+#             vec -= sum(val)
+#         else:
+#             vec -= val
+#     return grad_solid
 
-def _solve_grad_solid(model, adj_state1, grad_solid, df1_dsolid_form_adj):
+def _solve_grad_solid(model, adj_state1, grad_solid):
     # breakpoint()
     bsize = len(model.solid.get_properties_vec().size)
     adj_solid = model.apply_dres_dp_adj(adj_state1)[:bsize]
@@ -167,252 +168,132 @@ def solve_grad_dt(model, adj_state1):
     adj_dt1 = -(dfu1_ddt*adj_u1).sum() - dfv1_ddt.inner(adj_v1) - dfa1_ddt.inner(adj_a1)
     return adj_dt1
 
-def solve_adj_imp(model, adj_rhs, it_params, out=None):
-    """
-    Solve for adjoint states given the RHS source vector
+# def solve_adj_exp(model, adj_rhs, it_params, out=None):
+#     """
+#     Solve for adjoint states given the RHS source vector
 
-    Parameters
-    ----------
+#     Parameters
+#     ----------
 
-    Returns
-    -------
-    """
-    ## Assemble sensitivity matrices
-    # model.set_iter_params(**it_params)
-    dt = it_params['dt']
+#     Returns
+#     -------
+#     """
+#     ## Assemble sensitivity matrices
+#     # model.set_iter_params(**it_params)
+#     dt = it_params['dt']
 
-    dfu2_du2 = model.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-    dfv2_du2 = 0 - newmark_v_du1(dt)
-    dfa2_du2 = 0 - newmark_a_du1(dt)
-    dfu2_dp2 = dfn.assemble(model.solid.forms['form.bi.df1_dp1_adj'])
+#     dfu2_du2 = model.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+#     dfv2_du2 = 0 - newmark_v_du1(dt)
+#     dfa2_du2 = 0 - newmark_a_du1(dt)
 
-    # map dfu2_dp2 to have p on the fluid domain
-    solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
-    dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, model.fluid.state1['p'].size)
+#     # model.set_ini_state((it_params['u1'], 0, 0))
+#     dq_du, dp_du = model.solve_dqp1_du1_solid(adjoint=True)
+#     dfq2_du2 = 0 - dq_du
+#     dfp2_du2 = 0 - dp_du
 
-    dq_du, dp_du = model.solve_dqp1_du1_solid(adjoint=True)
-    dfq2_du2 = 0 - dq_du
-    dfp2_du2 = 0 - dp_du
+#     ## Do the linear algebra that solves for the adjoint states
+#     adj_uva = model.solid.get_state_vec()
+#     adj_qp = model.fluid.get_state_vec()
 
-    ## Do the linear algebra that solves for the adjoint states
-    adj_uva = model.solid.get_state_vec()
-    adj_qp = model.fluid.get_state_vec()
+#     adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
 
-    adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
+#     model.solid.bc_base.apply(adj_a_rhs)
+#     adj_uva['a'][:] = adj_a_rhs
 
-    # adjoint states for v, a, and q are explicit so we can solve for them
-    model.solid.bc_base.apply(adj_v_rhs)
-    adj_uva['v'][:] = adj_v_rhs
+#     model.solid.bc_base.apply(adj_v_rhs)
+#     adj_uva['v'][:] = adj_v_rhs
 
-    model.solid.bc_base.apply(adj_a_rhs)
-    adj_uva['a'][:] = adj_a_rhs
+#     # TODO: Think of how to apply fluid boundary conditions in a generic way.
+#     # There are no boundary conditions for the Bernoulli case because of the way it's coded but
+#     # this will be needed for different models
+#     adj_qp['q'][:] = adj_q_rhs
+#     adj_qp['p'][:] = adj_p_rhs
 
-    # TODO: how to apply fluid boundary conditions in a generic way?
-    adj_qp['q'][:] = adj_q_rhs
+#     _adj_p = dfp2_du2.getVecRight()
+#     _adj_p[:] = adj_qp['p']
 
-    adj_u_rhs -= dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q']
+#     adj_u_rhs = adj_u_rhs - (
+#         dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q'] 
+#         + dfn.PETScVector(dfp2_du2*_adj_p))
+#     model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
+#     dfn.solve(dfu2_du2, adj_uva['u'], adj_u_rhs, 'petsc')
 
-    bc_dofs = np.array(list(model.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
-    model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-    dfp2_du2.zeroRows(bc_dofs, diag=0.0)
-    # model.solid.bc_base.zero_columns(dfu2_du2, adj_u_rhs.copy(), diagonal_value=1.0)
-
-    # solve the coupled system for pressure and displacement residuals
-    dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
-    blocks = [[dfu2_du2_mat, dfp2_du2], [dfu2_dp2, 1.0]]
-
-    dfup2_dup2 = linalg.form_block_matrix(blocks)
-    adj_up, rhs = dfup2_dup2.getVecs()
-
-    # calculate rhs vectors
-    rhs[:adj_u_rhs.size()] = adj_u_rhs
-    rhs[adj_u_rhs.size():] = adj_p_rhs
-
-    # Solve the block linear system with LU factorization
-    ksp = PETSc.KSP().create()
-    ksp.setType(ksp.Type.PREONLY)
-
-    pc = ksp.getPC()
-    pc.setType(pc.Type.LU)
-
-    ksp.setOperators(dfup2_dup2)
-    ksp.solve(rhs, adj_up)
-
-    adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
-    adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
-
-    return linalg.concatenate(adj_uva, adj_qp)
-
-def solve_adj_rhs_imp(model, adj_state2, dcost_dstate1, it_params2, out=None):
-    """
-    Solves the adjoint recurrence relations to return the rhs
-
-    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
-    dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
-
-    ## Assemble sensitivity matrices
-    dt2 = it_params2['dt']
-    # model.set_iter_params(**it_params2)
-
-    dfu2_du1 = model.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-    dfu2_dv1 = model.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-    dfu2_da1 = model.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
-
-    dfv2_du1 = 0 - newmark_v_du0(dt2)
-    dfv2_dv1 = 0 - newmark_v_dv0(dt2)
-    dfv2_da1 = 0 - newmark_v_da0(dt2)
-
-    dfa2_du1 = 0 - newmark_a_du0(dt2)
-    dfa2_dv1 = 0 - newmark_a_dv0(dt2)
-    dfa2_da1 = 0 - newmark_a_da0(dt2)
-
-    ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-    # Allocate a vector the for fluid side mat-vec multiplication
-    adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
-    adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
-    adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-    adj_q1_rhs = dcost_dq1 - 0
-    adj_p1_rhs = dcost_dp1 - 0
-
-    labels = adj_state2.keys
-    vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
-    return linalg.BlockVec(vecs, labels)
-
-def solve_adj_exp(model, adj_rhs, it_params, out=None):
-    """
-    Solve for adjoint states given the RHS source vector
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    """
-    ## Assemble sensitivity matrices
-    # model.set_iter_params(**it_params)
-    dt = it_params['dt']
-
-    dfu2_du2 = model.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-    dfv2_du2 = 0 - newmark_v_du1(dt)
-    dfa2_du2 = 0 - newmark_a_du1(dt)
-
-    # model.set_ini_state((it_params['u1'], 0, 0))
-    dq_du, dp_du = model.solve_dqp1_du1_solid(adjoint=True)
-    dfq2_du2 = 0 - dq_du
-    dfp2_du2 = 0 - dp_du
-
-    ## Do the linear algebra that solves for the adjoint states
-    adj_uva = model.solid.get_state_vec()
-    adj_qp = model.fluid.get_state_vec()
-
-    adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = adj_rhs
-
-    model.solid.bc_base.apply(adj_a_rhs)
-    adj_uva['a'][:] = adj_a_rhs
-
-    model.solid.bc_base.apply(adj_v_rhs)
-    adj_uva['v'][:] = adj_v_rhs
-
-    # TODO: Think of how to apply fluid boundary conditions in a generic way.
-    # There are no boundary conditions for the Bernoulli case because of the way it's coded but
-    # this will be needed for different models
-    adj_qp['q'][:] = adj_q_rhs
-    adj_qp['p'][:] = adj_p_rhs
-
-    _adj_p = dfp2_du2.getVecRight()
-    _adj_p[:] = adj_qp['p']
-
-    adj_u_rhs = adj_u_rhs - (
-        dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q'] 
-        + dfn.PETScVector(dfp2_du2*_adj_p))
-    model.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
-    dfn.solve(dfu2_du2, adj_uva['u'], adj_u_rhs, 'petsc')
-
-    return linalg.concatenate(adj_uva, adj_qp)
+#     return linalg.concatenate(adj_uva, adj_qp)
 
 def _solve_adj(model, adj_rhs, out=None):
     adj = model.solve_dres_dstate1_adj(adj_rhs)
     return adj
 
-def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
-    """
-    Solves the adjoint recurrence relations to return the rhs
+# def solve_adj_rhs_exp(model, adj_state2, dcost_dstate1, it_params2, out=None):
+#     """
+#     Solves the adjoint recurrence relations to return the rhs
 
-    ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
+#     ## Set form coefficients to represent f^{n+2} aka f2(uva1, uva2) -> uva2
 
-    Parameters
-    ----------
+#     Parameters
+#     ----------
 
-    Returns
-    -------
-    """
-    adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
-    # adj_uva2, adj_qp2 = adj_state2[:3], adj_state2[3:]
-    dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
+#     Returns
+#     -------
+#     """
+#     adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = adj_state2
+#     # adj_uva2, adj_qp2 = adj_state2[:3], adj_state2[3:]
+#     dcost_du1, dcost_dv1, dcost_da1, dcost_dq1, dcost_dp1 = dcost_dstate1
 
-    ## Assemble sensitivity matrices
-    dt2 = it_params2['dt']
-    # model.set_iter_params(**it_params2)
+#     ## Assemble sensitivity matrices
+#     dt2 = it_params2['dt']
+#     # model.set_iter_params(**it_params2)
 
-    dfu2_du1 = model.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-    dfu2_dv1 = model.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-    dfu2_da1 = model.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
-    # df1_dp1 is assembled because the explicit coupling is achieved through passing the previous
-    # pressure as the current pressure rather than changing the actualy governing equations to use
-    # the previous pressure
-    dfu2_dp1 = dfn.assemble(model.solid.forms['form.bi.df1_dp1_adj'])
+#     dfu2_du1 = model.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
+#     dfu2_dv1 = model.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
+#     dfu2_da1 = model.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
+#     # df1_dp1 is assembled because the explicit coupling is achieved through passing the previous
+#     # pressure as the current pressure rather than changing the actualy governing equations to use
+#     # the previous pressure
+#     dfu2_dp1 = dfn.assemble(model.solid.forms['form.bi.df1_dp1_adj'])
 
-    dfv2_du1 = 0 - newmark_v_du0(dt2)
-    dfv2_dv1 = 0 - newmark_v_dv0(dt2)
-    dfv2_da1 = 0 - newmark_v_da0(dt2)
+#     dfv2_du1 = 0 - newmark_v_du0(dt2)
+#     dfv2_dv1 = 0 - newmark_v_dv0(dt2)
+#     dfv2_da1 = 0 - newmark_v_da0(dt2)
 
-    dfa2_du1 = 0 - newmark_a_du0(dt2)
-    dfa2_dv1 = 0 - newmark_a_dv0(dt2)
-    dfa2_da1 = 0 - newmark_a_da0(dt2)
+#     dfa2_du1 = 0 - newmark_a_du0(dt2)
+#     dfa2_dv1 = 0 - newmark_a_dv0(dt2)
+#     dfa2_da1 = 0 - newmark_a_da0(dt2)
 
-    solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-    dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
-    dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
-    matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(adj_u2).vec()
+#     solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
+#     dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
+#     dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
+#     matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(adj_u2).vec()
 
-    adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
-    adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
-    adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-    adj_q1_rhs = dcost_dq1 - 0
-    adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
+#     adj_u1_rhs = dcost_du1 - (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
+#     adj_v1_rhs = dcost_dv1 - (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
+#     adj_a1_rhs = dcost_da1 - (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
+#     adj_q1_rhs = dcost_dq1 - 0
+#     adj_p1_rhs = dcost_dp1 - matvec_adj_p_rhs
 
-    keys = adj_state2.keys
-    vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
-    return linalg.BlockVec(vecs, keys)
+#     keys = adj_state2.keys
+#     vecs = [adj_u1_rhs, adj_v1_rhs, adj_a1_rhs, adj_q1_rhs, adj_p1_rhs]
+#     return linalg.BlockVec(vecs, keys)
 
 def _solve_adj_rhs(model, adj_state2, dcost_dstate1, out=None):
     b = model.apply_dres_dstate0_adj(adj_state2)
     return dcost_dstate1 - b
 
-def get_df1_dsolid_forms(solid):
-    """
-    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
-    """
-    df1_dsolid = {}
-    for key in solid.PROPERTY_TYPES:
-        try:
-            df1_dsolid[key] = dfn.adjoint(ufl.derivative(solid.f1, solid.forms[f'coeff.prop.{key}'],
-                                                         solid.scalar_trial))
-        except RuntimeError:
-            df1_dsolid[key] = None
+# def get_df1_dsolid_forms(solid):
+#     """
+#     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
+#     """
+#     df1_dsolid = {}
+#     for key in solid.PROPERTY_TYPES:
+#         try:
+#             df1_dsolid[key] = dfn.adjoint(ufl.derivative(solid.f1, solid.forms[f'coeff.prop.{key}'],
+#                                                          solid.scalar_trial))
+#         except RuntimeError:
+#             df1_dsolid[key] = None
 
-        if df1_dsolid[key] is not None:
-            try:
-                dfn.assemble(df1_dsolid[key])
-            except RuntimeError:
-                df1_dsolid[key] = None
-    return df1_dsolid
+#         if df1_dsolid[key] is not None:
+#             try:
+#                 dfn.assemble(df1_dsolid[key])
+#             except RuntimeError:
+#                 df1_dsolid[key] = None
+#     return df1_dsolid
