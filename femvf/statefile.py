@@ -95,12 +95,12 @@ class StateFile:
         # TODO: This is probably buggy
         self.dset_chunk_cache = {}
         if mode == 'r':
-            ## Create caches for reading states and controls
-            # TODO: When you implement time-varying controls you should implement
-            # commented line
-            # for name in model.state0.keys + model.control0.keys:
+            ## Create caches for reading states and controls, since these vary in time
             for name in model.state0.keys:
-                self.dset_chunk_cache[name] = DatasetChunkCache(self.root_group[f'state/{name}'])
+                self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
+
+            for name in model.control0.keys:
+                self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.root_group[f'control/{name}'])
 
     ## Implement an h5 group interface to the underlying root group
     def __enter__(self):
@@ -133,6 +133,18 @@ class StateFile:
         Return the number of states in the file.
         """
         return self.root_group['state/u'].shape[0]
+
+    @property
+    def variable_controls(self):
+        num_controls = 1
+        control_group = self.root_group['control']
+        for key in self.model.control0.keys:
+            num_controls = max(control_group[key].shape[0], num_controls)
+
+        if num_controls > 1:
+            return True
+        else: 
+            return False
 
     ## Statefile properties related to the root group where things are stored
     @property
@@ -210,16 +222,15 @@ class StateFile:
         state_group = self.root_group.create_group('state')
         for name, vec in zip(self.model.state0.keys, self.model.state0.vecs):
             NDOF = len(vec)
-            # breakpoint()
             state_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF),
                                        chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
     def init_control(self):
-        # control_group = self.root_group.create_group('control')
+        control_group = self.root_group.create_group('control')
 
-        # for name, vec in zip(self.model.control0.keys, self.model.control0.vecs):
-        #     NDOF = vec.size
-        #     control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), dtype=np.float64)
+        for name, vec in zip(self.model.control0.keys, self.model.control0.vecs):
+            NDOF = len(vec)
+            control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), dtype=np.float64)
         pass
 
     def init_properties(self):
@@ -253,10 +264,11 @@ class StateFile:
             dset[-1, :] = value
 
     def append_control(self, control):
-        # for name, value in zip(state.keys, state.vecs):
-        #     dset = self.root_group[name]
-        #     dset.resize(dset.shape[0]+1, axis=0)
-        #     dset[-1] = value[:]
+        control_group = self.root_group['control']
+        for name, value in zip(control.keys, control.vecs):
+            dset = control_group[name]
+            dset.resize(dset.shape[0]+1, axis=0)
+            dset[-1] = value
         pass
 
     def append_properties(self, properties):
@@ -330,7 +342,7 @@ class StateFile:
         """
         state = self.model.get_state_vec()
         for vec, key in zip(state.vecs, state.keys):
-            value = self.dset_chunk_cache[key].get(n)
+            value = self.dset_chunk_cache[f'state/{key}'].get(n)
             try:
                 vec[:] = value
             except IndexError:
@@ -349,16 +361,15 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
-        pass
-        # state = self.model.get_state_vec()
-        # for vec, key in zip(state.vecs, state.keys):
-        #     value = self.dset_chunk_cache[key].get(n)
-        #     try:
-        #         vec[:] = value
-        #     except IndexError:
-        #         vec[()] = value
+        control = self.model.get_control_vec()
+        for vec, key in zip(control.vecs, control.keys):
+            value = self.dset_chunk_cache[f'control/{key}'].get(n)
+            try:
+                vec[:] = value
+            except IndexError:
+                vec[()] = value
 
-        # return state
+        return control
 
     def get_properties(self):
         properties = self.model.get_properties_vec()

@@ -37,9 +37,15 @@ def adjoint(model, f, functional):
     grad_uva, grad_solid, grad_fluid, grad_times
         Gradients with respect to initial state, solid, fluid, and integration time points
     """
+    ## Set potentially constant values
     # Set properties
     props = f.get_properties()
     model.set_properties(props)
+
+    # Check whether controls are variable in time or constant
+    variable_controls = f.variable_controls
+    control0 = f.get_control(0)
+    control1 = control0
 
     # run the functional once to initialize any cached values
     functional_value = functional(f)
@@ -69,14 +75,18 @@ def adjoint(model, f, functional):
     for ii in range(N-1, 0, -1):
         # Properties at index 2 through 1 were loaded during initialization, so we only need to read
         # index 0
-        state0 = f.get_state(ii-1)
-        state1 = f.get_state(ii)
+        state0, state1 = f.get_state(ii-1), f.get_state(ii)
+        if variable_controls:
+            control0, control1 = f.get_control(ii-1), f.get_control(ii)
+
         dt1 = times[ii] - times[ii-1]
 
         # All the calculations are based on the state of the model at iter_params1, so you only have
         # to set it once here
         model.set_ini_state(state0)
         model.set_fin_state(state1)
+        model.set_ini_control(control0)
+        model.set_fin_control(control1)
         model.set_time_step(dt1)
 
         # adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)

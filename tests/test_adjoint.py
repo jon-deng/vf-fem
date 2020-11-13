@@ -109,6 +109,25 @@ def get_starting_kelvinvoigt_model(coupling='explicit'):
 
     return model, linalg.concatenate(solid_props, fluid_props)
 
+def taylor_order(f0, hs, fs, 
+                 gstate, gcontrols, gprops, gtimes,
+                 dstate, dcontrols, dprops, dtimes):
+    # breakpoint()
+    ## Project the gradient along the step direction
+    directions = linalg.concatenate(dstate, dprops, linalg.BlockVec([dtimes], ['t']))
+    gradients = linalg.concatenate(gstate, gprops, linalg.BlockVec([gtimes], ['t']))
+
+    grad_step = linalg.dot(directions, gradients)
+    grad_step_fd = (fs - f0)/hs
+
+    ## Compare the adjoint and finite difference gradients projected on the step direction
+    remainder_1 = np.abs(fs - f0)
+    remainder_2 = np.abs((fs - f0) - hs*grad_step)
+
+    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
+    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
+    return (order_1, order_2), (grad_step, grad_step_fd)
+
 class AbstractTaylorTest(unittest.TestCase):
 
     def compute_baseline(self):
@@ -158,12 +177,14 @@ class AbstractTaylorTest(unittest.TestCase):
             print("Using existing files")
     
         fs = functionals_on_line_search(hs, self.functional, self.model, lsearch_fname)
+        print(fs)
 
         ## Compute the taylor convergence order
         gstate, gcontrols, gprops, gtimes = self.grads
-        order_1, order_2 = taylor_order(self.f0, hs, fs,
-                                        gstate, gcontrols, gprops, gtimes,
-                                        dstate, dcontrols, dprops, dtimes)
+        (order_1, order_2), (grad_step, grad_step_fd) = taylor_order(
+            self.f0, hs, fs,
+            gstate, gcontrols, gprops, gtimes,
+            dstate, dcontrols, dprops, dtimes)
 
         # self.plot_taylor_convergence(grad_step, hs, gs)
         # self.plot_grad_uva(self.model, grad_uva)
@@ -171,7 +192,7 @@ class AbstractTaylorTest(unittest.TestCase):
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
-        breakpoint()
+        # breakpoint()
 
         return (order_1, order_2)
 
@@ -204,8 +225,8 @@ class AbstractTaylorTest(unittest.TestCase):
         return fig, axs
 
 class TestBasicGradient(AbstractTaylorTest):
-    COUPLING = 'implicit'
-    OVERWRITE_LSEARCH = True
+    COUPLING = 'explicit'
+    OVERWRITE_LSEARCH = False
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
@@ -261,6 +282,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
         ## Compute the baseline forward simulation and functional/gradient at the baseline (via adjoint)
         self.f0, self.grads = self.compute_baseline()
+        print(self.f0)
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
@@ -304,10 +326,9 @@ class TestBasicGradient(AbstractTaylorTest):
 
         self.model.solid.bc_base.apply(step_dir)
         dstate = self.model.get_state_vec()
-        dstate = self.model.solid.get_state_vec()
         dstate['u'][:] = step_dir*0.01
 
-        order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=duva)
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
@@ -363,6 +384,7 @@ class TestBasicGradient(AbstractTaylorTest):
         dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1e-9
 
+        breakpoint()
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
@@ -370,7 +392,7 @@ class TestBasicGradient(AbstractTaylorTest):
 class TestBasicGradientSingleStep(AbstractTaylorTest):
     COUPLING = 'explicit'
     # COUPLING = 'implicit'
-    OVERWRITE_LSEARCH = True
+    OVERWRITE_LSEARCH = False
     # FUNCTIONAL = basic.FinalDisplacementNorm
     FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
@@ -397,17 +419,19 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
         times_meas = np.linspace(t_start, t_final, 2)
         self.times = times_meas
 
+        control = self.model.get_control_vec()
         uva0 = self.model.solid.get_state_vec()
         self.model.set_ini_solid_state(uva0)
-        qp0, _ = self.model.fluid.solve_qp0()
 
-        self.state0 = linalg.concatenate(uva0, qp0)
-
-        control = self.model.get_control_vec()
         control['psub'][:] = 800 * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
+        self.model.set_ini_control(control)
 
+        qp0, _ = self.model.fluid.solve_qp0()
+
+        self.state0 = linalg.concatenate(uva0, qp0)
+    
         # Step sizes and scale factor
         self.functional = self.FUNCTIONAL(self.model)
 
@@ -516,12 +540,56 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
 
     def test_times(self):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-4)
+        hs = 2.0**(np.arange(2, 9)+5)
 
         dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1e-11
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
+
+
+def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='explicit'):
+    """
+    """
+    ## Calculate the functional value at each point along the line search
+    total_runtime = 0
+    functionals = list()
+    for n, h in enumerate(hs):
+        with sf.StateFile(model, filepath, group=f'{n}', mode='r') as f:
+            runtime_start = perf_counter()
+            val = functional(f)
+            functionals.append(val)
+            runtime_end = perf_counter()
+            total_runtime += runtime_end-runtime_start
+            print(f"f = {val:.2e}")
+    print(f"Runtime {total_runtime:.2f} seconds")
+
+    functionals = np.array(functionals)
+
+    ## Calculate the gradient via the adjoint equations at the 0th point
+    print("\nComputing Gradient via adjoint calculation")
+
+    grad = None
+    runtime_start = perf_counter()
+    with sf.StateFile(model, filepath, group='0', mode='r') as f:
+        _, grad_uva, grad_solid, grad_fluid, grad_times = adjoint(model, f, functional, coupling=coupling)
+    runtime_end = perf_counter()
+    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+
+    ## Project the gradient along the step direction
+    grad_p = p.dconvert(grad_uva, grad_solid, grad_fluid, grad_times)
+    grad_step = np.dot(grad_p.vector, dp.vector)
+    grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
+
+    ## Compare the adjoint and finite difference projected gradients
+    remainder_1 = np.abs(functionals[1:] - functionals[0])
+    remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*grad_step)
+
+    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
+    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
+
+    return functionals, (remainder_1, remainder_2), (order_1, order_2), \
+           ((grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd)
 
 class TestPeriodicKelvinVoigtGradient(AbstractTaylorTest):
     COUPLING = 'explicit'
@@ -608,7 +676,7 @@ class TestPeriodicKelvinVoigtGradient(AbstractTaylorTest):
 
         dp['v0'].reshape(-1)[:] = dv0
 
-        order_1, order_2 = self.get_taylor_order(save_path, hs, dp)
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dp)[0]
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
 
@@ -625,67 +693,6 @@ class TestPeriodicKelvinVoigtGradient(AbstractTaylorTest):
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
 
-def taylor_order(f0, hs, fs, 
-                 gstate, gcontrols, gprops, gtimes,
-                 dstate, dcontrols, dprops, dtimes):
-
-    ## Project the gradient along the step direction
-    directions = linalg.concatenate(dstate, dprops, linalg.BlockVec([dtimes], ['t']))
-    gradients = linalg.concatenate(gstate, gprops, linalg.BlockVec([gtimes], ['t']))
-
-    grad_step = linalg.dot(directions, gradients)
-    grad_step_fd = (fs - f0)/hs
-
-    ## Compare the adjoint and finite difference gradients projected on the step direction
-    remainder_1 = np.abs(fs - f0)
-    remainder_2 = np.abs((fs - f0) - hs*grad_step)
-
-    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
-    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
-    return order_1, order_2
-
-def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='explicit'):
-    """
-    """
-    ## Calculate the functional value at each point along the line search
-    total_runtime = 0
-    functionals = list()
-    for n, h in enumerate(hs):
-        with sf.StateFile(model, filepath, group=f'{n}', mode='r') as f:
-            runtime_start = perf_counter()
-            val = functional(f)
-            functionals.append(val)
-            runtime_end = perf_counter()
-            total_runtime += runtime_end-runtime_start
-            print(f"f = {val:.2e}")
-    print(f"Runtime {total_runtime:.2f} seconds")
-
-    functionals = np.array(functionals)
-
-    ## Calculate the gradient via the adjoint equations at the 0th point
-    print("\nComputing Gradient via adjoint calculation")
-
-    grad = None
-    runtime_start = perf_counter()
-    with sf.StateFile(model, filepath, group='0', mode='r') as f:
-        _, grad_uva, grad_solid, grad_fluid, grad_times = adjoint(model, f, functional, coupling=coupling)
-    runtime_end = perf_counter()
-    print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
-
-    ## Project the gradient along the step direction
-    grad_p = p.dconvert(grad_uva, grad_solid, grad_fluid, grad_times)
-    grad_step = np.dot(grad_p.vector, dp.vector)
-    grad_step_fd = (functionals[1:] - functionals[0])/hs[1:]
-
-    ## Compare the adjoint and finite difference projected gradients
-    remainder_1 = np.abs(functionals[1:] - functionals[0])
-    remainder_2 = np.abs(functionals[1:] - functionals[0] - hs[1:]*grad_step)
-
-    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
-    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
-
-    return functionals, (remainder_1, remainder_2), (order_1, order_2), \
-           ((grad_uva, grad_solid, grad_fluid, grad_times), grad_step, grad_step_fd)
 
 class TestResidualJacobian(unittest.TestCase):
     """
@@ -774,21 +781,21 @@ class TestResidualJacobian(unittest.TestCase):
 if __name__ == '__main__':
     # unittest.main()
 
-    # test = TestBasicGradient()
+    test = TestBasicGradient()
+    test.setUp()
+    test.test_emod()
+    # test.test_u0()
+    # test.test_v0()
+    # test.test_a0()
+    # test.test_times()
+
+    # test = TestBasicGradientSingleStep()
     # test.setUp()
     # test.test_emod()
     # test.test_u0()
     # test.test_v0()
     # test.test_a0()
     # test.test_times()
-
-    test = TestBasicGradientSingleStep()
-    test.setUp()
-    test.test_emod()
-    test.test_u0()
-    test.test_v0()
-    test.test_a0()
-    test.test_times()
 
     # test = TestPeriodicKelvinVoigtGradient()
     # test.setUp()
