@@ -137,3 +137,19 @@ def sort_vertices_by_nearest_neighbours(vertex_coordinates):
         idx_sort.append(np.nanargmin(distances))
 
     return np.array(idx_sort)
+
+def verts_from_cell_function(mesh, cell_func, id):
+    verts = []
+    for n_cell, cell_verts in enumerate(mesh.cells()): 
+        if cell_func[n_cell] == id:
+            verts += cell_verts.tolist()
+
+    return np.unique(verts)
+
+def verts_from_facet_function(mesh, facet_func, id):
+    verts = []
+    for facet in dfn.facets(mesh):
+        if facet_func[facet.index()] == id:
+            verts += [vert.index() for vert in dfn.vertices(facet)]
+
+    return np.unique(verts)

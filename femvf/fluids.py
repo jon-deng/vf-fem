@@ -37,12 +37,6 @@ class QuasiSteady1DFluid:
         # the surface y coordinates of the solid
         self.y_surface = y_surface
 
-        # self.p1 = np.zeros(x_vertices.shape)
-        # self.p0 = np.zeros(x_vertices.shape)
-
-        # self.q0 = np.zeros((1,))
-        # self.q1 = np.zeros((1,))
-
         # Calculate surface coordinates which are needed to compute surface integrals
         dx = self.x_vertices[1:] - self.x_vertices[:-1]
         dy = self.y_surface[1:] - self.y_surface[:-1]
@@ -54,18 +48,16 @@ class QuasiSteady1DFluid:
         self.state0 = BlockVec((q0, p0), ('q', 'p'))
 
         p1 = np.zeros(NVERT)
-        q1 = np.zeros((1,))
+        q1 = np.zeros(1)
         self.state1 = BlockVec((q1, p1), ('q', 'p'))
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
-        u0surf = np.zeros(2*NVERT)
-        v0surf = np.zeros(2*NVERT)
-        self.control0 = BlockVec((u0surf, v0surf), ('usurf', 'vsurf'))
-
-        u1surf = np.zeros(2*NVERT)
-        v1surf = np.zeros(2*NVERT)
-        self.control1 = BlockVec((u1surf, v1surf), ('usurf', 'vsurf'))
+        usurf0 = np.zeros(2*NVERT)
+        vsurf0 = np.zeros(2*NVERT)
+        psub0, psup0 = np.zeros(1), np.zeros(1)
+        self.control0 = BlockVec((usurf0, vsurf0, psub0, psup0), ('usurf', 'vsurf', 'psub', 'psup'))
+        self.control1 = self.control0.copy()
 
         self.properties = self.get_properties_vec(set_default=True)
 
@@ -105,18 +97,6 @@ class QuasiSteady1DFluid:
         # you were to use a unsteady fluid.
         pass
 
-    def get_properties_vec(self, set_default=True):
-        """
-        Return a BlockVec representing the properties of the fluid
-        """
-        field_size = 1
-        prop_defaults = None
-        if set_default:
-            prop_defaults = self.PROPERTY_DEFAULTS
-        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
-
-        return BlockVec(vecs, labels)
-
     def set_properties(self, props):
         """
         Set the fluid properties
@@ -129,24 +109,7 @@ class QuasiSteady1DFluid:
             # else:
             #     vec[:] = props[key]
 
-    def get_properties(self):
-        """
-        Return the fluid properties
-        """
-        return self.properties.copy()
-
-    def get_ini_control(self):
-        """
-        Return the initial surface displacement and velocity
-        """
-        return self.control0.copy()
-
-    def get_fin_control(self):
-        """
-        Return the final surface displacement and velocity
-        """
-        return self.control1.copy()
-
+    ## Get empty vectors
     def get_state_vec(self):
         """
         Return empty flow speed and pressure state vectors
@@ -154,29 +117,20 @@ class QuasiSteady1DFluid:
         q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
         return BlockVec((q, p), ('q', 'p'))
 
-    def get_surf_vector(self):
+    def get_properties_vec(self, set_default=True):
         """
-        Return a vector representing vector data on the FSI surface
+        Return a BlockVec representing the properties of the fluid
         """
-        return np.zeros(self.x_vertices.shape[0]*2)
+        field_size = 1
+        prop_defaults = None
+        if set_default:
+            prop_defaults = self.PROPERTY_DEFAULTS
+        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
 
-    def get_surf_scalar(self):
-        """
-        Return a vector representing scalar data on the FSI surface
-        """
-        return np.zeros(self.x_vertices.shape[0])
+        return BlockVec(vecs, labels)
 
-    def set_iter_params(self, qp0, uvsurf0, qp1, uvsurf1, fluid_props):
-        """
-        Set all parameters needed to define an iteration/time step of the model
-        """
-        self.set_ini_state(qp0)
-        self.set_fin_state(qp1)
-
-        self.set_ini_control(uvsurf0)
-        self.set_fin_control(uvsurf1)
-
-        self.set_properties(fluid_props)
+    def get_control_vec(self):
+        return self.control0.copy()
 
     ## Methods that subclasses must implement
     def res(self):
@@ -267,8 +221,6 @@ class Bernoulli(QuasiSteady1DFluid):
     """
     PROPERTY_TYPES = {
         'y_midline': ('const', ()),
-        'p_sub': ('const', ()),
-        'p_sup': ('const', ()),
         'a_sub': ('const', ()),
         'a_sup': ('const', ()),
         'rho_air': ('const', ()),
@@ -281,8 +233,6 @@ class Bernoulli(QuasiSteady1DFluid):
 
     PROPERTY_DEFAULTS = {
         'y_midline': 1e6,
-        'p_sub': 800 * PASCAL_TO_CGS,
-        'p_sup': 0 * PASCAL_TO_CGS,
         'a_sub': 100000,
         'a_sup': 0.6,
         'r_sep': 1.0,
@@ -297,25 +247,25 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return self.fluid_pressure(self.get_fin_control(), self.properties)
+        return self.fluid_pressure(*self.control1.vecs, self.properties)
 
     def solve_qp0(self):
         """
         Return the initial flow state
         """
-        return self.fluid_pressure(self.get_ini_control(), self.properties)
+        return self.fluid_pressure(*self.control0.vecs, self.properties)
 
     def solve_dqp1_du1(self, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(self.get_fin_control(), self.properties)
+        return self.flow_sensitivity(*self.control1.vecs, self.properties)
 
     def solve_dqp0_du0(self, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(self.get_ini_control(), self.properties)
+        return self.flow_sensitivity(*self.control0.vecs, self.properties)
 
     # TODO: Refactor to use the DOF map from solid to fluid rather than `ForwardModel`
     def solve_dqp1_du1_solid(self, model, adjoint=False):
@@ -379,7 +329,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dssep_damin, dssep_dsmin, dssep_da, dasep_damin, dasep_dsmin, dasep_da
 
-    def fluid_pressure(self, surface_state, fluid_props):
+    def fluid_pressure(self, usurf, vsurf, psub, psup, fluid_props):
         """
         Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
@@ -404,14 +354,13 @@ class Bernoulli(QuasiSteady1DFluid):
         xy_min, xy_sep: (2,) np.ndarray
             The coordinates of the vertices at minimum and separation areas
         """
-        psup, psub = fluid_props['p_sup'], fluid_props['p_sub']
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
         alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
 
         # x = surface_state[0][:-1:2]
-        y = surface_state[0][1::2]
+        y = usurf[1::2]
 
         a = 2 * (fluid_props['y_midline'] - y)
         asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
@@ -437,8 +386,8 @@ class Bernoulli(QuasiSteady1DFluid):
         # Find the first point where s passes s_min/s_sep, then we can linearly interpolate
         idx_min = np.argmax(s>smin)
         idx_sep = np.argmax(s>ssep)
-        xy_min = surface_state[0].reshape(-1, 2)[idx_min]
-        xy_sep = surface_state[0].reshape(-1, 2)[idx_sep]
+        xy_min = usurf.reshape(-1, 2)[idx_min]
+        xy_sep = usurf.reshape(-1, 2)[idx_sep]
         # breakpoint()
         info = {'flow_rate': q,
                 'idx_sep': idx_sep,
@@ -453,7 +402,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'pressure': p}
         return BlockVec((np.array(q), p), ('q', 'p')), info
 
-    def flow_sensitivity(self, surface_state, fluid_props):
+    def flow_sensitivity(self, usurf, vsurf, psub, psup, fluid_props):
         """
         Return the sensitivities of pressure and flow rate to the surface state.
 
@@ -464,15 +413,14 @@ class Bernoulli(QuasiSteady1DFluid):
         fluid_props : BlockVec
             A dictionary of fluid property keyword arguments.
         """
-        assert surface_state[0].size%2 == 0
-        psup, psub = fluid_props['p_sup'], fluid_props['p_sub']
+        assert usurf.size%2 == 0
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
         alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
 
         # x = surface_state[0][:-1:2]
-        y = surface_state[0][1::2]
+        y = usurf[1::2]
 
         a = 2 * (fluid_props['y_midline'] - y)
         da_dy = -2
@@ -520,17 +468,17 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_dpsub = sepweight*dpbern_dpsub
         dq_dpsub = 0.5*qsqr**-0.5 * dqsqr_dpsub
 
-        dp_du = np.zeros((surface_state[0].size//2, surface_state[0].size))
+        dp_du = np.zeros((usurf.size//2, usurf.size))
         dp_du[:, :-1:2] = 0
         dp_du[:, 1::2] = dp_dy
 
         ## Calculate the flow rate sensitivity
-        dq_du = np.zeros(surface_state[0].size)
+        dq_du = np.zeros(usurf.size)
         dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_dy
 
         return dq_du, dp_du, dq_dpsub, dp_dpsub
 
-    def flow_sensitivity_solid(self, model, surface_state, fluid_props, adjoint=False):
+    def flow_sensitivity_solid(self, model, usurf, vsurf, psub, psup, fluid_props, adjoint=False):
         """
         Returns sparse mats/vecs for the sensitivity of pressure and flow rate to displacement.
 
@@ -549,7 +497,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dq_du : PETSc.Vec
             Sensitivity of flow rate with respect to displacement
         """
-        _dq_du, _dp_du, *_ = self.flow_sensitivity(surface_state, fluid_props)
+        _dq_du, _dp_du, *_ = self.flow_sensitivity(usurf, vsurf, psub, psup, fluid_props)
 
         dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
         dp_du.setType('aij')
@@ -562,7 +510,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_du.setSizes(shape)
         dp_du.setUp()
 
-        pressure_vertices = model.surface_vertices
+        pressure_vertices = model.fsi_verts
         solid_dofs, fluid_dofs = model.get_fsi_vector_dofs()
         # ()
         rows, cols = None, None
@@ -604,16 +552,6 @@ class Bernoulli(QuasiSteady1DFluid):
         b = self.get_properties_vec()
         b.set(0.0)
         return b
-
-    # def get_glottal_width(self, surface_state):
-    #     """
-    #     Return the non smoothed, glottal width
-    #     """
-    #     _, y = surface_state[0][:, 0], surface_state[0][:, 1]
-
-    #     area = 2 * (self.properties['y_midline'] - y)
-    #     a_min = smooth_minimum(area, self.s_vertices, self.properties['alpha'])
-    #     return a_min
 
 # Below are a collection of smoothened functions for selecting the minimum area, separation point,
 # and simulating separation

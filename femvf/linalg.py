@@ -590,6 +590,7 @@ class BlockVec:
         desc = ", ".join([f"{key}:{_len(vec)}" for key, vec in zip(self.keys, self.vecs)])
         return f"({desc})"
 
+    ## Dict-like interface
     def __contains__(self, key):
         return key in self.data
 
@@ -625,6 +626,9 @@ class BlockVec:
     def __iter__(self):
         for key in self.keys:
             yield self.data[key]
+
+    def items(self):
+        return zip(self.keys, self.vecs)
 
     def set(self, scalar):
         """

@@ -36,8 +36,8 @@ def init_figure(model, fluid_props):
 
     thickness_bottom = np.amax(model.mesh.coordinates()[..., 0])
 
-    x = np.arange(model.surface_vertices.shape[0])
-    y = np.arange(model.surface_vertices.shape[0])
+    x = np.arange(model.fsi_verts.shape[0])
+    y = np.arange(model.fsi_verts.shape[0])
 
     axs[1, 0].plot(x, y, marker='o')
 
@@ -86,7 +86,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     fig.colorbar(mappable, cax=axs[0, 1])
     axs[0, 1].set_ylabel('[kPa]')
 
-    xy_surface = xy_current[model.surface_vertices]
+    xy_surface = xy_current[model.fsi_verts]
 
     xy_min, xy_sep = fluid_info['xy_min'], fluid_info['xy_sep']
     axs[0, 0].plot(*xy_min, marker='o', mfc='none', color='C0')

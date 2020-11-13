@@ -1485,7 +1485,7 @@ class GlottalWidthErrorNorm(Functional):
 
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config().reshape(-1)
-        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
+        DOF_SURFACE = model.solid.vert_to_vdof[model.fsi_verts].reshape(-1)
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
         # Calculate the glottal width at every node
@@ -1506,7 +1506,7 @@ class GlottalWidthErrorNorm(Functional):
 
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config().reshape(-1)
-        DOF_SURFACE = model.solid.vert_to_vdof[model.surface_vertices].reshape(-1)
+        DOF_SURFACE = model.solid.vert_to_vdof[model.fsi_verts].reshape(-1)
         Y_DOF = DOF_SURFACE[1::2]
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 

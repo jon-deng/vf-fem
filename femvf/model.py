@@ -83,46 +83,73 @@ class FSIModel:
     fluid : Fluid
         A fluid model object
 
-    surface_vertices : array_like
+    fsi_verts : array_like
         A list of vertex numbers on the pressure surface. They are ordered in increasing streamwise
         direction.
+    fsi_coordinates
     """
     def __init__(self, solid, fluid):
         self.solid = solid
         self.fluid = fluid
 
-        # Create a vertex marker from the boundary marker
-        fsi_facet_ids = [solid.facet_labels[name] for name in solid.fsi_facet_labels]
-        pressure_edges = np.array([nedge for nedge, fedge in enumerate(solid.facet_func.array()) 
-                                   if fedge in set(fsi_facet_ids)])
-
-        # TODO: Should replace with the commented code
-        # fixed_facet_ids = [solid.facet_labels[name] for name in solid.fixed_facet_labels]
-        # fixed_edges = np.array([nedge for nedge, fedge in enumerate(solid.mesh.edges().array()) 
-        #                         if fedge in set(fixed_facet_ids)])
-        fixed_edges = self.solid.facet_func.where_equal(self.solid.facet_labels['fixed'])
-
-        pressure_vertices = meshutils.vertices_from_edges(pressure_edges, self.solid.mesh)
-        fixed_vertices = meshutils.vertices_from_edges(fixed_edges, self.solid.mesh)
-
-        surface_vertices = pressure_vertices
-        surface_coordinates = self.solid.mesh.coordinates()[surface_vertices]
-
-        # TODO: This will only work if you use a 1D fluid mesh where the mesh is aligned along the
-        # surface
-        # Sort the pressure surface vertices from inferior to superior
-        idx_sort = meshutils.sort_vertices_by_nearest_neighbours(surface_coordinates)
-        self.surface_vertices = surface_vertices[idx_sort]
-        self.surface_coordinates = surface_coordinates[idx_sort]
-
-        self.fixed_vertices = fixed_vertices
-        self.fixed_corodinates = self.solid.mesh.coordinates()[fixed_vertices]
-
+        ## Specify state, controls, and properties
         self.state0 = linalg.concatenate(self.solid.state0, self.fluid.state0)
         self.state1 = linalg.concatenate(self.solid.state1, self.fluid.state1)
-        self.control0 = linalg.BlockVec((), ())
-        self.control1 = linalg.BlockVec((), ())
+
+        # The control is just the subglottal and supraglottal pressures
+        self.control0 = self.fluid.control0[2:].copy()
+        self.control1 = self.fluid.control1[2:].copy()
         self.properties = linalg.concatenate(self.solid.properties, self.fluid.properties)
+
+        ## Process the surface vertices to perform coupling between the solid and fluid
+        # Create a vertex marker from the boundary marker
+        fsi_facet_ids = [solid.facet_labels[name] for name in solid.fsi_facet_labels]
+        fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.facet_func.array()) 
+                                   if fedge in set(fsi_facet_ids)])
+
+        fsi_verts = meshutils.vertices_from_edges(fsi_edges, self.solid.mesh)
+        fsi_coordinates = self.solid.mesh.coordinates()[fsi_verts]
+
+        # Sort the pressure surface vertices from inferior to superior
+        # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
+        idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
+        self.fsi_verts = fsi_verts[idx_sort]
+        self.fsi_coordinates = fsi_coordinates[idx_sort]
+
+    ## These have to be defined to exchange data between domains
+    def set_ini_solid_state(self, uva0):
+        """
+        Sets the state variables u, v, and a at the start of the step.
+
+        Parameters
+        ----------
+        u0, v0, a0 : array_like
+        """
+        self.solid.set_ini_state(uva0)
+        
+        X_ref = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
+        u0_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva0[0])
+        v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
+        self.fluid.set_ini_control((u0_fluid, v0_fluid))
+
+    def set_fin_solid_state(self, uva1):
+        """
+        Sets the displacement at the end of the time step.
+
+        This could be an initial guess in the case of non-linear governing equations, or a solved
+        state so that the non-linear form can be linearized for the given state.
+
+        Parameters
+        ----------
+        uva1 : tuple of array_like
+        """
+        self.solid.set_fin_state(uva1)
+
+        X_ref = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
+        
+        u1_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva1[0])
+        v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
+        self.fluid.set_fin_control((u1_fluid, v1_fluid))
 
     ## Methods for settings parameters of the model
     def set_ini_state(self, state):
@@ -134,10 +161,12 @@ class FSIModel:
         self.set_fin_fluid_state(state[3:])
 
     def set_ini_control(self, control):
-        pass
+        for key, value in control.items():
+            self.fluid.control0[key][:] = value
     
     def set_fin_control(self, control):
-        pass
+        for key, value in control.items():
+            self.fluid.control1[key][:] = value
 
     def set_properties(self, props):
         self.solid.set_properties(props[:len(self.solid.properties.size)])
@@ -154,7 +183,7 @@ class FSIModel:
         self.solid.set_time_step(dt)
         self.fluid.set_time_step(dt)
 
-
+    # Additional more friendly method for setting parameters (use the above defined methods)
     def set_ini_params(self, state0, control0):
         """
         Sets all properties at the initial time.
@@ -252,57 +281,10 @@ class FSIModel:
         state1 = f.get_state(n)
         control1 = f.get_control(n)
 
-        dt = statefile.get_time(n) - statefile.get_time(n-1)
+        dt = f.get_time(n) - f.get_time(n-1)
 
         # Assign the values to the model
         self.set_iter_params(state0, control0, state1, control1, dt)
-
-    # These must be defined to properly exchange the forcing data between the solid and fluid
-    def set_ini_solid_state(self, uva0):
-        """
-        Sets the state variables u, v, and a at the start of the step.
-
-        Parameters
-        ----------
-        u0, v0, a0 : array_like
-        """
-        self.solid.set_ini_state(uva0)
-        
-        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
-        u0_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva0[0])
-        v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
-        self.fluid.set_ini_control((u0_fluid, v0_fluid))
-
-    def set_fin_solid_state(self, uva1):
-        """
-        Sets the displacement at the end of the time step.
-
-        This could be an initial guess in the case of non-linear governing equations, or a solved
-        state so that the non-linear form can be linearized for the given state.
-
-        Parameters
-        ----------
-        uva1 : tuple of array_like
-        """
-        self.solid.set_fin_state(uva1)
-
-        X_ref = self.solid.mesh.coordinates()[self.surface_vertices].reshape(-1)
-        
-        u1_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva1[0])
-        v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
-        self.fluid.set_fin_control((u1_fluid, v1_fluid))
-
-    def set_ini_fluid_state(self, qp0):
-        self.fluid.set_ini_state(qp0)
-
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        self.solid.set_ini_control(p0_solid)
-
-    def set_fin_fluid_state(self, qp1):
-        self.fluid.set_fin_state(qp1)
-
-        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        self.solid.set_fin_control(p1_solid)
 
     ## Solid / fluid interfacing functions
     def get_fsi_scalar_dofs(self):
@@ -313,8 +295,8 @@ class FSIModel:
         between them. Currently this is specifically made to work for the 1D fluid, so if you want
         to do something else, you'll have to think of how to generalized it.
         """
-        sdof_solid = self.solid.vert_to_sdof[self.surface_vertices]
-        sdof_fluid = np.arange(self.surface_vertices.size)
+        sdof_solid = self.solid.vert_to_sdof[self.fsi_verts]
+        sdof_fluid = np.arange(self.fsi_verts.size)
 
         return sdof_solid, sdof_fluid
 
@@ -326,7 +308,7 @@ class FSIModel:
         between them. Currently this is specifically made to work for the 1D fluid, so if you want
         to do something else, you'll have to think of how to generalized it.
         """
-        vdof_solid = self.solid.vert_to_vdof.reshape(-1, 2)[self.surface_vertices].reshape(-1).copy()
+        vdof_solid = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
         vdof_fluid = np.arange(vdof_solid.size)
 
         return vdof_solid, vdof_fluid
@@ -354,7 +336,8 @@ class FSIModel:
     def map_fsi_vector_from_solid_to_fluid(self, solid_vector):
         vdof_solid, vdof_fluid = self.get_fsi_vector_dofs()
 
-        fluid_vector = self.fluid.get_surf_vector()
+        fluid_vector = self.fluid.control0['usurf'].copy()
+        fluid_vector[:] = 0.0
         fluid_vector[vdof_fluid] = solid_vector[vdof_solid]
         return fluid_vector
 
@@ -415,7 +398,7 @@ class FSIModel:
             A tuple of arrays of surface positions, velocities and accelerations.
         """
         vert_to_vdof = self.solid.vert_to_vdof
-        surface_dofs = vert_to_vdof.reshape(-1, 2)[self.surface_vertices].flat
+        surface_dofs = vert_to_vdof.reshape(-1, 2)[self.fsi_verts].flat
 
         u = self.solid.u0.vector()[surface_dofs].reshape(-1, 2)
         v = self.solid.v0.vector()[surface_dofs].reshape(-1, 2)
@@ -486,7 +469,7 @@ class FSIModel:
         """
         # import ipdb; ipdb.set_trace()
         u_surface = self.get_surf_state()[0]
-        verts = self.surface_vertices[u_surface[..., 1] > self.y_collision.values()[0]]
+        verts = self.fsi_verts[u_surface[..., 1] > self.y_collision.values()[0]]
         return verts
 
     ## Methods for getting vectors
@@ -500,25 +483,9 @@ class FSIModel:
         return linalg.concatenate(self.solid.get_properties_vec(), self.fluid.get_properties_vec())
 
     ## Solver functions
-    ## Specific models have to implement these
+    # Specific models must implement these
     def res(self):
-        """
-        Return the residual vector, F
-        """
-        dt = self.solid.dt.vector()[0]
-        u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
-        u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
-        res = self.get_state_vec()
-
-        res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
-        self.solid.bc_base.apply(res['u'])
-        res['v'][:] = v1 - solids.newmark_v(u1, u0, v0, a0, dt)
-        res['a'][:] = a1 - solids.newmark_a(u1, u0, v0, a0, dt)
-
-        qp, *_ = self.fluid.solve_qp1()
-        res['q'][:] = self.fluid.state1['q'] - qp['q']
-        res['p'][:] = self.fluid.state1['p'] - qp['p']
-        return res
+        raise NotImplementedError
     
     # Forward solver methods
     def solve_state1(self, ini_state, newton_solver_prm=None):
@@ -546,11 +513,24 @@ class FSIModel:
     def apply_dres_dp_adj(self, x):
         raise NotImplementedError
 
-    def apply_dres_dcontrol_adj(self, x):
+    def apply_dres_dcontrol0_adj(self, x):
         raise NotImplementedError
 
 class ExplicitFSIModel(FSIModel):
+    ## These setting functions ensure explicit coupling between the domains
+    def set_ini_fluid_state(self, qp0):
+        self.fluid.set_ini_state(qp0)
 
+        # Note that setting the initial fluid state sets the final driving pressure
+        # for explicit coupling
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
+        control = linalg.BlockVec((p0_solid,), self.solid.control0.keys)
+        self.solid.set_fin_control(control)
+
+    def set_fin_fluid_state(self, qp1):
+        self.fluid.set_fin_state(qp1)
+
+    ## Solver functions
     def res(self):
         """
         Return the residual vector, F
@@ -570,22 +550,6 @@ class ExplicitFSIModel(FSIModel):
         res['p'][:] = self.fluid.state1['p'] - qp['p']
         return res
     
-    # These setting function are overwritten to ensure the explicit coupling of fluid/solid 
-    # states is done 
-    def set_ini_fluid_state(self, qp0):
-        self.fluid.set_ini_state(qp0)
-
-        # Note that setting the initial fluid state sets the final driving pressure
-        # for explicit coupling
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        self.solid.set_fin_control(p0_solid)
-
-    def set_fin_fluid_state(self, qp1):
-        self.fluid.set_fin_state(qp1)
-
-        # p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        # self.solid.set_fin_control(p1_solid)
-
     # Forward solver methods
     def solve_state1(self, ini_state, newton_solver_prm=None):
         """
@@ -739,7 +703,23 @@ class ExplicitFSIModel(FSIModel):
         pass
 
 class ImplicitFSIModel(FSIModel):
-    
+    ## These must be defined to properly exchange the forcing data between the solid and fluid
+    def set_ini_fluid_state(self, qp0):
+        self.fluid.set_ini_state(qp0)
+
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
+        control = linalg.BlockVec((p0_solid,), self.solid.control0.keys)
+        self.solid.set_ini_control(control)
+
+    def set_fin_fluid_state(self, qp1):
+        self.fluid.set_fin_state(qp1)
+
+        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
+        control = linalg.BlockVec((p1_solid,), self.solid.control0.keys)
+        self.solid.set_fin_control(control)
+
+
+    ## Forward solver methods
     def res(self):
         """
         Return the residual vector, F
@@ -759,7 +739,6 @@ class ImplicitFSIModel(FSIModel):
         res['p'][:] = self.fluid.state1['p'] - qp['p']
         return res
     
-    # Forward solver methods
     def solve_state1(self, ini_state, newton_solver_prm=None):
         """
         Solve for the final state given an initial guess
@@ -852,7 +831,7 @@ class ImplicitFSIModel(FSIModel):
         x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
         return x
 
-    # Adjoint solver methods
+    ## Adjoint solver methods
     def solve_dres_dstate1_adj(self, b):
         """
         Solve, dF/du^T x = f
@@ -965,3 +944,87 @@ class ImplicitFSIModel(FSIModel):
     def apply_dres_dcontrol_adj(self, x):
         # b = self.get_properties_vec()
         pass
+
+class SolidModel:
+    def __init__(self, solid):
+        self.solid = solid
+
+        self.state0 = self.solid.state0
+        self.state1 = self.solid.state1
+
+        self.control0 = self.solid.control0
+        self.control1 = self.solid.control1
+
+        self.properties = self.solid.properties
+
+    def set_ini_state(self, state):
+        self.solid.set_ini_state(state)
+
+    def set_fin_state(self, state):
+        self.solid.set_fin_state(state)
+
+    def set_ini_control(self, control):
+        self.solid.set_ini_control(control)
+    
+    def set_fin_control(self, control):
+        self.solid.set_fin_control(control)
+
+    def set_properties(self, props):
+        self.solid.set_properties(props)
+
+    def set_time_step(self, dt):
+        """
+        Sets the time step.
+
+        Parameters
+        ----------
+        dt : float
+        """
+        self.solid.set_time_step(dt)
+
+    def solve_state1(self, ini_state, newton_solver_prm=None):
+        """
+        Solve for the final state given an initial guess
+        """
+        """
+        Solve for the final state given an initial guess
+        """
+        solid = self.solid
+        dt = solid.dt.vector()[0]
+        uva0 = solid.state0
+
+        uva1 = solid.get_state_vec()
+
+        # Update form coefficients and initial guess
+        self.set_fin_state(ini_state)
+
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+
+        dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
+                  solver_parameters={"newton_solver": newton_solver_prm})
+
+        res = dfn.assemble(self.solid.forms['form.un.f1'])
+        self.solid.bc_base.apply(res)
+
+        uva1['u'][:] = solid.u1.vector()
+        uva1['v'][:] = solids.newmark_v(uva1['u'], *uva0, dt)
+        uva1['a'][:] = solids.newmark_a(uva1['u'], *uva0, dt)
+
+        self.set_fin_state(uva1)
+        step_info = {}
+
+        return uva1, step_info
+
+    def get_state_vec(self):
+        return self.solid.get_state_vec()
+
+    def get_control_vec(self):
+        return self.solid.get_control_vec()
+
+    def get_properties_vec(self):
+        return self.solid.get_properties_vec()
+
+class FSAIModel:
+    def __init__(self, solid, fluid, acoustic):
+        pass 

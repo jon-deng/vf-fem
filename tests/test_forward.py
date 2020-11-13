@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import dolfin as dfn
 # import h5py
 
-from femvf.forward import integrate
+from femvf.forward import integrate, gw_callback
 from femvf.model import load_fsi_model
 from femvf.constants import PASCAL_TO_CGS
 
@@ -43,15 +43,17 @@ class TestForward(unittest.TestCase):
         p_sub = 500
 
         times = np.linspace(0, 0.01, 100)
+        control = model.get_control_vec()
+        control['psub'][:] = p_sub * PASCAL_TO_CGS
+        control['psup'][:] = 0.0 * PASCAL_TO_CGS
 
-        fluid_props = model.fluid.get_properties()
+        fluid_props = model.fluid.get_properties_vec(set_default=True)
         fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-        fluid_props['p_sub'][()] = p_sub * PASCAL_TO_CGS
         fluid_props['alpha'][()] = alpha
         fluid_props['k'][()] = k
         fluid_props['sigma'][()] = sigma
 
-        solid_props = model.solid.get_properties()
+        solid_props = model.solid.get_properties_vec(set_default=True)
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
@@ -78,8 +80,6 @@ class TestForward(unittest.TestCase):
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
 
-        controls = linalg.BlockVec(())
-
         save_path = 'test_forward.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
@@ -87,13 +87,15 @@ class TestForward(unittest.TestCase):
         ## Run the simulation
         print("Running forward model")
         runtime_start = perf_counter()
-        info = integrate(model, ini_state, controls, props, times, h5file=save_path, h5group='/')
+        info = integrate(model, ini_state, control, props, times, h5file=save_path, h5group='/',
+                         callbacks={'glottal_width': gw_callback})
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
+        breakpoint()
 
         ## Plot the resulting glottal width
         fig, ax = plt.subplots(1, 1)
-        ax.plot(times, info['glottal_width'])
+        ax.plot(times[1:], info['glottal_width'])
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
 

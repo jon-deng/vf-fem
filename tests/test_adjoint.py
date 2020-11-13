@@ -262,8 +262,8 @@ class TestBasicGradient(TaylorTestUtils):
         # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
 
         # Increment `u` only along the pressure surface
-        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.surface_vertices]
-        xy_surface = self.model.solid.mesh.coordinates()[self.model.surface_vertices, :]
+        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.fsi_verts]
+        xy_surface = self.model.solid.mesh.coordinates()[self.model.fsi_verts, :]
         x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
 
@@ -409,8 +409,8 @@ class TestBasicGradientSingleStep(TestBasicGradient):
         # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
 
         # Increment `u` only along the pressure surface
-        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.surface_vertices]
-        xy_surface = self.model.solid.mesh.coordinates()[self.model.surface_vertices, :]
+        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.fsi_verts]
+        xy_surface = self.model.solid.mesh.coordinates()[self.model.fsi_verts, :]
         x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
 

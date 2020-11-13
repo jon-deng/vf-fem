@@ -140,8 +140,8 @@ class Solid:
         ## Define the state/controls/properties
         self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
         self.state1 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
-        self.control0 = BlockVec((self.forms['coeff.fsi.p0'].vector(),), ('p'))
-        self.control1 = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p'))
+        self.control0 = BlockVec((self.forms['coeff.fsi.p0'].vector(),), ('p',))
+        self.control1 = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
         self.properties = self.get_properties_vec(set_default=True)
         self.set_properties(self.get_properties_vec(set_default=True))
 
@@ -174,6 +174,22 @@ class Solid:
         a = dfn.Function(self.vector_fspace).vector()
         return BlockVec((u, v, a), ('u', 'v', 'a')) 
 
+    def get_control_vec(self):
+        ret = self.control0.copy()
+        ret.set(0.0)
+        return ret
+
+    def get_properties_vec(self, set_default=True):
+        field_size = self.scalar_fspace.dim()
+
+        prop_defaults = None
+        if set_default:
+            prop_defaults = self.PROPERTY_DEFAULTS
+
+        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
+
+        return BlockVec(vecs, labels)
+    
     def set_ini_state(self, uva0):
         """
         Sets the initial state variables, (u, v, a)
@@ -203,10 +219,10 @@ class Solid:
         self.forms['coeff.state.a1'].vector()[:] = uva1[2]
 
     def set_ini_control(self, p0):
-        self.forms['coeff.fsi.p0'].vector()[:] = p0
+        self.forms['coeff.fsi.p0'].vector()[:] = p0['p']
 
     def set_fin_control(self, p1):
-        self.forms['coeff.fsi.p1'].vector()[:] = p1
+        self.forms['coeff.fsi.p1'].vector()[:] = p1['p']
 
     def set_time_step(self, dt):
         """
@@ -269,17 +285,6 @@ class Solid:
             return dfn.assemble(self.forms[form_key])
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
-
-    def get_properties_vec(self, set_default=True):
-        field_size = self.scalar_fspace.dim()
-
-        prop_defaults = None
-        if set_default:
-            prop_defaults = self.PROPERTY_DEFAULTS
-
-        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
-
-        return BlockVec(vecs, labels)
 
     def get_properties(self):
         """
