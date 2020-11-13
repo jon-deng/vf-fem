@@ -385,29 +385,6 @@ class FSIModel:
         displacement = self.solid.u0.vector()[self.solid.vert_to_vdof].reshape(-1, 2)
         return self.solid.mesh.coordinates() + displacement
 
-    def get_surf_state(self):
-        """
-        Returns the state (u, v, a) of surface vertices of the model.
-
-        The displacement, u, returned is the actual position rather than the displacement relative
-        to the reference configuration. Also, states are ordered in streamwise increasing order.
-
-        Returns
-        -------
-        tuple of array_like
-            A tuple of arrays of surface positions, velocities and accelerations.
-        """
-        vert_to_vdof = self.solid.vert_to_vdof
-        surface_dofs = vert_to_vdof.reshape(-1, 2)[self.fsi_verts].flat
-
-        u = self.solid.u0.vector()[surface_dofs].reshape(-1, 2)
-        v = self.solid.v0.vector()[surface_dofs].reshape(-1, 2)
-        a = self.solid.a0.vector()[surface_dofs].reshape(-1, 2)
-
-        x_surface = (self.surface_coordinates + u, v, a)
-
-        return x_surface
-
     # Fluid 'residuals'
     # These are designed for quasi-steady, Bernoulli fluids where you don't need any iterative
     # methods to solve.
@@ -430,47 +407,6 @@ class FSIModel:
 
         cells = self.solid.mesh.cells()
         return Triangulation(coords[:, 0], coords[:, 1], triangles=cells)
-
-    def get_glottal_width(self):
-        """
-        Return glottal width
-        """
-        x_surface = self.get_surf_state()
-
-        return self.fluid.get_glottal_width(x_surface)
-
-    def get_exact_glottal_width(self):
-        """
-        Return glottal width
-        """
-        x_surface = self.get_surf_state()
-
-        return self.fluid_props['y_midline'] - np.max(x_surface[0][..., 1])
-
-    def get_collision_gap(self):
-        """
-        Return the smallest distance to the collision plane
-        """
-        u_surface = self.get_surf_state()[0]
-
-        return self.solid.forms['coeff.prop.y_collision'].values()[0] - np.max(u_surface[..., 1])
-
-    def get_ymax(self):
-        """
-        Return the maximum y-coordinate of the reference configuration
-        """
-        x_surface = self.get_surf_state()
-
-        return np.max(x_surface[0][..., 1])
-
-    def get_collision_verts(self):
-        """
-        Return vertex numbers of nodes in collision.
-        """
-        # import ipdb; ipdb.set_trace()
-        u_surface = self.get_surf_state()[0]
-        verts = self.fsi_verts[u_surface[..., 1] > self.y_collision.values()[0]]
-        return verts
 
     ## Methods for getting vectors
     def get_state_vec(self):

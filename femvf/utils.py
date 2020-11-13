@@ -12,32 +12,27 @@ from . import statefile as sf
 import numpy as np
 
 
-def line_search(hs, model, ini_state, controls, props, times,
-                dstate=None, dcontrols=None, dprops=None, dtimes=None,
+def line_search(hs, model, 
+                ini_state, controls, props, times,
+                dstate, dcontrols, dprops, dtimes,
                 filepath='temp.h5'):
     if path.exists(filepath):
         os.remove(filepath)
 
     for n, h in enumerate(hs):
-        # Increment all the properties along the search direction
-        state_n = ini_state
-        if dstate is not None:
-            state_n = ini_state + h*dstate
+        ## Increment the inputs for the provided step
+        state_n = ini_state + h*dstate
 
-        controls_n = controls
-        if dcontrols is not None:
-            for control, dcontrol in zip(controls_n, dcontrols):
-                control = control + h*dcontrol
+        controls_n = []
+        for control, dcontrol in zip(controls, dcontrols):
+            controls_n.append(control + h*dcontrol)
 
-        props_n = props
-        if dprops is not None:
-            props_n = props + h*dprops
+        props_n = props + h*dprops
 
         times_n = np.array(times)
-        if dtimes is not None:
-            times_n += h*dtimes
-        # timing_props_n = {'t0': times_n[0], 'tmeas': times_n, 'dt_max': np.inf}
+        times_n += h*dtimes
 
+        ## Run simulations at the step
         runtime_start = perf_counter()
         info = integrate(model, state_n, controls_n, props_n, times_n,
                          h5file=filepath, h5group=f'{n}')
@@ -45,7 +40,7 @@ def line_search(hs, model, ini_state, controls, props, times,
 
         print(f"Run duration {runtime_end-runtime_start} s")
 
-        # Save the run info to a pickled file
+        ## Save the run info to a pickled file
         if h == 0:
             with open(path.splitext(filepath)[0] + ".pickle", 'wb') as f:
                 pickle.dump(info, f)

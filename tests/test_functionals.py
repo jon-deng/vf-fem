@@ -53,8 +53,8 @@ class TestFunctionals(unittest.TestCase):
         timing_props = tmeas
 
         # Set parameters for the simulation
-        solid_props = model.solid.get_properties()
-        fluid_props = model.fluid.get_properties()
+        solid_props = model.solid.get_properties_vec()
+        fluid_props = model.fluid.get_properties_vec()
 
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002

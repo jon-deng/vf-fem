@@ -43,7 +43,7 @@ class CommonSetup(unittest.TestCase):
         
         p_sub = 800.0*PASCAL_TO_CGS
         p_sup = 0*PASCAL_TO_CGS
-        self.fluid_properties = self.fluid.get_properties()
+        self.fluid_properties = self.fluid.get_properties_vec()
         self.fluid_properties['p_sub'][()] = p_sub
         self.fluid_properties['p_sup'][()] = p_sup
         self.fluid_properties['y_midline'][()] = y.max()+1e-3

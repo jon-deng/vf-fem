@@ -33,15 +33,18 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
     Parameters
     ----------
     model : model.ForwardModel
-    uva : tuple of dfn.Vector
-        Initial solid state (displacement, velocity, acceleration)
-    solid_props, fluid_props : femvf.Properties
-        Solid / fluid parameter vectors
-    times : array of float
+    ini_state : BlockVec
+        Initial state of the system (for example: displacement, velocity, acceleration)
+    controls : list(BlockVec)
+        List of control BlockVec with on entry for each integration time. If there is only one 
+        control in the list, then the controls are considered to be constant in time.
+    props : BlockVec
+        Properties vector for the system
+    times : np.ndarray
         Array of discrete integration times. Each time point is one integration point so the time
         between successive time points is a time step.
-    idx_meas : array of int
-        Array marking which integration points correspond to something (usu. measurements)
+    idx_meas : np.ndarray
+        Array of integers marking which integration points correspond to something (usu. measurements)
     h5file : str
         Path to h5 file where states should be saved
 
@@ -58,7 +61,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
         idx_meas = np.array([])
 
     variable_controls = False
-    if isinstance(controls, list):
+    if len(controls) > 1:
         variable_controls = True
         assert len(controls) == times.size
 
@@ -74,11 +77,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
 
     ## Allocate functions to store states
     state0 = ini_state.copy()
-    control0 = None
-    if variable_controls:
-        control0 = controls[0]
-    else:
-        control0 = controls
+    control0 = controls[0]
 
     ## Initialize datasets and save initial states to the h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
@@ -96,11 +95,10 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
         for n in range(1, times.size):
             if variable_controls:
-                control0 = controls[n-1]
                 control1 = controls[n]
             else:
-                control0 = controls
-                control1 = controls
+                control1 = control0
+
             dt = times[n] - times[n-1]
 
             model.set_time_step(dt)
@@ -121,6 +119,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
 
             # Update initial conditions for the next time step
             state0 = state1
+            control0 = control1
 
     return info
 

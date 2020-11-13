@@ -272,14 +272,14 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity_solid(model, self.get_fin_control(), self.properties,
+        return self.flow_sensitivity_solid(model, *self.control1.vecs, self.properties,
                                            adjoint)
 
     def solve_dqp0_du0_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity_solid(model, self.get_ini_control(), self.properties,
+        return self.flow_sensitivity_solid(model, *self.control0.vecs, self.properties,
                                            adjoint)
 
     ## internal methods

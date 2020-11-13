@@ -286,35 +286,35 @@ class Solid:
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
 
-    def get_properties(self):
-        """
-        Returns the current values of the properties
+    # def get_properties(self):
+    #     """
+    #     Returns the current values of the properties
 
-        Returns
-        -------
-        properties : Properties
-        """
-        properties = self.get_properties_vec()
+    #     Returns
+    #     -------
+    #     properties : Properties
+    #     """
+    #     properties = self.get_properties_vec()
 
-        for key in properties.keys:
-            # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = self.forms['coeff.prop.'+key]
+    #     for key in properties.keys:
+    #         # TODO: Check types to make sure the input property is compatible with the solid type
+    #         coefficient = self.forms['coeff.prop.'+key]
 
-            if properties[key].shape == ():
-                if isinstance(coefficient, dfn.function.constant.Constant):
-                    # If the coefficient is a constant, then the property must be a float
-                    general_vec_set(properties[key], coefficient.values()[0])
-                else:
-                    # If a vector, it's possible it's the 'hacky' version for a time step, where the
-                    # actual property is a float but the coefficient is assigned to be a vector
-                    # (which is done so you can differentiate it)
-                    assert coefficient.vector().max() == coefficient.vector().min()
-                    general_vec_set(properties[key], coefficient.vector().max())
-            else:
-                # coefficient.vector()[:] = properties[key]
-                properties[key][:] = coefficient.vector()[:]
+    #         if properties[key].shape == ():
+    #             if isinstance(coefficient, dfn.function.constant.Constant):
+    #                 # If the coefficient is a constant, then the property must be a float
+    #                 general_vec_set(properties[key], coefficient.values()[0])
+    #             else:
+    #                 # If a vector, it's possible it's the 'hacky' version for a time step, where the
+    #                 # actual property is a float but the coefficient is assigned to be a vector
+    #                 # (which is done so you can differentiate it)
+    #                 assert coefficient.vector().max() == coefficient.vector().min()
+    #                 general_vec_set(properties[key], coefficient.vector().max())
+    #         else:
+    #             # coefficient.vector()[:] = properties[key]
+    #             properties[key][:] = coefficient.vector()[:]
 
-        return properties
+    #     return properties
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)

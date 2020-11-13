@@ -123,12 +123,12 @@ class PeriodicError(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -205,7 +205,7 @@ class PeriodicEnergyError(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
 
         alphau = self.constants['alpha']
@@ -220,7 +220,7 @@ class PeriodicEnergyError(Functional):
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -321,12 +321,12 @@ class FinalVelocityNorm(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -375,12 +375,12 @@ class FinalSurfaceDisplacementNorm(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -431,12 +431,12 @@ class FinalSurfacePressureNorm(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -511,12 +511,12 @@ class FinalSurfacePower(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -548,12 +548,12 @@ class FinalFlowRateNorm(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -634,7 +634,7 @@ class ElasticEnergyDifference(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
 
         self.model.set_solid_props(f.get_solid_props(0))
@@ -656,7 +656,7 @@ class ElasticEnergyDifference(Functional):
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -734,7 +734,7 @@ class KVDampingWork(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
 
         N_START = N_START = self.constants['n_start']
@@ -755,7 +755,7 @@ class KVDampingWork(Functional):
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -858,14 +858,14 @@ class RayleighDampingWork(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
 
         dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.model.solid.dt.vector()[0]
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1005,12 +1005,12 @@ class TransferWorkbyVelocity(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1124,12 +1124,12 @@ class TransferWorkbyDisplacementIncrement(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1194,12 +1194,12 @@ class SubglottalWork(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1268,12 +1268,12 @@ class TransferEfficiency(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1376,12 +1376,12 @@ class AcousticPower(Functional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1454,12 +1454,12 @@ class AcousticEfficiency(Functional):
     # TODO: dsolid though dfluid are not really correct. You should fix these if they are relevant
     # to the problem
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1532,12 +1532,12 @@ class GlottalWidthErrorNorm(Functional):
         return self.model.fluid.get_state_vec()
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -1570,12 +1570,12 @@ class Scalar(AbstractFunctional):
         return self.model.fluid.get_state_vec()
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties()
+        dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 

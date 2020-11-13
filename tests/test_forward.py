@@ -46,6 +46,7 @@ class TestForward(unittest.TestCase):
         control = model.get_control_vec()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
+        controls = [control]
 
         fluid_props = model.fluid.get_properties_vec(set_default=True)
         fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
@@ -87,7 +88,7 @@ class TestForward(unittest.TestCase):
         ## Run the simulation
         print("Running forward model")
         runtime_start = perf_counter()
-        info = integrate(model, ini_state, control, props, times, h5file=save_path, h5group='/',
+        info = integrate(model, ini_state, controls, props, times, h5file=save_path, h5group='/',
                          callbacks={'glottal_width': gw_callback})
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

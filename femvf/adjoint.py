@@ -37,7 +37,6 @@ def adjoint(model, f, functional):
     grad_uva, grad_solid, grad_fluid, grad_times
         Gradients with respect to initial state, solid, fluid, and integration time points
     """
-    breakpoint()
     # Set properties
     props = f.get_properties()
     model.set_properties(props)
@@ -47,7 +46,6 @@ def adjoint(model, f, functional):
 
     # Make adjoint forms for sensitivity of parameters
     solid = model.solid
-    # df1_dsolid_form_adj = get_df1_dsolid_forms(solid)
 
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
