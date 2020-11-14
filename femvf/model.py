@@ -9,6 +9,7 @@ import dolfin as dfn
 from petsc4py import PETSc
 # import ufl
 
+from . import newmark
 from . import solids, fluids
 from . import meshutils
 from . import linalg
@@ -474,8 +475,8 @@ class ExplicitFSIModel(FSIModel):
 
         res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
         self.solid.bc_base.apply(res['u'])
-        res['v'][:] = v1 - solids.newmark_v(u1, u0, v0, a0, dt)
-        res['a'][:] = a1 - solids.newmark_a(u1, u0, v0, a0, dt)
+        res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
+        res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
 
         qp, *_ = self.fluid.solve_qp1()
         res['q'][:] = self.fluid.state1['q'] - qp['q']
@@ -512,8 +513,8 @@ class ExplicitFSIModel(FSIModel):
         solid = self.solid
 
         dfu1_du1 = dfn.assemble(solid.df1_du1)
-        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
-        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
         dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
         dfq2_du2 = 0 - dq_du
@@ -541,8 +542,8 @@ class ExplicitFSIModel(FSIModel):
         dt = self.solid.dt
 
         dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
-        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
         dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
         dfq2_du2 = 0 - dq_du
@@ -586,13 +587,13 @@ class ExplicitFSIModel(FSIModel):
         dfu2_da1 = self.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
         dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
 
-        dfv2_du1 = 0 - solids.newmark_v_du0(dt2)
-        dfv2_dv1 = 0 - solids.newmark_v_dv0(dt2)
-        dfv2_da1 = 0 - solids.newmark_v_da0(dt2)
+        dfv2_du1 = 0 - newmark.newmark_v_du0(dt2)
+        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt2)
+        dfv2_da1 = 0 - newmark.newmark_v_da0(dt2)
 
-        dfa2_du1 = 0 - solids.newmark_a_du0(dt2)
-        dfa2_dv1 = 0 - solids.newmark_a_dv0(dt2)
-        dfa2_da1 = 0 - solids.newmark_a_da0(dt2)
+        dfa2_du1 = 0 - newmark.newmark_a_du0(dt2)
+        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt2)
+        dfa2_da1 = 0 - newmark.newmark_a_da0(dt2)
 
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
         dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
@@ -646,8 +647,8 @@ class ImplicitFSIModel(FSIModel):
 
         res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
         self.solid.bc_base.apply(res['u'])
-        res['v'][:] = v1 - solids.newmark_v(u1, u0, v0, a0, dt)
-        res['a'][:] = a1 - solids.newmark_a(u1, u0, v0, a0, dt)
+        res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
+        res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
 
         qp, *_ = self.fluid.solve_qp1()
         res['q'][:] = self.fluid.state1['q'] - qp['q']
@@ -715,8 +716,8 @@ class ImplicitFSIModel(FSIModel):
         solid = self.solid
 
         dfu1_du1 = dfn.assemble(solid.df1_du1)
-        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
-        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
         dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
         dfq2_du2 = 0 - dq_du
@@ -744,8 +745,8 @@ class ImplicitFSIModel(FSIModel):
         dt = self.solid.dt
 
         dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-        dfv2_du2 = 0 - solids.newmark_v_du1(dt)
-        dfa2_du2 = 0 - solids.newmark_a_du1(dt)
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
         dfu2_dp2 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
 
         # map dfu2_dp2 to have p on the fluid domain
@@ -819,12 +820,12 @@ class ImplicitFSIModel(FSIModel):
         dfu2_dv1 = solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
         dfu2_da1 = solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
 
-        dfv2_du1 = 0 - solids.newmark_v_du0(dt2)
-        dfv2_dv1 = 0 - solids.newmark_v_dv0(dt2)
-        dfv2_da1 = 0 - solids.newmark_v_da0(dt2)
-        dfa2_du1 = 0 - solids.newmark_a_du0(dt2)
-        dfa2_dv1 = 0 - solids.newmark_a_dv0(dt2)
-        dfa2_da1 = 0 - solids.newmark_a_da0(dt2)
+        dfv2_du1 = 0 - newmark.newmark_v_du0(dt2)
+        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt2)
+        dfv2_da1 = 0 - newmark.newmark_v_da0(dt2)
+        dfa2_du1 = 0 - newmark.newmark_a_du0(dt2)
+        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt2)
+        dfa2_da1 = 0 - newmark.newmark_a_da0(dt2)
 
         ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
         # Allocate a vector the for fluid side mat-vec multiplication
@@ -911,8 +912,8 @@ class SolidModel:
         self.solid.bc_base.apply(res)
 
         uva1['u'][:] = solid.u1.vector()
-        uva1['v'][:] = solids.newmark_v(uva1['u'], *uva0, dt)
-        uva1['a'][:] = solids.newmark_a(uva1['u'], *uva0, dt)
+        uva1['v'][:] = newmark.newmark_v(uva1['u'], *uva0, dt)
+        uva1['a'][:] = newmark.newmark_a(uva1['u'], *uva0, dt)
 
         self.set_fin_state(uva1)
         step_info = {}

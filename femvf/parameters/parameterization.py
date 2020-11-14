@@ -9,7 +9,7 @@ from collections import OrderedDict
 from .base import KeyIndexedArray
 from . import properties as props
 from .. import constants, linalg
-from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
+from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 import dolfin as dfn
 import ufl
