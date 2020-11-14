@@ -177,7 +177,7 @@ class AbstractTaylorTest(unittest.TestCase):
             print("Using existing files")
     
         fs = functionals_on_line_search(hs, self.functional, self.model, lsearch_fname)
-        print(fs)
+        # print(fs)
 
         ## Compute the taylor convergence order
         gstate, gcontrols, gprops, gtimes = self.grads
@@ -226,7 +226,7 @@ class AbstractTaylorTest(unittest.TestCase):
 
 class TestBasicGradient(AbstractTaylorTest):
     COUPLING = 'explicit'
-    OVERWRITE_LSEARCH = False
+    OVERWRITE_LSEARCH = True
     FUNCTIONAL = basic.FinalDisplacementNorm
     # FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
@@ -282,7 +282,6 @@ class TestBasicGradient(AbstractTaylorTest):
 
         ## Compute the baseline forward simulation and functional/gradient at the baseline (via adjoint)
         self.f0, self.grads = self.compute_baseline()
-        print(self.f0)
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
@@ -394,8 +393,8 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
     # COUPLING = 'implicit'
     OVERWRITE_LSEARCH = False
     # FUNCTIONAL = basic.FinalDisplacementNorm
-    FUNCTIONAL = basic.FinalVelocityNorm
-    # FUNCTIONAL = basic.ElasticEnergyDifference
+    # FUNCTIONAL = basic.FinalVelocityNorm
+    FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
     # FUNCTIONAL = basic.TransferEfficiency
@@ -545,6 +544,7 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
         dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1e-11
 
+        # breakpoint()
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
 
 
@@ -784,10 +784,10 @@ if __name__ == '__main__':
     test = TestBasicGradient()
     test.setUp()
     test.test_emod()
-    # test.test_u0()
-    # test.test_v0()
-    # test.test_a0()
-    # test.test_times()
+    test.test_u0()
+    test.test_v0()
+    test.test_a0()
+    test.test_times()
 
     # test = TestBasicGradientSingleStep()
     # test.setUp()

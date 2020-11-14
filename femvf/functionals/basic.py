@@ -843,14 +843,14 @@ class RayleighDampingWork(Functional):
         for ii in range(N_START, N_STATE-1):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_iter_params_fromfile(f, ii+1)
-            res += dfn.assemble(self.forms['damping_power']) * self.model.solid.dt.vector()[0]
+            res += dfn.assemble(self.forms['damping_power']) * self.model.solid.dt
 
         return res
 
     def eval_duva(self, f, n):
         duva = self.model.solid.get_state_vec()
 
-        duva['v'][:] = dfn.assemble(self.forms['ddamping_power_dv']) * self.model.solid.dt.vector()[0]
+        duva['v'][:] = dfn.assemble(self.forms['ddamping_power_dv']) * self.model.solid.dt
         return duva
 
     def eval_dqp(self, f, n):
@@ -861,7 +861,7 @@ class RayleighDampingWork(Functional):
         dsolid = self.model.solid.get_properties_vec()
         dsolid.set(0.0)
 
-        dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.model.solid.dt.vector()[0]
+        dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.model.solid.dt
         return dsolid
 
     def eval_dfluid(self, f):
@@ -882,7 +882,7 @@ class RayleighDampingWork(Functional):
         if n > N_START:
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_iter_params_fromfile(f, n)
-            # res += dfn.assemble(self.forms['damping_power']) * self.model.solid.dt.vector()[0]
+            # res += dfn.assemble(self.forms['damping_power']) * self.model.solid.dt
             ddt += dfn.assemble(self.forms['damping_power'])
 
         return ddt

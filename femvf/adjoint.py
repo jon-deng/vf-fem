@@ -164,7 +164,7 @@ def solve_grad_dt(model, adj_state1):
     Calculate the gradietn wrt dt
     """
     # model.set_iter_params(**iter_params1)
-    dt1 = model.solid.dt.vector()[0]
+    dt1 = model.solid.dt
     uva0 = model.solid.state0
     uva1 = model.solid.state1
 

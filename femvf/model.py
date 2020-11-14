@@ -12,11 +12,7 @@ from petsc4py import PETSc
 from . import solids, fluids
 from . import meshutils
 from . import linalg
-
-DEFAULT_NEWTON_SOLVER_PRM = {
-    'linear_solver': 'petsc',
-    'absolute_tolerance': 1e-7,
-    'relative_tolerance': 1e-9}
+from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli, 
                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
@@ -471,7 +467,7 @@ class ExplicitFSIModel(FSIModel):
         """
         Return the residual vector, F
         """
-        dt = self.solid.dt.vector()[0]
+        dt = self.solid.dt
         u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
         u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
         res = self.get_state_vec()
@@ -491,29 +487,13 @@ class ExplicitFSIModel(FSIModel):
         """
         Solve for the final state given an initial guess
         """
-        dt = self.solid.dt.vector()[0]
-        solid = self.solid
-        uva0 = self.solid.state0
-
-        uva1 = self.solid.get_state_vec()
-
         # Update form coefficients and initial guess
         self.set_fin_state(ini_state)
-        # self.set_iter_params(uva1=ini_state.vecs[:3], qp1=ini_state.vecs[3:])
 
-        # TODO: You could implement this to use the non-linear solver only when collision is happening
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
 
-        dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
-                  solver_parameters={"newton_solver": newton_solver_prm})
-
-        res = dfn.assemble(self.solid.forms['form.un.f1'])
-        self.solid.bc_base.apply(res)
-
-        uva1['u'][:] = solid.u1.vector()
-        uva1['v'][:] = solids.newmark_v(uva1['u'], *uva0, dt)
-        uva1['a'][:] = solids.newmark_a(uva1['u'], *uva0, dt)
+        uva1, _ = self.solid.solve_state1(newton_solver_prm)
 
         self.set_fin_solid_state(uva1)
         qp1, fluid_info = self.fluid.solve_qp1()
@@ -526,7 +506,7 @@ class ExplicitFSIModel(FSIModel):
         """
         Solve, dF/du x = f
         """
-        dt = self.solid.dt.vector()[0]
+        dt = self.solid.dt
         x = self.get_state_vec()
 
         solid = self.solid
@@ -558,7 +538,7 @@ class ExplicitFSIModel(FSIModel):
         """
         ## Assemble sensitivity matrices
         # model.set_iter_params(**it_params)
-        dt = self.solid.dt.vector()[0]
+        dt = self.solid.dt
 
         dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
         dfv2_du2 = 0 - solids.newmark_v_du1(dt)
@@ -600,7 +580,7 @@ class ExplicitFSIModel(FSIModel):
         return x
 
     def apply_dres_dstate0_adj(self, x):
-        dt2 = self.solid.dt.vector()[0]
+        dt2 = self.solid.dt
         dfu2_du1 = self.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
         dfu2_dv1 = self.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
         dfu2_da1 = self.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
@@ -639,7 +619,7 @@ class ExplicitFSIModel(FSIModel):
         pass
 
 class ImplicitFSIModel(FSIModel):
-    ## These must be defined to properly exchange the forcing data between the solid and fluid
+    ## These must be defined to properly exchange the forcing data between the solid and domains
     def set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
 
@@ -654,13 +634,12 @@ class ImplicitFSIModel(FSIModel):
         control = linalg.BlockVec((p1_solid,), self.solid.control0.keys)
         self.solid.set_fin_control(control)
 
-
     ## Forward solver methods
     def res(self):
         """
         Return the residual vector, F
         """
-        dt = self.solid.dt.vector()[0]
+        dt = self.solid.dt
         u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
         u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
         res = self.get_state_vec()
@@ -677,19 +656,18 @@ class ImplicitFSIModel(FSIModel):
     
     def solve_state1(self, ini_state, newton_solver_prm=None):
         """
-        Solve for the final state given an initial guess
+        Solve for the final state given an initial guess 
+        
+        This uses a fixed-point iteration where the solid is solved, then the fluid and so-on.
         """
-        dt = self.solid.dt.vector()[0]
-        solid = self.solid
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
 
         # Set initial guesses for the states at the next time
         # uva1 = solid.get_state_vec()
         uva1 = ini_state[:3].copy()
         qp1 = ini_state[3:].copy()
 
-        # Solve the coupled problem using fixed point iterations between the fluid and solid
-        if newton_solver_prm is None:
-            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
 
         # Calculate the initial residual
         self.set_fin_solid_state(uva1)
@@ -698,40 +676,29 @@ class ImplicitFSIModel(FSIModel):
         self.solid.bc_base.apply(res0)
 
         # Set tolerances for the fixed point iterations
-        nit = 0
-        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
-        max_nit = 10
-        abs_err_prev, abs_err, rel_err = 1.0, np.inf, np.inf
-        # *_, fluid_info = self.fluid.solve_qp0() 
         fluid_info = None
+        nit, max_nit = 0, 10
+        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
+        abs_err_prev, abs_err, rel_err = 1.0, np.inf, np.inf
         while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
-            dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
-                      solver_parameters={"newton_solver": newton_solver_prm})
+            # Solve the solid with the previous iteration's fluid pressures
+            uva1, _ = self.solid.solve_state1(newton_solver_prm)
 
-            uva1['u'][:] = solid.u1.vector()
-            uva1['v'][:] = solids.newmark_v(uva1['u'], *self.solid.state0, dt)
-            uva1['a'][:] = solids.newmark_a(uva1['u'], *self.solid.state0, dt)
-            # print(uva0['u'].norm('l2'))
-
+            # Compute new fluid pressures for the updated solid position
             self.set_fin_solid_state(uva1)
             qp1, fluid_info = self.fluid.solve_qp1()
-
             self.set_fin_fluid_state(qp1)
 
             # Calculate the error in the solid residual with the updated pressures
-            # self.set_iter_params(uva1=uva1, qp1=qp1)
-            res = dfn.assemble(solid.f1)
-            solid.bc_base.apply(res)
-            # breakpoint()
+            res = dfn.assemble(self.solid.f1)
+            self.solid.bc_base.apply(res)
 
             abs_err = res.norm('l2')
             rel_err = abs_err/abs_err_prev
 
-            # breakpoint()
             nit += 1
         res = dfn.assemble(self.solid.forms['form.un.f1'])
         self.solid.bc_base.apply(res)
-        # print(nit, res.norm('l2'))
 
         step_info = {'fluid_info': fluid_info,
                      'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
@@ -742,7 +709,7 @@ class ImplicitFSIModel(FSIModel):
         """
         Solve, dF/du x = f
         """
-        dt = self.solid.dt.vector()[0]
+        dt = self.solid.dt
         x = self.get_state_vec()
 
         solid = self.solid
@@ -774,7 +741,7 @@ class ImplicitFSIModel(FSIModel):
         """
         ## Assemble sensitivity matrices
         # self.set_iter_params(**it_params)
-        dt = self.solid.dt.vector()[0]
+        dt = self.solid.dt
 
         dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
         dfv2_du2 = 0 - solids.newmark_v_du1(dt)
@@ -845,7 +812,7 @@ class ImplicitFSIModel(FSIModel):
         ## Assemble sensitivity matrices
         # dt2 = it_params2['dt']
         solid = self.solid
-        dt2 = self.solid.dt.vector()[0]
+        dt2 = self.solid.dt
         # model.set_iter_params(**it_params2)
 
         dfu2_du1 = solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
@@ -926,7 +893,7 @@ class SolidModel:
         Solve for the final state given an initial guess
         """
         solid = self.solid
-        dt = solid.dt.vector()[0]
+        dt = solid.dt
         uva0 = solid.state0
 
         uva1 = solid.get_state_vec()

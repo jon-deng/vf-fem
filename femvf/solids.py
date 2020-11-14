@@ -11,10 +11,11 @@ and what types of forms are always generated the same way, and refactor accordin
 import dolfin as dfn
 import ufl
 
+from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from .parameters.properties import property_vecs
 from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
-from .newmark import *
+from . import newmark
 from .linalg import BlockVec, general_vec_set
 
 
@@ -120,7 +121,7 @@ class Solid:
         self.v1 = self.forms['coeff.state.v1']
         self.a1 = self.forms['coeff.state.a1']
 
-        self.dt = self.forms['coeff.time.dt']
+        self.dt_form = self.forms['coeff.time.dt']
 
         self.f1 = self.forms['form.un.f1']
         self.df1_du1 = self.forms['form.bi.df1_du1']
@@ -156,6 +157,15 @@ class Solid:
     @property
     def forms(self):
         return self._forms
+
+    # The dt property makes the time step form behave like a scalar
+    @property
+    def dt(self):
+        return self.dt_form.vector()[0]
+
+    @dt.setter
+    def dt(self, value):
+        self.dt_form.vector()[:] = value
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels, 
@@ -286,35 +296,20 @@ class Solid:
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
 
-    # def get_properties(self):
-    #     """
-    #     Returns the current values of the properties
+    ## Solver functions
+    def solve_state1(self, newton_solver_prm=None):
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+        dt = self.dt
 
-    #     Returns
-    #     -------
-    #     properties : Properties
-    #     """
-    #     properties = self.get_properties_vec()
+        uva1 = self.get_state_vec()
+        dfn.solve(self.f1 == 0, self.u1, bcs=self.bc_base, J=self.df1_du1,
+                  solver_parameters={"newton_solver": newton_solver_prm})
 
-    #     for key in properties.keys:
-    #         # TODO: Check types to make sure the input property is compatible with the solid type
-    #         coefficient = self.forms['coeff.prop.'+key]
-
-    #         if properties[key].shape == ():
-    #             if isinstance(coefficient, dfn.function.constant.Constant):
-    #                 # If the coefficient is a constant, then the property must be a float
-    #                 general_vec_set(properties[key], coefficient.values()[0])
-    #             else:
-    #                 # If a vector, it's possible it's the 'hacky' version for a time step, where the
-    #                 # actual property is a float but the coefficient is assigned to be a vector
-    #                 # (which is done so you can differentiate it)
-    #                 assert coefficient.vector().max() == coefficient.vector().min()
-    #                 general_vec_set(properties[key], coefficient.vector().max())
-    #         else:
-    #             # coefficient.vector()[:] = properties[key]
-    #             properties[key][:] = coefficient.vector()[:]
-
-    #     return properties
+        uva1['u'][:] = self.u1.vector()
+        uva1['v'][:] = newmark.newmark_v(uva1['u'], *self.state0.vecs, dt)
+        uva1['a'][:] = newmark.newmark_a(uva1['u'], *self.state0.vecs, dt)
+        return uva1, {}
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
@@ -398,8 +393,8 @@ class Rayleigh(Solid):
         v1 = dfn.Function(vector_fspace)
         a1 = dfn.Function(vector_fspace)
 
-        v1_nmk = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1_nmk = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
         p0 = dfn.Function(scalar_fspace)
@@ -611,8 +606,8 @@ class KelvinVoigt(Solid):
         v1 = dfn.Function(vector_fspace)
         a1 = dfn.Function(vector_fspace)
 
-        v1_nmk = newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1_nmk = newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
         p0 = dfn.Function(scalar_fspace)
