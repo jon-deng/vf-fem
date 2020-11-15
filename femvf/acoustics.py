@@ -8,17 +8,17 @@ from jax import numpy as jnp
 
 from femvf import linalg
 
-class WaveAnalog1D:
+class Acoustic1D:
     def __init__(self, num_tube, dt):
         assert num_tube%2 == 0
 
         self.dt = dt
 
-        f1 = np.zeros(num_tube//2 + 1)
-        b2 = np.zeros(num_tube//2 + 1)
-        b1 = np.zeros(num_tube//2 + 1)
-        f2 = np.zeros(num_tube//2 + 1)
-        self.state0 = linalg.BlockVec((f1, b2, b1, f2), ('f1', 'b2', 'b1', 'f2'))
+        # pinc (interlaced f1, b2 partial pressures) are incident pressures
+        # pref (interlaced b1, f2 partial pressures) are reflected pressures
+        pinc = np.zeros((num_tube//2 + 1)*2)
+        pref = np.zeros((num_tube//2 + 1)*2)
+        self.state0 = linalg.BlockVec((pinc, pref), ('pinc', 'pref'))
 
         self.state1 = self.state0.copy()
 
@@ -27,6 +27,7 @@ class WaveAnalog1D:
         self.control0 = linalg.BlockVec((qin,), ('qin',))
         self.control1 = self.control0.copy()
 
+        dt = np.ones(1)
         area = np.ones(num_tube)
         gamma = np.zeros(num_tube)
         rho = 1.225*1e-3*np.ones(1)
@@ -34,9 +35,10 @@ class WaveAnalog1D:
         re_rad = np.ones(1)
         im_rad = np.ones(1)
         self.properties = linalg.BlockVec(
-            (area, gamma, rho, c, re_rad, im_rad), 
-            ('area', 'proploss', 'rhoac', 'soundspeed', 're_zrad', 'im_zrad'))
+            (dt, area, gamma, rho, c, re_rad, im_rad), 
+            ('dt', 'area', 'proploss', 'rhoac', 'soundspeed', 're_zrad', 'im_zrad'))
 
+    ## Setting parameters of the acoustic model
     def set_ini_state(self, state):
         for key, value in state.items():
             self.state0[key][:] = value
@@ -60,7 +62,7 @@ class WaveAnalog1D:
         for key, value in props.items():
             self.properties[key][:] = value
 
-
+    ## Getting empty vectors
     def get_state_vec(self):
         ret = self.state0.copy()
         ret.set(0.0)
@@ -71,10 +73,10 @@ class WaveAnalog1D:
         ret.set(0.0)
         return ret
 
-    def get_properties_vec(self):
+    def get_properties_vec(self, set_default=True):
         return self.properties.copy()
 
-class WRA(WaveAnalog1D):
+class WRA(Acoustic1D):
 
     def set_properties(self, props):
         super().set_properties(props)
@@ -91,26 +93,37 @@ class WRA(WaveAnalog1D):
         area = self.properties['area'].copy()
         gamma = self.properties['proploss'].copy()
 
+        ## Set radiation proeprties
+        # Ignore below for now?
         im_zrad = self.properties['im_zrad'][0]
         re_zrad = self.properties['re_zrad'][0]
 
+        # Formula given by Story and Flanagan
+        PISTON_RAD = np.sqrt(area[-1]/np.pi)
+        R = 128/(9*np.pi**2)
+        L = 16/dt*PISTON_RAD/(3*np.pi*cspeed)
+
         NUM_TUBE = area.size
 
-        a1 = np.concatenate([0], area[:-1:2])
-        a2 = np.concatenate(area[1::2], [0])
+        a1 = np.concatenate([[1.0], area[:-1:2]])
+        a2 = np.concatenate([area[1::2], [1.0]])
 
-        gamma1 = np.concatenate([0], gamma[:-1:2])
-        gamma2 = np.concatenate(gamma[1::2], [0])
+        gamma1 = np.concatenate([[1.0], gamma[:-1:2]])
+        gamma2 = np.concatenate([gamma[1::2], [1.0]])
 
-        self.reflect, *_ = wra(dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=re_zrad, L=im_zrad)
+        self.reflect, self.reflect00, self.inputq = wra(dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=R, L=L)
+
+    ## Solver functions
+    def solve_state1(self):
+        qin = self.control1['qin'][0]
+        pinc, pref = self.state0.vecs
+        pinc_1, pref_1 = self.reflect(pinc, pref, qin)
+
+        state1 = linalg.BlockVec((pinc_1, pref_1), self.state0.keys)
+        return state1
 
     def res(self):
-        qin = self.control0['qin'][0]
-        f1, b2, b1, f2 = self.state0.vecs
-        f1_1, b2_1, b1_1, f2_1 = self.reflect(f1, b2, b1, f2, qin)
-
-        state1_guess = linalg.BlockVec((f1_1, b2_1, b1_1, f2_1), self.state0.keys)
-        return self.state1 - state1_guess
+        return self.state1 - self.solve_state1()
 
     def dres_dstate1_adj(self, x):
         return x
@@ -149,13 +162,16 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
     z1 = RHO*C/a1
     z2 = RHO*C/a2
 
-    # T = dt
+    def inputq(q, pinc):
+        z = z2[0]
+        gamma = gamma2[0]
 
-    def inputq(q, bi, z, gamma):
-        bi = gamma * bi
+        f1, b2 = pinc[0], pinc[1]
+        b2 = gamma * b2
 
-        fr = z*q + bi
-        return fr
+        b1 = 0.0
+        f2 = z*q + b2
+        return np.array([b1, f2])
 
     def dinputq(q, bi, z, gamma):
         dfr_dq = z
@@ -163,7 +179,12 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         return dfr_dq, dfr_dbi
 
 
-    def radiation(f1, f1prev, b1prev, f2prev, gamma):
+    def radiation(pinc, pinc_prev, pref_prev):
+        gamma = gamma1[-1]
+        f1prev = pinc_prev[0]
+        b1prev, f2prev = pref_prev[0], pref_prev[1]
+        f1 = pinc[0]
+
         f1 = gamma * f1
 
         _a1 = -R+L-R*L
@@ -174,7 +195,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         b1 = 1/_b2*(f1*_a2 + f1prev*_a1 + b1prev*_b1)
         f2 = 1/_b2*(f2prev*_b1 + f1*(_b2+_a2) + f1prev*(_a1-_b1))
-        return f2, b1
+        return np.array([b1, f2])
 
     def dradiation(f1, f1prev, b1prev, f2prev, gamma):
         _a1 = -R+L-R*L
@@ -196,9 +217,11 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
                (db1_df1, db1_df1prev, db1_db1prev, db1_df2prev)
 
 
-    def reflect00(f1, b2, f1prev, b2prev, b1prev, f2prev, q):
+    def reflect00(pinc, pinc_prev, pref_prev, q):
         # Note that int, inp, rad refer to interior, input, and radiation junction
         # locations, respectively
+        f1, b2 = pinc[:-1:2], pinc[1::2]
+        
         f1 = gamma1 * f1
         b2 = gamma2 * b2
         
@@ -206,17 +229,20 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         f2int = (f1 + (f1-b2)*r1)[1:-1]
         b1int = (b2 + (f1-b2)*r1)[1:-1]
+        pref_int = np.stack([b1int, f2int], axis=-1).reshape(-1)
 
         ## Input boundary
-        f2inp = inputq(q, b2[0], z2[0], gamma2[0]) * np.ones(1)
-        b1inp = np.zeros(1)
+        pinc_inp = pinc[:2]
+        pref_inp = inputq(q, pinc_inp) * np.ones(1)
 
         ## Radiation boundary
-        f2rad, b1rad = radiation(f1[-1], f1prev[-1], b1prev[-1], f2prev[-1], gamma1[-1])
+        pinc_rad = pinc[-2:]
+        pinc_rad_prev = pinc_prev[-2:]
+        pref_rad_prev = pref_prev[-2:]
+        pref_rad = radiation(pinc_rad, pinc_rad_prev, pref_rad_prev)
 
-        f2 = np.concatenate((f2inp, f2int, f2rad))
-        b1 = np.concatenate((b1inp, b1int, b1rad))
-        return b1, f2
+        pref = np.concatenate([pref_inp, pref_int, pref_rad])
+        return pref
 
     def dreflect00(f1, b2, f1prev, b2prev, b1prev, f2prev, q):
         r1 = (z2-z1)/(z2+z1)
@@ -262,17 +288,24 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         return db1, df2 
 
 
-    def reflect05(f1, b2, gamma1, gamma2, z1, z2):
-        assert f1.size == N//2
-        assert b2.size == N//2
+    def reflect05(pinc):
+        z1_ = z2[:-1]
+        z2_ = z1[1:]
         
-        f1 = gamma1 * f1
-        b2 = gamma2 * b2
-        r = (z2-z1)/(z2+z1)
+        gamma1_ = gamma2[:-1]
+        gamma2_ = gamma1[1:]
+
+        f1 = pinc[:-1:2]
+        b2 = pinc[1::2]
+        
+        f1 = gamma1_ * f1
+        b2 = gamma2_ * b2
+        r = (z2_-z1_)/(z2_+z1_)
 
         b1 = b2 + (f1-b2)*r
         f2 = f1 + (f1-b2)*r
-        return b1, f2
+        pref = np.stack([b1, f2], axis=-1).reshape(-1)
+        return pref
 
     def dreflect05(f1, b2, gamma1, gamma2, z1, z2):
         r = (z2-z1)/(z2+z1)
@@ -285,27 +318,26 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         return (db1_df1, db1_db2), (df2_df1, df2_db2)
     
 
-    def reflect(f1, b2, b1, f2, q):
+    def reflect(pinc, pref, q):
+        f1, b2 = pinc[:-1:2], pinc[1::2]
+        b1, f2 = pref[:-1:2], pref[1::2]
+
         # f2 and b1 (reflected @ 0.0) -> f1, b2 (incident @ 0.5)
         f1_05 = f2[:-1]
         b2_05 = b1[1:]
-        
-        z1_05 = z2[:-1]
-        z2_05 = z1[1:]
-        
-        gamma1_05 = gamma2[:-1]
-        gamma2_05 = gamma1[1:]
-        
-        b1_05, f2_05 = reflect05(f1_05, b2_05, gamma1_05, gamma2_05, z1_05, z2_05)
+        pinc_05 = np.stack([f1_05, b2_05], axis=-1).reshape(-1)
+
+        pref_05 = reflect05(pinc_05)
+        b1_05, f2_05 = pref_05[:-1:2], pref_05[1::2]
         
         # f2_05 and b1_05 (reflected @ 0.5) -> f1, b2 (incident @ 1.0)
-        f1inp = np.zeros(1)
-        b2rad = np.zeros(1)
-        f1_1 = np.concatenate((f1inp, f2_05))
-        b2_1 = np.concatenate((b1_05, b2rad))
+        f1inp, b2rad = np.zeros(1), np.zeros(1)
+        f1_1 = np.concatenate([f1inp, f2_05])
+        b2_1 = np.concatenate([b1_05, b2rad])
+        pinc_1 = np.stack([f1_1, b2_1], axis=-1).reshape(-1)
         
-        b1_1, f2_1 = reflect00(f1_1, b2_1, f1, b2, b1, f2, q)
-        return f1_1, b2_1, b1_1, f2_1
+        pref_1 = reflect00(pinc_1, pinc, pref, q)
+        return pinc_1, pref_1
 
     def dreflect(f1, b2, b1, f2, q):
         df1_1_df1 = np.zeros(f1.shape)
@@ -339,8 +371,8 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         db1_05, df2_05 = dreflect05(f1_05, b2_05, gamma1_05, gamma2_05, z1_05, z2_05)
 
-        # f1_1 = np.concatenate((f1inp, f2_05))
-        # b2_1 = np.concatenate((b1_05, b2rad))
+        # f1_1 = np.concatenate([f1inp, f2_05])
+        # b2_1 = np.concatenate([b1_05, b2rad])
         df1_1_df2[1:] = df2_05[0]
         df1_1_db1[1:] = df2_05[1]
         
@@ -348,4 +380,4 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         db2_1_db1[:-1] = db1_05[1]
         pass
 
-    return reflect, reflect00
+    return reflect, reflect00, inputq
