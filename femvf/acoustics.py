@@ -9,10 +9,10 @@ from jax import numpy as jnp
 from femvf import linalg
 
 class Acoustic1D:
-    def __init__(self, num_tube, dt):
+    def __init__(self, num_tube):
         assert num_tube%2 == 0
 
-        self.dt = dt
+        # self._dt = 0.0
 
         # pinc (interlaced f1, b2 partial pressures) are incident pressures
         # pref (interlaced b1, f2 partial pressures) are reflected pressures
@@ -27,18 +27,31 @@ class Acoustic1D:
         self.control0 = linalg.BlockVec((qin,), ('qin',))
         self.control1 = self.control0.copy()
 
-        dt = np.ones(1)
+        length = np.ones(1)
         area = np.ones(num_tube)
         gamma = np.zeros(num_tube)
         rho = 1.225*1e-3*np.ones(1)
         c = 340*100*np.ones(1)
-        re_rad = np.ones(1)
-        im_rad = np.ones(1)
+        rrad = np.ones(1)
+        lrad = np.ones(1)
         self.properties = linalg.BlockVec(
-            (dt, area, gamma, rho, c, re_rad, im_rad), 
-            ('dt', 'area', 'proploss', 'rhoac', 'soundspeed', 're_zrad', 'im_zrad'))
+            (length, area, gamma, rho, c, rrad, lrad), 
+            ('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad'))
 
     ## Setting parameters of the acoustic model
+    @property
+    def dt(self):
+        NTUBE = self.properties['area'].size
+        length = self.properties['length'][0]
+        C = self.properties['soundspeed'][0]
+        return (2*length/NTUBE) / C
+
+    @dt.setter
+    def dt(self, value):
+        # Note the acoustic model can't change the time step without changing the length of the tract
+        # because the tract length and time step are linked throught the speed of sound
+        raise NotImplementedError("You can't set the time step of a WRA tube")
+
     def set_ini_state(self, state):
         for key, value in state.items():
             self.state0[key][:] = value
@@ -87,7 +100,7 @@ class WRA(Acoustic1D):
         self.init_wra()
 
     def init_wra(self):
-        dt = self.properties['dt'][0]
+        dt = self.dt
         cspeed = self.properties['soundspeed'][0]
         rho = self.properties['rhoac'][0]
         area = self.properties['area'].copy()
@@ -95,8 +108,8 @@ class WRA(Acoustic1D):
 
         ## Set radiation proeprties
         # Ignore below for now?
-        im_zrad = self.properties['im_zrad'][0]
-        re_zrad = self.properties['re_zrad'][0]
+        R = self.properties['rrad'][0]
+        L = self.properties['lrad'][0]
 
         # Formula given by Story and Flanagan
         PISTON_RAD = np.sqrt(area[-1]/np.pi)

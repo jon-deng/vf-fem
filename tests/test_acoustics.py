@@ -1,5 +1,7 @@
 import unittest
 
+from time import perf_counter
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -12,10 +14,10 @@ class TestWRA(unittest.TestCase):
         self.CSOUND = 343*100
 
         self.LENGTH = 17.46
-        self.DT = 2*self.LENGTH/self.NTUBE/self.CSOUND
-        print(self.DT)
+        # self.DT = 2*self.LENGTH/self.NTUBE/self.CSOUND
+        # print(self.DT)
 
-        model = WRA(self.NTUBE, self.DT)
+        model = WRA(self.NTUBE)
         self.model = model
 
     def test_uniform(self):
@@ -25,7 +27,7 @@ class TestWRA(unittest.TestCase):
         props['area'][:] = 4.0
         props['proploss'][:] = 1.0
         props['rhoac'][:] = 1.2e-3
-        props['dt'][:] = self.DT
+        props['length'][:] = self.LENGTH
 
         self.model.set_properties(props)
 
@@ -38,7 +40,8 @@ class TestWRA(unittest.TestCase):
         qin = 1.0
         state0['pref'][:2] = self.model.inputq(qin, state0['pinc'][:2])
 
-        times = self.DT*np.arange(2**12)
+        tstart = perf_counter()
+        times = self.model.dt*np.arange(2**12)
         pinc = np.zeros((times.size, state0['pinc'].size))
         pref = np.zeros((times.size, state0['pref'].size))
         for n in range(1, times.size):
@@ -49,13 +52,13 @@ class TestWRA(unittest.TestCase):
             pref[n, :] = state1['pref']
 
             state0 = state1
-        breakpoint()
+        print(f"Duration {perf_counter()-tstart:.4f} s")
 
         # Compute the impulse response of the radiated pressure
         prad = pref[:, -1]
         N = prad.size
         ft_prad = np.fft.fft(prad)
-        ft_freq = np.fft.fftfreq(N, d=self.DT)
+        ft_freq = np.fft.fftfreq(N, d=self.model.dt)
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(ft_freq[0:N//2], 20*np.log10(np.abs(ft_prad[0:N//2])))
