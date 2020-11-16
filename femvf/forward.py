@@ -101,11 +101,16 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
 
             dt = times[n] - times[n-1]
 
-            model.set_time_step(dt)
+            model.dt = dt
             model.set_ini_state(state0)
             model.set_ini_control(control0)
             model.set_fin_control(control1)
+            # breakpoint()
             state1, step_info = model.solve_state1(state0)
+            print(model.fluid.control0['psub'], model.fluid.control1['psub'])
+            print(model.fluid.control0['psup'], model.fluid.control1['psup'])
+            print(state1['pref'])
+            print(state1['pinc'])
 
             model.set_fin_state(state1)
             for key, callback in callbacks.items():

@@ -61,6 +61,16 @@ class QuasiSteady1DFluid:
 
         self.properties = self.get_properties_vec(set_default=True)
 
+        self._dt = 1.0
+
+    @property
+    def dt(self):
+        return self._dt
+
+    @dt.setter
+    def dt(self, value):
+        self._dt = value
+
     def set_ini_state(self, qp0):
         """
         Set the initial fluid state
@@ -79,15 +89,19 @@ class QuasiSteady1DFluid:
         """
         Set the initial surface displacement and velocity
         """
-        self.control0['usurf'][:] = uv0[0]
-        self.control0['vsurf'][:] = uv0[1]
+        # self.control0['usurf'][:] = uv0[0]
+        # self.control0['vsurf'][:] = uv0[1]
+        for key, value in uv0.items():
+            self.control0[key][:] = value
 
     def set_fin_control(self, uv1):
         """
         Set the final surface displacement and velocity
         """
-        self.control1['usurf'][:] = uv1[0]
-        self.control1['vsurf'][:] = uv1[1]
+        for key, value in uv1.items():
+            self.control1[key][:] = value
+        # self.control1['usurf'][:] = uv1[0]
+        # self.control1['vsurf'][:] = uv1[1]
 
     def set_time_step(self, dt):
         """

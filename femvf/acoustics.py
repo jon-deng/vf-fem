@@ -29,7 +29,7 @@ class Acoustic1D:
 
         length = np.ones(1)
         area = np.ones(num_tube)
-        gamma = np.zeros(num_tube)
+        gamma = np.ones(num_tube)
         rho = 1.225*1e-3*np.ones(1)
         c = 340*100*np.ones(1)
         rrad = np.ones(1)
@@ -133,7 +133,8 @@ class WRA(Acoustic1D):
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
         state1 = linalg.BlockVec((pinc_1, pref_1), self.state0.keys)
-        return state1
+        info = {}
+        return state1, info
 
     def res(self):
         return self.state1 - self.solve_state1()

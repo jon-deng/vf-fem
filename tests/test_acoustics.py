@@ -36,6 +36,7 @@ class TestWRA(unittest.TestCase):
 
         control = self.model.get_control_vec()
         control.set(0.0)
+        control['qin'][:] = 1.0
 
         qin = 1.0
         state0['pref'][:2] = self.model.inputq(qin, state0['pinc'][:2])
@@ -47,7 +48,8 @@ class TestWRA(unittest.TestCase):
         for n in range(1, times.size):
             self.model.set_ini_state(state0)
             self.model.set_fin_control(control)
-            state1 = self.model.solve_state1()
+            breakpoint()
+            state1, _ = self.model.solve_state1()
             pinc[n, :] = state1['pinc']
             pref[n, :] = state1['pref']
 

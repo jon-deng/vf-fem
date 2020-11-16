@@ -10,6 +10,14 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Current File in tests",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}/tests",
+            "console": "integratedTerminal"
         }
     ]
 }
