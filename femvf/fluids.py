@@ -1,10 +1,11 @@
 """
 Functionality related to fluids
 """
+import warnings
 
 import numpy as np
 # import autograd
-import autograd.numpy as np
+# import autograd.numpy as np
 
 import dolfin as dfn
 from petsc4py import PETSc
@@ -301,7 +302,10 @@ class Bernoulli(QuasiSteady1DFluid):
         asep = fluid_props['r_sep'] * amin
 
         # This ensures the separation area is selected at a point past the minimum area
-        log_wsep = np.log(1-smoothstep(s, smin, fluid_props['k'])) +  log_gaussian(area, asep, fluid_props['sigma'])
+        log_wsep = None
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'divide by zero encountered in log')
+            log_wsep = np.log(1-smoothstep(s, smin, fluid_props['k'])) +  log_gaussian(area, asep, fluid_props['sigma'])
         wsep = np.exp(log_wsep - log_wsep.max())
         ssep = wavg(s, s, wsep)
 
@@ -310,7 +314,7 @@ class Bernoulli(QuasiSteady1DFluid):
         return ssep, asep
 
     def dseparation_point(self, s, amin, smin, a, fluid_props):
-        # breakpoint()
+        
         asep = fluid_props['r_sep'] * amin
         dasep_damin = fluid_props['r_sep']
         dasep_dsmin = 0.0 
@@ -325,7 +329,10 @@ class Bernoulli(QuasiSteady1DFluid):
         dwgaussian_damin = dgaussian_dx0(a, asep, fluid_props['sigma']) * dasep_damin
 
         # wsep = wpostsep * wgaussian
-        log_wsep = np.log(wpostsep) +  log_gaussian(a, asep, fluid_props['sigma'])
+        log_wsep = None
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'divide by zero encountered in log')
+            log_wsep = np.log(wpostsep) +  log_gaussian(a, asep, fluid_props['sigma'])
         wsep = np.exp(log_wsep - log_wsep.max())
 
         dwsep_dsmin = dwpostsep_dsmin * wgaussian
@@ -402,7 +409,7 @@ class Bernoulli(QuasiSteady1DFluid):
         idx_sep = np.argmax(s>ssep)
         xy_min = usurf.reshape(-1, 2)[idx_min]
         xy_sep = usurf.reshape(-1, 2)[idx_sep]
-        # breakpoint()
+        
         info = {'flow_rate': q,
                 'idx_sep': idx_sep,
                 'idx_min': idx_min,
@@ -460,10 +467,12 @@ class Bernoulli(QuasiSteady1DFluid):
         # Calculate the flow rate using Bernoulli
         coeff = 2*(psup - psub)/rho
         dcoeff_dpsub = -2/rho
+        dcoeff_dpsup = 2/rho
 
         qsqr = coeff/(asub**-2 - asep**-2)
         dqsqr_dasep = -coeff/(asub**-2 - asep**-2)**2 * (2/asep**3)
         dqsqr_dpsub = dcoeff_dpsub/(asub**-2 - asep**-2)
+        dqsqr_dpsup = dcoeff_dpsup/(asub**-2 - asep**-2)
 
         # Find Bernoulli pressure
         pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
@@ -471,6 +480,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dpbern_dasep = 1/2*rho*(asub**-2 - asafe**-2) * dqsqr_dasep
         dpbern_dy = np.diag(dpbern_da*da_dy) + dpbern_dasep[:, None]*dasep_dy
         dpbern_dpsub = 1.0 + 1/2*rho*dqsqr_dpsub*(asub**-2 - asafe**-2)
+        dpbern_dpsup = 1.0 + 1/2*rho*dqsqr_dpsup*(asub**-2 - asafe**-2)
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
         sepweight = smoothstep(self.s_vertices, ssep, k=k)
@@ -480,7 +490,10 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_dy = sepweight[:, None]*dpbern_dy + dsepweight_dy*pbern[:, None]
 
         dp_dpsub = sepweight*dpbern_dpsub
+        dp_dpsup = sepweight*dpbern_dpsup
+
         dq_dpsub = 0.5*qsqr**-0.5 * dqsqr_dpsub
+        dq_dpsup = 0.5*qsqr**-0.5 * dqsqr_dpsup
 
         dp_du = np.zeros((usurf.size//2, usurf.size))
         dp_du[:, :-1:2] = 0
@@ -490,7 +503,10 @@ class Bernoulli(QuasiSteady1DFluid):
         dq_du = np.zeros(usurf.size)
         dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_dy
 
-        return dq_du, dp_du, dq_dpsub, dp_dpsub
+        return dq_du, dp_du, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup
+
+    def dres_dcontrol(self):
+        pass
 
     def flow_sensitivity_solid(self, model, usurf, vsurf, psub, psup, fluid_props, adjoint=False):
         """

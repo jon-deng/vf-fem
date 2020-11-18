@@ -60,7 +60,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
         p_n.vector[:] = p.vector + h*dp.vector
 
         uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
-        # breakpoint()
+        
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()

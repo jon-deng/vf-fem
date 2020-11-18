@@ -86,7 +86,7 @@ class TestBernoulli(CommonSetup):
         ax_surf.set_ylabel("y [cm]")
 
         plt.show()
-        breakpoint()
+        
 
     def test_flow_sensitivity(self):
         """
@@ -134,7 +134,7 @@ class TestBernoulli(CommonSetup):
         print("2nd order Taylor (q)", q_order_2)
 
         error = dp - dp_true
-        # breakpoint()
+        
         # print(p_order_2[:, 25])
         # self.assertTrue((error))
 
@@ -183,7 +183,7 @@ class TestBernoulli(CommonSetup):
         print("2nd order Taylor (q)", q_order_2)
 
         error = dp - dp_true
-        breakpoint()
+        
         print(p_order_2[:, 25])
         self.assertTrue((error))
 
@@ -217,7 +217,7 @@ class TestBernoulli(CommonSetup):
         dp_solid = dp_du_solid*du_solid
 
         dp_solid_adj = dp_du_solid_adj.getVecRight()
-        breakpoint()
+        
         dp_du_solid_adj.multTranspose(du_solid, dp_solid_adj)
 
         error = dp_solid[:] - dp_fluid
@@ -319,7 +319,7 @@ class TestSmoothApproximations(CommonSetup):
         f0 = fluids.smoothlb(a0, a_lb, beta=self.fluid_properties['beta'])
         f1 = fluids.smoothlb(a0+da, a_lb, beta=self.fluid_properties['beta'])
         df_da_fd = (f1-f0)/da
-        breakpoint()
+        
 
     def test_smoothmin(self):
         """
@@ -335,7 +335,7 @@ class TestSmoothApproximations(CommonSetup):
 
         # print(fluid_props.)
         print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
-        # breakpoint()
+        
         K_STABILITY = np.max(fluid_props['alpha']*area)
         w_smooth_min = np.exp(fluid_props['alpha']*area - K_STABILITY)
 

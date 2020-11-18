@@ -48,7 +48,7 @@ class TestWRA(unittest.TestCase):
         for n in range(1, times.size):
             self.model.set_ini_state(state0)
             self.model.set_fin_control(control)
-            breakpoint()
+            
             state1, _ = self.model.solve_state1()
             pinc[n, :] = state1['pinc']
             pref[n, :] = state1['pref']

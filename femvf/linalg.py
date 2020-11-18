@@ -328,7 +328,7 @@ def reorder_mat_cols(mat, cols_in, cols_out, n_out, finalize=True):
 
     m_in, n_in = mat.getSize()
     i_in, j_in, v_in = mat.getValuesCSR()
-    # breakpoint()
+    
     # assert n_out >= n_in
 
     i_out = [0]
@@ -443,7 +443,7 @@ def handle_scalars(bvec_op):
         return bvec_op(*new_args)
     return wrapped_bvec_op
 
-@handle_scalars
+# @handle_scalars
 def dot(a, b):
     """
     Return the dot product of a and b
@@ -574,7 +574,6 @@ class BlockVec:
     def vecs(self):
         """Return tuple of vectors from each block"""
         return self._vecs
-        # return tuple([self.data[key] for key in self.keys])
 
     def copy(self):
         """Return a copy of the block vector"""
@@ -584,7 +583,10 @@ class BlockVec:
 
     def __copy__(self):
         return self.copy()
-    # def __repr__(self):
+    
+    ## Basic string representation functions
+    def __repr__(self):
+        return self.__str__()
 
     def __str__(self):
         desc = ", ".join([f"{key}:{_len(vec)}" for key, vec in zip(self.keys, self.vecs)])
@@ -594,16 +596,28 @@ class BlockVec:
     def __contains__(self, key):
         return key in self.data
 
+    def __iter__(self):
+        for key in self.keys:
+            yield self.data[key]
+
+    def items(self):
+        return zip(self.keys, self.vecs)
+
+    ## Array like slicing/indexing interface
+    @property
+    def monovec(self):
+        """
+        Return an object allowing indexing of the block vector as a monolithic vector
+        """
+        return MonotoBlock(self)
+
     def __getitem__(self, key):
         """
-        Return the vector corresponding to the labelled block
-
-        A slice references the memory of the original array, so the returned slice can be used to
-        set values.
+        Return the vector or BlockVec corresponding to the index
 
         Parameters
         ----------
-        key : str, int, or slice
+        key : str, int, slice
             A block label
         """
         if isinstance(key, str):
@@ -622,13 +636,18 @@ class BlockVec:
             return BlockVec(vecs, keys)
         else:
             raise TypeError(f"`{key}` must be either str, int or slice")
+    
+    def __setitem__(self, key, value):
+        """
+        Return the vector corresponding to the labelled block
 
-    def __iter__(self):
-        for key in self.keys:
-            yield self.data[key]
-
-    def items(self):
-        return zip(self.keys, self.vecs)
+        Parameters
+        ----------
+        key : str, int, slice
+            A block label
+        value : array_like or BlockVec
+        """
+        raise NotImplementedError("")
 
     def set(self, scalar):
         """
@@ -637,6 +656,32 @@ class BlockVec:
         for vec in self:
             general_vec_set(vec, scalar)
 
+    def set_vec(self, vec):
+        """
+        Sets all values based on a vector
+        """
+        # Check sizes are compatible
+        assert vec.size == np.sum(self.size)
+
+        # indices of the boundaries of each block
+        n_blocks = np.concatenate(([0], np.cumsum(self.size)))
+        for i, (n_start, n_stop) in enumerate(zip(n_blocks[:-1], n_blocks[1:])):
+            self[i][:] = vec[n_start:n_stop]
+
+    ## Conversion and treatment as a monolithic vector
+    def to_ndarray(self):
+        ndarray_vecs = [np.array(vec) for vec in self.vecs]
+        return np.concatenate(ndarray_vecs, axis=0)
+
+    def to_petsc_seq(self, comm=None):
+        total_size = np.sum(self.size)
+        vec = PETSc.Vec.createSeq(total_size, comm=comm)
+        vec.setArray(self.to_ndarray)
+        vec.assemblyBegin()
+        vec.assemblyEnd()
+        return vec
+
+    ## Basic arithmetic operator overloading
     def __add__(self, other):
         return add(self, other)
 
@@ -666,6 +711,40 @@ class BlockVec:
 
     def __rtruediv__(self, other):
         return div(other, self)
+
+class MonotoBlock:
+    def __init__(self, bvec):
+        self.bvec = bvec
+
+    def __setitem__(self, key, value):
+        assert isinstance(key, slice)
+        total_size = np.sum(self.bvec.size)
+
+        # Let n refer to the monolithic index while m refer to a block index (the # of blocks)
+        nstart, nstop, nstep = self.slice_to_numeric(key, total_size)
+
+        # Get the monolithic ending indices of each block
+        # nblock = np.concatenate(np.cumsum(self.bvec.size))
+        
+        # istart = np.where()
+        # istop = 0, 0
+        raise NotImplementedError("do this later I guess")
+
+    def slice_to_numeric(self, slice_obj, array_len):
+        nstart, nstop, nstep = 0, 0, 1
+        if slice_obj.start is not None:
+            nstart = slice_obj.start
+
+        if slice_obj.stop is None:
+            nstop = array_len + 1
+        elif slice_obj.stop < 0:
+            nstop = array_len + slice_obj.stop
+        else:
+            nstop = slice_obj.stop
+
+        if slice_obj.step is not None:
+            nstep = slice_obj.step
+        return (nstart, nstop, nstep)
 
 class BlockMat:
     """

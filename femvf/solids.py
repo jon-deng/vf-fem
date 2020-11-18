@@ -415,7 +415,7 @@ class Rayleigh(Solid):
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
-        # breakpoint()
+        
         facet_normal = dfn.FacetNormal(mesh)
         traction_ds = ds(facet_labels[fsi_facet_labels[0]])
         for fsi_edge in fsi_facet_labels[1:]:

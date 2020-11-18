@@ -51,7 +51,7 @@ def export_vertex_values(model, statefile_path, export_path):
 
             for ii in range(N_TIME):
                 u, v, a = fi.get_state(ii)
-                # breakpoint()
+                
                 for label, vector in zip(['u', 'v', 'a'], [u, v, a]):
                     vector_func.vector()[:] = vector
                     fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VALUE_SHAPE)

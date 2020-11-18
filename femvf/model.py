@@ -1029,6 +1029,9 @@ class FSAIModel:
         return ret
 
     ## Solver methods
+    def res(self):
+        raise NotImplementedError("Didn't do this yet")
+
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
@@ -1039,17 +1042,220 @@ class FSAIModel:
         sl_state1, _ = self.solid.solve_state1(newton_solver_prm)
 
         self.set_fin_solid_state(sl_state1)
-        fl_state1, fluid_info = self.fluid.solve_qp1()
 
-        self.set_fin_fluid_state(fl_state1)
+        fluid_info, num_it = None, 0 
+        fl_state1, ac_state1 = None, None
+        abserr_max, relerr_max = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
+        abserr, relerr = 1.0, 1.0
+        while abserr > abserr_max and relerr > relerr_max and num_it < 15:
+            # do one fixed-point iteration
+            fl_state1, fluid_info = self.fluid.solve_qp1()
 
-        ac_state1, _ = self.acoustic.solve_state1()
+            self.set_fin_fluid_state(fl_state1)
 
-        self.set_fin_acoustic_state(ac_state1)
+            ac_state1, _ = self.acoustic.solve_state1()
 
-        step_info = {'fluid_info': fluid_info}
+            self.set_fin_acoustic_state(ac_state1)
+
+            # compute the error/residual. The acoustic equations is updated last so 
+            # it should have zero residual
+            fl_res = fl_state1 - self.fluid.solve_qp1()[0]
+            err = linalg.dot(fl_res, fl_res)
+            relerr = err - abserr
+            abserr = err
+            num_it += 1
+
+        step_info = {'fluid_info': fluid_info, 'num_it': num_it}
 
         return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
+    
+    def solve_dres_dstate1(self, b):
+        """
+        Solve, dF/du x = f
+        """
+        dt = self.solid.dt
+        x = self.get_state_vec()
+
+        ## Solve the solid system portion 
+        solid = self.solid
+
+        dfu1_du1 = dfn.assemble(solid.df1_du1)
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
+
+        self.solid.bc_base.apply(dfu1_du1)
+        dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
+        x['v'][:] = b['v'] - dfv2_du2*x['u']
+        x['a'][:] = b['a'] - dfa2_du2*x['u']
+
+        ## Solve the coupled fluid/acoustic system 
+        # First compute some sensitivities that are needed
+        _, _, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control1.vecs, self.fluid.properties)
+        # solve the coupled system for pressure and acoustic residuals
+        dfq_dq = 1.0
+        dfp_dp = 1.0
+        dfpinc_dpinc = PETSc.Mat().createAIJ((b['pinc'].size, b['pinc'].size), nnz=b['pinc'].size)
+        diag = PETSc.Vec().createSeq(b['pinc'].size)
+        diag.set(1.0)
+        dfpinc_dpinc.setDiagonal(diag)
+        dfpref_dpref = 1.0
+
+        dfq_dpref = PETSc.Mat().createAIJ((b['q'].size, b['pref'].size), nnz=1)
+        dfq_dpsup = -dq_dpsup
+        dpsup_dpref = 1.0 # Supraglottal pressure is equal to very first reflected pressure
+        dfq_dpref.setValue(0, 0, dfq_dpsup*dpsup_dpref)
+
+        dfp_dpref = PETSc.Mat().createAIJ((b['p'].size, b['pref'].size), nnz=b['p'].size)
+        dfp_psup = -dp_dpsup
+        dfp_dpref.setValues(np.arange(b['p'].size, dtype=np.int32), 0, dfp_psup*dpsup_dpref)
+
+        # dfpinc_dq = PETSc.Mat.createAIJ((b['pinc'].size, b['q'].size), nnz=0.0)
+        dfpref_dq = PETSc.Mat().createAIJ((b['pref'].size, b['q'].size), nnz=2)
+        dcontrol = self.acoustic.get_control_vec()
+        dcontrol.set(0.0)
+        dcontrol['qin'][:] = 1.0
+        dfpref_dqin = self.acoustic.dres_dcontrol(dcontrol)['pref'][:2]
+        
+        dqin_dq = 1.0
+
+        
+        dfpref_dq.setValues(np.array([0, 1], dtype=np.int32), 0, dfpref_dqin*dqin_dq)
+
+        for mat in (dfq_dpref, dfp_dpref, dfpref_dq):
+            mat.assemble()
+
+        blocks = [[   dfq_dq,    0.0,          0.0,    dfq_dpref], 
+                  [      0.0, dfp_dp,          0.0,    dfp_dpref],
+                  [      0.0,    0.0, dfpinc_dpinc,          0.0],
+                  [dfpref_dq,    0.0,          0.0, dfpref_dpref]]
+
+        A = linalg.form_block_matrix(blocks)
+        adj_z, rhs = A.getVecs()
+
+        # Get only the q, p, pinc, pref (fluid/acoustic) portions of the residual
+        rhs[:] = b[3:].to_ndarray()
+
+        ksp = PETSc.KSP().create()
+        ksp.setType(ksp.Type.PREONLY)
+
+        pc = ksp.getPC()
+        pc.setType(pc.Type.LU)
+
+        ksp.setOperators(A)
+        ksp.solve(rhs, adj_z)
+
+        x[3:].set_vec(adj_z)
+        print(linalg.dot(x[3:], x[3:]))
+
+        return x
+
+    # Adjoint solver methods
+    def solve_dres_dstate1_adj(self, b):
+        """
+        Solve, dF/du^T x = f
+        """
+        ## Assemble sensitivity matrices
+        # self.set_iter_params(**it_params)
+        dt = self.solid.dt
+
+        dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
+        dfu2_dp2 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+
+        # map dfu2_dp2 to have p on the fluid domain
+        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
+        dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
+        dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, self.fluid.state1['p'].size)
+
+        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
+        dfq2_du2 = 0 - dq_du
+        dfp2_du2 = 0 - dp_du
+
+        ## Do the linear algebra that solves for the adjoint states
+        adj_uva = self.solid.get_state_vec()
+        adj_qp = self.fluid.get_state_vec()
+
+        adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
+
+        # adjoint states for v, a, and q are explicit so we can solve for them
+        # self.solid.bc_base.apply(adj_v_rhs)
+        # self.solid.bc_base.apply(adj_a_rhs)
+        adj_uva['v'][:] = adj_v_rhs
+        adj_uva['a'][:] = adj_a_rhs
+        adj_qp['q'][:] = adj_q_rhs
+
+        adj_u_rhs -= dfv2_du2*adj_uva['v'] + dfa2_du2*adj_uva['a'] + dfq2_du2*adj_qp['q']
+
+        bc_dofs = np.array(list(self.solid.bc_base.get_boundary_values().keys()), dtype=np.int32)
+        self.solid.bc_base.apply(dfu2_du2, adj_u_rhs)
+        dfp2_du2.zeroRows(bc_dofs, diag=0.0)
+        # self.solid.bc_base.zero_columns(dfu2_du2, adj_u_rhs.copy(), diagonal_value=1.0)
+
+        # solve the coupled system for pressure and displacement residuals
+        dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
+        blocks = [[dfu2_du2_mat, dfp2_du2], [dfu2_dp2, 1.0]]
+
+        dfup2_dup2 = linalg.form_block_matrix(blocks)
+        adj_up, rhs = dfup2_dup2.getVecs()
+
+        # calculate rhs vectors
+        rhs[:adj_u_rhs.size()] = adj_u_rhs
+        rhs[adj_u_rhs.size():] = adj_p_rhs
+
+        # Solve the block system with LU factorization
+        ksp = PETSc.KSP().create()
+        ksp.setType(ksp.Type.PREONLY)
+
+        pc = ksp.getPC()
+        pc.setType(pc.Type.LU)
+
+        ksp.setOperators(dfup2_dup2)
+        ksp.solve(rhs, adj_up)
+
+        adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
+        adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
+
+        return linalg.concatenate(adj_uva, adj_qp)
+
+    def apply_dres_dstate0_adj(self, x):
+        dt = self.solid.dt
+        dfu2_du1 = self.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
+        dfu2_dv1 = self.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
+        dfu2_da1 = self.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
+        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+
+        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
+        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
+        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
+
+        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
+        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
+        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
+
+        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
+        dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
+        dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
+        matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(x['u']).vec()
+
+        b = self.get_state_vec()
+        b['u'][:] = dfu2_du1*x['u'] + dfv2_du1*x['v'] + dfa2_du1*x['a']
+        b['v'][:] = dfu2_dv1*x['u'] + dfv2_dv1*x['v'] + dfa2_dv1*x['a']
+        b['a'][:] = dfu2_da1*x['u'] + dfv2_da1*x['v'] + dfa2_da1*x['a']
+        b['q'][:] = 0.0
+        b['p'][:] = matvec_adj_p_rhs
+        return b
+
+    def apply_dres_dp_adj(self, x):
+        # bsolid = self.solid.get_properties_vec()
+        # bfluid = self.fluid.get_properties_vec()
+        bsolid = self.solid.apply_dres_dp_adj(x[:3])
+        bfluid = self.fluid.apply_dres_dp_adj(x[3:])
+        return linalg.concatenate(bsolid, bfluid)
+
+    def apply_dres_dcontrol_adj(self, x):
+        # b = self.get_properties_vec()
+        pass
 
 class SolidModel:
     def __init__(self, solid):

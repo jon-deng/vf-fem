@@ -151,10 +151,20 @@ class WRA(Acoustic1D):
 
     def dres_dcontrol1_adj(self, x):
         args = (*self.state0.vecs, *self.control1.vecs)
-        Atrans = jax.linear_transpose(self.reflect, *args)
+        _, Atrans = jax.linear_transpose(self.reflect, *args)
         
-        bvecs = [np.array(vec) for vec in Atrans(x)[-1:]]
+        # collect only the linearized controls
+        bvecs = [np.array(vec) for vec in Atrans(x)[len(self.state0.vecs):]]
         return -linalg.BlockVec(bvecs, self.control1.keys)
+
+    def dres_dcontrol(self, x):
+        args = (*self.state0.vecs, *self.control1.vecs)
+        _, A = jax.linearize(self.reflect, *args)
+
+        x_ = linalg.concatenate(self.get_state_vec(), x)
+        bvecs = [np.array(vec) for vec in A(*x_.vecs)]
+
+        return -linalg.BlockVec(bvecs, self.state1.keys)
 
     def dres_dcontrol0_adj(self, x):
         b = self.control0.copy()
@@ -177,15 +187,16 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
     z2 = RHO*C/a2
 
     def inputq(q, pinc):
+        q = jnp.squeeze(q)
         z = z2[0]
         gamma = gamma2[0]
 
         f1, b2 = pinc[0], pinc[1]
         b2 = gamma * b2
 
-        b1 = 0.0
         f2 = z*q + b2
-        return np.array([b1, f2])
+        b1 = b2 + f2 - f1
+        return jnp.array([b1, f2])
 
     def dinputq(q, bi, z, gamma):
         dfr_dq = z
@@ -209,7 +220,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         b1 = 1/_b2*(f1*_a2 + f1prev*_a1 + b1prev*_b1)
         f2 = 1/_b2*(f2prev*_b1 + f1*(_b2+_a2) + f1prev*(_a1-_b1))
-        return np.array([b1, f2])
+        return jnp.array([b1, f2])
 
     def dradiation(f1, f1prev, b1prev, f2prev, gamma):
         _a1 = -R+L-R*L
@@ -243,7 +254,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         f2int = (f1 + (f1-b2)*r1)[1:-1]
         b1int = (b2 + (f1-b2)*r1)[1:-1]
-        pref_int = np.stack([b1int, f2int], axis=-1).reshape(-1)
+        pref_int = jnp.stack([b1int, f2int], axis=-1).reshape(-1)
 
         ## Input boundary
         pinc_inp = pinc[:2]
@@ -255,7 +266,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         pref_rad_prev = pref_prev[-2:]
         pref_rad = radiation(pinc_rad, pinc_rad_prev, pref_rad_prev)
 
-        pref = np.concatenate([pref_inp, pref_int, pref_rad])
+        pref = jnp.concatenate([pref_inp, pref_int, pref_rad])
         return pref
 
     def dreflect00(f1, b2, f1prev, b2prev, b1prev, f2prev, q):
@@ -318,7 +329,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         b1 = b2 + (f1-b2)*r
         f2 = f1 + (f1-b2)*r
-        pref = np.stack([b1, f2], axis=-1).reshape(-1)
+        pref = jnp.stack([b1, f2], axis=-1).reshape(-1)
         return pref
 
     def dreflect05(f1, b2, gamma1, gamma2, z1, z2):
@@ -331,7 +342,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         db1_db2 = (1.0-r)*gamma2
         return (db1_df1, db1_db2), (df2_df1, df2_db2)
     
-
+    @jax.jit
     def reflect(pinc, pref, q):
         f1, b2 = pinc[:-1:2], pinc[1::2]
         b1, f2 = pref[:-1:2], pref[1::2]
@@ -339,16 +350,16 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         # f2 and b1 (reflected @ 0.0) -> f1, b2 (incident @ 0.5)
         f1_05 = f2[:-1]
         b2_05 = b1[1:]
-        pinc_05 = np.stack([f1_05, b2_05], axis=-1).reshape(-1)
+        pinc_05 = jnp.stack([f1_05, b2_05], axis=-1).reshape(-1)
 
         pref_05 = reflect05(pinc_05)
         b1_05, f2_05 = pref_05[:-1:2], pref_05[1::2]
         
         # f2_05 and b1_05 (reflected @ 0.5) -> f1, b2 (incident @ 1.0)
         f1inp, b2rad = np.zeros(1), np.zeros(1)
-        f1_1 = np.concatenate([f1inp, f2_05])
-        b2_1 = np.concatenate([b1_05, b2rad])
-        pinc_1 = np.stack([f1_1, b2_1], axis=-1).reshape(-1)
+        f1_1 = jnp.concatenate([f1inp, f2_05])
+        b2_1 = jnp.concatenate([b1_05, b2rad])
+        pinc_1 = jnp.stack([f1_1, b2_1], axis=-1).reshape(-1)
         
         pref_1 = reflect00(pinc_1, pinc, pref, q)
         return pinc_1, pref_1

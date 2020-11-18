@@ -112,7 +112,7 @@ def get_starting_kelvinvoigt_model(coupling='explicit'):
 def taylor_order(f0, hs, fs, 
                  gstate, gcontrols, gprops, gtimes,
                  dstate, dcontrols, dprops, dtimes):
-    # breakpoint()
+    
     ## Project the gradient along the step direction
     directions = linalg.concatenate(dstate, dprops, linalg.BlockVec([dtimes], ['t']))
     gradients = linalg.concatenate(gstate, gprops, linalg.BlockVec([gtimes], ['t']))
@@ -192,7 +192,7 @@ class AbstractTaylorTest(unittest.TestCase):
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
-        # breakpoint()
+        
 
         return (order_1, order_2)
 
@@ -383,7 +383,7 @@ class TestBasicGradient(AbstractTaylorTest):
         dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1e-9
 
-        breakpoint()
+        
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
@@ -544,7 +544,7 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
         dtimes = np.zeros(self.times.size)
         dtimes[1:] = np.arange(1, dtimes.size)*1e-11
 
-        # breakpoint()
+        
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
 
 

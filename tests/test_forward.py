@@ -154,7 +154,7 @@ class TestForward(unittest.TestCase):
         # C, N = model.acoustic.properties['soundspeed'][0], model.acoustic.properties['area'].size
         # props['length'][:] = (0.5*dt*C) * N
 
-        save_path = 'test_forward.h5'
+        save_path = 'out/test_forward.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
@@ -178,7 +178,7 @@ class TestForward(unittest.TestCase):
         ax.set_ylabel("Glottal width [cm]")
 
         plt.show()
-        fig.savefig('test_forward.png')
+        fig.savefig('out/test_forward.png')
 
 if __name__ == '__main__':
     test = TestForward()
