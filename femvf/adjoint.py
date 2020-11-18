@@ -137,24 +137,7 @@ def adjoint(model, f, functional):
 
     return functional_value, grad_state, grad_controls, grad_props, grad_times
 
-# def solve_grad_solid(model, adj_state1, iter_params1, grad_solid, df1_dsolid_form_adj):
-#     """
-#     Update the gradient wrt solid parameters
-#     """
-#     # model.set_iter_params(**iter_params1)
-#     for key, vec in zip(grad_solid.keys, grad_solid.vecs):
-#         df1_dkey = dfn.assemble(df1_dsolid_form_adj[key])
-#         val = df1_dkey*adj_state1[0]
-#         if vec.shape == ():
-#             # Note this is a hack because some properties are scalar values but stored as vectors
-#             # throughout the domain
-#             vec -= sum(val)
-#         else:
-#             vec -= val
-#     return grad_solid
-
 def _solve_grad_solid(model, adj_state1, grad_solid):
-    # breakpoint()
     bsize = len(model.solid.get_properties_vec().size)
     adj_solid = model.apply_dres_dp_adj(adj_state1)[:bsize]
     return grad_solid - adj_solid 
