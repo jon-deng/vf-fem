@@ -99,7 +99,7 @@ class StateFile:
             for name in model.state0.keys:
                 self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
 
-            for name in model.control0.keys:
+            for name in model.control.keys:
                 self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.root_group[f'control/{name}'])
 
     ## Implement an h5 group interface to the underlying root group
@@ -138,7 +138,7 @@ class StateFile:
     def variable_controls(self):
         num_controls = 1
         control_group = self.root_group['control']
-        for key in self.model.control0.keys:
+        for key in self.model.control.keys:
             num_controls = max(control_group[key].shape[0], num_controls)
 
         if num_controls > 1:
@@ -228,7 +228,7 @@ class StateFile:
     def init_control(self):
         control_group = self.root_group.create_group('control')
 
-        for name, vec in zip(self.model.control0.keys, self.model.control0.vecs):
+        for name, vec in zip(self.model.control.keys, self.model.control.vecs):
             NDOF = len(vec)
             control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), dtype=np.float64)
         pass

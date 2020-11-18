@@ -54,11 +54,10 @@ class QuasiSteady1DFluid:
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
-        usurf0 = np.zeros(2*NVERT)
-        vsurf0 = np.zeros(2*NVERT)
-        psub0, psup0 = np.zeros(1), np.zeros(1)
-        self.control0 = BlockVec((usurf0, vsurf0, psub0, psup0), ('usurf', 'vsurf', 'psub', 'psup'))
-        self.control1 = self.control0.copy()
+        usurf = np.zeros(2*NVERT)
+        vsurf = np.zeros(2*NVERT)
+        psub, psup = np.zeros(1), np.zeros(1)
+        self.control = BlockVec((usurf, vsurf, psub, psup), ('usurf', 'vsurf', 'psub', 'psup'))
 
         self.properties = self.get_properties_vec(set_default=True)
 
@@ -86,31 +85,14 @@ class QuasiSteady1DFluid:
         self.state1['q'][()] = qp1[0]
         self.state1['p'][:] = qp1[1]
 
-    def set_ini_control(self, uv0):
-        """
-        Set the initial surface displacement and velocity
-        """
-        # self.control0['usurf'][:] = uv0[0]
-        # self.control0['vsurf'][:] = uv0[1]
-        for key, value in uv0.items():
-            self.control0[key][:] = value
-
-    def set_fin_control(self, uv1):
+    def set_control(self, uv1):
         """
         Set the final surface displacement and velocity
         """
         for key, value in uv1.items():
-            self.control1[key][:] = value
-        # self.control1['usurf'][:] = uv1[0]
-        # self.control1['vsurf'][:] = uv1[1]
-
-    def set_time_step(self, dt):
-        """
-        Set the time step
-        """
-        # This is a quasi-steady fluid so time doesn't matter. I put this here for consistency if
-        # you were to use a unsteady fluid.
-        pass
+            self.control[key][:] = value
+        # self.control['usurf'][:] = uv1[0]
+        # self.control['vsurf'][:] = uv1[1]
 
     def set_properties(self, props):
         """
@@ -145,7 +127,7 @@ class QuasiSteady1DFluid:
         return BlockVec(vecs, labels)
 
     def get_control_vec(self):
-        return self.control0.copy()
+        return self.control.copy()
 
     ## Methods that subclasses must implement
     def res(self):
@@ -262,39 +244,39 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return self.fluid_pressure(*self.control1.vecs, self.properties)
+        return self.fluid_pressure(*self.control.vecs, self.properties)
 
     def solve_qp0(self):
         """
         Return the initial flow state
         """
-        return self.fluid_pressure(*self.control0.vecs, self.properties)
+        return self.fluid_pressure(*self.control.vecs, self.properties)
 
     def solve_dqp1_du1(self, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(*self.control1.vecs, self.properties)
+        return self.flow_sensitivity(*self.control.vecs, self.properties)
 
     def solve_dqp0_du0(self, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity(*self.control0.vecs, self.properties)
+        return self.flow_sensitivity(*self.control.vecs, self.properties)
 
     # TODO: Refactor to use the DOF map from solid to fluid rather than `ForwardModel`
     def solve_dqp1_du1_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity_solid(model, *self.control1.vecs, self.properties,
+        return self.flow_sensitivity_solid(model, *self.control.vecs, self.properties,
                                            adjoint)
 
     def solve_dqp0_du0_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
-        return self.flow_sensitivity_solid(model, *self.control0.vecs, self.properties,
+        return self.flow_sensitivity_solid(model, *self.control.vecs, self.properties,
                                            adjoint)
 
     ## internal methods

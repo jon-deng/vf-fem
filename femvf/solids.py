@@ -141,8 +141,7 @@ class Solid:
         ## Define the state/controls/properties
         self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
         self.state1 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
-        self.control0 = BlockVec((self.forms['coeff.fsi.p0'].vector(),), ('p',))
-        self.control1 = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
+        self.control = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
         self.properties = self.get_properties_vec(set_default=True)
         self.set_properties(self.get_properties_vec(set_default=True))
 
@@ -185,7 +184,7 @@ class Solid:
         return BlockVec((u, v, a), ('u', 'v', 'a')) 
 
     def get_control_vec(self):
-        ret = self.control0.copy()
+        ret = self.control.copy()
         ret.set(0.0)
         return ret
 
@@ -228,19 +227,8 @@ class Solid:
         self.forms['coeff.state.v1'].vector()[:] = uva1[1]
         self.forms['coeff.state.a1'].vector()[:] = uva1[2]
 
-    def set_ini_control(self, p0):
-        self.forms['coeff.fsi.p0'].vector()[:] = p0['p']
-
-    def set_fin_control(self, p1):
+    def set_control(self, p1):
         self.forms['coeff.fsi.p1'].vector()[:] = p1['p']
-
-    def set_time_step(self, dt):
-        """
-        Sets the time step
-        """
-        # The coefficient for time is a vector because of a hack; it's needed to take derivatives
-        # but you should only pass a float to ensure each node has the same time step
-        self.forms['coeff.time.dt'].vector()[:] = dt
 
     def set_properties(self, props):
         """
@@ -279,11 +267,10 @@ class Solid:
         self.set_ini_state(uva0)
         self.set_fin_state(uva1)
 
-        self.set_ini_control(p0)
-        self.set_fin_control(p1)
+        self.set_control(p1)
 
         self.set_properties(props)
-        self.set_time_step(dt)
+        self.dt = dt
 
     def assem(self, form_name):
         """

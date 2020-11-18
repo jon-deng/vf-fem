@@ -38,7 +38,7 @@ class TestModel(unittest.TestCase):
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         controls = [control]
 
-        model.set_fin_control(control)
+        model.set_control(control)
 
         # Set the properties
         y_gap = 0.01

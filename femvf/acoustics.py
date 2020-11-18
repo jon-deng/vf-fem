@@ -24,8 +24,7 @@ class Acoustic1D:
 
         # The control is the input flow rate
         qin = np.zeros((1,))
-        self.control0 = linalg.BlockVec((qin,), ('qin',))
-        self.control1 = self.control0.copy()
+        self.control = linalg.BlockVec((qin,), ('qin',))
 
         length = np.ones(1)
         area = np.ones(num_tube)
@@ -60,16 +59,9 @@ class Acoustic1D:
         for key, value in state.items():
             self.state0[key][:] = value
 
-    def set_ini_control(self, control):
+    def set_control(self, control):
         for key, value in control.items():
-            self.control0[key][:] = value
-
-    def set_fin_control(self, control):
-        for key, value in control.items():
-            self.control1[key][:] = value
-
-    def set_time_step(self, dt):
-        self.dt = dt
+            self.control[key][:] = value
 
     def set_properties(self, props):
         for key, value in props.items():
@@ -82,7 +74,7 @@ class Acoustic1D:
         return ret
 
     def get_control_vec(self):
-        ret = self.control0.copy()
+        ret = self.control.copy()
         ret.set(0.0)
         return ret
 
@@ -128,7 +120,7 @@ class WRA(Acoustic1D):
 
     ## Solver functions
     def solve_state1(self):
-        qin = self.control1['qin'][0]
+        qin = self.control['qin'][0]
         pinc, pref = self.state0.vecs
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
@@ -143,33 +135,28 @@ class WRA(Acoustic1D):
         return x
 
     def dres_dstate0_adj(self, x):
-        args = (*self.state0.vecs, *self.control1.vecs)
+        args = (*self.state0.vecs, *self.control.vecs)
         Atrans = jax.linear_transpose(self.reflect, *args)
 
         bvecs = [np.array(vec) for vec in Atrans(x)[:-1]]
         return -linalg.BlockVec(bvecs, self.state0.keys)
 
     def dres_dcontrol1_adj(self, x):
-        args = (*self.state0.vecs, *self.control1.vecs)
+        args = (*self.state0.vecs, *self.control.vecs)
         _, Atrans = jax.linear_transpose(self.reflect, *args)
         
         # collect only the linearized controls
         bvecs = [np.array(vec) for vec in Atrans(x)[len(self.state0.vecs):]]
-        return -linalg.BlockVec(bvecs, self.control1.keys)
+        return -linalg.BlockVec(bvecs, self.control.keys)
 
     def dres_dcontrol(self, x):
-        args = (*self.state0.vecs, *self.control1.vecs)
+        args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
         x_ = linalg.concatenate(self.get_state_vec(), x)
         bvecs = [np.array(vec) for vec in A(*x_.vecs)]
 
         return -linalg.BlockVec(bvecs, self.state1.keys)
-
-    def dres_dcontrol0_adj(self, x):
-        b = self.control0.copy()
-        b.set(0.0)
-        return b
 
     def dres_dproperties_adj(self, x):
         b = self.get_properties_vec()

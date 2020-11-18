@@ -100,7 +100,7 @@ class TestBernoulli(CommonSetup):
 
         ## Set a surface state step direction and step sizes
         hs = np.concatenate([[0], 2**np.arange(-5, 5, dtype=np.float)])
-        du = np.zeros(fluid.control1['usurf'].size)
+        du = np.zeros(fluid.control['usurf'].size)
         du[:] = np.random.rand(du.size)*1e-5
 
         ## Calculate p/q sensitivity and convergence order using FD
@@ -198,7 +198,7 @@ class TestBernoulli(CommonSetup):
         surface_coordinates = self.surface_coordinates
 
         # Set a displacement change direction
-        du_fluid = np.zeros(fluid.control1['usurf'].size)
+        du_fluid = np.zeros(fluid.control['usurf'].size)
         du_fluid[:] = np.random.rand(du_fluid.size)*1e-2
 
         du_solid = dfn.Function(self.model.solid.vector_fspace).vector().vec()

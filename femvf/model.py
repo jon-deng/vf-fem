@@ -115,8 +115,7 @@ class FSIModel:
         self.state1 = linalg.concatenate(self.solid.state1, self.fluid.state1)
 
         # The control is just the subglottal and supraglottal pressures
-        self.control0 = self.fluid.control0[2:].copy()
-        self.control1 = self.fluid.control1[2:].copy()
+        self.control = self.fluid.control[2:].copy()
         self.properties = linalg.concatenate(self.solid.properties, self.fluid.properties)
 
         self.fsi_verts = fsi_verts
@@ -138,13 +137,6 @@ class FSIModel:
         fsi_ref_config = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
         fsi_vdofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
         fl_control = sl_state_to_fl_control(uva0, fl_control, fsi_ref_config, fsi_vdofs)
-        
-        # X_ref = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
-        # u0_fluid = X_ref + self.map_fsi_vector_from_solid_to_fluid(uva0[0])
-        # v0_fluid = self.map_fsi_vector_from_solid_to_fluid(uva0[1])
-        # fl_control['usurf'][:] = u0_fluid
-        # fl_control['vsurf'][:] = v0_fluid
-        self.fluid.set_ini_control(fl_control)
 
     def set_fin_solid_state(self, uva1):
         """
@@ -169,7 +161,7 @@ class FSIModel:
         # v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
         # fl_control['usurf'][:] = u1_fluid
         # fl_control['vsurf'][:] = v1_fluid
-        self.fluid.set_fin_control(fl_control)
+        self.fluid.set_control(fl_control)
 
     ## Methods for settings parameters of the model
     @property
@@ -188,61 +180,17 @@ class FSIModel:
     def set_fin_state(self, state):
         self.set_fin_solid_state(state[:3])
         self.set_fin_fluid_state(state[3:])
-
-    def set_ini_control(self, control):
-        for key, value in control.items():
-            self.fluid.control0[key][:] = value
     
-    def set_fin_control(self, control):
+    def set_control(self, control):
         for key, value in control.items():
-            self.fluid.control1[key][:] = value
+            self.fluid.control[key][:] = value
 
     def set_properties(self, props):
         self.solid.set_properties(props[:len(self.solid.properties.size)])
         self.fluid.set_properties(props[len(self.solid.properties.size):])
 
-    def set_time_step(self, dt):
-        """
-        Sets the time step.
-
-        Parameters
-        ----------
-        dt : float
-        """
-        self.solid.set_time_step(dt)
-        self.fluid.set_time_step(dt)
-
     # Additional more friendly method for setting parameters (use the above defined methods)
-    def set_ini_params(self, state0, control0):
-        """
-        Sets all properties at the initial time.
-
-        Parameters
-        ----------
-        uva0 : tuple of array_like
-        qp0 : tuple of array_like
-        dt : float
-        fluid_props : dict
-        solid_props : dict
-        """
-        self.set_ini_state(state0)
-        self.set_ini_control(control0)
-
-    def set_fin_params(self, state1, control1):
-        """
-        Sets all properties at the final time.
-
-        Parameters
-        ----------
-        uva1 : tuple of array_like
-        qp1 : tuple of array_like
-        fluid_props : dict
-        solid_props : dict
-        """
-        self.set_fin_state(state1)
-        self.set_fin_control(control1)
-
-    def set_iter_params(self, state0, control0, state1, control1, dt):
+    def set_iter_params(self, state0, state1, control1, dt):
         """
         Sets all parameter values needed to integrate the model over a time step.
 
@@ -259,7 +207,7 @@ class FSIModel:
         """
         self.set_ini_params(state0, control0)
         self.set_fin_params(state1, control1)
-        self.set_time_step(dt)
+        self.dt = dt
 
     def set_params_fromfile(self, f, n, update_props=True):
         """
@@ -365,7 +313,7 @@ class FSIModel:
     def map_fsi_vector_from_solid_to_fluid(self, solid_vector):
         vdof_solid, vdof_fluid = self.get_fsi_vector_dofs()
 
-        fluid_vector = self.fluid.control0['usurf'].copy()
+        fluid_vector = self.fluid.control['usurf'].copy()
         fluid_vector[:] = 0.0
         fluid_vector[vdof_fluid] = solid_vector[vdof_solid]
         return fluid_vector
@@ -442,7 +390,7 @@ class FSIModel:
         return linalg.concatenate(self.solid.get_state_vec(), self.fluid.get_state_vec())
 
     def get_control_vec(self):
-        return self.control0.copy()
+        return self.control.copy()
 
     def get_properties_vec(self):
         return linalg.concatenate(self.solid.get_properties_vec(), self.fluid.get_properties_vec())
@@ -489,8 +437,8 @@ class ExplicitFSIModel(FSIModel):
         # Note that setting the initial fluid state sets the final driving pressure
         # for explicit coupling
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = linalg.BlockVec((p0_solid,), self.solid.control0.keys)
-        self.solid.set_fin_control(control)
+        control = linalg.BlockVec((p0_solid,), self.solid.control.keys)
+        self.solid.set_control(control)
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
@@ -655,15 +603,14 @@ class ImplicitFSIModel(FSIModel):
         self.fluid.set_ini_state(qp0)
 
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = linalg.BlockVec((p0_solid,), self.solid.control0.keys)
-        self.solid.set_ini_control(control)
+        control = linalg.BlockVec((p0_solid,), self.solid.control.keys)
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
         p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        control = linalg.BlockVec((p1_solid,), self.solid.control0.keys)
-        self.solid.set_fin_control(control)
+        control = linalg.BlockVec((p1_solid,), self.solid.control.keys)
+        self.solid.set_control(control)
 
     ## Forward solver methods
     def res(self):
@@ -888,8 +835,7 @@ class FSAIModel:
         self.state1 = state.copy()
 
         control = linalg.BlockVec((np.array([1.0]),), ('psub',))
-        self.control0 = control
-        self.control1 = control.copy()
+        self.control = control.copy()
 
         self.properties = linalg.concatenate(
             solid.get_properties_vec(), fluid.get_properties_vec(), acoustic.get_properties_vec())
@@ -922,11 +868,6 @@ class FSAIModel:
         self.set_ini_fluid_state(fl_state)
         self.set_ini_acoustic_state(ac_state)
 
-    def set_ini_control(self, control):
-        fl_control = self.fluid.control0.copy()
-        fl_control['psub'][:] = control['psub']
-        self.fluid.set_ini_control(fl_control)
-
     def set_fin_state(self, state):
         sl_nblock = len(self.solid.state0.size)
         fl_nblock = len(self.fluid.state0.size)
@@ -940,10 +881,10 @@ class FSAIModel:
         self.set_fin_fluid_state(fl_state)
         self.set_fin_acoustic_state(ac_state)
 
-    def set_fin_control(self, control):
-        fl_control = self.fluid.control1.copy()
+    def set_control(self, control):
+        fl_control = self.fluid.control.copy()
         fl_control['psub'][:] = control['psub']
-        self.fluid.set_fin_control(fl_control)
+        self.fluid.set_control(fl_control)
 
     def set_properties(self, props):
         sl_nblock = len(self.solid.properties.size)
@@ -961,59 +902,46 @@ class FSAIModel:
     ## Coupling methods
     def set_ini_solid_state(self, sl_state0):
         self.solid.set_ini_state(sl_state0)
-
-        # fl_control = self.fluid.control0.copy()
-        
-        # fsi_ref_config = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
-        # fsi_vdofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
-        # fl_control = sl_state_to_fl_control(sl_state0, fl_control, fsi_ref_config, fsi_vdofs)
-
-        # self.fluid.set_ini_control(fl_control)
     
     def set_ini_fluid_state(self, fl_state0):
         self.fluid.set_ini_state(fl_state0)
 
         # for explicit coupling
-        sl_control = self.solid.control1.copy()
+        sl_control = self.solid.control.copy()
         fsi_sdofs = self.solid.vert_to_sdof[self.fsi_verts].copy()
         sl_control = fl_state_to_sl_control(fl_state0, sl_control, fsi_sdofs)
-        self.solid.set_fin_control(sl_control)
-
-        # control = fl_state_to_ac_control(fl_state0, self.acoustic.control0.copy())
-        # self.acoustic.set_ini_control(control)
+        self.solid.set_control(sl_control)
     
     def set_ini_acoustic_state(self, ac_state0):
         self.acoustic.set_ini_state(ac_state0)
 
-        # control = ac_state_to_fl_control(ac_state0, self.fluid.control0.copy())
-        # self.fluid.set_ini_control(control)
 
     def set_fin_solid_state(self, sl_state1):
         self.solid.set_fin_state(sl_state1)
 
-        fl_control = self.fluid.control1.copy()
+        fl_control = self.fluid.control.copy()
         
         fsi_ref_config = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
         fsi_vdofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
         fl_control = sl_state_to_fl_control(sl_state1, fl_control, fsi_ref_config, fsi_vdofs)
         
-        self.fluid.set_fin_control(fl_control)
+        self.fluid.set_control(fl_control)
 
     def set_fin_fluid_state(self, fl_state1):
         self.fluid.set_fin_state(fl_state1)
 
-        ac_control = fl_state_to_ac_control(fl_state1, self.acoustic.control1.copy())
-        self.acoustic.set_fin_control(ac_control)
+        ac_control = fl_state_to_ac_control(fl_state1, self.acoustic.control.copy())
+        self.acoustic.set_control(ac_control)
     
     def set_fin_acoustic_state(self, ac_state1):
         self.acoustic.set_fin_state(ac_state1)
 
-        control = ac_state_to_fl_control(ac_state1, self.fluid.control1.copy())
-        self.fluid.set_fin_control(control)
+        control = ac_state_to_fl_control(ac_state1, self.fluid.control.copy())
+        self.fluid.set_control(control)
 
     ## Empty parameter vectors
     def get_control_vec(self):
-        ret = self.control0.copy()
+        ret = self.control.copy()
         ret.set(0.0)
         return ret
 
@@ -1090,7 +1018,7 @@ class FSAIModel:
 
         ## Solve the coupled fluid/acoustic system 
         # First compute some sensitivities that are needed
-        _, _, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control1.vecs, self.fluid.properties)
+        _, _, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
         # solve the coupled system for pressure and acoustic residuals
         dfq_dq = 1.0
         dfp_dp = 1.0
@@ -1264,35 +1192,29 @@ class SolidModel:
         self.state0 = self.solid.state0
         self.state1 = self.solid.state1
 
-        self.control0 = self.solid.control0
-        self.control1 = self.solid.control1
+        self.control = self.solid.control
 
         self.properties = self.solid.properties
+
+    @property
+    def dt(self):
+        return self.solid.dt
+
+    @dt.setter
+    def dt(self, value):
+        self.solid.dt = value
 
     def set_ini_state(self, state):
         self.solid.set_ini_state(state)
 
     def set_fin_state(self, state):
         self.solid.set_fin_state(state)
-
-    def set_ini_control(self, control):
-        self.solid.set_ini_control(control)
     
-    def set_fin_control(self, control):
-        self.solid.set_fin_control(control)
+    def set_control(self, control):
+        self.solid.set_control(control)
 
     def set_properties(self, props):
         self.solid.set_properties(props)
-
-    def set_time_step(self, dt):
-        """
-        Sets the time step.
-
-        Parameters
-        ----------
-        dt : float
-        """
-        self.solid.set_time_step(dt)
 
     def solve_state1(self, ini_state, newton_solver_prm=None):
         """

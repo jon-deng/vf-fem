@@ -103,8 +103,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
 
             model.dt = dt
             model.set_ini_state(state0)
-            model.set_ini_control(control0)
-            model.set_fin_control(control1)
+            model.set_control(control1)
             
             state1, step_info = model.solve_state1(state0)
             model.set_fin_state(state1)

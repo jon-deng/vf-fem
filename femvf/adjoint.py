@@ -85,9 +85,8 @@ def adjoint(model, f, functional):
         # to set it once here
         model.set_ini_state(state0)
         model.set_fin_state(state1)
-        model.set_ini_control(control0)
-        model.set_fin_control(control1)
-        model.set_time_step(dt1)
+        model.set_control(control1)
+        model.dt = dt1
 
         # adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
         adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
