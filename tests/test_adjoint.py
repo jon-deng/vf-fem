@@ -139,9 +139,15 @@ class AbstractTaylorTest(unittest.TestCase):
             integrate(self.model, self.state0, self.controls, self.props, self.times,
                       h5file=base_path)
 
+        print("Computing gradient via adjoint")
+        t_start = perf_counter()
+
         f0, grads = None, None
         with sf.StateFile(self.model, base_path, mode='r') as f:
             f0, *grads = adjoint(self.model, f, self.functional)
+
+        print(f"Duration {perf_counter()-t_start:.4f} s")
+        
         return f0, grads
 
     def get_taylor_order(self, lsearch_fname, hs,

@@ -24,7 +24,7 @@ FIXEDPOINT_SOLVER_PRM = {
     'absolute_tolerance': 1e-8,
     'relative_tolerance': 1e-11}
 
-# @profile
+# # @profile
 def integrate(model, ini_state, controls, props, times, idx_meas=None,
               h5file='tmp.h5', h5group='/', newton_solver_prm=None, callbacks=None):
     """

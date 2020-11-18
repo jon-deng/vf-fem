@@ -647,7 +647,24 @@ class BlockVec:
             A block label
         value : array_like or BlockVec
         """
-        raise NotImplementedError("")
+        if isinstance(key, str):
+            if key in self.data:
+                self.data[key][:] = value
+            else:
+                raise KeyError(f"`{key}` is not a valid block key")
+        elif isinstance(key, int):
+            try:
+                self.vecs[key][:] = value
+            except IndexError as e:
+                raise e
+        elif isinstance(key, slice):
+            assert isinstance(value, BlockVec)
+            assert self.size[key] == value.size
+            
+            for vec, val in zip(self.vecs[key], value.vecs):
+                vec[:] = val
+        else:
+            raise TypeError(f"`{key}` must be either str, int or slice")
 
     def set(self, scalar):
         """

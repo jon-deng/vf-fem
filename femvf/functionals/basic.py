@@ -1146,7 +1146,7 @@ class SubglottalWork(Functional):
     func_types = ()
     default_constants = {'n_start': 0}
 
-    # @profile
+    # # @profile
     def eval(self, f):
         # meas_ind = f.get_meas_indices()
         N_START = self.constants['n_start']

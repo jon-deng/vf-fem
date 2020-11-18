@@ -242,7 +242,7 @@ class StateFile:
                 size = len(value)
             except TypeError:
                 size = value.size
-            properties_group.create_dataset(name, (value.size,), dtype=np.float64)
+            properties_group.create_dataset(name, (size,), dtype=np.float64)
 
     ## Functions for writing by appending
     def append_state(self, state):

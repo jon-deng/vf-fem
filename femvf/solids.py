@@ -8,6 +8,7 @@ You should think about what forms should be custom made for different solid gove
 and what types of forms are always generated the same way, and refactor accordingly.
 """
 
+import numpy as np
 import dolfin as dfn
 import ufl
 
@@ -189,15 +190,35 @@ class Solid:
         return ret
 
     def get_properties_vec(self, set_default=True):
-        field_size = self.scalar_fspace.dim()
+        labels = tuple(self.PROPERTY_TYPES.keys())
+        vecs = []
+        for label in labels:
+            coefficient = self.forms['coeff.prop.'+label]
 
-        prop_defaults = None
-        if set_default:
-            prop_defaults = self.PROPERTY_DEFAULTS
+            # If the property is a field variable, values have to be assigned to every spot in
+            # the vector
+            vec = None
+            if isinstance(coefficient, dfn.function.constant.Constant):
+                vec = np.ones(1)
+            else:
+                vec = coefficient.vector().copy()
+            
+            if set_default:
+                vec[:] = self.PROPERTY_DEFAULTS[label]
 
-        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
+            vecs.append(vec)
 
         return BlockVec(vecs, labels)
+
+        # field_size = self.scalar_fspace.dim()
+
+        # prop_defaults = None
+        # if set_default:
+        #     prop_defaults = self.PROPERTY_DEFAULTS
+
+        # vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
+
+        # return BlockVec(vecs, labels)
     
     def set_ini_state(self, uva0):
         """
@@ -298,19 +319,38 @@ class Solid:
         uva1['a'][:] = newmark.newmark_a(uva1['u'], *self.state0.vecs, dt)
         return uva1, {}
 
+    def solve_dres_dstate1_adj(self, b):
+        dt = self.dt
+        dfu2_du2 = self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
+
+        x = self.get_state_vec()
+        adj_u_rhs, adj_v_rhs, adj_a_rhs = b.vecs
+
+        x['a'][:] = adj_a_rhs
+        x['v'][:] = adj_v_rhs
+
+        adj_u_rhs = adj_u_rhs - (dfv2_du2*x['v'] + dfa2_du2*x['a'])
+
+        self.bc_base.apply(dfu2_du2, adj_u_rhs)
+        dfn.solve(dfu2_du2, x['u'], adj_u_rhs, 'petsc')
+        return x
+
+    # @profile
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
+        # breakpoint()
         for key, vec in zip(b.keys, b.vecs):
+            # assert self.df1_dsolid[key] is not None
             df1_dkey = dfn.assemble(self.df1_dsolid[key])
             val = df1_dkey*x['u']
-            if vec.shape == ():
+            if vec.size == 1:
+                val = val.sum()
                 # Note this is a hack because some properties are scalar values but stored as vectors
                 # throughout the domain (specifically, the time step)
-                vec[()] = sum(val)
-            else:
-                vec[:] = val
+            vec[:] = val
         return b
-
 
 class Rayleigh(Solid):
     """
