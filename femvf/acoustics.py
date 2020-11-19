@@ -131,25 +131,18 @@ class WRA(Acoustic1D):
     def res(self):
         return self.state1 - self.solve_state1()
 
-    def dres_dstate1_adj(self, x):
+    def solve_dres_dstate1_adj(self, x):
         return x
 
-    def dres_dstate0_adj(self, x):
+    def apply_dres_dstate0_adj(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
-        Atrans = jax.linear_transpose(self.reflect, *args)
-
-        bvecs = [np.array(vec) for vec in Atrans(x)[:-1]]
+        ATr = jax.linear_transpose(self.reflect, *args)
+        
+        b_pinc, b_pref, b_qin = ATr(x.vecs)
+        bvecs = (np.array(b_pinc), np.array(b_pref))
         return -linalg.BlockVec(bvecs, self.state0.keys)
 
-    def dres_dcontrol1_adj(self, x):
-        args = (*self.state0.vecs, *self.control.vecs)
-        _, Atrans = jax.linear_transpose(self.reflect, *args)
-        
-        # collect only the linearized controls
-        bvecs = [np.array(vec) for vec in Atrans(x)[len(self.state0.vecs):]]
-        return -linalg.BlockVec(bvecs, self.control.keys)
-
-    def dres_dcontrol(self, x):
+    def apply_dres_dcontrol(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
@@ -158,7 +151,7 @@ class WRA(Acoustic1D):
 
         return -linalg.BlockVec(bvecs, self.state1.keys)
 
-    def dres_dproperties_adj(self, x):
+    def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()
         b.set(0.0)
         return b

@@ -539,19 +539,7 @@ class ExplicitFSIModel(FSIModel):
         return x
 
     def apply_dres_dstate0_adj(self, x):
-        dt2 = self.solid.dt
-        dfu2_du1 = self.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-        dfu2_dv1 = self.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-        dfu2_da1 = self.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
         dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
-
-        dfv2_du1 = 0 - newmark.newmark_v_du0(dt2)
-        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt2)
-        dfv2_da1 = 0 - newmark.newmark_v_da0(dt2)
-
-        dfa2_du1 = 0 - newmark.newmark_a_du0(dt2)
-        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt2)
-        dfa2_da1 = 0 - newmark.newmark_a_da0(dt2)
 
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
         dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
@@ -559,9 +547,8 @@ class ExplicitFSIModel(FSIModel):
         matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(x['u']).vec()
 
         b = self.get_state_vec()
-        b['u'][:] = dfu2_du1*x['u'] + dfv2_du1*x['v'] + dfa2_du1*x['a']
-        b['v'][:] = dfu2_dv1*x['u'] + dfv2_dv1*x['v'] + dfa2_dv1*x['a']
-        b['a'][:] = dfu2_da1*x['u'] + dfv2_da1*x['v'] + dfa2_da1*x['a']
+        # Set uva blocks of b
+        b[:3] = self.solid.apply_dres_dstate0_adj(x[:3])
         b['q'][:] = 0.0
         b['p'][:] = matvec_adj_p_rhs
         return b
@@ -769,19 +756,19 @@ class ImplicitFSIModel(FSIModel):
         ## Assemble sensitivity matrices
         # dt2 = it_params2['dt']
         solid = self.solid
-        dt2 = self.solid.dt
+        dt = self.dt
         # model.set_iter_params(**it_params2)
 
         dfu2_du1 = solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
         dfu2_dv1 = solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
         dfu2_da1 = solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
 
-        dfv2_du1 = 0 - newmark.newmark_v_du0(dt2)
-        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt2)
-        dfv2_da1 = 0 - newmark.newmark_v_da0(dt2)
-        dfa2_du1 = 0 - newmark.newmark_a_du0(dt2)
-        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt2)
-        dfa2_da1 = 0 - newmark.newmark_a_da0(dt2)
+        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
+        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
+        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
+        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
+        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
+        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
 
         ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
         # Allocate a vector the for fluid side mat-vec multiplication
@@ -789,7 +776,7 @@ class ImplicitFSIModel(FSIModel):
         b['u'][:] = (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
         b['v'][:] = (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
         b['a'][:] = (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-        b['q'][()] = 0
+        b['q'][:] = 0
         b['p'][:] = 0
 
         return b
@@ -805,7 +792,7 @@ class ImplicitFSIModel(FSIModel):
         # b = self.get_properties_vec()
         pass
 
-class FSAIModel:
+class FSAIModel(FSIModel):
     """
     Represents a fluid-structure-acoustic interaction system
     """
@@ -981,6 +968,8 @@ class FSAIModel:
         return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
 
     def _form_dflac_dflac(self):
+        b = self.state0
+
         ## Solve the coupled fluid/acoustic system 
         # First compute some sensitivities that are needed
         _, _, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
@@ -1007,7 +996,7 @@ class FSAIModel:
         dcontrol = self.acoustic.get_control_vec()
         dcontrol.set(0.0)
         dcontrol['qin'][:] = 1.0
-        dfpref_dqin = self.acoustic.dres_dcontrol(dcontrol)['pref'][:2]
+        dfpref_dqin = self.acoustic.apply_dres_dcontrol(dcontrol)['pref'][:2]
         dqin_dq = 1.0
         dfpref_dq.setValues(np.array([0, 1], dtype=np.int32), 0, dfpref_dqin*dqin_dq)
 
@@ -1093,12 +1082,11 @@ class FSAIModel:
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
-
         _adj_p = dfp2_du2.getVecRight()
-        _adj_p[:] = x_qp['p']
+        _adj_p[:] = x['p']
 
         b_uva = b[:3].copy()
-        b_uva['u'] -= (dfq2_du2*x_qp['q'] + dfn.PETScVector(dfp2_du2*_adj_p))
+        b_uva['u'] -= (dfq2_du2*x['q'] + dfn.PETScVector(dfp2_du2*_adj_p))
 
         x_uva = x[:3]
         x_uva[:] = self.solid.solve_dres_dstate1_adj(b_uva)
@@ -1106,19 +1094,7 @@ class FSAIModel:
         return x
 
     def apply_dres_dstate0_adj(self, x):
-        dt = self.solid.dt
-        dfu2_du1 = self.solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-        dfu2_dv1 = self.solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-        dfu2_da1 = self.solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
         dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
-
-        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
-        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
-        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
-
-        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
-        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
-        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
 
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
         dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
@@ -1126,25 +1102,23 @@ class FSAIModel:
         matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(x['u']).vec()
 
         b = self.get_state_vec()
-        b['u'][:] = dfu2_du1*x['u'] + dfv2_du1*x['v'] + dfa2_du1*x['a']
-        b['v'][:] = dfu2_dv1*x['u'] + dfv2_dv1*x['v'] + dfa2_dv1*x['a']
-        b['a'][:] = dfu2_da1*x['u'] + dfv2_da1*x['v'] + dfa2_da1*x['a']
+        # Set uva blocks of b
+        b[:3] = self.solid.apply_dres_dstate0_adj(x[:3])
         b['q'][:] = 0.0
         b['p'][:] = matvec_adj_p_rhs
-        return b
 
+        # Set acoustics state blocks of b
+        b[-2:] = self.acoustic.apply_dres_dstate0_adj(x[-2:])
+        return b
+        
     def apply_dres_dp_adj(self, x):
-        # bsolid = self.solid.get_properties_vec()
-        # bfluid = self.fluid.get_properties_vec()
-        pass
+        bsl = self.solid.apply_dres_dp_adj(x[:3])
+        bfl = self.fluid.apply_dres_dp_adj(x[3:5])
+        bac = self.acoustic.apply_dres_dp_adj(x[5:])
+        return linalg.concatenate(bsl, bfl, bac)
 
     def apply_dres_dcontrol_adj(self, x):
-        # b = self.get_properties_vec()
-        pass
-        bsolid = self.solid.apply_dres_dp_adj(x[:3])
-        bfluid = self.fluid.apply_dres_dp_adj(x[3:])
-        return linalg.concatenate(bsolid, bfluid)
-
+        return self.get_control_vec()
 
 class SolidModel:
     def __init__(self, solid):

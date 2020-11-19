@@ -3,7 +3,7 @@ Implements some basic math operations tha can be used to combine functionals int
 """
 import numpy as np
 from .abstract import AbstractFunctional
-from .basic import Scalar
+# from .basic import Scalar
 
 
 def add(funa, funb):
@@ -174,3 +174,41 @@ class Power(AbstractFunctional):
 
     def eval_dt0(self, f, n):
         return self._power_drule(*self.funcs, 'dt0', f, n)
+
+class Scalar(AbstractFunctional):
+    """
+    Functional that always evaluates to a constant scalar
+    """
+    func_types = ()
+    default_constants = {
+        'value': 0.0
+    }
+
+    def __init__(self, model, val):
+        self._val = val
+        super().__init__(model)
+
+    def eval(self, f):
+        return self._val
+
+    def eval_duva(self, f, n):
+        return self.model.solid.get_state_vec()
+
+    def eval_dqp(self, f, n):
+        return self.model.fluid.get_state_vec()
+
+    def eval_dsolid(self, f):
+        dsolid = self.model.solid.get_properties_vec()
+        dsolid.set(0.0)
+        return dsolid
+
+    def eval_dfluid(self, f):
+        dfluid = self.model.fluid.get_properties_vec()
+        dfluid.set(0.0)
+        return dfluid
+
+    def eval_ddt(self, f, n):
+        return 0.0
+
+    def eval_dt0(self, f, n):
+        return 0.0

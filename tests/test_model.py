@@ -91,6 +91,8 @@ class TestModel(unittest.TestCase):
         b.set(1.0)
         x = model.solve_dres_dstate1(b)
 
+        x = model.solve_dres_dstate1_adj(b)
+
 
 if __name__ == '__main__':
     test = TestModel()

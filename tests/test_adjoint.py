@@ -21,14 +21,17 @@ import matplotlib.pyplot as plt
 import dolfin as dfn
 
 from femvf import statefile as sf, linalg
-from femvf.model import load_fsi_model
-from femvf.forward import integrate
-from femvf.adjoint import adjoint
+
+from femvf.model import load_fsi_model, load_fsai_model
 from femvf.solids import Rayleigh, KelvinVoigt
 from femvf.fluids import Bernoulli
+from femvf.acoustics import WRA
+
+from femvf.forward import integrate
+from femvf.adjoint import adjoint
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import basic, math as fmath
+from femvf.functionals import solid as fsolid, math as fmath
 from femvf import linalg
 
 from femvf.utils import line_search, line_search_p, functionals_on_line_search
@@ -108,6 +111,49 @@ def get_starting_kelvinvoigt_model(coupling='explicit'):
     solid_props['y_collision'][()] = fluid_props['y_midline'] - y_coll_offset
 
     return model, linalg.concatenate(solid_props, fluid_props)
+
+def get_starting_fsai_model(coupling='explicit'):
+    mesh_dir = '../meshes'
+    mesh_base_filename = 'geometry2'
+    mesh_base_filename = 'M5-3layers-refined'
+    mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+
+    ## Configure the model and its parameters
+    acoustic = WRA(44)
+    model = load_fsai_model(mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
+                            coupling='explicit')
+
+    # Set the properties
+    y_gap = 0.01
+    alpha, k, sigma = -3000, 50, 0.002
+
+    fl_props = model.fluid.get_properties_vec(set_default=True)
+    fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    fl_props['alpha'][()] = alpha
+    fl_props['k'][()] = k
+    fl_props['sigma'][()] = sigma
+
+    sl_props = model.solid.get_properties_vec(set_default=True)
+    xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
+    x = xy[:, 0]
+    y = xy[:, 1]
+    x_min, x_max = x.min(), x.max()
+    y_min, y_max = y.min(), y.max()
+    sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+    sl_props['rayleigh_m'][()] = 0
+    sl_props['rayleigh_k'][()] = 4e-3
+    sl_props['k_collision'][()] = 1e11
+    sl_props['y_collision'][()] = fl_props['y_midline'] - y_gap*1/2
+
+    ac_props = model.acoustic.get_properties_vec(set_default=True)
+    ac_props['area'][:] = 4.0
+    ac_props['length'][:] = 12.0
+    ac_props['soundspeed'][:] = 340*100
+
+    props = linalg.concatenate(sl_props, fl_props, ac_props)
+    
+    return model, props
+
 
 def taylor_order(f0, hs, fs, 
                  gstate, gcontrols, gprops, gtimes,
@@ -233,7 +279,7 @@ class AbstractTaylorTest(unittest.TestCase):
 class TestBasicGradient(AbstractTaylorTest):
     COUPLING = 'explicit'
     OVERWRITE_LSEARCH = True
-    FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = fsolid.FinalDisplacementNorm
     # FUNCTIONAL = basic.FinalVelocityNorm
     # FUNCTIONAL = basic.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
@@ -259,6 +305,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
         ## Load the model and set baseline parameters (point the model is linearized around)
         self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
+        # self.model, self.props = get_starting_fsai_model(self.COUPLING)
 
         t_start, t_final = 0, 0.01
         times_meas = np.linspace(t_start, t_final, 128)
@@ -270,7 +317,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
         control = self.model.get_control_vec()
         control['psub'][:] = 800 * PASCAL_TO_CGS
-        control['psup'][:] = 0.0 * PASCAL_TO_CGS
+        # control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
 
         ## Specify the functional to test the gradient with
@@ -398,9 +445,9 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
     COUPLING = 'explicit'
     # COUPLING = 'implicit'
     OVERWRITE_LSEARCH = False
-    # FUNCTIONAL = basic.FinalDisplacementNorm
+    # FUNCTIONAL = fsolid.FinalDisplacementNorm
     # FUNCTIONAL = basic.FinalVelocityNorm
-    FUNCTIONAL = basic.ElasticEnergyDifference
+    FUNCTIONAL = fsolid.ElasticEnergyDifference
     # FUNCTIONAL = basic.PeriodicError
     # FUNCTIONAL = basic.PeriodicEnergyError
     # FUNCTIONAL = basic.TransferEfficiency
@@ -600,7 +647,7 @@ def grad_and_taylor_order_p(filepath, functional, hs, model, p, dp, coupling='ex
 class TestPeriodicKelvinVoigtGradient(AbstractTaylorTest):
     COUPLING = 'explicit'
     OVERWRITE_LSEARCH = False
-    FUNCTIONAL = basic.FinalDisplacementNorm
+    FUNCTIONAL = fsolid.FinalDisplacementNorm
 
     def setUp(self):
         """

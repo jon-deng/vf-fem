@@ -1,8 +1,6 @@
 """
 Adjoint model.
 
-Makes a vocal fold go elggiw elggiw.
-
 I'm using CGS : cm-g-s units
 """
 
@@ -50,24 +48,17 @@ def adjoint(model, f, functional):
     # run the functional once to initialize any cached values
     functional_value = functional(f)
 
-    # Make adjoint forms for sensitivity of parameters
-    solid = model.solid
-
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
-    adj_solid = model.solid.get_properties_vec(set_default=False)
-    adj_solid.set(0.0)
-    adj_fluid = model.fluid.get_properties_vec(set_default=False)
-    adj_fluid.set(0.0)
+    adj_props = model.get_properties_vec()
+    adj_props.set(0.0)
 
     ## Load states/parameters
     N = f.size
     times = f.get_times()
 
     ## Initialize the adj rhs
-    dcost_duva1 = functional.duva(f, N-1)
-    dcost_dqp1 = functional.dqp(f, N-1)
-    adj_state1_rhs = linalg.concatenate(dcost_duva1, dcost_dqp1)
+    adj_state1_rhs = functional.dstate(f, N-1)
 
     ## Loop through states for adjoint computation
     # Note that ii corresponds to the time index of the adjoint state we are solving for.
@@ -92,19 +83,14 @@ def adjoint(model, f, functional):
         adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
 
         # Update gradients wrt parameters using the adjoint
-        adj_p = _solve_grad_solid(model, adj_state1, adj_solid) 
-        adj_solid = adj_p[:len(adj_solid.size)]
+        adj_props[:] = adj_props - model.apply_dres_dp_adj(adj_state1)
 
         adj_dt1 = solve_grad_dt(model, adj_state1) + functional.ddt(f, ii)
         adj_dt.insert(0, adj_dt1)
 
         # Find the RHS for the next iteration
-        dcost_duva0 = functional.duva(f, ii-1)
-        dcost_dqp0 = functional.dqp(f, ii-1)
-        dcost_dstate0 = linalg.concatenate(dcost_duva0, dcost_dqp0)
-
-        # adj_state0_rhs = solve_adj_rhs(model, adj_state1, dcost_dstate0, iter_params1)
-        adj_state0_rhs = _solve_adj_rhs(model, adj_state1, dcost_dstate0)
+        dcost_dstate0 = functional.dstate(f, ii-1)
+        adj_state0_rhs = dcost_dstate0 - model.apply_dres_dstate0_adj(adj_state1)
 
         # Set initial states to the previous states for the start of the next iteration
         adj_state1_rhs = adj_state0_rhs
@@ -114,16 +100,9 @@ def adjoint(model, f, functional):
 
     # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
     # components once
-    dfunc_dsolid = functional.dsolid(f)
-    grad_solid = adj_solid + dfunc_dsolid
+    grad_props = adj_props + functional.dprops(f)
 
-    dfunc_dfluid = functional.dfluid(f)
-    grad_fluid = adj_fluid + dfunc_dfluid
-
-    grad_props = linalg.concatenate(grad_solid, grad_fluid)
-
-    ## Calculate gradients
-    grad_controls = None
+    grad_controls = model.get_control_vec()
 
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)

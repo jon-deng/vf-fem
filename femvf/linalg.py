@@ -661,7 +661,7 @@ class BlockVec:
             assert isinstance(value, BlockVec)
             assert self.size[key] == value.size
             
-            for vec, val in zip(self.vecs[key], value.vecs):
+            for vec, val, name in zip(self.vecs[key], value.vecs, self.keys[key]):
                 vec[:] = val
         else:
             raise TypeError(f"`{key}` must be either str, int or slice")

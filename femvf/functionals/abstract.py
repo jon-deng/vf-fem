@@ -93,39 +93,12 @@ class AbstractFunctional:
         return self._value
 
     @update_cache
-    def duva(self, f, n):
-        """
-        Return dg/d(u, v, a)
-
-        Parameters
-        ----------
-        n : int
-            Index of state
-        f : statefile.StateFile
-            The history of states to compute it over
-        """
-        return self.eval_duva(f, n)
+    def dstate(self, f, n):
+        return self.eval_dstate(f, n)
 
     @update_cache
-    def dqp(self, f, n):
-        """
-        Return dg/d(q, p)
-        """
-        return self.eval_dqp(f, n)
-
-    @update_cache
-    def dsolid(self, f):
-        """
-        Return dg/dsolid_paramters
-        """
-        return self.eval_dsolid(f)
-
-    @update_cache
-    def dfluid(self, f):
-        """
-        Return dg/dfluid_parameters
-        """
-        return self.eval_dfluid(f)
+    def dprops(self, f):
+        return self.eval_dprops(f)
 
     @update_cache
     def ddt(self, f, n):
@@ -148,7 +121,7 @@ class AbstractFunctional:
         """
         raise NotImplementedError("`eval` must be implemented")
 
-    def eval_duva(self, f, n):
+    def eval_dstate(self, f, n):
         """
         Return dg/d(u, v, a)
 
@@ -168,35 +141,9 @@ class AbstractFunctional:
         """
         raise NotImplementedError("`eval_duva` must be implemented")
 
-    def eval_dqp(self, f, n):
-        """
-        Return dg/d(q, p)
-
-        Parameters
-        ----------
-        n : int
-            Index of state
-        f : statefile.StateFile
-            The history of states to compute it over
-        iter_params0, iter_params1 : dict
-            Dictionary of parameters that specify iteration n. These are parameters fed into
-            `model.ForwardModel.set_iter_params` with signature:
-            `(uva0=None, dt=None, u1=None, solid_props=None, fluid_props=None)`
-
-            `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
-            at `n+0`.
-        """
-        raise NotImplementedError("You have to implement this")
-
-    def eval_dsolid(self, f):
+    def eval_dprops(self, f):
         """
         Return the dg/dsolidparameters
-        """
-        raise NotImplementedError("`eval_dt0` must be implemented")
-
-    def eval_dfluid(self, f):
-        """
-        Return the dg/dfluidparameters
         """
         raise NotImplementedError("`eval_dt0` must be implemented")
 
@@ -211,29 +158,3 @@ class AbstractFunctional:
         Return the dg/ddt
         """
         raise NotImplementedError("`eval_ddt` must be implemented")
-
-    # def __add__(self, other):
-
-    # def __sub__(self, other):
-
-    # def __mul__(self, other):
-
-    # def __truediv__(self, other):
-
-    # def __pow__(self, other):
-
-    # def __radd__(self, other):
-    #     return NotImplementedError("")
-
-    # def __rsub__(self, other):
-    #     return NotImplementedError("")
-
-    # def __rmul__(self, other):
-    #     return NotImplementedError("")
-
-    # def __rtruediv__(self, other):
-    #     return NotImplementedError("")
-
-    # def __neg__(self):
-
-    # def __pos__(self):

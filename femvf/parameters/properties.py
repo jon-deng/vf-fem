@@ -46,8 +46,8 @@ def property_size(field_size, prop_type):
 
     # Interpret properties with 1 element as '0-D' np.ndarray
     # TODO: I'm not sure if this is a good choice or not
-    if shape == (1,):
-        shape = ()
+    # if shape == (1,):
+    #     shape = ()
     return shape
 
 def property_vecs(field_size, prop_types, prop_defaults=None):

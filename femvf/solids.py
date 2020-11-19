@@ -195,8 +195,6 @@ class Solid:
         for label in labels:
             coefficient = self.forms['coeff.prop.'+label]
 
-            # If the property is a field variable, values have to be assigned to every spot in
-            # the vector
             vec = None
             if isinstance(coefficient, dfn.function.constant.Constant):
                 vec = np.ones(1)
@@ -209,16 +207,6 @@ class Solid:
             vecs.append(vec)
 
         return BlockVec(vecs, labels)
-
-        # field_size = self.scalar_fspace.dim()
-
-        # prop_defaults = None
-        # if set_default:
-        #     prop_defaults = self.PROPERTY_DEFAULTS
-
-        # vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
-
-        # return BlockVec(vecs, labels)
     
     def set_ini_state(self, uva0):
         """
@@ -337,7 +325,29 @@ class Solid:
         dfn.solve(dfu2_du2, x['u'], adj_u_rhs, 'petsc')
         return x
 
-    # @profile
+    def apply_dres_dstate0_adj(self, x):
+        dt = self.dt
+
+        dfu2_du1 = self.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
+        dfu2_dv1 = self.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
+        dfu2_da1 = self.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
+
+        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
+        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
+        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
+        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
+        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
+        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
+
+        ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
+        # Allocate a vector the for fluid side mat-vec multiplication
+        b = x.copy()
+        b['u'][:] = (dfu2_du1*x['u'] + dfv2_du1*x['v'] + dfa2_du1*x['a'])
+        b['v'][:] = (dfu2_dv1*x['u'] + dfv2_dv1*x['v'] + dfa2_dv1*x['a'])
+        b['a'][:] = (dfu2_da1*x['u'] + dfv2_da1*x['v'] + dfa2_da1*x['a'])
+
+        return b
+
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
         # breakpoint()
