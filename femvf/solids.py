@@ -178,6 +178,7 @@ class Solid:
         """
         return NotImplementedError("Subclasses must implement this function")
 
+    ## Functions for getting empty parameter vectors
     def get_state_vec(self):
         u = dfn.Function(self.vector_fspace).vector()
         v = dfn.Function(self.vector_fspace).vector()
@@ -208,6 +209,7 @@ class Solid:
 
         return BlockVec(vecs, labels)
     
+    ## Parameter setting functions
     def set_ini_state(self, uva0):
         """
         Sets the initial state variables, (u, v, a)
@@ -262,25 +264,7 @@ class Solid:
             else:
                 coefficient.vector()[:] = props[key]
 
-    def set_iter_params(self, uva1, uva0, p1, p0, dt, props):
-        """
-        Sets all coefficient values to solve the model
-
-        Parameters
-        ----------
-        uva1, uva0 : tuple of array_like
-        p1, p0 : array_like
-        dt : float
-        props : dict_like
-        """
-        self.set_ini_state(uva0)
-        self.set_fin_state(uva1)
-
-        self.set_control(p1)
-
-        self.set_properties(props)
-        self.dt = dt
-
+    ## Solver functions
     def assem(self, form_name):
         """
         Assembles the form given by label `form_name`
@@ -292,7 +276,18 @@ class Solid:
         else:
             raise ValueError(f"`{form_name}` is not a valid form label")
 
-    ## Solver functions
+    def res(self):
+        dt = self.dt
+        u1, v1, a1 = self.u1.vector(), self.v1.vector(), self.a1.vector()
+        u0, v0, a0 = self.u0.vector(), self.v0.vector(), self.a0.vector()
+
+        res = self.get_state_vec()
+        res['u'] = dfn.assemble(self.forms['form.un.f1'])
+        self.bc_base.apply(res['u'])
+        res['v'] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
+        res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
+        return res
+
     def solve_state1(self, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
@@ -307,6 +302,23 @@ class Solid:
         uva1['a'][:] = newmark.newmark_a(uva1['u'], *self.state0.vecs, dt)
         return uva1, {}
 
+    def solve_dres_dstate1(self, b):
+        dt = self.dt
+        dfu2_du2 = dfn.assemble(self.forms['form.bi.df1_du1'])
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
+
+        x = self.get_state_vec()
+        bu, bv, ba = b.vecs
+
+        self.bc_base.apply(dfu2_du2)
+        dfn.solve(dfu2_du2, x['u'], bu, 'petsc')
+
+        x['v'][:] = bv - dfv2_du2*x['u']
+        x['a'][:] = ba - dfa2_du2*x['u']
+        
+        return x
+        
     def solve_dres_dstate1_adj(self, b):
         dt = self.dt
         dfu2_du2 = self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()

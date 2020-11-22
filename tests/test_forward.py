@@ -146,6 +146,7 @@ class TestForward(unittest.TestCase):
 
     def test_integrate(self):
         model, ini_state, controls, props = self.config_fsai_model()
+        # model, ini_state, controls, props = self.config_fsi_model()
 
         times = np.linspace(0, 0.01, 100)
 

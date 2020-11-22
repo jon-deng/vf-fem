@@ -151,16 +151,11 @@ class FSIModel:
         """
         self.solid.set_fin_state(uva1)
 
-        fl_control = self.fluid.get_control_vec()
+        fl_control = self.fluid.control.copy()
         
         fsi_ref_config = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
         fsi_vdofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
         fl_control = sl_state_to_fl_control(uva1, fl_control, fsi_ref_config, fsi_vdofs)
-        
-        # u1_fluid = fsi_ref_config + self.map_fsi_vector_from_solid_to_fluid(uva1[0])
-        # v1_fluid = self.map_fsi_vector_from_solid_to_fluid(uva1[1])
-        # fl_control['usurf'][:] = u1_fluid
-        # fl_control['vsurf'][:] = v1_fluid
         self.fluid.set_control(fl_control)
 
     ## Methods for settings parameters of the model
@@ -228,9 +223,14 @@ class FSIModel:
         if update_props:
             self.set_properties(f.get_properties())
 
-        state0 = f.get_state(n)
-        control0 = f.get_control(n)
-        self.set_ini_params(state0, control0)
+        state = f.get_state(n)
+        control = None
+        if f.variable_controls:
+            control = f.get_control(n)
+        else:
+            control = f.get_control(0)
+        self.set_fin_state(state)
+        self.set_control(control)
 
     def set_iter_params_fromfile(self, f, n, update_props=True):
         """
@@ -253,10 +253,15 @@ class FSIModel:
             self.set_properties(f.get_properties())
 
         state0 = f.get_state(n-1)
-        control0 = f.get_control(n-1)
-
         state1 = f.get_state(n)
-        control1 = f.get_control(n)
+
+        control0, control1 = None, None
+        if f.variable_controls:
+            control0 = f.get_control(n-1)
+            control1 = f.get_control(n)
+        else:
+            control0 = f.get_control(0)
+            control1 = f.get_control(0)
 
         dt = f.get_time(n) - f.get_time(n-1)
 
@@ -390,7 +395,9 @@ class FSIModel:
         return linalg.concatenate(self.solid.get_state_vec(), self.fluid.get_state_vec())
 
     def get_control_vec(self):
-        return self.control.copy()
+        ret = self.control.copy()
+        ret.set(0.0)
+        return ret
 
     def get_properties_vec(self):
         return linalg.concatenate(self.solid.get_properties_vec(), self.fluid.get_properties_vec())
@@ -928,7 +935,10 @@ class FSAIModel(FSIModel):
 
     ## Solver methods
     def res(self):
-        raise NotImplementedError("Didn't do this yet")
+        res_sl = self.solid.res()
+        res_fl = self.fluid.res()
+        res_ac = self.acoustic.res()
+        return linalg.concatenate(res_sl, res_fl, res_ac)
 
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
@@ -944,26 +954,36 @@ class FSAIModel(FSIModel):
         fluid_info, num_it = None, 0 
         fl_state1, ac_state1 = None, None
         abserr_max, relerr_max = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
-        abserr, relerr = 1.0, 1.0
-        while abserr > abserr_max and relerr > relerr_max and num_it < 15:
-            # do one fixed-point iteration
-            fl_state1, fluid_info = self.fluid.solve_qp1()
+        abserr_prev, abserr, relerr = 0.0, 1.0, 1.0
 
+        ## Solve the coupled fluid/acoustic system with a fixed point iteration:
+        # solve fluids -> solve acoustics with updated fluids -> compute error in fluid and repeat if necessary
+        fl_state1, fluid_info = self.fluid.solve_qp1()
+        while abserr > abserr_max and relerr > relerr_max and num_it < 15:
             self.set_fin_fluid_state(fl_state1)
 
             ac_state1, _ = self.acoustic.solve_state1()
-
             self.set_fin_acoustic_state(ac_state1)
+            print(linalg.dot(ac_state1, ac_state1))
 
-            # compute the error/residual. The acoustic equations is updated last so 
-            # it should have zero residual
-            fl_res = fl_state1 - self.fluid.solve_qp1()[0]
-            err = linalg.dot(fl_res, fl_res)
-            relerr = err - abserr
-            abserr = err
+            # compute the error/residual. The acoustic equations were solved previously so the residual is 
+            # due only to the fluid
+            fl_state1_new = self.fluid.solve_qp1()[0]
+            fl_res = fl_state1 - fl_state1_new
+            fl_state1 = fl_state1_new
+
+            abserr = linalg.dot(fl_res, fl_res)
+            relerr = abs(abserr - abserr_prev) / abserr
+            abserr_prev = abserr
+            print(abserr, relerr)
+            # print(fl_res['q'], fl_res['p'])
             num_it += 1
+        print("Iteration finished. Stats:")
+        # print(abserr, abserr_max)
+        # print(relerr, relerr_max)
+        # print(num_it, '\n')
 
-        step_info = {'fluid_info': fluid_info, 'num_it': num_it}
+        step_info = {'fluid_info': fluid_info, 'num_it': num_it, 'abserr': abserr, 'relerr': relerr}
 
         return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
 
@@ -972,7 +992,8 @@ class FSAIModel(FSIModel):
 
         ## Solve the coupled fluid/acoustic system 
         # First compute some sensitivities that are needed
-        _, _, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+        *_, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+        
         # solve the coupled system for pressure and acoustic residuals
         dfq_dq = 1.0
         dfp_dp = 1.0
@@ -982,16 +1003,17 @@ class FSAIModel(FSIModel):
         dfpinc_dpinc.setDiagonal(diag)
         dfpref_dpref = 1.0
 
+        # dfluid / dacoustic
         dfq_dpref = PETSc.Mat().createAIJ((b['q'].size, b['pref'].size), nnz=1)
         dfq_dpsup = -dq_dpsup
         dpsup_dpref = 1.0 # Supraglottal pressure is equal to very first reflected pressure
         dfq_dpref.setValue(0, 0, dfq_dpsup*dpsup_dpref)
 
         dfp_dpref = PETSc.Mat().createAIJ((b['p'].size, b['pref'].size), nnz=b['p'].size)
-        dfp_psup = -dp_dpsup
-        dfp_dpref.setValues(np.arange(b['p'].size, dtype=np.int32), 0, dfp_psup*dpsup_dpref)
+        dfp_dpsup = -dp_dpsup
+        dfp_dpref.setValues(np.arange(b['p'].size, dtype=np.int32), 0, dfp_dpsup*dpsup_dpref)
 
-        # dfpinc_dq = PETSc.Mat.createAIJ((b['pinc'].size, b['q'].size), nnz=0.0)
+        # dacoustic / dfluid
         dfpref_dq = PETSc.Mat().createAIJ((b['pref'].size, b['q'].size), nnz=2)
         dcontrol = self.acoustic.get_control_vec()
         dcontrol.set(0.0)
@@ -1002,6 +1024,7 @@ class FSAIModel(FSIModel):
 
         for mat in (dfq_dpref, dfp_dpref, dfpref_dq):
             mat.assemble()
+        # breakpoint()
 
         blocks = [[   dfq_dq,    0.0,          0.0,    dfq_dpref], 
                   [      0.0, dfp_dp,          0.0,    dfp_dpref],
@@ -1009,33 +1032,31 @@ class FSAIModel(FSIModel):
                   [dfpref_dq,    0.0,          0.0, dfpref_dpref]]
 
         A = linalg.form_block_matrix(blocks)
+        # breakpoint()
         return A
 
     def solve_dres_dstate1(self, b):
         """
         Solve, dF/du x = f
         """
-        dt = self.solid.dt
         x = self.get_state_vec()
+        ## Assmeble any needed sensitivity matrices
+        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
+        dfq2_du2 = 0 - dq_du
+        dfp2_du2 = 0 - dp_du
 
-        ## Solve the solid system portion 
-        solid = self.solid
-
-        dfu1_du1 = dfn.assemble(solid.df1_du1)
-        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-
-        self.solid.bc_base.apply(dfu1_du1)
-        dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
-        x['v'][:] = b['v'] - dfv2_du2*x['u']
-        x['a'][:] = b['a'] - dfa2_du2*x['u']
+        ## Solve the solid system portion
+        x[:3] = self.solid.solve_dres_dstate1(b[:3])
 
         ## Solve the coupled fluid/acoustic system 
         A = self._form_dflac_dflac()
         adj_z, rhs = A.getVecs()
 
         # Get only the q, p, pinc, pref (fluid/acoustic) portions of the residual
-        rhs[:] = b[3:].to_ndarray()
+        b_flac = b[3:].copy()
+        b_flac['q'] -= (dfq2_du2*x['u']).sum()
+        b_flac['p'] -= dfp2_du2*x['u'].vec()
+        rhs[:] = b_flac.to_ndarray()
 
         ksp = PETSc.KSP().create()
         ksp.setType(ksp.Type.PREONLY)
@@ -1047,7 +1068,7 @@ class FSAIModel(FSIModel):
         ksp.solve(rhs, adj_z)
 
         x[3:].set_vec(adj_z)
-        print(linalg.dot(x[3:], x[3:]))
+        # print(linalg.dot(x[3:], x[3:]))
 
         return x
 
@@ -1056,7 +1077,6 @@ class FSAIModel(FSIModel):
         """
         Solve, dF/du^T x = f
         """
-        dt = self.solid.dt
         x = self.get_state_vec()
 
         ## Solve the coupled fluid/acoustic system first
@@ -1211,7 +1231,7 @@ def fl_state_to_sl_control(fl_state, sl_control, fsi_sdofs):
     return sl_control
 
 def ac_state_to_fl_control(ac_state, fl_control):
-    fl_control['psup'][:] = ac_state['pinc'][1] + ac_state['pref'][1]
+    fl_control['psup'] = ac_state['pref'][0]
     return fl_control
 
 def fl_state_to_ac_control(fl_state, ac_control):

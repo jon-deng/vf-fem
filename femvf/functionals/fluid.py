@@ -25,6 +25,7 @@ import scipy.signal as sig
 
 from .abstract import AbstractFunctional
 from ..fluids import QuasiSteady1DFluid, smoothmin, dsmoothmin_df
+from .. import linalg
 
 class FluidFunctional(AbstractFunctional):
     """
@@ -52,13 +53,15 @@ class FluidFunctional(AbstractFunctional):
         return linalg.concatenate(*vecs)
 
     def eval_dprops(self, f):
-        vecs = [self.model.solid.get_properties_vec(), self.eval_dfl_props(f)]
+        dsolid = self.model.solid.get_properties_vec()
+        dsolid.set(0.0)
+        vecs = [dsolid, self.eval_dfl_props(f)]
 
         if hasattr(self.model, 'acoustic'):
             vecs.append(self.model.acoustic.get_properties_vec())
         return linalg.concatenate(*vecs)
 
-class FinalSurfacePressureNorm(FluidFunctional):
+class FinalPressureNorm(FluidFunctional):
     r"""
     Return the l2 norm of pressure at the final time
 
@@ -68,18 +71,17 @@ class FinalSurfacePressureNorm(FluidFunctional):
     default_constants = {}
 
     def eval(self, f):
-        self.model.set_params_fromfile(f, f.size-1)
-        # self.forms['pressure'].vector()[:] = f.get_fluid_state(f.size-1)[0]
+        # self.model.set_params_fromfile(f, f.size-1)
+        state = f.get_state(f.size-1)
 
-        return dfn.assemble(self.forms['res'])
+        return np.linalg.norm(state['p'])**2
 
     def eval_dfl_state(self, f, n):
         dqp = self.fluid.get_state_vec()
 
         if n == f.size-1:
-            self.model.set_params_fromfile(f, f.size-1)
-            dqp['p'][:] = dfn.assemble(self.forms['dres_dpressure'],
-                                       tensor=dfn.PETScVector())
+            state = f.get_state(n)
+            dqp['p'][:] = 2*state['p']
 
         return dqp
 
@@ -99,15 +101,15 @@ class FinalFlowRateNorm(FluidFunctional):
     func_types = ()
 
     def eval(self, f):
-        qp = f.get_fluid_state(f.size-1)
+        qp = f.get_state(f.size-1)[3:5]
 
-        return qp[0]**2
+        return qp['q'][0]**2
 
     def eval_dfl_state(self, f, n):
         dqp = self.fluid.get_state_vec()
 
         if n == f.size-1:
-            qp = f.get_fluid_state(n)
+            qp = f.get_state(n)[3:5]
             dqp['q'][:] = 2*qp[0]
 
         return dqp

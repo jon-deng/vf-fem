@@ -59,27 +59,26 @@ def adjoint(model, f, functional):
 
     ## Initialize the adj rhs
     adj_state1_rhs = functional.dstate(f, N-1)
-
+    
     ## Loop through states for adjoint computation
     # Note that ii corresponds to the time index of the adjoint state we are solving for.
     # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
     for ii in range(N-1, 0, -1):
+        ## Set the properties of the system to that of the `ii` iteration
         # Properties at index 2 through 1 were loaded during initialization, so we only need to read
         # index 0
+        dt1 = times[ii] - times[ii-1]
         state0, state1 = f.get_state(ii-1), f.get_state(ii)
         if variable_controls:
-            control0, control1 = f.get_control(ii-1), f.get_control(ii)
+            control1 = f.get_control(ii)
 
-        dt1 = times[ii] - times[ii-1]
-
-        # All the calculations are based on the state of the model at iter_params1, so you only have
-        # to set it once here
         model.set_ini_state(state0)
         model.set_fin_state(state1)
         model.set_control(control1)
         model.dt = dt1
 
-        # adj_state1 = solve_adj(model, adj_state1_rhs, iter_params1)
+        ## Do the adjoint calculations
+        # breakpoint()
         adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
 
         # Update gradients wrt parameters using the adjoint
@@ -92,7 +91,6 @@ def adjoint(model, f, functional):
         dcost_dstate0 = functional.dstate(f, ii-1)
         adj_state0_rhs = dcost_dstate0 - model.apply_dres_dstate0_adj(adj_state1)
 
-        # Set initial states to the previous states for the start of the next iteration
         adj_state1_rhs = adj_state0_rhs
 
     ## Calculate gradients
@@ -114,11 +112,6 @@ def adjoint(model, f, functional):
 
     return functional_value, grad_state, grad_controls, grad_props, grad_times
 
-def _solve_grad_solid(model, adj_state1, grad_solid):
-    bsize = len(model.solid.get_properties_vec().size)
-    adj_solid = model.apply_dres_dp_adj(adj_state1)[:bsize]
-    return grad_solid - adj_solid 
-
 def solve_grad_dt(model, adj_state1):
     """
     Calculate the gradient wrt dt
@@ -135,11 +128,3 @@ def solve_grad_dt(model, adj_state1):
     adj_u1, adj_v1, adj_a1 = adj_state1[:3]
     adj_dt1 = -(dfu1_ddt*adj_u1).sum() - dfv1_ddt.inner(adj_v1) - dfa1_ddt.inner(adj_a1)
     return adj_dt1
-
-def _solve_adj(model, adj_rhs, out=None):
-    adj = model.solve_dres_dstate1_adj(adj_rhs)
-    return adj
-
-def _solve_adj_rhs(model, adj_state2, dcost_dstate1, out=None):
-    b = model.apply_dres_dstate0_adj(adj_state2)
-    return dcost_dstate1 - b

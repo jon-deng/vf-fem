@@ -13,7 +13,7 @@ from femvf.acoustics import WRA
 from femvf.constants import PASCAL_TO_CGS
 from femvf import linalg
 
-class TestModel(unittest.TestCase):
+class TestFSAIModel(unittest.TestCase):
     def setUp(self):
         """
         Set the solid mesh
@@ -83,18 +83,114 @@ class TestModel(unittest.TestCase):
         
         return model, ini_state, controls, props
 
+    def test_apply_dres_dstate1(self):
+        model, ini_state, controls, props = self.config_fsai_model()
+        model.set_properties(props)
+
+        fin_state = ini_state.copy()
+
+        dx_fd = model.get_state_vec()
+        dx_fd.set(0.0)
+        # dx_fd['u'] = 0.0
+        dx_fd['q'] = 1e-2
+        # dx_fd['p'][:] = 1e-2
+        # dx_fd['pinc'][:] = 1e-2
+        # dx_fd['pref'][:] = 1e-2
+        model.solid.bc_base.apply(dx_fd['u'])
+
+        breakpoint()
+        model.set_fin_state(fin_state)
+        res0 = model.res()
+
+        model.set_fin_state(fin_state + dx_fd)
+        res1 = model.res()
+        dres = res1-res0
+
+        model.set_fin_state(fin_state)
+        dx = model.solve_dres_dstate1(dres)
+        print(f"||dres|| = {linalg.dot(dres, dres)}")
+        print(f"||dx|| = {linalg.dot(dx, dx)}")
+        print(f"||dx_fd|| = {linalg.dot(dx_fd, dx_fd)}")
+        for name in ('u', 'v', 'a'):
+            print(name, dx[name].norm('l2'), dx_fd[name].norm('l2'))
+
+        for name in ('q', 'p', 'pinc', 'pref'):
+            print(name, np.linalg.norm(dx[name]), np.linalg.norm(dx_fd[name]))
+        breakpoint()
+
     def test_solve_dres_dstate1(self):
         model, ini_state, controls, props = self.config_fsai_model()
         model.set_properties(props)
 
-        b = model.get_state_vec()
-        b.set(1.0)
-        x = model.solve_dres_dstate1(b)
+        fin_state = ini_state.copy()
 
-        x = model.solve_dres_dstate1_adj(b)
+        dx_fd = model.get_state_vec()
+        dx_fd.set(0.0)
+        # dx_fd['u'] = 0.0
+        # dx_fd['q'] = 1e-2
+        # dx_fd['p'] = 1e-2
+        # dx_fd['pref'][:2] = 1e-2
+        model.solid.bc_base.apply(dx_fd['u'])
 
+        model.set_fin_state(fin_state)
+        res0 = model.res()
+
+        model.set_fin_state(fin_state + dx_fd)
+        breakpoint()
+        res1 = model.res()
+        dres = res1-res0
+
+        model.set_fin_state(fin_state)
+        dx = model.solve_dres_dstate1(dres)
+        print(f"||dres|| = {linalg.dot(dres, dres)}")
+        print(f"||dx|| = {linalg.dot(dx, dx)}")
+        print(f"||dx_fd|| = {linalg.dot(dx_fd, dx_fd)}")
+        for name in ('u', 'v', 'a'):
+            print(name, dx[name].norm('l2'), dx_fd[name].norm('l2'))
+
+        for name in ('q', 'p', 'pinc', 'pref'):
+            print(name, np.linalg.norm(dx[name]), np.linalg.norm(dx_fd[name]))
+        breakpoint()
+
+class TestAcoustic(unittest.TestCase):
+
+    def setUp(self):
+        self.model = WRA(12)
+
+    def test_res(self):
+        pass
+
+    def test_apply_dres_dcontrol(self):
+        ## Set the linearization point
+        state0 = self.model.get_state_vec() 
+        state1 = self.model.get_state_vec()
+        control_ = self.model.get_control_vec()
+        props = self.model.get_properties_vec()
+
+        state0['pref'][:] = 1
+        self.model.set_ini_state(state0)
+        self.model.set_fin_state(state1)
+        self.model.set_control(control_)
+        self.model.set_properties(props)
+
+        dcontrol = self.model.get_control_vec()
+        dcontrol['qin'] = 2.0
+
+        dres = self.model.apply_dres_dcontrol(dcontrol)
+
+        res0 = self.model.res()
+        self.model.set_control(control_ + dcontrol)
+        res1 = self.model.res()
+        dres_fd = res1-res0
+
+        print(dres.to_ndarray())
+        print(dres_fd.to_ndarray())
 
 if __name__ == '__main__':
-    test = TestModel()
+    test = TestFSAIModel()
     test.setUp()
-    test.test_solve_dres_dstate1()
+    test.test_apply_dres_dstate1()
+
+    # test = TestAcoustic()
+    # test.setUp()
+    # test.test_apply_dres_dcontrol()

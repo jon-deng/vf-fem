@@ -31,7 +31,7 @@ from femvf.forward import integrate
 from femvf.adjoint import adjoint
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import solid as fsolid, math as fmath
+from femvf.functionals import solid as fsolid, fluid as ffluid, math as fmath
 from femvf import linalg
 
 from femvf.utils import line_search, line_search_p, functionals_on_line_search
@@ -165,6 +165,7 @@ def taylor_order(f0, hs, fs,
 
     grad_step = linalg.dot(directions, gradients)
     grad_step_fd = (fs - f0)/hs
+    # breakpoint()
 
     ## Compare the adjoint and finite difference gradients projected on the step direction
     remainder_1 = np.abs(fs - f0)
@@ -227,9 +228,9 @@ class AbstractTaylorTest(unittest.TestCase):
                 dstate, dcontrols, dprops, dtimes, filepath=lsearch_fname)
         else:
             print("Using existing files")
-    
+
         fs = functionals_on_line_search(hs, self.functional, self.model, lsearch_fname)
-        # print(fs)
+        assert not np.all(fs == self.f0) # Make sure that f changes along the step direction
 
         ## Compute the taylor convergence order
         gstate, gcontrols, gprops, gtimes = self.grads
@@ -245,7 +246,7 @@ class AbstractTaylorTest(unittest.TestCase):
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
         
-
+        breakpoint()
         return (order_1, order_2)
 
     def plot_taylor_convergence(self, grad_on_step_dir, h, g):
@@ -280,18 +281,8 @@ class TestBasicGradient(AbstractTaylorTest):
     COUPLING = 'explicit'
     OVERWRITE_LSEARCH = True
     FUNCTIONAL = fsolid.FinalDisplacementNorm
-    # FUNCTIONAL = basic.FinalVelocityNorm
-    # FUNCTIONAL = basic.ElasticEnergyDifference
-    # FUNCTIONAL = basic.PeriodicError
-    # FUNCTIONAL = basic.PeriodicEnergyError
-    # FUNCTIONAL = basic.SubglottalWork
-    # FUNCTIONAL = basic.TransferWorkbyDisplacementIncrement
-    # FUNCTIONAL = basic.TransferWorkbyVelocityl
-    # FUNCTIONAL = basic.FinalFlowRateNorm
-    # FUNCTIONAL = basic.TransferEfficiency
-    # FUNCTIONAL = basic.AcousticPower
-    # FUNCTIONAL = basic.AcousticEfficiency
-    # FUNCTIONAL = basic.KVDampingWork
+    # FUNCTIONAL = fsolid.FinalVelocityNorm
+    FUNCTIONAL = ffluid.FinalPressureNorm
 
     def setUp(self):
         """
@@ -444,15 +435,11 @@ class TestBasicGradient(AbstractTaylorTest):
 class TestBasicGradientSingleStep(AbstractTaylorTest):
     COUPLING = 'explicit'
     # COUPLING = 'implicit'
-    OVERWRITE_LSEARCH = False
+    OVERWRITE_LSEARCH = True
+    # FUNCTIONAL = fsolid.FinalVelocityNorm
     # FUNCTIONAL = fsolid.FinalDisplacementNorm
-    # FUNCTIONAL = basic.FinalVelocityNorm
-    FUNCTIONAL = fsolid.ElasticEnergyDifference
-    # FUNCTIONAL = basic.PeriodicError
-    # FUNCTIONAL = basic.PeriodicEnergyError
-    # FUNCTIONAL = basic.TransferEfficiency
-    # FUNCTIONAL = basic.SubglottalWork
-    # FUNCTIONAL = basic.FinalFlowRateNorm
+    FUNCTIONAL = ffluid.FinalPressureNorm
+    # FUNCTIONAL = ffluid.FinalFlowRateNorm
 
     def setUp(self):
         """
@@ -464,25 +451,33 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
         self.CASE_NAME = 'singlestep'
 
         ## parameter set
-        self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
+        # self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
+        self.model, self.props = get_starting_fsai_model(self.COUPLING)
         self.model.set_properties(self.props)
 
         t_start, t_final = 0, 0.001
         times_meas = np.linspace(t_start, t_final, 2)
+
+        # t_start, t_final = 0, 0.002
+        # times_meas = np.linspace(t_start, t_final, 3)
         self.times = times_meas
 
         control = self.model.get_control_vec()
         uva0 = self.model.solid.get_state_vec()
+        uva0['v'][:] = 0.0
+        self.model.solid.bc_base.apply(uva0['v'])
         self.model.set_ini_solid_state(uva0)
 
         control['psub'][:] = 800 * PASCAL_TO_CGS
-        control['psup'][:] = 0.0 * PASCAL_TO_CGS
+        # control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
-        self.model.set_ini_control(control)
+        self.model.set_control(control)
 
-        qp0, _ = self.model.fluid.solve_qp0()
+        self.model.set_fin_solid_state(uva0)
+        qp0, _ = self.model.fluid.solve_qp1()
 
-        self.state0 = linalg.concatenate(uva0, qp0)
+        self.state0 = self.model.get_state_vec()
+        self.state0[3:5] = qp0
     
         # Step sizes and scale factor
         self.functional = self.FUNCTIONAL(self.model)
@@ -746,107 +741,22 @@ class TestPeriodicKelvinVoigtGradient(AbstractTaylorTest):
         # self.assertTrue(np.all(order_1 == 1.0))
         # self.assertTrue(np.all(order_2 == 2.0))
 
-
-class TestResidualJacobian(unittest.TestCase):
-    """
-    Tests if jacobians of residuals are correct
-    """
-    def test_df1_dstate1_implicit(self):
-        np.random.seed(0)
-
-        # Set up the parameters and objects needed for the iteration
-        model, sp, fp = get_starting_kelvinvoigt_model()
-        model.set_solid_props(sp)
-        model.set_fluid_props(fp)
-        uva0 = tuple([dfn.Function(model.solid.vector_fspace).vector() for i in range(3)])
-        model.set_ini_solid_state(*uva0)
-        q0, p0, _ = model.get_pressure()
-        qp0 = (q0, p0)
-        dt = 1e-3
-
-        # Set state change directions du1, dp1
-        du1 = dfn.Function(model.solid.vector_fspace).vector()
-        # _du1 = np.array(du1[:])
-        # _du1[:20] = 1e-5
-        # du1[:] = _du1
-        du1[:] = np.random.rand(du1.size())*1e-5
-        model.solid.bc_base.apply(du1)
-
-        dp1 = np.random.rand(qp0[1].size)
-        dp1 = np.ones(qp0[1].size)*1e-4
-
-        # Find the state at 1 so you can linearize about this point
-        state1 = model.solve_state1(model, state0)
-        # uva1, qp1, _ = implicit_increment(model, uva0, qp0, dt)
-
-        # Set up the block matrix dFup_dup_adj and dFup_dup
-        model.set_iter_params(uva0=uva0, dt=dt, uva1=uva1, qp1=qp1)
-        dfu_du_adj = model.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-        model.solid.bc_base.apply(dfu_du_adj)
-        dfu_du_adj = dfn.as_backend_type(dfu_du_adj).mat()
-
-        dfu_dp_adj = dfn.as_backend_type(dfn.assemble(model.solid.forms['form.bi.df1_dpressure_adj'])).mat()
-        solid_dofs, fluid_dofs = model.get_fsi_scalar_dofs()
-        dfu_dp_adj = linalg.reorder_mat_rows(dfu_dp_adj, solid_dofs, fluid_dofs, fluid_dofs.size)
-
-        _, dp_du = model.get_flow_sensitivity_solid_ord(adjoint=True)
-        dfp_du_adj = 0.0 - dp_du
-
-        blocks = [[dfu_du_adj, dfp_du_adj],
-                  [dfu_dp_adj,        1.0]]
-        dfup_dup_adj = linalg.form_block_matrix(blocks)
-
-        # Calculate the linear change in residual using the residual jacobian
-        dup, dres_jac = dfup_dup_adj.getVecs()
-        dup[:du1.size()] = du1
-        dup[du1.size():] = dp1
-        dfup_dup_adj.multTranspose(dup, dres_jac)
-
-        dres_u, dres_p = du1.copy(), dp1.copy()
-        dres_u[:] = dres_jac[:du1.size()]
-        dres_p[:] = dres_jac[du1.size():]
-        model.solid.bc_base.apply(dres_u)
-
-        # Calculate residuals at up1
-        model.set_iter_params(uva0=uva0, uva1=uva1[0], qp1=qp1)
-        res_u0 = dfn.assemble(model.solid.f1)
-        model.solid.bc_base.apply(res_u0)
-
-        model.set_ini_solid_state(uva1[0], 0, 0)
-        res_p0 = qp1[1] - model.get_pressure()[1]
-
-        # Calculate residuals at up1 + dup1
-        model.set_iter_params(uva0=uva0, uva1=uva1[0]+du1, qp1=(qp1[0], qp1[1]+dp1))
-        res_u1 = dfn.assemble(model.solid.f1)
-        model.solid.bc_base.apply(res_u1)
-
-        model.set_ini_solid_state(uva1[0]+du1, 0, 0)
-        res_p1 = qp1[1]+dp1 - model.get_pressure()[1]
-
-        # Calculate the actual residual change
-        dres_u_true = dfn.as_backend_type(res_u1-res_u0).vec()
-        dres_p_true = res_p1-res_p0
-
-        # Compare and
-        error_u = dres_u.vec() - dres_u_true
-        error_p = dres_p - dres_p_true
-
 if __name__ == '__main__':
     # unittest.main()
 
-    test = TestBasicGradient()
-    test.setUp()
-    test.test_emod()
-    test.test_u0()
-    test.test_v0()
-    test.test_a0()
-    test.test_times()
-
-    # test = TestBasicGradientSingleStep()
+    # test = TestBasicGradient()
     # test.setUp()
     # test.test_emod()
     # test.test_u0()
     # test.test_v0()
+    # test.test_a0()
+    # test.test_times()
+
+    test = TestBasicGradientSingleStep()
+    test.setUp()
+    test.test_emod()
+    test.test_u0()
+    test.test_v0()
     # test.test_a0()
     # test.test_times()
 

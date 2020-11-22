@@ -52,20 +52,16 @@ class Acoustic1D:
         raise NotImplementedError("You can't set the time step of a WRA tube")
 
     def set_ini_state(self, state):
-        for key, value in state.items():
-            self.state0[key][:] = value
+        self.state0[:] = state
 
     def set_fin_state(self, state):
-        for key, value in state.items():
-            self.state0[key][:] = value
+        self.state1[:] = state
 
     def set_control(self, control):
-        for key, value in control.items():
-            self.control[key][:] = value
+        self.control[:] = control
 
     def set_properties(self, props):
-        for key, value in props.items():
-            self.properties[key][:] = value
+        self.properties[:] = props
 
     ## Getting empty vectors
     def get_state_vec(self):
@@ -79,7 +75,10 @@ class Acoustic1D:
         return ret
 
     def get_properties_vec(self, set_default=True):
-        return self.properties.copy()
+        ret = self.properties.copy()
+        if not set_default:
+            ret.set(0.0)
+        return ret
 
 class WRA(Acoustic1D):
 
@@ -124,12 +123,12 @@ class WRA(Acoustic1D):
         pinc, pref = self.state0.vecs
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
-        state1 = linalg.BlockVec((pinc_1, pref_1), self.state0.keys)
+        state1 = linalg.BlockVec((pinc_1, pref_1), self.state1.keys)
         info = {}
         return state1, info
 
     def res(self):
-        return self.state1 - self.solve_state1()
+        return self.state1 - self.solve_state1()[0]
 
     def solve_dres_dstate1_adj(self, x):
         return x
@@ -139,7 +138,7 @@ class WRA(Acoustic1D):
         ATr = jax.linear_transpose(self.reflect, *args)
         
         b_pinc, b_pref, b_qin = ATr(x.vecs)
-        bvecs = (np.array(b_pinc), np.array(b_pref))
+        bvecs = (np.asarray(b_pinc), np.asarray(b_pref))
         return -linalg.BlockVec(bvecs, self.state0.keys)
 
     def apply_dres_dcontrol(self, x):
@@ -147,7 +146,7 @@ class WRA(Acoustic1D):
         _, A = jax.linearize(self.reflect, *args)
 
         x_ = linalg.concatenate(self.get_state_vec(), x)
-        bvecs = [np.array(vec) for vec in A(*x_.vecs)]
+        bvecs = (np.asarray(vec) for vec in A(*x_.vecs))
 
         return -linalg.BlockVec(bvecs, self.state1.keys)
 

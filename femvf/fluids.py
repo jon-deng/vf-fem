@@ -71,40 +71,30 @@ class QuasiSteady1DFluid:
     def dt(self, value):
         self._dt = value
 
-    def set_ini_state(self, qp0):
+    ## Parameter setting functions
+    def set_ini_state(self, state):
         """
         Set the initial fluid state
         """
-        self.state0['q'][()] = qp0[0]
-        self.state0['p'][:] = qp0[1]
+        self.state0[:] = state
 
-    def set_fin_state(self, qp1):
+    def set_fin_state(self, state):
         """
         Set the final fluid state
         """
-        self.state1['q'][()] = qp1[0]
-        self.state1['p'][:] = qp1[1]
+        self.state1[:] = state
 
-    def set_control(self, uv1):
+    def set_control(self, control):
         """
         Set the final surface displacement and velocity
         """
-        for key, value in uv1.items():
-            self.control[key][:] = value
-        # self.control['usurf'][:] = uv1[0]
-        # self.control['vsurf'][:] = uv1[1]
+        self.control[:] = control
 
     def set_properties(self, props):
         """
         Set the fluid properties
         """
-        for key in props.keys:
-            vec = self.properties[key]
-            general_vec_set(vec, props[key])
-            # if vec.shape == ():
-            #     vec[()] = props[key]
-            # else:
-            #     vec[:] = props[key]
+        self.properties[:] = props
 
     ## Get empty vectors
     def get_state_vec(self):
@@ -127,7 +117,9 @@ class QuasiSteady1DFluid:
         return BlockVec(vecs, labels)
 
     def get_control_vec(self):
-        return self.control.copy()
+        ret = self.control.copy()
+        ret.set(0.0)
+        return ret
 
     ## Methods that subclasses must implement
     def res(self):
@@ -139,33 +131,15 @@ class QuasiSteady1DFluid:
         """
         raise NotImplementedError("Fluid models have to implement this")
 
-    def solve_qp0(self):
-        """
-        Return the initial flow and pressure
-        """
-        raise NotImplementedError("Fluid models have to implement this")
-
     def solve_dqp1_du1(self, adjoint=False):
         """
         Return sensitivities of the final flow and pressure
         """
         raise NotImplementedError("Fluid models have to implement this")
 
-    def solve_dqp0_du0(self, adjoint=False):
-        """
-        Return sensitivities of the initial flow and pressure
-        """
-        raise NotImplementedError("Fluid models have to implement this")
-
     def solve_dqp1_du1_solid(self, model, adjoint=False):
         """
         Return sensitivities of the final flow and pressure
-        """
-        raise NotImplementedError("Fluid models have to implement this")
-
-    def solve_dqp0_du0_solid(self, model, adjoint=False):
-        """
-        Return sensitivities of the initial flow and pressure
         """
         raise NotImplementedError("Fluid models have to implement this")
     
@@ -376,8 +350,7 @@ class Bernoulli(QuasiSteady1DFluid):
         ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
         
         # 1D Bernoulli approximation of the flow
-        psep = psup
-        flow_rate_sqr = 2/rho*(psep - psub)/(asub**-2 - asep**-2)
+        flow_rate_sqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
 
         pbern = psub + 1/2*rho*flow_rate_sqr*(asub**-2 - asafe**-2)
 
@@ -462,7 +435,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dpbern_dasep = 1/2*rho*(asub**-2 - asafe**-2) * dqsqr_dasep
         dpbern_dy = np.diag(dpbern_da*da_dy) + dpbern_dasep[:, None]*dasep_dy
         dpbern_dpsub = 1.0 + 1/2*rho*dqsqr_dpsub*(asub**-2 - asafe**-2)
-        dpbern_dpsup = 1.0 + 1/2*rho*dqsqr_dpsup*(asub**-2 - asafe**-2)
+        dpbern_dpsup = 1/2*rho*dqsqr_dpsup*(asub**-2 - asafe**-2)
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
         sepweight = smoothstep(self.s_vertices, ssep, k=k)
@@ -485,7 +458,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dq_du = np.zeros(usurf.size)
         dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_dy
 
-        return dq_du, dp_du, dq_dpsub, dq_dpsup, dp_dpsub, dp_dpsup
+        return dq_du, dp_du, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup
 
     def dres_dcontrol(self):
         pass
@@ -560,6 +533,9 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dq_du, dp_du
 
+    def res(self):
+        return self.state1 - self.solve_qp1()[0]
+        
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()
         b.set(0.0)
