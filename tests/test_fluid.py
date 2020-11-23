@@ -1,5 +1,5 @@
 """
-Tests fluids.py module
+Tests fluid.py module
 """
 
 import unittest
@@ -15,8 +15,7 @@ import autograd.numpy as np
 import petsc4py
 petsc4py.init()
 
-from femvf.model import load_fsi_model
-from femvf import fluids
+from femvf.models import load_fsi_model, fluid
 from femvf.constants import PASCAL_TO_CGS
 
 class CommonSetup(unittest.TestCase):
@@ -30,7 +29,7 @@ class CommonSetup(unittest.TestCase):
         """
         mesh_path = '../meshes/M5-3layers.xml'
 
-        # self.model = load_fsi_model(mesh_path, None, Fluid=fluids.Bernoulli)
+        # self.model = load_fsi_model(mesh_path, None, Fluid=fluid.Bernoulli)
         # self.surface_coordinates = np.stack([self.model.fluid.x_vertices,
         #                                      self.model.fluid.y_surface], axis=-1).reshape(-1)
         # self.fluid = self.model.fluid
@@ -38,7 +37,7 @@ class CommonSetup(unittest.TestCase):
         x = np.linspace(-0.5, 0.5, 50)
         y = 0.5-x**2
         # print(y)
-        self.fluid = fluids.Bernoulli(x, y)
+        self.fluid = fluid.Bernoulli(x, y)
         self.surface_coordinates = np.stack([x, y], axis=-1).reshape(-1)
         
         p_sub = 800.0*PASCAL_TO_CGS
@@ -325,10 +324,10 @@ class TestSmoothApproximations(CommonSetup):
 
         da = 1e-6
 
-        df_da = fluids.dsmoothlb_df(a0, a_lb, beta=self.fluid_properties['beta'])
+        df_da = fluid.dsmoothlb_df(a0, a_lb, beta=self.fluid_properties['beta'])
 
-        f0 = fluids.smoothlb(a0, a_lb, beta=self.fluid_properties['beta'])
-        f1 = fluids.smoothlb(a0+da, a_lb, beta=self.fluid_properties['beta'])
+        f0 = fluid.smoothlb(a0, a_lb, beta=self.fluid_properties['beta'])
+        f1 = fluid.smoothlb(a0+da, a_lb, beta=self.fluid_properties['beta'])
         df_da_fd = (f1-f0)/da
         
 
@@ -370,7 +369,7 @@ class TestSmoothApproximations(CommonSetup):
 
         # print(fluid_props.)
         print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
-        log_w = fluids.log_gaussian(area, np.min(area), fluid_props['sigma'])
+        log_w = fluid.log_gaussian(area, np.min(area), fluid_props['sigma'])
         w = np.exp(log_w - np.max(log_w))
 
         fig, ax = plt.subplots(1, 1)
@@ -386,7 +385,7 @@ class TestSmoothApproximations(CommonSetup):
         """
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]
-        w = fluids.smoothstep(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['k'])
+        w = fluid.smoothstep(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['k'])
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(fluid.x_vertices, y)
@@ -396,27 +395,27 @@ class TestSmoothApproximations(CommonSetup):
         plt.show()
 
     def test_gaussian(self):
-        dgaussian_dx_ad = autograd.grad(fluids.gaussian, 0)
-        dgaussian_dx0_ad = autograd.grad(fluids.gaussian, 1)
+        dgaussian_dx_ad = autograd.grad(fluid.gaussian, 0)
+        dgaussian_dx0_ad = autograd.grad(fluid.gaussian, 1)
         x, x0, sigma = 0.1, 0.0, 0.1
 
-        self.assertAlmostEqual(dgaussian_dx_ad(x, x0, sigma), fluids.dgaussian_dx(x, x0, sigma))
+        self.assertAlmostEqual(dgaussian_dx_ad(x, x0, sigma), fluid.dgaussian_dx(x, x0, sigma))
 
-        self.assertAlmostEqual(dgaussian_dx0_ad(x, x0, sigma), fluids.dgaussian_dx0(x, x0, sigma))
+        self.assertAlmostEqual(dgaussian_dx0_ad(x, x0, sigma), fluid.dgaussian_dx0(x, x0, sigma))
 
     def test_sigmoid(self):
-        dsigmoid_dx_ad = autograd.grad(fluids.sigmoid, 0)
+        dsigmoid_dx_ad = autograd.grad(fluid.sigmoid, 0)
         x = 0.1
 
-        self.assertAlmostEqual(dsigmoid_dx_ad(x), fluids.dsigmoid_dx(x))
+        self.assertAlmostEqual(dsigmoid_dx_ad(x), fluid.dsigmoid_dx(x))
 
     def test_dsmoothstep(self):
-        dsmooth_cutoff_dx_ad = autograd.grad(fluids.smoothstep, 0)
-        dsmooth_cutoff_dx0_ad = autograd.grad(fluids.smoothstep, 1)
+        dsmooth_cutoff_dx_ad = autograd.grad(fluid.smoothstep, 0)
+        dsmooth_cutoff_dx0_ad = autograd.grad(fluid.smoothstep, 1)
         x, k = 0.1, 100.0
 
-        self.assertAlmostEqual(dsmooth_cutoff_dx_ad(x, k), fluids.dsmoothstep_dx(x, k))
-        self.assertAlmostEqual(dsmooth_cutoff_dx0_ad(x, k), fluids.dsmoothstep_dx0(x, k))
+        self.assertAlmostEqual(dsmooth_cutoff_dx_ad(x, k), fluid.dsmoothstep_dx(x, k))
+        self.assertAlmostEqual(dsmooth_cutoff_dx0_ad(x, k), fluid.dsmoothstep_dx0(x, k))
 
     # def test_wavg(self):
 

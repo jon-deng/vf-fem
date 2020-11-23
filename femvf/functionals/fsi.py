@@ -24,8 +24,8 @@ import dolfin as dfn
 import ufl
 
 from .solid import SolidFunctional
-from ..fluids import smoothmin, dsmoothmin_df
-from ..solids import strain
+from ..models.fluid import smoothmin, dsmoothmin_df
+from ..models.solid import strain
 
 class FSIFunctional(SolidFunctional):
     def __init__(self, model):

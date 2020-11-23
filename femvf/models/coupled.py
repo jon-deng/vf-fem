@@ -10,80 +10,10 @@ from petsc4py import PETSc
 # import ufl
 
 from . import newmark
-from . import solids, fluids
-from . import meshutils
-from . import linalg
-from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
-
-def load_fsi_model(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli, 
-                   fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
-    """
-    Factory function that loads a model based on input solid/fluid meshes.
-
-    The function will delegate to specific loading routines depending on how the mesh
-    is input etc.
-
-    Parameters
-    ----------
-    """
-    solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh, 
-        Solid=Solid, Fluid=Fluid, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
-    
-    if coupling == 'explicit':
-        model = ExplicitFSIModel(solid, fluid, fsi_verts)
-    elif coupling == 'implicit':
-        model = ImplicitFSIModel(solid, fluid, fsi_verts)
-
-    return model
-
-def load_fsai_model(solid_mesh, fluid_mesh, acoustic, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli, 
-                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
-    solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh, 
-        Solid=Solid, Fluid=Fluid, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
-
-    return FSAIModel(solid, fluid, acoustic, fsi_verts)
-
-def process_fsi(solid_mesh, fluid_mesh, Solid=solids.KelvinVoigt, Fluid=fluids.Bernoulli, 
-                fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
-    ## Load the solid
-    mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
-    if isinstance(solid_mesh, str):
-        ext = path.splitext(solid_mesh)[1]
-        # if no extension is supplied, assume it's a fenics xml mesh
-        if ext == '':
-            ext = '.xml'
-
-        if ext.lower() == '.xml':
-            # The solid mesh is an xml file
-            mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
-        else:
-            raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
-    solid = Solid(mesh, facet_func, facet_labels, cell_func, cell_labels, 
-                  fsi_facet_labels, fixed_facet_labels)
-
-    ## Process the fsi surface vertices to set the coupling between solid and fluid
-    # Find vertices corresponding to the fsi facets
-    fsi_facet_ids = [solid.facet_labels[name] for name in solid.fsi_facet_labels]
-    fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.facet_func.array()) 
-                                if fedge in set(fsi_facet_ids)])
-    fsi_verts = meshutils.vertices_from_edges(fsi_edges, solid.mesh)
-    fsi_coordinates = solid.mesh.coordinates()[fsi_verts]
-
-    # Sort the fsi vertices from inferior to superior
-    # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
-    idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
-    fsi_verts = fsi_verts[idx_sort]
-
-    # Load the fluid
-    fluid = None
-    if fluid_mesh is None and issubclass(Fluid, fluids.QuasiSteady1DFluid):
-        xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
-        fluid = Fluid(xfluid, yfluid)
-    elif fluid_mesh is None and not issubclass(Fluid, fluids.QuasiSteady1DFluid):
-        raise ValueError(f"`fluid_mesh` cannot be `None` if the fluid is not 1D")
-    else:
-        raise ValueError(f"This function does not yet support input fluid meshes.")
-    return solid, fluid, fsi_verts
+from . import solid, fluid
+from .. import meshutils
+from .. import linalg
+from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 
 class FSIModel:
@@ -185,25 +115,6 @@ class FSIModel:
         self.fluid.set_properties(props[len(self.solid.properties.size):])
 
     # Additional more friendly method for setting parameters (use the above defined methods)
-    def set_iter_params(self, state0, state1, control1, dt):
-        """
-        Sets all parameter values needed to integrate the model over a time step.
-
-        The parameter specified at the final time (index 1) are initial guesses for the solution.
-        One can then use a Newton method to iteratively solve for the actual final states.
-
-        Unspecified parameters will have unchanged values.
-
-        Parameters
-        ----------
-        state : tuple of array_like
-            Initial and final solid states
-        dt : float
-        """
-        self.set_ini_params(state0, control0)
-        self.set_fin_params(state1, control1)
-        self.dt = dt
-
     def set_params_fromfile(self, f, n, update_props=True):
         """
         Set all parameters needed to integrate the model from a recorded value.
@@ -828,7 +739,7 @@ class FSAIModel(FSIModel):
 
     @dt.setter
     def dt(self, value):
-        #  the acoustic domain time step is ignored for WRA
+        #  the acoustic domain time step is ignored for WRAnalog
         for domain in (self.solid, self.fluid):
             domain.dt = value
 
@@ -1142,80 +1053,6 @@ class FSAIModel(FSIModel):
 
     def apply_dres_dcontrol_adj(self, x):
         return self.get_control_vec()
-
-class SolidModel:
-    def __init__(self, solid):
-        self.solid = solid
-
-        self.state0 = self.solid.state0
-        self.state1 = self.solid.state1
-
-        self.control = self.solid.control
-
-        self.properties = self.solid.properties
-
-    @property
-    def dt(self):
-        return self.solid.dt
-
-    @dt.setter
-    def dt(self, value):
-        self.solid.dt = value
-
-    def set_ini_state(self, state):
-        self.solid.set_ini_state(state)
-
-    def set_fin_state(self, state):
-        self.solid.set_fin_state(state)
-    
-    def set_control(self, control):
-        self.solid.set_control(control)
-
-    def set_properties(self, props):
-        self.solid.set_properties(props)
-
-    def solve_state1(self, ini_state, newton_solver_prm=None):
-        """
-        Solve for the final state given an initial guess
-        """
-        """
-        Solve for the final state given an initial guess
-        """
-        solid = self.solid
-        dt = solid.dt
-        uva0 = solid.state0
-
-        uva1 = solid.get_state_vec()
-
-        # Update form coefficients and initial guess
-        self.set_fin_state(ini_state)
-
-        if newton_solver_prm is None:
-            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-
-        dfn.solve(solid.f1 == 0, solid.u1, bcs=solid.bc_base, J=solid.df1_du1,
-                  solver_parameters={"newton_solver": newton_solver_prm})
-
-        res = dfn.assemble(self.solid.forms['form.un.f1'])
-        self.solid.bc_base.apply(res)
-
-        uva1['u'][:] = solid.u1.vector()
-        uva1['v'][:] = newmark.newmark_v(uva1['u'], *uva0, dt)
-        uva1['a'][:] = newmark.newmark_a(uva1['u'], *uva0, dt)
-
-        self.set_fin_state(uva1)
-        step_info = {}
-
-        return uva1, step_info
-
-    def get_state_vec(self):
-        return self.solid.get_state_vec()
-
-    def get_control_vec(self):
-        return self.solid.get_control_vec()
-
-    def get_properties_vec(self):
-        return self.solid.get_properties_vec()
 
 
 def sl_state_to_fl_control(sl_state, fl_control, fsi_ref_config, fsi_vdofs):

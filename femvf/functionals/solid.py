@@ -25,8 +25,8 @@ import ufl
 
 from .. import linalg
 from .abstract import AbstractFunctional
-from ..fluids import smoothmin, dsmoothmin_df
-from ..solids import strain, Solid
+from ..models.fluid import smoothmin, dsmoothmin_df
+from ..models.solid import strain, Solid
 
 class SolidFunctional(AbstractFunctional):
     """
@@ -156,7 +156,7 @@ class PeriodicEnergyError(SolidFunctional):
 
     @staticmethod
     def form_definitions(solid):
-        from ..solids import biform_m, biform_k
+        from ..solid import biform_m, biform_k
         forms = {}
         forms['u_0'] = dfn.Function(solid.vector_fspace)
         forms['u_N'] = dfn.Function(solid.vector_fspace)
@@ -362,7 +362,7 @@ class ElasticEnergyDifference(SolidFunctional):
 
     @staticmethod
     def form_definitions(solid):
-        from ..solids import biform_k
+        from ..solid import biform_k
         forms = {}
 
         emod = solid.forms['coeff.prop.emod']
@@ -578,7 +578,7 @@ class RayleighDampingWork(SolidFunctional):
 
         v0 = solid.forms['coeff.state.v0']
 
-        from ..solids import biform_m, biform_k
+        from ..solid import biform_m, biform_k
         forms = {}
         forms['damping_power'] = ray_m*biform_m(v0, v0, rho) + ray_k*biform_k(v0, v0, emod, nu)
 

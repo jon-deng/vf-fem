@@ -12,12 +12,12 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
-from .parameters.properties import property_vecs
-from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
+from ..parameters.properties import property_vecs
+from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import newmark
-from .linalg import BlockVec, general_vec_set
+from ..linalg import BlockVec, general_vec_set
 
 
 def cauchy_stress(u, emod, nu):

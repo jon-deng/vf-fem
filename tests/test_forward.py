@@ -14,12 +14,9 @@ import dolfin as dfn
 
 import femvf.statefile as sf
 from femvf.forward import integrate, gw_callback
-from femvf.model import load_fsi_model, load_fsai_model
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.solids import Rayleigh, KelvinVoigt
-from femvf.fluids import Bernoulli
-from femvf.acoustics import WRA
+from femvf.models import load_fsi_model, load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
 
 from femvf import linalg
 
@@ -90,7 +87,7 @@ class TestForward(unittest.TestCase):
 
     def config_fsai_model(self):
         ## Configure the model and its parameters
-        acoustic = WRA(44)
+        acoustic = WRAnalog(44)
         model = load_fsai_model(self.mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
                                 coupling='explicit')
 
@@ -150,7 +147,7 @@ class TestForward(unittest.TestCase):
 
         times = np.linspace(0, 0.01, 100)
 
-        # Set the total length of the WRA to match the specified time step
+        # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
         # C, N = model.acoustic.properties['soundspeed'][0], model.acoustic.properties['area'].size
         # props['length'][:] = (0.5*dt*C) * N

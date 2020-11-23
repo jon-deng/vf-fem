@@ -5,7 +5,7 @@ from time import perf_counter
 import numpy as np
 import matplotlib.pyplot as plt
 
-from femvf.acoustics import WRA
+from femvf.models.acoustic import WRAnalog
 
 class TestWRA(unittest.TestCase):
 
@@ -17,7 +17,7 @@ class TestWRA(unittest.TestCase):
         # self.DT = 2*self.LENGTH/self.NTUBE/self.CSOUND
         # print(self.DT)
 
-        model = WRA(self.NTUBE)
+        model = WRAnalog(self.NTUBE)
         self.model = model
 
     def test_uniform(self):
@@ -82,3 +82,4 @@ if __name__ == '__main__':
     test = TestWRA()
     test.setUp()
     test.test_uniform()
+    

@@ -10,9 +10,9 @@ import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
-from .parameters.properties import property_vecs
-from .constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
-from .linalg import BlockVec, general_vec_set
+from ..parameters.properties import property_vecs
+from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+from ..linalg import BlockVec, general_vec_set
 
 ## 1D Bernoulli approximation codes
 

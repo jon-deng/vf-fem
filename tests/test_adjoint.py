@@ -22,10 +22,9 @@ import dolfin as dfn
 
 from femvf import statefile as sf, linalg
 
-from femvf.model import load_fsi_model, load_fsai_model
-from femvf.solids import Rayleigh, KelvinVoigt
-from femvf.fluids import Bernoulli
-from femvf.acoustics import WRA
+from femvf.models import (
+    load_fsi_model, load_fsai_model,
+    Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
 
 from femvf.forward import integrate
 from femvf.adjoint import adjoint
@@ -119,7 +118,7 @@ def get_starting_fsai_model(coupling='explicit'):
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
     ## Configure the model and its parameters
-    acoustic = WRA(44)
+    acoustic = WRAnalog(44)
     model = load_fsai_model(mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
                             coupling='explicit')
 

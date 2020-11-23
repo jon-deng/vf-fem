@@ -10,21 +10,10 @@ import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
-from . import solids
 from . import statefile as sf
 from . import linalg
 
-DEFAULT_NEWTON_SOLVER_PRM = {
-    'linear_solver': 'petsc',
-    'absolute_tolerance': 1e-7,
-    'relative_tolerance': 1e-9,
-    'max_num_it': 5}
-
-FIXEDPOINT_SOLVER_PRM = {
-    'absolute_tolerance': 1e-8,
-    'relative_tolerance': 1e-11}
-
-# # @profile
+# @profile
 def integrate(model, ini_state, controls, props, times, idx_meas=None,
               h5file='tmp.h5', h5group='/', newton_solver_prm=None, callbacks=None):
     """

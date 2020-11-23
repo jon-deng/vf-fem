@@ -15,9 +15,7 @@ import dolfin as dfn
 
 from femvf import statefile as sf
 from femvf.forward import integrate
-from femvf.fluids import Bernoulli
-from femvf.solids import KelvinVoigt, Rayleigh
-from femvf.model import load_fsi_model
+from femvf.models import load_fsi_model, KelvinVoigt, Rayleigh, Bernoulli
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functionals import basic

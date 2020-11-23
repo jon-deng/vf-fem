@@ -12,8 +12,8 @@ from os import path
 # import xml
 
 from femvf.model import load_fsi_model
-from femvf.solids import Rayleigh
-from femvf.fluids import Bernoulli
+from femvf.solid import Rayleigh
+from femvf.fluid import Bernoulli
 
 from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
 

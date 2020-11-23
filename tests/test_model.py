@@ -4,11 +4,7 @@ import os
 import dolfin as dfn
 import numpy as np
 
-from femvf.model import load_fsai_model
-
-from femvf.solids import Rayleigh, KelvinVoigt
-from femvf.fluids import Bernoulli
-from femvf.acoustics import WRA
+from femvf.models import (load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
 
 from femvf.constants import PASCAL_TO_CGS
 from femvf import linalg
@@ -27,7 +23,7 @@ class TestFSAIModel(unittest.TestCase):
 
     def config_fsai_model(self):
         ## Configure the model and its parameters
-        acoustic = WRA(44)
+        acoustic = WRAnalog(44)
         model = load_fsai_model(self.mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
                                 coupling='explicit')
 
@@ -155,7 +151,7 @@ class TestFSAIModel(unittest.TestCase):
 class TestAcoustic(unittest.TestCase):
 
     def setUp(self):
-        self.model = WRA(12)
+        self.model = WRAnalog(12)
 
     def test_res(self):
         pass

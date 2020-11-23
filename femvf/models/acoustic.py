@@ -49,7 +49,7 @@ class Acoustic1D:
     def dt(self, value):
         # Note the acoustic model can't change the time step without changing the length of the tract
         # because the tract length and time step are linked throught the speed of sound
-        raise NotImplementedError("You can't set the time step of a WRA tube")
+        raise NotImplementedError("You can't set the time step of a WRAnalog tube")
 
     def set_ini_state(self, state):
         self.state0[:] = state
@@ -80,12 +80,12 @@ class Acoustic1D:
             ret.set(0.0)
         return ret
 
-class WRA(Acoustic1D):
+class WRAnalog(Acoustic1D):
 
     def set_properties(self, props):
         super().set_properties(props)
 
-        # Reset the WRA 'reflect' function when properties of the tract are updated
+        # Reset the WRAnalog 'reflect' function when properties of the tract are updated
         # The reflection function behaviour only changes if the properties are changed
         # so must be reset here
         self.init_wra()

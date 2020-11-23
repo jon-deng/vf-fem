@@ -17,14 +17,10 @@ compute the sensitivity with respect to.
 """
 
 import numpy as np
-# import matplotlib.pyplot as plt
 import scipy.signal as sig
 
-# import dolfin as dfn
-# import ufl
-
 from .abstract import AbstractFunctional
-from ..fluids import Fluid, smoothmin, dsmoothmin_df
+from ..models import acoustic
 
 class AcousticFunctional(AbstractFunctional):
     """
@@ -36,7 +32,7 @@ class AcousticFunctional(AbstractFunctional):
     def __init__(self, model):
         super().__init__(model, ())
 
-        if isinstance(model, Acoustic1D):
+        if isinstance(model, acoustic.Acoustic1D):
             self.acoustic = model
         else:
             self.acoustic = model.acoustic
