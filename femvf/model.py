@@ -3,7 +3,7 @@ Contains the Model class that couples fluid and solid behaviour
 """
 
 from os import path
-
+import warnings
 import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
@@ -943,6 +943,7 @@ class FSAIModel(FSIModel):
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+        ini_state_ref = self.state0.copy()
 
         # Update form coefficients and initial guess
         self.set_fin_state(ini_state)
@@ -960,11 +961,14 @@ class FSAIModel(FSIModel):
         # solve fluids -> solve acoustics with updated fluids -> compute error in fluid and repeat if necessary
         fl_state1, fluid_info = self.fluid.solve_qp1()
         while abserr > abserr_max and relerr > relerr_max and num_it < 15:
+        # while num_it < 15:
             self.set_fin_fluid_state(fl_state1)
 
+            # breakpoint()
             ac_state1, _ = self.acoustic.solve_state1()
             self.set_fin_acoustic_state(ac_state1)
-            print(linalg.dot(ac_state1, ac_state1))
+            # print(f"q: {self.acoustic.control['qin']}", fl_state1['q'])
+            # print(linalg.dot(ac_state1, ac_state1))
 
             # compute the error/residual. The acoustic equations were solved previously so the residual is 
             # due only to the fluid
@@ -973,15 +977,14 @@ class FSAIModel(FSIModel):
             fl_state1 = fl_state1_new
 
             abserr = linalg.dot(fl_res, fl_res)
-            relerr = abs(abserr - abserr_prev) / abserr
+            if abserr > 0:
+                relerr = abs(abserr - abserr_prev) / abserr
+            else:
+                relerr = 1.0
             abserr_prev = abserr
-            print(abserr, relerr)
-            # print(fl_res['q'], fl_res['p'])
             num_it += 1
-        print("Iteration finished. Stats:")
-        # print(abserr, abserr_max)
-        # print(relerr, relerr_max)
-        # print(num_it, '\n')
+
+            test = ini_state_ref - self.state0
 
         step_info = {'fluid_info': fluid_info, 'num_it': num_it, 'abserr': abserr, 'relerr': relerr}
 

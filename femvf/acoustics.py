@@ -146,7 +146,7 @@ class WRA(Acoustic1D):
         _, A = jax.linearize(self.reflect, *args)
 
         x_ = linalg.concatenate(self.get_state_vec(), x)
-        bvecs = (np.asarray(vec) for vec in A(*x_.vecs))
+        bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
         return -linalg.BlockVec(bvecs, self.state1.keys)
 

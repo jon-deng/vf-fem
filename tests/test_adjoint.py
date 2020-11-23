@@ -295,8 +295,8 @@ class TestBasicGradient(AbstractTaylorTest):
         self.CASE_NAME = 'singleperiod'
 
         ## Load the model and set baseline parameters (point the model is linearized around)
-        self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
-        # self.model, self.props = get_starting_fsai_model(self.COUPLING)
+        # self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
+        self.model, self.props = get_starting_fsai_model(self.COUPLING)
 
         t_start, t_final = 0, 0.01
         times_meas = np.linspace(t_start, t_final, 128)
@@ -329,7 +329,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-11)
+        hs = 2.0**(np.arange(2, 9)-5)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
@@ -438,8 +438,8 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
     OVERWRITE_LSEARCH = True
     # FUNCTIONAL = fsolid.FinalVelocityNorm
     # FUNCTIONAL = fsolid.FinalDisplacementNorm
-    FUNCTIONAL = ffluid.FinalPressureNorm
-    # FUNCTIONAL = ffluid.FinalFlowRateNorm
+    # FUNCTIONAL = ffluid.FinalPressureNorm
+    FUNCTIONAL = ffluid.FinalFlowRateNorm
 
     def setUp(self):
         """
@@ -487,7 +487,7 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(2, 9)-5)
+        hs = 2.0**(np.arange(7)+5)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
@@ -744,19 +744,19 @@ class TestPeriodicKelvinVoigtGradient(AbstractTaylorTest):
 if __name__ == '__main__':
     # unittest.main()
 
-    # test = TestBasicGradient()
-    # test.setUp()
-    # test.test_emod()
+    test = TestBasicGradient()
+    test.setUp()
+    test.test_emod()
     # test.test_u0()
     # test.test_v0()
     # test.test_a0()
     # test.test_times()
 
-    test = TestBasicGradientSingleStep()
-    test.setUp()
-    test.test_emod()
-    test.test_u0()
-    test.test_v0()
+    # test = TestBasicGradientSingleStep()
+    # test.setUp()
+    # test.test_emod()
+    # test.test_u0()
+    # test.test_v0()
     # test.test_a0()
     # test.test_times()
 

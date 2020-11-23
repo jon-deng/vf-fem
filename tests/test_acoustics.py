@@ -24,10 +24,16 @@ class TestWRA(unittest.TestCase):
         ## Set properties of the uniform tube
         props = self.model.get_properties_vec(set_default=True)
         props['soundspeed'][:] = 343*1e2
-        props['area'][:] = 4.0
         props['proploss'][:] = 1.0
         props['rhoac'][:] = 1.2e-3
         props['length'][:] = self.LENGTH
+
+        # Uniform tract
+        props['area'][:] = 4.0
+
+        # Idealized /a/ 
+        props['area'][:22] = 0.5
+        props['area'][22:] = 3
 
         self.model.set_properties(props)
 
