@@ -59,7 +59,7 @@ class Parameterization:
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.bvector == other.vector
+            return self.bvector == other.bvector
         elif isinstance(other, np.ndarray):
             return self.bvector.to_ndarray() == other
         else:
@@ -73,7 +73,7 @@ class Parameterization:
         Return a copy of parameterization
         """
         out = type(self)(self.model, self.constants.copy())
-        out.vector[:] = self.bvector
+        out.bvector[:] = self.bvector
         return out
 
     ## Implement the array-like interface from the block vector
@@ -239,7 +239,7 @@ class KelvinVoigtNodalConstants(Parameterization):
         # of all properties wrt parameters
         """
         out = self.copy()
-        out.vector[:] = 0.0
+        out.bvector[:] = 0.0
         out['emod'][:] = 1.0*grad_solid['emod']
         out['eta'][:] = grad_solid['eta']
 

@@ -107,6 +107,8 @@ class FSIModel:
         self.set_fin_fluid_state(state[3:])
     
     def set_control(self, control):
+        self.control[:] = control
+        
         for key, value in control.items():
             self.fluid.control[key][:] = value
 
