@@ -82,17 +82,11 @@ class Sum(AbstractFunctional):
         da, db = dfuna(*args), dfunb(*args)
         return da + db
 
-    def eval_duva(self, f, n):
-        return self._sum_drule(*self.funcs, 'duva', f, n)
+    def eval_dstate(self, f, n):
+        return self._sum_drule(*self.funcs, 'dstate', f, n)
 
-    def eval_dqp(self, f, n):
-        return self._sum_drule(*self.funcs, 'dqp', f, n)
-
-    def eval_dsolid(self, f):
-        return self._sum_drule(*self.funcs, 'dsolid', f)
-
-    def eval_dfluid(self, f):
-        return self._sum_drule(*self.funcs, 'dfluid', f)
+    def eval_dprops(self, f):
+        return self._sum_drule(*self.funcs, 'dprops', f)
 
     def eval_ddt(self, f, n):
         return self._sum_drule(*self.funcs, 'ddt', f, n)
@@ -121,17 +115,11 @@ class Product(AbstractFunctional):
 
         return da*b + a*db
 
-    def eval_duva(self, f, n):
-        return self._product_drule(*self.funcs, 'duva', f, n)
+    def eval_dstate(self, f, n):
+        return self._product_drule(*self.funcs, 'dstate', f, n)
 
-    def eval_dqp(self, f, n):
-        return self._product_drule(*self.funcs, 'dqp', f, n)
-
-    def eval_dsolid(self, f):
-        return self._product_drule(*self.funcs, 'dsolid', f)
-
-    def eval_dfluid(self, f):
-        return self._product_drule(*self.funcs, 'dfluid', f)
+    def eval_dprops(self, f):
+        return self._product_drule(*self.funcs, 'dprops', f)
 
     def eval_ddt(self, f, n):
         return self._product_drule(*self.funcs, 'ddt', f, n)
@@ -157,17 +145,11 @@ class Power(AbstractFunctional):
 
         return b*a**(b-1)*da + np.log(a)*a**b*db
 
-    def eval_duva(self, f, n):
-        return self._power_drule(*self.funcs, 'duva', f, n)
+    def eval_dstate(self, f, n):
+        return self._power_drule(*self.funcs, 'dstate', f, n)
 
-    def eval_dqp(self, f, n):
-        return self._power_drule(*self.funcs, 'dqp', f, n)
-
-    def eval_dsolid(self, f):
-        return self._power_drule(*self.funcs, 'dsolid', f)
-
-    def eval_dfluid(self, f):
-        return self._power_drule(*self.funcs, 'dfluid', f)
+    def eval_dprops(self, f):
+        return self._power_drule(*self.funcs, 'dprops', f)
 
     def eval_ddt(self, f, n):
         return self._power_drule(*self.funcs, 'ddt', f, n)
@@ -191,21 +173,13 @@ class Scalar(AbstractFunctional):
     def eval(self, f):
         return self._val
 
-    def eval_duva(self, f, n):
-        return self.model.solid.get_state_vec()
+    def eval_dstate(self, f, n):
+        return self.model.get_state_vec()
 
-    def eval_dqp(self, f, n):
-        return self.model.fluid.get_state_vec()
-
-    def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties_vec()
-        dsolid.set(0.0)
-        return dsolid
-
-    def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties_vec()
-        dfluid.set(0.0)
-        return dfluid
+    def eval_dprops(self, f):
+        dprops = self.model.get_properties_vec()
+        dprops.set(0.0)
+        return dprops
 
     def eval_ddt(self, f, n):
         return 0.0

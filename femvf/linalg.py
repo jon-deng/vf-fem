@@ -698,7 +698,18 @@ class BlockVec:
         vec.assemblyEnd()
         return vec
 
-    ## Basic arithmetic operator overloading
+    ## Basic algebra operator overloading
+    def __eq__(self, other):
+        eq = False
+        if isinstance(other, BlockVec):
+            err = self - other
+            if dot(err, err) == 0:
+                eq = True
+        else:
+            raise TypeError(f"Cannot compare {type(other)} to {type(self)}")
+
+        return eq
+
     def __add__(self, other):
         return add(self, other)
 

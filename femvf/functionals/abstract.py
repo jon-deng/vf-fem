@@ -139,13 +139,13 @@ class AbstractFunctional:
             `iter_params0` specifies the parameters needed to map the states at `n-1` to the states
             at `n+0`.
         """
-        raise NotImplementedError("`eval_duva` must be implemented")
+        raise NotImplementedError("`eval_dstate` must be implemented")
 
     def eval_dprops(self, f):
         """
         Return the dg/dsolidparameters
         """
-        raise NotImplementedError("`eval_dt0` must be implemented")
+        raise NotImplementedError("`eval_dprops` must be implemented")
 
     def eval_dt0(self, f, n):
         """

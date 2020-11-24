@@ -5,7 +5,7 @@ from os import path
 import numpy as np
 
 from .. import meshutils
-from .coupled import (FSAIModel, FSIModel, solid, fluid)
+from .coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel, solid, fluid)
 
 def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.Bernoulli, 
                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):

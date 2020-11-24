@@ -114,11 +114,11 @@ class PeriodicError(SolidFunctional):
 
     def eval(self, f):
         alphau = self.constants['alpha']
-        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], _ = f.get_state(0)
-        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
+        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], *_ = f.get_state(0)
+        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], *_ = f.get_state(f.size-1)
         erru = dfn.assemble(self.forms['resu'])
         errv = dfn.assemble(self.forms['resv'])
-        print(alphau**2*erru, errv)
+        # print(alphau**2*erru, errv)
         return alphau**2*erru + errv
 
     def eval_dsl_state(self, f, n):

@@ -6,7 +6,7 @@ import math
 
 from collections import OrderedDict
 
-from .base import KeyIndexedArray
+from ..linalg import BlockVec
 from . import properties as props
 from .. import constants, linalg
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -17,16 +17,14 @@ from petsc4py import PETSc
 
 import numpy as np
 
-class FullParameterization:
+class Parameterization:
     """
-    A parameterization is a mapping from a set of parameters to the set of basic parameters for the
+    A parameterization is a mapping from one set of parameters to the basic parameters for the
     forward model.
 
-    Parameter values are stored in a single array. The slice corresponding to a specific parameter
-    can be accessed through a label based index i.e. `self[param_label]`
-
-    Each parameterization has to have `convert` and `dconvert` methods. `convert` transforms the
-    parameterization to a standard parameterization for the forward model and `dconvert` transforms
+    Each parameterization has `convert` and `dconvert` methods tha perform the mapping and
+    calculate it's sensitivity. `convert` transforms the parameterization to a standard 
+    parameterization for the forward model and `dconvert` transforms
     gradients wrt. standard parameters, to gradients wrt. the parameterization.
 
     Parameters
@@ -46,56 +44,24 @@ class FullParameterization:
     model : femvf.model.ForwardModel
     constants : dict({str: value})
         A dictionary of labeled constants to values
-    vector : np.ndarray
-        The parameter vector
-    PARAM_TYPES : OrderedDict(tuple( 'field'|'const' , tuple), ...)
-        A dictionary storing the shape of each labeled parameter in the parameterization
+    bvector : np.ndarray
+        The BlockVector representation of the parameterization
     """
 
-    PARAM_TYPES = OrderedDict(
-        {'abstract_parameters': ('field', ())}
-        )
-    CONSTANT_LABELS = {'foo': 2, 'bar': 99}
-
-    def __new__(cls, model, constants, parameters=None):
-        # Raise an error if one of the required constant labels is missing, then proceed with
-        # initializing
-        for label in cls.CONSTANT_LABELS:
-            if label not in constants:
-                raise ValueError(f"Could not find constant `{label}` in supplied constants")
-
-        return super().__new__(cls)
-
-    def __init__(self, model, constants, parameters=None):
+    def __init__(self, model, constants):
         self.model = model
-        self._constants = constants
 
-        # Calculate the array shape for each labeled parameter
-        shapes = OrderedDict()
-        N_DOF = model.solid.scalar_fspace.dim()
-        for key, param_type in self.PARAM_TYPES.items():
-            shape = None
-            if param_type[0] == 'field':
-                shape = (N_DOF, *param_type[1])
-            elif param_type[0] == 'const':
-                shape = (*param_type[1], )
-            else:
-                raise ValueError("Parameter type must be one of 'field' or 'const'")
-            shapes[key] = shape
-
-        self._data = KeyIndexedArray(shapes)
+        self._bvector = self.init_vector()
+        self.constants = constants
 
     def __str__(self):
-        return self.PARAM_TYPES.__str__()
-
-    def __repr__(self):
-        return f"{type(self).__name__}({self.model.__repr__()}, {self.constants})"
+        return self.bvector.__str__()
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return np.all(self.vector == other.vector)
+            return self.bvector == other.vector
         elif isinstance(other, np.ndarray):
-            return np.all(self.vector == other)
+            return self.bvector.to_ndarray() == other
         else:
             raise TypeError(f"Cannot compare type {type(self)} <-- {type(other)}")
 
@@ -106,47 +72,36 @@ class FullParameterization:
         """
         Return a copy of parameterization
         """
-        out = type(self)(self.model, self.constants)
-        out.vector[:] = self.vector
+        out = type(self)(self.model, self.constants.copy())
+        out.vector[:] = self.bvector
         return out
 
+    ## Implement the array-like interface from the block vector
     @property
-    def constants(self):
-        """
-        Return constant values associated with the parameterization
-        """
-        return self._constants
-
-    ## Implement the dict-like interface coming from the KeyIndexedArray
-    @property
-    def data(self):
-        """
-        Return the KeyIndexedArray instance containing the data
-        """
-        return self._data
-
-    def __contains__(self, key):
-        return key in self.data
-
-    def __getitem__(self, key):
-        return self.data[key]
-
-    def __iter__(self):
-        return self.data.__iter__()
-
-    def keys(self):
-        return self.data.keys()
-
-    ## Implement the array-like interface coming from the KeyIndexedArray
-    @property
-    def vector(self):
-        return self.data.vector
+    def bvector(self):
+        return self._bvector
 
     @property
     def size(self):
-        return self.vector.size
+        return self.bvector.size
+
+    ## Implement the dict-like interface coming from the blockvector
+    def __contains__(self, key):
+        return key in self.bvector
+
+    def __getitem__(self, key):
+        return self.bvector[key]
+
+    def __iter__(self):
+        return self.bvector.__iter__()
+
+    def keys(self):
+        return self.bvector.keys
 
     ## Subclasses must implement these two methods
+    def init_vector(self):
+        raise NotImplementedError
+
     def convert(self):
         """
         Return the solid/fluid properties for the forward model.
@@ -182,41 +137,77 @@ class FullParameterization:
         """
         return NotImplementedError
 
-class NodalElasticModuli(FullParameterization):
+class NodalElasticModuli(Parameterization):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
-    PARAM_TYPES = OrderedDict(
-        {'emod': ('field', ())}
-    )
-
-    CONSTANT_LABELS = ('default_solid_props',
-                       'default_fluid_props',
-                       'default_timing_props')
+    def init_vector(self):
+        vecs = [self.model.properties['emod'].copy()]
+        labels = ['emod']
+        return linalg.BlockVec(vecs, labels)
 
     def convert(self):
-        solid_props = self.constants['default_solid_props'].copy()
-        fluid_props = self.constants['default_fluid_props'].copy()
-        timing_props = self.constants['default_timing_props'].copy()
+        ini_state = self.model.get_state_vec()
+        ini_state.set(0.0)
 
-        solid_props['emod'][:] = self['emod']
+        controls = [self.model.control.copy()]
+        props = self.model.properties.copy()
 
-        return (0.0, 0.0, 0.0), solid_props, fluid_props, timing_props
+        props['emod'] = self.bvector['emod']
+        times = self.constants['times']
 
-    def dconvert(self, grad_uva, grad_solid, grad_fluid, grad_times):
+        return ini_state, controls, props, times
+
+    def dconvert(self, grad_state, grad_controls, grad_props, grad_times):
         """
         Returns the sensitivity of the elastic modulus with respect to parameters
 
         # TODO: This should return a dict or something that has the sensitivity
         # of all properties wrt parameters
         """
-        out = self.copy()
-        out.vector[:] = 0.0
-        out['emod'][:] = grad_solid['emod']
+        out = self.bvector.copy()
+        out.set(0.0)
+        out['emod'][:] = grad_props['emod']
 
         return out
 
-class KelvinVoigtNodalConstants(FullParameterization):
+class ElasticModuliAndInitialState(Parameterization):
+    """
+    A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
+    """
+    def init_vector(self):
+        vecs = [self.model.state0.copy(), self.model.properties['emod'].copy()]
+        labels = [*self.model.state0.keys, 'emod']
+        return linalg.BlockVec(vecs, labels)
+
+    def convert(self):
+        ini_state = self.model.get_state_vec()
+        ini_state[:] = self.bvector[:-1] 
+
+        controls = [self.model.control.copy()]
+        props = self.model.properties.copy()
+
+        props['emod'] = self.bvector['emod']
+        times = self.constants['times']
+
+        return ini_state, controls, props, times
+
+    def dconvert(self, grad_state, grad_controls, grad_props, grad_times):
+        """
+        Returns the sensitivity of the elastic modulus with respect to parameters
+
+        # TODO: This should return a dict or something that has the sensitivity
+        # of all properties wrt parameters
+        """
+        out = self.bvector.copy()
+        out[:] = 0.0
+        out['emod'] = grad_props['emod']
+        out[:-1] = grad_state
+
+        return out
+
+## These need to be fixed since they use an old version of the code
+class KelvinVoigtNodalConstants(Parameterization):
     """
     A parameterization consisting of nodal values of elastic moduli and damping constants
     for the Kelvin-Voigt constitutive model.
@@ -254,7 +245,7 @@ class KelvinVoigtNodalConstants(FullParameterization):
 
         return out
 
-class PeriodicKelvinVoigt(FullParameterization):
+class PeriodicKelvinVoigt(Parameterization):
     """
     A parameterization defining a periodic Kelvin-Voigt model
     """
@@ -310,7 +301,7 @@ class PeriodicKelvinVoigt(FullParameterization):
 
         return out
 
-class FixedPeriodKelvinVoigt(FullParameterization):
+class FixedPeriodKelvinVoigt(Parameterization):
     """
     A parameterization defining a periodic Kelvin-Voigt model
     """
@@ -375,7 +366,7 @@ class FixedPeriodKelvinVoigt(FullParameterization):
 
         return out
 
-class FixedPeriodKelvinVoigtwithDamping(FullParameterization):
+class FixedPeriodKelvinVoigtwithDamping(Parameterization):
     """
     A parameterization defining a periodic Kelvin-Voigt model
     """

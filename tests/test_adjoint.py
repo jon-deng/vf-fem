@@ -328,7 +328,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-5)
+        hs = 2.0**(np.arange(2, 9)-10)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
@@ -486,7 +486,7 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(7)+5)
+        hs = 2.0**(np.arange(7)-5)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()

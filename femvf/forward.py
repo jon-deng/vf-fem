@@ -108,8 +108,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
             # Update initial conditions for the next time step
             state0 = state1
             control0 = control1
-
-    return info
+    return h5file, h5group, info
 
 def newton_solve(u, du, jac, res, bcs, **kwargs):
     """
