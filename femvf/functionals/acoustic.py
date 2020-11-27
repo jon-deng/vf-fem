@@ -36,3 +36,55 @@ class AcousticFunctional(AbstractFunctional):
             self.acoustic = model
         else:
             self.acoustic = model.acoustic
+
+    def eval_dac_state(self, f, n):
+        raise NotImplementedError
+
+    def eval_dac_props(self, f):
+        raise NotImplementedError
+
+class RmsRadiatedPressure(AcousticFunctional):
+    """The norm of the final flow rate"""
+    def eval(self, f):
+        # dt must be a constant for acoustic simulations
+        dt = self.model.dt
+        T = (f.size-1)*dt
+
+        # compute the mean-square using trapezoidal integration
+        prad_ms = 0
+        for n in range(f.size-1):
+            prad_a = f.get_state(n)['pref'][-1]
+            prad_b = f.get_state(n+1)['pref'][-1]
+
+            prad_ms += (prad_a**2 + prad_b**2)/2 * dt
+
+        return (prad_ms/T)**0.5
+
+    def eval_dac_state(self, f, n):
+        prad_rms = self(f)
+        prad_ms = prad_rms**2
+
+        dt = self.model.dt
+        
+        dprad_ms = 0
+        prad_n = f.get_state(n)['pref'][-1]
+        if n == 0 or n == f.size-1:
+            dprad_ms = prad_n * dt
+        else:
+            dprad_ms = 2*prad_n*dt
+
+        dac = self.model.acoustic.get_state_vec()
+        dac['pref'][-1] = 0.5*prad_ms**-0.5 * dprad_ms
+
+        return dac
+
+    def eval_dfl_props(self, f):
+        dfluid = self.acoustic.get_properties_vec()
+        dfluid.set(0.0)
+        return dfluid
+
+    def eval_dt0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0

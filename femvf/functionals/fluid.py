@@ -61,15 +61,18 @@ class FluidFunctional(AbstractFunctional):
             vecs.append(self.model.acoustic.get_properties_vec())
         return linalg.concatenate(*vecs)
 
+    def eval_dfl_state(self, f, n):
+        raise NotImplementedError
+
+    def eval_dfl_props(self, f):
+        raise NotImplementedError
+
 class FinalPressureNorm(FluidFunctional):
     r"""
     Return the l2 norm of pressure at the final time
 
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
-    func_types = ()
-    default_constants = {}
-
     def eval(self, f):
         # self.model.set_params_fromfile(f, f.size-1)
         state = f.get_state(f.size-1)
@@ -98,8 +101,6 @@ class FinalPressureNorm(FluidFunctional):
 
 class FinalFlowRateNorm(FluidFunctional):
     """The norm of the final flow rate"""
-    func_types = ()
-
     def eval(self, f):
         # breakpoint()
         qp = f.get_state(f.size-1)[3:5]
@@ -125,3 +126,4 @@ class FinalFlowRateNorm(FluidFunctional):
 
     def eval_ddt(self, f, n):
         return 0.0
+
