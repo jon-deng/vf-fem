@@ -77,7 +77,6 @@ def traction_1form(trial, test, pressure, facet_normal, traction_ds):
 
     fluid_force = -pressure*deformation_cofactor*facet_normal
 
-    # ds(facet_label['pressure']) should be replaced with traction_ds
     traction = ufl.dot(fluid_force, test)*traction_ds
     return traction
 
@@ -93,6 +92,7 @@ class Solid:
                  fsi_facet_labels, fixed_facet_labels):
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
+
         self._forms = self.form_definitions(mesh, facet_func, facet_labels,
                                             cell_func, cell_labels, fsi_facet_labels, fixed_facet_labels)
 
@@ -153,6 +153,10 @@ class Solid:
             'bilin.df1_dv0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_dv0_adj']),
             'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_da0_adj'])
         }
+
+    @property
+    def solid(self):
+        return self
 
     @property
     def forms(self):
@@ -288,12 +292,13 @@ class Solid:
         res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
         return res
 
-    def solve_state1(self, newton_solver_prm=None):
+    def solve_state1(self, state1, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
         dt = self.dt
 
         uva1 = self.get_state_vec()
+        self.set_fin_state(state1)
         dfn.solve(self.f1 == 0, self.u1, bcs=self.bc_base, J=self.df1_du1,
                   solver_parameters={"newton_solver": newton_solver_prm})
 

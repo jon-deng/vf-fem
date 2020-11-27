@@ -14,6 +14,7 @@ import h5py
 import dolfin as dfn
 import numpy as np
 
+from .models.solid import Solid
 from . import constants
 
 def get_from_cache(cache_name):
@@ -100,6 +101,7 @@ class StateFile:
                 self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
 
             for name in model.control.keys:
+                # breakpoint()
                 self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.root_group[f'control/{name}'])
 
     ## Implement an h5 group interface to the underlying root group
@@ -230,7 +232,8 @@ class StateFile:
 
         for name, vec in zip(self.model.control.keys, self.model.control.vecs):
             NDOF = len(vec)
-            control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), dtype=np.float64)
+            control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), 
+                                         chunks=(self.NCHUNK, NDOF), dtype=np.float64)
         pass
 
     def init_properties(self):
