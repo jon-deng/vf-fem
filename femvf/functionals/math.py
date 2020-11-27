@@ -34,7 +34,10 @@ def power(funa, funb):
     funa, funb = _convert_float(funa, funb)
     _validate(funa, funb)
 
-    return Power(funa.model, funa, funb)
+    if isinstance(funb, Scalar):
+        return ScalarPower(funa.model, funa, funb)
+    else:
+        return Power(funa.model, funa, funb)
 
 def _validate(*funs):
     _model = funs[0].model
@@ -142,7 +145,8 @@ class Power(AbstractFunctional):
 
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
-
+        
+        assert a > 0 # This is not defined if a < 0
         return b*a**(b-1)*da + np.log(a)*a**b*db
 
     def eval_dstate(self, f, n):
@@ -156,6 +160,38 @@ class Power(AbstractFunctional):
 
     def eval_dt0(self, f, n):
         return self._power_drule(*self.funcs, 'dt0', f, n)
+
+class ScalarPower(AbstractFunctional):
+    """
+    A functional representing a ** b, where a is a functional and b a scalar
+    """
+    def eval(self, f):
+        funa, funb = self.funcs
+        a, b = funa(f), funb(f)
+        return a**b
+
+    @staticmethod
+    def _scalarpower_drule(funa, funb, dname, *args):
+        dfuna = getattr(funa, dname)
+        dfunb = getattr(funb, dname)
+
+        a, b = funa(args[0]), funb(args[0])
+        da = dfuna(*args)
+        # db = dfunb(*args)
+
+        return b*a**(b-1) * da
+
+    def eval_dstate(self, f, n):
+        return self._scalarpower_drule(*self.funcs, 'dstate', f, n)
+
+    def eval_dprops(self, f):
+        return self._scalarpower_drule(*self.funcs, 'dprops', f)
+
+    def eval_ddt(self, f, n):
+        return self._scalarpower_drule(*self.funcs, 'ddt', f, n)
+
+    def eval_dt0(self, f, n):
+        return self._scalarpower_drule(*self.funcs, 'dt0', f, n)
 
 class Scalar(AbstractFunctional):
     """

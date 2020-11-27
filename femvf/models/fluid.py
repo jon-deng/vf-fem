@@ -306,6 +306,12 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dssep_damin, dssep_dsmin, dssep_da, dasep_damin, dasep_dsmin, dasep_da
 
+    def min_area(self, s, a, fluid_props):
+        alpha = fluid_props['alpha']
+        wmin = expweight(a, alpha)
+        amin = wavg(s, a, wmin)
+        return amin
+
     def fluid_pressure(self, usurf, vsurf, psub, psup, fluid_props):
         """
         Computes the pressure loading at a series of surface nodes according to Pelorson (1994)

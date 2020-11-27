@@ -860,8 +860,8 @@ class FSAIModel(FSIModel):
 
         # Update form coefficients and initial guess
         self.set_fin_state(ini_state)
-
-        sl_state1, _ = self.solid.solve_state1(newton_solver_prm)
+        ini_slstate = ini_state[:3]
+        sl_state1, _ = self.solid.solve_state1(ini_slstate, newton_solver_prm)
 
         self.set_fin_solid_state(sl_state1)
 

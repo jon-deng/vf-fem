@@ -97,20 +97,21 @@ class FinalPressureNorm(FluidFunctional):
         return 0.0
 
 class FinalFlowRateNorm(FluidFunctional):
-    """Represents the norm of the final flow rate"""
+    """The norm of the final flow rate"""
     func_types = ()
 
     def eval(self, f):
+        # breakpoint()
         qp = f.get_state(f.size-1)[3:5]
 
-        return qp['q'][0]**2
+        return qp['q'][0]
 
     def eval_dfl_state(self, f, n):
         dqp = self.fluid.get_state_vec()
 
         if n == f.size-1:
-            qp = f.get_state(n)[3:5]
-            dqp['q'][:] = 2*qp[0]
+            # qp = f.get_state(n)[3:5]
+            dqp['q'][:] = 1.0
 
         return dqp
 

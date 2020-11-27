@@ -15,7 +15,8 @@ from . import linalg
 
 # @profile
 def integrate(model, ini_state, controls, props, times, idx_meas=None,
-              h5file='tmp.h5', h5group='/', newton_solver_prm=None, callbacks=None):
+              h5file='tmp.h5', h5group='/', newton_solver_prm=None, 
+              export_callbacks=None):
     """
     Integrate the model over each time in `times` for the specified parameters
 
@@ -40,11 +41,12 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
     Returns
     -------
     info : dict
-        Info about the run
+        Any exported quantites are contained in here
     """
-    if callbacks is None:
-        callbacks = {}
-    info = {key: [] for key in callbacks}
+    # Initialize storage of exported quantites
+    if export_callbacks is None:
+        export_callbacks = {}
+    info = {key: [] for key in export_callbacks}
 
     if idx_meas is None:
         idx_meas = np.array([])
@@ -67,6 +69,9 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
     ## Allocate functions to store states
     state0 = ini_state.copy()
     control0 = controls[0]
+
+    for key, func in export_callbacks.items():
+        info[key].append(func(model, state0, control0, props, times[0]))
 
     ## Initialize datasets and save initial states to the h5 file
     with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
@@ -95,9 +100,9 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
             model.set_control(control1)
             
             state1, step_info = model.solve_state1(state0)
-            model.set_fin_state(state1)
-            for key, callback in callbacks.items():
-                info[key].append(callback(model))
+            # model.set_fin_state(state1)
+            for key, func in export_callbacks.items():
+                info[key].append(func(model, state1, control1, props, times[n]))
 
             # Write the solution outputs to a file
             f.append_state(state1)
@@ -108,7 +113,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
             # Update initial conditions for the next time step
             state0 = state1
             control0 = control1
-    info['time'] = np.array(times)
+    info['times'] = np.array(times)
     return h5file, h5group, info
 
 def newton_solve(u, du, jac, res, bcs, **kwargs):
@@ -195,7 +200,3 @@ def newmark_error_estimate(a1, a0, dt, beta=1/4):
         An estimate of the error in :math:`u_{n+1}`
     """
     return 0.5*dt**2*(2*beta - 1/3)*(a1-a0)
-
-def gw_callback(model):
-    _, info = model.fluid.solve_qp1()
-    return info['a_min']

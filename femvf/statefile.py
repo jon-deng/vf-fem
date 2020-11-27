@@ -365,6 +365,10 @@ class StateFile:
             A set of functions to set vector values for.
         """
         control = self.model.get_control_vec()
+        num_controls = self.root_group[f'control/{control.keys[0]}'].size
+        if n > num_controls-1:
+            n = num_controls-1
+
         for vec, key in zip(control.vecs, control.keys):
             value = self.dset_chunk_cache[f'control/{key}'].get(n)
             try:

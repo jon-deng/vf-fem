@@ -13,11 +13,11 @@ import dolfin as dfn
 # import h5py
 
 import femvf.statefile as sf
-from femvf.forward import integrate, gw_callback
+from femvf.forward import integrate
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models import load_fsi_model, load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
-
+from femvf import callbacks
 from femvf import linalg
 
 class TestForward(unittest.TestCase):
@@ -157,10 +157,13 @@ class TestForward(unittest.TestCase):
             os.remove(save_path)
 
         ## Run the simulation
+        # Set values to export
+        cbs = {'glottal_width': callbacks.safe_glottal_width}
         print("Running forward model")
         runtime_start = perf_counter()
-        h5file, h5group, info = integrate(model, ini_state, controls, props, times, h5file=save_path, h5group='/',
-                         callbacks={'glottal_width': gw_callback})
+        h5file, h5group, info = integrate(model, ini_state, controls, props, times, 
+            h5file=save_path, h5group='/', export_callbacks=cbs)
+
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
@@ -171,7 +174,7 @@ class TestForward(unittest.TestCase):
         #     psubs = f.get_control
 
         fig, ax = plt.subplots(1, 1)
-        ax.plot(times[1:], info['glottal_width'])
+        ax.plot(times, info['glottal_width'])
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
 

@@ -245,7 +245,7 @@ class AbstractTaylorTest(unittest.TestCase):
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
         
-        breakpoint()
+        # breakpoint()
         return (order_1, order_2)
 
     def plot_taylor_convergence(self, grad_on_step_dir, h, g):
