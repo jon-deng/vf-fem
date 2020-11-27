@@ -62,7 +62,10 @@ class QuasiSteady1DFluid:
         self.properties = self.get_properties_vec(set_default=True)
 
         self._dt = 1.0
-
+    @property
+    def fluid(self):
+        return self
+        
     @property
     def dt(self):
         return self._dt
