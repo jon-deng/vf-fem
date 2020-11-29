@@ -29,8 +29,7 @@ def line_search(hs, model,
 
         props_n = props + h*dprops
 
-        times_n = np.array(times)
-        times_n += h*dtimes
+        times_n = times + h*dtimes
 
         ## Run simulations at the step
         runtime_start = perf_counter()

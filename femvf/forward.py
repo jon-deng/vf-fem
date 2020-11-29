@@ -30,7 +30,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
         control in the list, then the controls are considered to be constant in time.
     props : BlockVec
         Properties vector for the system
-    times : np.ndarray
+    times : BlockVec
         Array of discrete integration times. Each time point is one integration point so the time
         between successive time points is a time step.
     idx_meas : np.ndarray
@@ -57,7 +57,9 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
         assert len(controls) == times.size
 
     # Check integration times are specified fine
-    if times[-1] < times[0]:
+    times_bvec = times
+    times = times_bvec[0]
+    if times[-1] <= times[0]:
         raise ValueError("The final time point must be greater than the initial one."
                          f"The input intial/final times were {times[0]}/{times[-1]}")
     if times.size <= 1:

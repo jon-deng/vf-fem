@@ -84,7 +84,7 @@ class FinalPressureNorm(FluidFunctional):
         return dqp
 
     def eval_dfl_props(self, f):
-        dfluid = self.fluid.get_properties_vec()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -278,7 +278,7 @@ class AcousticPower(FluidFunctional):
         return dqp
 
     def eval_dfl_props(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 

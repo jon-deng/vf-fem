@@ -159,8 +159,8 @@ def taylor_order(f0, hs, fs,
                  dstate, dcontrols, dprops, dtimes):
     
     ## Project the gradient along the step direction
-    directions = linalg.concatenate(dstate, dprops, linalg.BlockVec([dtimes], ['t']))
-    gradients = linalg.concatenate(gstate, gprops, linalg.BlockVec([gtimes], ['t']))
+    directions = linalg.concatenate(dstate, dprops, dtimes)
+    gradients = linalg.concatenate(gstate, gprops, gtimes)
 
     grad_step = linalg.dot(directions, gradients)
     grad_step_fd = (fs - f0)/hs
@@ -216,7 +216,7 @@ class AbstractTaylorTest(unittest.TestCase):
 
         if dtimes is None:
             dtimes = self.times.copy()
-            dtimes[:] = 0.0
+            dtimes.set(0.0)
 
         ## Conduct a line search along the specified direction
         if self.OVERWRITE_LSEARCH or not os.path.exists(lsearch_fname):
@@ -299,7 +299,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
         t_start, t_final = 0, 0.01
         times_meas = np.linspace(t_start, t_final, 128)
-        self.times = times_meas
+        self.times = linalg.BlockVec((times_meas,), ('times',))
 
         self.state0 = self.model.get_state_vec()
         self.state0['v'][:] = 1e-3
@@ -423,8 +423,8 @@ class TestBasicGradient(AbstractTaylorTest):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
         hs = 2.0**(np.arange(2, 9))
 
-        dtimes = np.zeros(self.times.size)
-        dtimes[1:] = np.arange(1, dtimes.size)*1e-9
+        dtimes = self.times.copy()
+        dtimes['times'][1:] = np.arange(1, dtimes['times'].size)*1e-9
 
         
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
@@ -459,7 +459,7 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
 
         # t_start, t_final = 0, 0.002
         # times_meas = np.linspace(t_start, t_final, 3)
-        self.times = times_meas
+        self.times = linalg.BlockVec((times_meas,), ('times',))
 
         control = self.model.get_control_vec()
         uva0 = self.model.solid.get_state_vec()
@@ -588,8 +588,8 @@ class TestBasicGradientSingleStep(AbstractTaylorTest):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
         hs = 2.0**(np.arange(2, 9)+5)
 
-        dtimes = np.zeros(self.times.size)
-        dtimes[1:] = np.arange(1, dtimes.size)*1e-11
+        dtimes = self.times.copy()
+        dtimes['times'][:] = np.arange(1, dtimes['times'].size)*1e-11
 
         
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)

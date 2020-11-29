@@ -42,17 +42,17 @@ class Parameterization:
     Attributes
     ----------
     model : femvf.model.ForwardModel
-    constants : dict({str: value})
+    constants : tuple
         A dictionary of labeled constants to values
     bvector : np.ndarray
         The BlockVector representation of the parameterization
     """
 
-    def __init__(self, model, constants):
+    def __init__(self, model, *constants):
         self.model = model
-
-        self._bvector = self.init_vector()
         self.constants = constants
+
+        self._bvector = None
 
     def __str__(self):
         return self.bvector.__str__()
@@ -72,7 +72,7 @@ class Parameterization:
         """
         Return a copy of parameterization
         """
-        out = type(self)(self.model, self.constants.copy())
+        out = type(self)(self.model, *self.constants)
         out.bvector[:] = self.bvector
         return out
 
@@ -136,6 +136,73 @@ class Parameterization:
             The sensitvity of the functional wrt. the parameterization
         """
         return NotImplementedError
+
+class FullParameterization(Parameterization):
+    def __init__(self, model, ntime):
+        super().__init__(model, ntime)
+        ini_state = model.get_state_vec()
+        control = model.get_control_vec()
+        props = model.get_properties_vec()
+        times = linalg.BlockVec((np.zeros(ntime),), ('times',))
+        self._bvector = linalg.concatenate(ini_state, control, props, times) #join_standard_to_bvector(ini_state, control, props, times)
+
+    def convert(self):
+        model = self.model
+        subvec_bsizes = [bvec.bsize for bvec in (model.state0, model.control, model.properties)] + [1]
+        ini_state, control, props, times = split_bvector_to_standard(model, self.bvector)
+
+        return ini_state, [control], props, times
+
+    def dconvert(self, grad_state, grad_controls, grad_props, grad_times):
+        """
+        Returns the sensitivity of the elastic modulus with respect to parameters
+
+        # TODO: This should return a dict or something that has the sensitivity
+        # of all properties wrt parameters
+        """
+        return join_standard_to_bvector(grad_state, grad_controls[0], grad_props, grad_times)
+
+class SubsetParameterization(Parameterization):
+    def __init__(self, model, ntime, subset_keys):
+        super().__init__(model, ntime, subset_keys)
+        ini_state = model.get_state_vec()
+        control = model.get_control_vec()
+        props = model.get_properties_vec()
+        times = linalg.BlockVec((np.zeros(ntime),), ('times',))
+        self._bvector = join_standard_to_bvector(ini_state, control, props, times)
+        self.subset_keys = subset_keys
+    
+    def copy(self):
+        """
+        Return a copy of parameterization
+        """
+        out = type(self)(self.model, *self.constants)
+        out.full_bvector[:] = self.full_bvector
+        out.bvector[:] = self.bvector
+        return out
+
+    @property
+    def full_bvector(self):
+        return self._bvector
+
+    @property
+    def bvector(self):
+        keys = self.subset_keys
+        vecs = [self.full_bvector[key] for key in keys]
+        return linalg.BlockVec(vecs, keys)
+
+    def convert(self):
+        model = self.model
+        
+        ini_state, control, props, times = split_bvector_to_standard(model, self.full_bvector)
+
+        return ini_state, [control], props, times
+
+    def dconvert(self, grad_state, grad_controls, grad_props, grad_times):
+        full_grad = join_standard_to_bvector(grad_state, grad_controls[0], grad_props, grad_times)
+        keys = self.subset_keys
+        vecs = [full_grad[key] for key in keys]
+        return linalg.BlockVec(vecs, keys)
 
 class NodalElasticModuli(Parameterization):
     """
@@ -205,6 +272,23 @@ class ElasticModuliAndInitialState(Parameterization):
         out[:-1] = grad_state
 
         return out
+
+def split_bvector_to_standard(model, full_bvec):
+    subvec_bsizes = [bvec.bsize for bvec in (model.state0, model.control, model.properties)] + [1]
+    subvec_idxs = np.cumsum([0] + subvec_bsizes)
+
+    ini_state, control, props, times = [full_bvec[ii:jj] for ii, jj in zip(subvec_idxs[:-1], subvec_idxs[1:])]
+
+    return ini_state, control, props, times
+
+def join_standard_to_bvector(state, control, props, times):
+    labels = [f'{key}'
+              for bvec in (state, control, props, times)
+              for key in bvec.keys]
+    vecs = [*state.vecs, *control.vecs, *props.vecs, *times.vecs]
+
+    # breakpoint()
+    return linalg.BlockVec(vecs, labels)
 
 ## These need to be fixed since they use an old version of the code
 class KelvinVoigtNodalConstants(Parameterization):

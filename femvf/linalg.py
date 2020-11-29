@@ -567,6 +567,13 @@ class BlockVec:
         return tuple([_len(vec) for vec in self.vecs])
 
     @property
+    def bsize(self):
+        """
+        Block size of the vector (number of blocks)
+        """
+        return len(self.vecs)
+
+    @property
     def keys(self):
         return self._keys
 

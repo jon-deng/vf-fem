@@ -98,7 +98,7 @@ def adjoint(model, f, functional):
     # components once
     grad_props = adj_props + functional.dprops(f)
 
-    grad_controls = model.get_control_vec()
+    grad_controls = [model.get_control_vec()]
 
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)
@@ -107,6 +107,7 @@ def adjoint(model, f, functional):
     # the conversion below is becase dt = t1 - t0
     grad_times[1:] = grad_dt
     grad_times[:-1] -= grad_dt
+    grad_times = linalg.BlockVec((grad_times,), ('times',))
 
     return functional_value, grad_state, grad_controls, grad_props, grad_times
 

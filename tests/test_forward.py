@@ -145,7 +145,7 @@ class TestForward(unittest.TestCase):
         model, ini_state, controls, props = self.config_fsai_model()
         # model, ini_state, controls, props = self.config_fsi_model()
 
-        times = np.linspace(0, 0.01, 100)
+        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
@@ -174,7 +174,7 @@ class TestForward(unittest.TestCase):
         #     psubs = f.get_control
 
         fig, ax = plt.subplots(1, 1)
-        ax.plot(times, info['glottal_width'])
+        ax.plot(times['times'], info['glottal_width'])
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
 
