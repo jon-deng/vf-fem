@@ -208,6 +208,11 @@ class NodalElasticModuli(Parameterization):
     """
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
+    def __init__(self, model, *constants):
+        super().__init__(model, *constants)
+        
+        self._bvector = self.init_vector()
+
     def init_vector(self):
         vecs = [self.model.properties['emod'].copy()]
         labels = ['emod']
@@ -221,7 +226,7 @@ class NodalElasticModuli(Parameterization):
         props = self.model.properties.copy()
 
         props['emod'] = self.bvector['emod']
-        times = self.constants['times']
+        times = self.constants[0]['times']
 
         return ini_state, controls, props, times
 

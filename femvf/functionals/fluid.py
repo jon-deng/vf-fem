@@ -103,7 +103,7 @@ class FinalFlowRateNorm(FluidFunctional):
         return qp['q'][0]
 
     def eval_dfl_state(self, f, n):
-        dqp = self.fluid.get_state_vec()
+        dqp = self.model.fluid.get_state_vec()
 
         if n == f.size-1:
             # qp = f.get_state(n)[3:5]
@@ -112,7 +112,7 @@ class FinalFlowRateNorm(FluidFunctional):
         return dqp
 
     def eval_dfl_props(self, f):
-        dfluid = self.fluid.get_properties_vec()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
