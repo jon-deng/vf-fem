@@ -219,11 +219,7 @@ class AcousticPower(FluidFunctional):
 
         time = f.get_times()[n_start:n_final]
 
-        q = []
-        for n in range(n_start, n_final):
-            qn = f.get_state(n)['q']
-            q.append(qn)
-        q = np.array(q)
+        q = np.array([f.get_state(i)['q'][0] for i in range(n_start, n_final)])
 
         ## Multiply the flow rate vector data by a tukey window
         tukey_window = sig.tukey(q.size, alpha=self.constants['tukey_alpha'])
@@ -246,32 +242,46 @@ class AcousticPower(FluidFunctional):
         # psd_acoustic = np.real(z_radiation) * (dft_q * np.conj(dft_q))
         psd_acoustic = np.real(z_radiation) * np.abs(dft_q_tukey)**2
 
-        self.cache.update({'q': q, 'dft_q_tukey': dft_q_tukey, 'dft_freq': dft_freq,
-                           'z_radiation': z_radiation,
-                           'psd_acoustic': psd_acoustic,
-                           'tukey_window': tukey_window})
-
         res = np.sum(psd_acoustic) / q.size**2
         return res
 
     def eval_dfl_state(self, f, n):
         dqp = self.model.fluid.get_state_vec()
 
-        ## Load cached value DFT quantities
+        ## Load the flow rate
         n_start = self.constants['n_start']
-        q = self.cache['q']
-        z_rad = self.cache['z_radiation']
-        dft_q_tukey = self.cache['dft_q_tukey']
+        n_final = f.size-1
+
+        time = f.get_times()[n_start:n_final]
+
+        q = np.array([f.get_state(i)['q'][0] for i in range(n_start, n_final)])
+
+        ## Multiply the flow rate vector data by a tukey window
+        tukey_window = sig.tukey(q.size, alpha=self.constants['tukey_alpha'])
+        q_tukey = tukey_window * q
+
+        ## Calculate the normalized radiation impedance, so it's equal to pressure/flow rate
+        rho = self.constants['rho']
+        c = self.constants['c']
+        a = self.constants['a']
+
+        dft_q_tukey = np.fft.fft(q_tukey, n=q.size)
+        dft_freq = np.fft.fftfreq(q.size, d=time[1]-time[0])
+
+        k = 2*np.pi*dft_freq/c
+        z = 1/2*(k*a)**2 + 1j*8*k*a/3/np.pi
+        z_rad = z * rho*c/(np.pi*a**2)
 
         ## Calculate the needed derivative terms (if applicable)
         N = q.size
         n_ = n-n_start
+        # breakpoint()
         if n_ >= 0 and n_ < q.size:
             # dft_q[n_] = sum(dft_factor * q)
             # psd_acoustic = np.real(z_radiation) * np.abs(dft_q_tukey)**2
             dft_factor = np.exp(1j*2*np.pi*n_*np.arange(N)/N)
             dpsd_dq_tukey = np.real(z_rad) * 2 * np.real(dft_q_tukey * dft_factor)
-            dpsd_dq = dpsd_dq_tukey * self.cache['tukey_window'][n_]
+            dpsd_dq = dpsd_dq_tukey * tukey_window[n_]
 
             dqp['q'][:] = np.sum(dpsd_dq) / N**2
 

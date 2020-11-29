@@ -174,7 +174,7 @@ def taylor_order(f0, hs, fs,
     order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
     return (order_1, order_2), (grad_step, grad_step_fd)
 
-class AbstractTaylorTest(unittest.TestCase):
+class TaylorTest(unittest.TestCase):
 
     def compute_baseline(self):
         ## Compute the baseline forward simulation and functional/gradient at the baseline (via adjoint)
@@ -245,7 +245,7 @@ class AbstractTaylorTest(unittest.TestCase):
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
         
-        # breakpoint()
+        breakpoint()
         return (order_1, order_2)
 
     def plot_taylor_convergence(self, grad_on_step_dir, h, g):
@@ -276,7 +276,7 @@ class AbstractTaylorTest(unittest.TestCase):
                 fig.colorbar(mappable, ax=axs[ii, jj])
         return fig, axs
 
-class TestBasicGradient(AbstractTaylorTest):
+class TestBasicGradient(TaylorTest):
     COUPLING = 'explicit'
     OVERWRITE_LSEARCH = True
     FUNCTIONAL = fsolid.FinalDisplacementNorm
@@ -298,7 +298,7 @@ class TestBasicGradient(AbstractTaylorTest):
         self.model, self.props = get_starting_fsai_model(self.COUPLING)
 
         t_start, t_final = 0, 0.01
-        times_meas = np.linspace(t_start, t_final, 128)
+        times_meas = np.linspace(t_start, t_final, 32)
         self.times = linalg.BlockVec((times_meas,), ('times',))
 
         self.state0 = self.model.get_state_vec()
@@ -316,6 +316,11 @@ class TestBasicGradient(AbstractTaylorTest):
 
         self.functional = self.FUNCTIONAL(self.model)
 
+        func_power_cons = fmath.sub(ffluid.AcousticPower(self.model), fmath.Scalar(self.model, 0.0))
+        func_periodic_cons = fmath.mul(fmath.Scalar(self.model, 1.0), fsolid.PeriodicError(self.model))
+        func = fmath.add(func_power_cons, func_periodic_cons)
+        self.functional = ffluid.AcousticPower(self.model)
+
         # self.functional = fmath.add(
         #     fmath.mul(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
         #                   basic.FinalVelocityNorm(self.model))
@@ -328,7 +333,7 @@ class TestBasicGradient(AbstractTaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-10)
+        hs = 2.0**(np.arange(2, 9)-7)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
@@ -431,7 +436,7 @@ class TestBasicGradient(AbstractTaylorTest):
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
-class TestBasicGradientSingleStep(AbstractTaylorTest):
+class TestBasicGradientSingleStep(TaylorTest):
     COUPLING = 'explicit'
     # COUPLING = 'implicit'
     OVERWRITE_LSEARCH = True
