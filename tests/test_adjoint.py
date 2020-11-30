@@ -30,7 +30,7 @@ from femvf.forward import integrate
 from femvf.adjoint import adjoint
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import solid as fsolid, fluid as ffluid, math as fmath
+from femvf.functionals import solid as fsolid, fluid as ffluid, acoustic as facous, math as fmath
 from femvf import linalg
 
 from femvf.utils import line_search, line_search_p, functionals_on_line_search
@@ -320,6 +320,7 @@ class TestBasicGradient(TaylorTest):
         func_periodic_cons = fmath.mul(fmath.Scalar(self.model, 1.0), fsolid.PeriodicError(self.model))
         func = fmath.add(func_power_cons, func_periodic_cons)
         self.functional = ffluid.AcousticPower(self.model)
+        self.functional = facous.AcousticPower(self.model)
 
         # self.functional = fmath.add(
         #     fmath.mul(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
@@ -333,7 +334,7 @@ class TestBasicGradient(TaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-7)
+        hs = 2.0**(np.arange(2, 9)-10)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
