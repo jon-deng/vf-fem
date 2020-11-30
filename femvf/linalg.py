@@ -423,9 +423,9 @@ def handle_scalars(bvec_op):
         # Find all input BlockVec arguments and check if they have compatible sizes
         bvecs = [arg for arg in args if isinstance(arg, BlockVec)]
         if not validate_blockvec_size(*bvecs):
-            raise ValueError("BlockVecs have incompatible sizes")
+            raise ValueError(f"Could not perform operation on BlockVecs with sizes", [vec.size for vec in bvecs])
 
-        bsize = len(bvecs[0].size)
+        bsize = bvecs[0].bsize
         keys = bvecs[0].keys
 
         # Convert floats to scalar BlockVecs in a new argument list
@@ -443,7 +443,6 @@ def handle_scalars(bvec_op):
         return bvec_op(*new_args)
     return wrapped_bvec_op
 
-# @handle_scalars
 def dot(a, b):
     """
     Return the dot product of a and b
@@ -451,10 +450,7 @@ def dot(a, b):
     c = a*b
     ret = 0
     for vec in c:
-        if isinstance(vec, float):
-            ret += vec
-        else:
-            ret += sum(vec)
+        ret += sum(vec)
     return ret
 
 @handle_scalars
@@ -467,7 +463,8 @@ def add(a, b):
     a, b: BlockVec or float
     """
     keys = a.keys
-    return BlockVec(tuple([ai+bi for ai, bi in zip(a, b)]), keys)
+    vecs = tuple([ai+bi for ai, bi in zip(a.vecs, b.vecs)])
+    return BlockVec(vecs, keys)
 
 @handle_scalars
 def sub(a, b):
@@ -479,7 +476,8 @@ def sub(a, b):
     a, b: BlockVec or float
     """
     keys = a.keys
-    return BlockVec(tuple([ai-bi for ai, bi in zip(a, b)]), keys)
+    vecs = tuple([ai-bi for ai, bi in zip(a, b)])
+    return BlockVec(vecs, keys)
 
 @handle_scalars
 def mul(a, b):
@@ -491,7 +489,8 @@ def mul(a, b):
     a, b: BlockVec or float
     """
     keys = a.keys
-    return BlockVec(tuple([ai*bi for ai, bi in zip(a, b)]), keys)
+    vecs = tuple([ai*bi for ai, bi in zip(a.vecs, b.vecs)])
+    return BlockVec(vecs, keys)
 
 @handle_scalars
 def div(a, b):
@@ -503,7 +502,8 @@ def div(a, b):
     a, b: BlockVec or float
     """
     keys = a.keys
-    return BlockVec(tuple([ai/bi for ai, bi in zip(a, b)]), keys)
+    vecs = tuple([ai/bi for ai, bi in zip(a, b)])
+    return BlockVec(vecs, keys)
 
 @handle_scalars
 def power(a, b):
@@ -515,7 +515,8 @@ def power(a, b):
     a, b: BlockVec or float
     """
     keys = a.keys
-    return BlockVec(tuple([ai**bi for ai, bi in zip(a, b)]), keys)
+    vecs = tuple([ai**bi for ai, bi in zip(a, b)])
+    return BlockVec(vecs, keys)
 
 @handle_scalars
 def neg(a):
@@ -527,14 +528,17 @@ def neg(a):
     a: BlockVec
     """
     keys = a.keys
-    return BlockVec(tuple([-ai for ai in a]), keys)
+    vecs = tuple([-ai for ai in a])
+    return BlockVec(vecs, keys)
 
+@handle_scalars
 def pos(a):
     """
     Positifiy block vector a
     """
     keys = a.keys
-    return BlockVec(tuple([+ai for ai in a]), keys)
+    vecs = tuple([+ai for ai in a])
+    return BlockVec(vecs, keys)
 
 def _len(vec):
     if isinstance(vec, np.ndarray):
