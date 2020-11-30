@@ -39,7 +39,6 @@ def adjoint(model, f, functional):
     model.set_properties(props)
 
     # Check whether controls are variable in time or constant
-    variable_controls = f.variable_controls
     control0 = f.get_control(0)
     control1 = control0
 
@@ -50,6 +49,7 @@ def adjoint(model, f, functional):
     adj_dt = []
     adj_props = model.get_properties_vec()
     adj_props.set(0.0)
+    adj_controls = [model.get_control_vec() for i in range(f.num_controls)]
 
     ## Load states/parameters
     N = f.size
@@ -67,8 +67,8 @@ def adjoint(model, f, functional):
         # index 0
         dt1 = times[ii] - times[ii-1]
         state0, state1 = f.get_state(ii-1), f.get_state(ii)
-        if variable_controls:
-            control1 = f.get_control(ii)
+        control1 = f.get_control(ii)
+        # breakpoint()
 
         model.set_ini_state(state0)
         model.set_fin_state(state1)
@@ -80,6 +80,8 @@ def adjoint(model, f, functional):
         adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
 
         # Update gradients wrt parameters using the adjoint
+        # this logic assumes the last control applies over all remaining time steps (which is correct)
+        adj_controls[min(ii, len(adj_controls)-1)][:] -= model.apply_dres_dcontrol_adj(adj_state1)
         adj_props[:] = adj_props - model.apply_dres_dp_adj(adj_state1)
 
         adj_dt1 = solve_grad_dt(model, adj_state1) + functional.ddt(f, ii)
@@ -98,7 +100,7 @@ def adjoint(model, f, functional):
     # components once
     grad_props = adj_props + functional.dprops(f)
 
-    grad_controls = [model.get_control_vec()]
+    grad_controls = adj_controls
 
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)

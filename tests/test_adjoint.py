@@ -159,8 +159,8 @@ def taylor_order(f0, hs, fs,
                  dstate, dcontrols, dprops, dtimes):
     
     ## Project the gradient along the step direction
-    directions = linalg.concatenate(dstate, dprops, dtimes)
-    gradients = linalg.concatenate(gstate, gprops, gtimes)
+    directions = linalg.concatenate(dstate, dprops, dtimes, *dcontrols)
+    gradients = linalg.concatenate(gstate, gprops, gtimes, *gcontrols)
 
     grad_step = linalg.dot(directions, gradients)
     grad_step_fd = (fs - f0)/hs
@@ -199,7 +199,7 @@ class TaylorTest(unittest.TestCase):
     def get_taylor_order(self, lsearch_fname, hs,
                          dstate=None, dcontrols=None, dprops=None, dtimes=None):
         """
-        Runs a line search of simulations along a specified direction
+        Runs the taylor order test along the specified direction
         """
         ## Set a zero search direction if one isn't specified
         if dstate is None:
@@ -437,6 +437,18 @@ class TestBasicGradient(TaylorTest):
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
+    def test_control(self):
+        save_path = f'out/linesearch_control_{self.COUPLING}_{self.CASE_NAME}.h5'
+        hs = 2.0**(np.arange(7)-5)
+        step_size = 1.0e0 * PASCAL_TO_CGS
+
+        dcontrol = self.model.get_control_vec()
+        dcontrol['psub'][:] = 1.0*step_size
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
 class TestBasicGradientSingleStep(TaylorTest):
     COUPLING = 'explicit'
     # COUPLING = 'implicit'
@@ -590,6 +602,18 @@ class TestBasicGradientSingleStep(TaylorTest):
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
+    def test_control(self):
+        save_path = f'out/linesearch_control_{self.COUPLING}_{self.CASE_NAME}.h5'
+        hs = 2.0**(np.arange(7)-5)
+        step_size = 5.0e0 * PASCAL_TO_CGS
+
+        dcontrol = self.model.get_control_vec()
+        dcontrol['psub'][:] = 1.0*step_size
+
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])
+        # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
+        # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
     def test_times(self):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
         hs = 2.0**(np.arange(2, 9)+5)
@@ -605,7 +629,8 @@ if __name__ == '__main__':
 
     test = TestBasicGradient()
     test.setUp()
-    test.test_emod()
+    # test.test_emod()
+    # test.test_control()
     # test.test_u0()
     # test.test_v0()
     # test.test_a0()

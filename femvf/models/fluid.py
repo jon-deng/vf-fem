@@ -359,14 +359,14 @@ class Bernoulli(QuasiSteady1DFluid):
         ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
         
         # 1D Bernoulli approximation of the flow
-        flow_rate_sqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
+        qsqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
 
-        pbern = psub + 1/2*rho*flow_rate_sqr*(asub**-2 - asafe**-2)
+        pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
 
         sep_multiplier = smoothstep(self.s_vertices, ssep, k=k)
 
         p = sep_multiplier * pbern
-        q = flow_rate_sqr**0.5
+        q = qsqr**0.5
 
         # Find the first point where s passes s_min/s_sep, then we can linearly interpolate
         idx_min = np.argmax(s>smin)
@@ -429,7 +429,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dasep_dy = (dasep_damin*damin_da + dasep_dsmin*dsmin_da + dasep_dasafe*dasafe_da) * da_dy
 
         # Calculate the flow rate using Bernoulli
-        coeff = 2*(psup - psub)/rho
+        coeff = 2/rho*(psup - psub)
         dcoeff_dpsub = -2/rho
         dcoeff_dpsup = 2/rho
 

@@ -138,15 +138,19 @@ class StateFile:
 
     @property
     def variable_controls(self):
-        num_controls = 1
-        control_group = self.root_group['control']
-        for key in self.model.control.keys:
-            num_controls = max(control_group[key].shape[0], num_controls)
-
-        if num_controls > 1:
+        if self.num_controls > 1:
             return True
         else: 
             return False
+    
+    @property
+    def num_controls(self):
+        num = 1
+        control_group = self.root_group['control']
+        for key in self.model.control.keys:
+            num = max(control_group[key].shape[0], num)
+
+        return num
 
     ## Statefile properties related to the root group where things are stored
     @property

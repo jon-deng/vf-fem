@@ -347,7 +347,13 @@ class FSIModel:
         raise NotImplementedError
 
     def apply_dres_dcontrol_adj(self, x):
-        raise NotImplementedError
+        ## Implement here since both FSI models should use this rule
+        b = self.get_control_vec()
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.control.vecs, self.properties)
+
+        b['psub'][:] = np.linalg.dot(x['p'], dp_dpsub) + np.linalg.dot(x['q'], dq_dpsub)
+        b['psub'][:] = np.linalg.dot(x['p'], dp_dpsup) + np.linalg.dot(x['q'], dq_dpsup)
+        return -b
 
 class ExplicitFSIModel(FSIModel):
     ## These setting functions ensure explicit coupling between the domains
@@ -482,8 +488,7 @@ class ExplicitFSIModel(FSIModel):
         return linalg.concatenate(bsolid, bfluid)
 
     def apply_dres_dcontrol_adj(self, x):
-        # b = self.get_properties_vec()
-        pass
+        return super().apply_dres_dcontrol_adj(x)
 
 class ImplicitFSIModel(FSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
@@ -709,8 +714,7 @@ class ImplicitFSIModel(FSIModel):
         return linalg.concatenate(bsolid, bfluid)
 
     def apply_dres_dcontrol_adj(self, x):
-        # b = self.get_properties_vec()
-        pass
+        return super().apply_dres_dcontrol_adj(x)
 
 class FSAIModel(FSIModel):
     """
@@ -729,7 +733,7 @@ class FSAIModel(FSIModel):
         self.control = control.copy()
 
         self.properties = linalg.concatenate(
-            solid.get_properties_vec(), fluid.get_properties_vec(), acoustic.get_properties_vec())
+            solid.properties, fluid.properties, acoustic.properties)
 
         self._dt = 1.0
 
@@ -877,7 +881,6 @@ class FSAIModel(FSIModel):
         # while num_it < 15:
             self.set_fin_fluid_state(fl_state1)
 
-            # breakpoint()
             ac_state1, _ = self.acoustic.solve_state1()
             self.set_fin_acoustic_state(ac_state1)
             # print(f"q: {self.acoustic.control['qin']}", fl_state1['q'])
@@ -940,7 +943,6 @@ class FSAIModel(FSIModel):
 
         for mat in (dfq_dpref, dfp_dpref, dfpref_dq):
             mat.assemble()
-        # breakpoint()
 
         blocks = [[   dfq_dq,    0.0,          0.0,    dfq_dpref], 
                   [      0.0, dfp_dp,          0.0,    dfp_dpref],
@@ -948,7 +950,6 @@ class FSAIModel(FSIModel):
                   [dfpref_dq,    0.0,          0.0, dfpref_dpref]]
 
         A = linalg.form_block_matrix(blocks)
-        # breakpoint()
         return A
 
     def solve_dres_dstate1(self, b):
@@ -1054,7 +1055,12 @@ class FSAIModel(FSIModel):
         return linalg.concatenate(bsl, bfl, bac)
 
     def apply_dres_dcontrol_adj(self, x):
-        return self.get_control_vec()
+        ## Implement here since both FSI models should use this rule
+        b = self.get_control_vec()
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+
+        b['psub'][:] = np.dot(x['p'], dp_dpsub) + np.dot(x['q'][0], dq_dpsub)
+        return -b
 
 
 def sl_state_to_fl_control(sl_state, fl_control, fsi_ref_config, fsi_vdofs):

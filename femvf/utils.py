@@ -23,9 +23,7 @@ def line_search(hs, model,
         ## Increment the inputs for the provided step
         state_n = ini_state + h*dstate
 
-        controls_n = []
-        for control, dcontrol in zip(controls, dcontrols):
-            controls_n.append(control + h*dcontrol)
+        controls_n = [control+h*dcontrol for control, dcontrol in zip(controls, dcontrols)]
 
         props_n = props + h*dprops
 
