@@ -349,7 +349,7 @@ class FSIModel:
     def apply_dres_dcontrol_adj(self, x):
         ## Implement here since both FSI models should use this rule
         b = self.get_control_vec()
-        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.control.vecs, self.properties)
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
 
         b['psub'][:] = np.linalg.dot(x['p'], dp_dpsub) + np.linalg.dot(x['q'], dq_dpsub)
         b['psub'][:] = np.linalg.dot(x['p'], dp_dpsup) + np.linalg.dot(x['q'], dq_dpsup)
