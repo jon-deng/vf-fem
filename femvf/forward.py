@@ -115,7 +115,11 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
             # Update initial conditions for the next time step
             state0 = state1
             control0 = control1
-    info['times'] = np.array(times)
+
+        info['times'] = np.array(times)
+        for key, value in info.items:
+            f.root_group[f'exports/{key}'] = value
+
     return h5file, h5group, info
 
 def newton_solve(u, du, jac, res, bcs, **kwargs):
