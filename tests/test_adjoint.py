@@ -30,7 +30,7 @@ from femvf.forward import integrate
 from femvf.adjoint import adjoint
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import solid as fsolid, fluid as ffluid, acoustic as facous, math as fmath
+from femvf.functionals import solid as fsolid, fluid as ffluid, acoustic as facous
 from femvf import linalg
 
 from femvf.utils import line_search, line_search_p, functionals_on_line_search
@@ -282,6 +282,7 @@ class TestBasicGradient(TaylorTest):
     FUNCTIONAL = fsolid.FinalDisplacementNorm
     # FUNCTIONAL = fsolid.FinalVelocityNorm
     FUNCTIONAL = ffluid.FinalPressureNorm
+    FUNCTIONAL = fsolid.PeriodicError
 
     def setUp(self):
         """
@@ -316,9 +317,9 @@ class TestBasicGradient(TaylorTest):
 
         self.functional = self.FUNCTIONAL(self.model)
 
-        func_power_cons = fmath.sub(ffluid.AcousticPower(self.model), fmath.Scalar(self.model, 0.0))
-        func_periodic_cons = fmath.mul(fmath.Scalar(self.model, 1.0), fsolid.PeriodicError(self.model))
-        func = fmath.add(func_power_cons, func_periodic_cons)
+        func_power_cons = ffluid.AcousticPower(self.model) - 0.0
+        func_periodic_cons = fsolid.PeriodicError(self.model)
+        func = func_power_cons + func_periodic_cons
         self.functional = ffluid.AcousticPower(self.model)
         self.functional = facous.AcousticPower(self.model)
 
@@ -629,8 +630,8 @@ if __name__ == '__main__':
 
     test = TestBasicGradient()
     test.setUp()
-    # test.test_emod()
-    # test.test_control()
+    test.test_emod()
+    test.test_control()
     # test.test_u0()
     # test.test_v0()
     # test.test_a0()

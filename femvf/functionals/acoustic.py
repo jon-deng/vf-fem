@@ -19,7 +19,7 @@ compute the sensitivity with respect to.
 import numpy as np
 import scipy.signal as sig
 
-from .abstract import AbstractFunctional
+from .base import AbstractFunctional
 from ..models import acoustic
 from .. import linalg
 

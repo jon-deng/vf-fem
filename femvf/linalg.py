@@ -751,6 +751,9 @@ class BlockVec:
     def __rtruediv__(self, other):
         return div(other, self)
 
+    def norm(self):
+        return dot(self, self)
+
 class MonotoBlock:
     def __init__(self, bvec):
         self.bvec = bvec

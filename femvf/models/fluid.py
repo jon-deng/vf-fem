@@ -360,6 +360,7 @@ class Bernoulli(QuasiSteady1DFluid):
         
         # 1D Bernoulli approximation of the flow
         qsqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
+        assert qsqr >= 0.0
 
         pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
 

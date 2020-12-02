@@ -117,7 +117,7 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
             control0 = control1
 
         info['times'] = np.array(times)
-        for key, value in info.items:
+        for key, value in info.items():
             f.root_group[f'exports/{key}'] = value
 
     return h5file, h5group, info

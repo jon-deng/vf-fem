@@ -23,7 +23,7 @@ import scipy.signal as sig
 # import dolfin as dfn
 # import ufl
 
-from .abstract import AbstractFunctional
+from .base import AbstractFunctional
 from ..models.fluid import QuasiSteady1DFluid, smoothmin, dsmoothmin_df
 from .. import linalg
 

@@ -24,7 +24,7 @@ import dolfin as dfn
 import ufl
 
 from .. import linalg
-from .abstract import AbstractFunctional
+from .base import AbstractFunctional
 from ..models.fluid import smoothmin, dsmoothmin_df
 from ..models.solid import strain, Solid
 
@@ -96,30 +96,38 @@ class PeriodicError(SolidFunctional):
         forms['u_N'] = dfn.Function(solid.vector_fspace)
         forms['v_0'] = dfn.Function(solid.vector_fspace)
         forms['v_N'] = dfn.Function(solid.vector_fspace)
+        forms['a_0'] = dfn.Function(solid.vector_fspace)
+        forms['a_N'] = dfn.Function(solid.vector_fspace)
 
         res_u = forms['u_N']-forms['u_0']
         res_v = forms['v_N']-forms['v_0']
+        res_a = forms['a_N']-forms['a_0']
 
         # forms['alpha'] = dfn.Constant(1.0)
 
         forms['resu'] = ufl.inner(res_u, res_u) * ufl.dx
         forms['resv'] = ufl.inner(res_v, res_v) * ufl.dx
+        forms['resa'] = ufl.inner(res_a, res_a) * ufl.dx
 
         forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], solid.vector_trial)
         forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], solid.vector_trial)
 
         forms['dresv_dv_0'] = ufl.derivative(forms['resv'], forms['v_0'], solid.vector_trial)
         forms['dresv_dv_N'] = ufl.derivative(forms['resv'], forms['v_N'], solid.vector_trial)
+
+        forms['dresa_da_0'] = ufl.derivative(forms['resa'], forms['a_0'], solid.vector_trial)
+        forms['dresa_da_N'] = ufl.derivative(forms['resa'], forms['a_N'], solid.vector_trial)
         return forms
 
     def eval(self, f):
         alphau = self.constants['alpha']
-        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], *_ = f.get_state(0)
-        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], *_ = f.get_state(f.size-1)
+        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], self.forms['a_0'].vector()[:] = f.get_state(0)[:3]
+        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], self.forms['a_N'].vector()[:] = f.get_state(f.size-1)[:3]
         erru = dfn.assemble(self.forms['resu'])
         errv = dfn.assemble(self.forms['resv'])
+        erra = dfn.assemble(self.forms['resa'])
         # print(alphau**2*erru, errv)
-        return alphau**2*erru + errv
+        return alphau**2*erru + errv + erra
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.get_state_vec()
@@ -127,9 +135,11 @@ class PeriodicError(SolidFunctional):
         if n == 0:
             duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
             duva[1][:] = dfn.assemble(self.forms['dresv_dv_0'])
+            duva[2][:] = dfn.assemble(self.forms['dresa_da_0'])
         elif n == f.size-1:
             duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_N'])
             duva[1][:] = dfn.assemble(self.forms['dresv_dv_N'])
+            duva[2][:] = dfn.assemble(self.forms['dresa_da_N'])
         return duva
 
     def eval_dsl_props(self, f):
@@ -142,6 +152,65 @@ class PeriodicError(SolidFunctional):
 
     def eval_ddt(self, f, n):
         return 0.0
+
+
+class _PeriodicError(SolidFunctional):
+    r"""
+    SolidFunctional that measures the periodicity of a simulation
+
+    This returns
+    .. math:: \int_\Omega ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 \, dx ,
+    where :math:T is the period.
+    """
+    IDX_COMP = -1
+    @staticmethod
+    def form_definitions(solid):
+        forms = {}
+        forms['u_0'] = dfn.Function(solid.vector_fspace)
+        forms['u_N'] = dfn.Function(solid.vector_fspace)
+
+        res_u = forms['u_N']-forms['u_0']
+
+        forms['resu'] = ufl.inner(res_u, res_u) * ufl.dx
+
+        forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], solid.vector_trial)
+        forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], solid.vector_trial)
+        return forms
+
+    def eval(self, f):
+        self.forms['u_0'].vector()[:]= f.get_state(0)[self.IDX_COMP]
+        self.forms['u_N'].vector()[:]= f.get_state(f.size-1)[self.IDX_COMP]
+        erru = dfn.assemble(self.forms['resu'])
+        return erru
+
+    def eval_dsl_state(self, f, n):
+        duva = self.solid.get_state_vec()
+        if n == 0:
+            duva[self.IDX_COMP][:] = dfn.assemble(self.forms['dresu_du_0'])
+        elif n == f.size-1:
+            duva[self.IDX_COMP][:] = dfn.assemble(self.forms['dresu_du_N'])
+        return duva
+
+    def eval_dsl_props(self, f):
+        dsolid = self.solid.get_properties_vec()
+        dsolid.set(0.0)
+        return dsolid
+
+    def eval_dt0(self, f, n):
+        return 0.0
+
+    def eval_ddt(self, f, n):
+        return 0.0
+
+class UPeriodicError(_PeriodicError):
+    IDX_COMP = 0
+
+class VPeriodicError(_PeriodicError):
+    IDX_COMP = 1
+
+class APeriodicError(_PeriodicError):
+    IDX_COMP = 2
+
 
 class PeriodicEnergyError(SolidFunctional):
     r"""
