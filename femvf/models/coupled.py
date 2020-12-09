@@ -352,7 +352,7 @@ class FSIModel:
         _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
 
         b['psub'][:] = np.dot(x['p'], dp_dpsub) + np.dot(x['q'], dq_dpsub)
-        b['psub'][:] = np.dot(x['p'], dp_dpsup) + np.dot(x['q'], dq_dpsup)
+        b['psup'][:] = np.dot(x['p'], dp_dpsup) + np.dot(x['q'], dq_dpsup)
         return -b
 
 class ExplicitFSIModel(FSIModel):
