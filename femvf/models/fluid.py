@@ -62,6 +62,7 @@ class QuasiSteady1DFluid:
         self.properties = self.get_properties_vec(set_default=True)
 
         self._dt = 1.0
+
     @property
     def fluid(self):
         return self
@@ -340,6 +341,8 @@ class Bernoulli(QuasiSteady1DFluid):
         xy_min, xy_sep: (2,) np.ndarray
             The coordinates of the vertices at minimum and separation areas
         """
+        # print(psub, psup)
+        assert psub > psup
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
         alpha, k = fluid_props['alpha'], fluid_props['k']
@@ -399,6 +402,7 @@ class Bernoulli(QuasiSteady1DFluid):
         fluid_props : BlockVec
             A dictionary of fluid property keyword arguments.
         """
+        assert psub > psup
         assert usurf.size%2 == 0
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
