@@ -752,7 +752,7 @@ class BlockVec:
         return div(other, self)
 
     def norm(self):
-        return dot(self, self)
+        return dot(self, self)**0.5
 
 class MonotoBlock:
     def __init__(self, bvec):
