@@ -545,17 +545,20 @@ class KVDampingWork(SolidFunctional):
         return forms
 
     def eval(self, f):
+        solid = self.model.solid
         N_START = self.constants['n_start']
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
 
         res = 0
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        self.model.set_params_fromfile(f, N_START)
+        self.model.set_ini_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
-            self.model.set_params_fromfile(f, ii, update_props=False)
+            # self.model.set_params_fromfile(f, ii, update_props=False)
+            self.model.set_ini_state(f.get_state(ii))
+
             power_right = dfn.assemble(self.forms['damping_power'])
             res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
             power_left = power_right
@@ -565,11 +568,12 @@ class KVDampingWork(SolidFunctional):
     def eval_dsl_state(self, f, n):
         duva = self.solid.get_state_vec()
         N_START = self.constants['n_start']
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
         time = f.get_times()
 
         if n >= N_START:
-            self.model.set_params_fromfile(f, n)
+            # self.model.set_params_fromfile(f, n)
+            self.model.set_ini_state(f.get_state(n))
             dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
 
             if n > N_START:
@@ -586,7 +590,7 @@ class KVDampingWork(SolidFunctional):
         dsolid.set(0.0)
 
         N_START = N_START = self.constants['n_start']
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
 
         dwork_deta = dfn.Function(self.solid.scalar_fspace).vector()
         # Calculate total damped work by the trapezoidal rule
@@ -610,7 +614,7 @@ class KVDampingWork(SolidFunctional):
     def eval_ddt(self, f, n):
         ddt = 0
         N_START = N_START = self.constants['n_start']
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
         if n >= N_START+1:
             # Calculate damped work over n-1 -> n
             # time = f.get_times()
@@ -657,7 +661,7 @@ class RayleighDampingWork(SolidFunctional):
 
     def eval(self, f):
         N_START = 0
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
 
         res = 0
         for ii in range(N_START, N_STATE-1):
@@ -686,7 +690,7 @@ class RayleighDampingWork(SolidFunctional):
     def eval_ddt(self, f, n):
         ddt = 0
         N_START = 0
-        # N_STATE = f.get_num_states()
+        # N_STATE = f.size
 
         # res = 0
         # for ii in range(N_START, N_STATE-1):

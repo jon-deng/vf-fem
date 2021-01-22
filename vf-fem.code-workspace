@@ -8,6 +8,9 @@
 		},
         {
 			"path": "../vf-experiments"
+		},
+		{
+			"path": "../vf-sig"
 		}
 	],
 	"settings": {

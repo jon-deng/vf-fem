@@ -13,10 +13,14 @@ from petsc4py import PETSc
 from . import statefile as sf
 from . import linalg
 
+# TODO: change args to require statefile context where outputs will be written to, 
+# instead of having function open a file
+# TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile
-def integrate(model, ini_state, controls, props, times, idx_meas=None,
-              h5file='tmp.h5', h5group='/', newton_solver_prm=None, 
-              export_callbacks=None):
+def integrate(
+    model, ini_state, controls, props, times, idx_meas=None,
+    h5file='tmp.h5', h5group='/', newton_solver_prm=None, export_callbacks=None
+    ):
     """
     Integrate the model over each time in `times` for the specified parameters
 
@@ -122,6 +126,40 @@ def integrate(model, ini_state, controls, props, times, idx_meas=None,
 
     return h5file, h5group, info
 
+def integrate_linear(
+    model, f, dini_state, dcontrols, dprops, dtimes, idx_meas=None,
+    h5file='tmp.h5', h5group='/', newton_solver_prm=None, export_callbacks=None
+    ):
+    """
+    Integrate the linearized forward equations and return the final linearized state
+
+    Returns
+    -------
+    dfin_state : linalg.BlockVec
+    """
+    model.set_properties(f.get_properties())
+
+    dfin_state_n = dini_state
+    for n in range(1, f.size):
+        # Set the linearization point
+        # This represents the residual F^n
+        model.set_ini_state(f.get_state(n-1))
+        model.set_fin_state(f.get_state(n))
+        model.set_control(f.get_control(n))
+
+        # Compute the action of the n'th time step
+        # note that the input "dx^{n-1}" vector is the previous output "dx"
+        _dini_state = dfin_state_n
+        _dcontrol = dcontrols[min(n, len(dcontrols)-1)]
+        _dt = dtimes[0][n]-dtimes[0][n-1]
+        dres_n = (model.apply_dres_dstate0(_dini_state) 
+                  + model.apply_dres_dcontrol(_dcontrol)
+                  + model.apply_dres_dp(dprops)
+                  + model.apply_dres_ddt(_dt))
+        dfin_state_n = model.solve_dres_dstate1(dres_n)
+
+    return dfin_state_n
+        
 def newton_solve(u, du, jac, res, bcs, **kwargs):
     """
     Solves the system using a newton method.

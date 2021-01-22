@@ -226,10 +226,10 @@ class TaylorTest(unittest.TestCase):
                 hs, self.model, self.state0, self.controls, self.props, self.times,
                 dstate, dcontrols, dprops, dtimes, filepath=lsearch_fname)
         else:
-            print("Using existing files")
+            print("Line search simulations already exist. Using existing files.")
 
         fs = functionals_on_line_search(hs, self.functional, self.model, lsearch_fname)
-        assert not np.all(fs == self.f0) # Make sure that f changes along the step direction
+        assert not np.all(fs == self.f0) # Check that f actually changes along the step direction
 
         ## Compute the taylor convergence order
         gstate, gcontrols, gprops, gtimes = self.grads
@@ -278,11 +278,12 @@ class TaylorTest(unittest.TestCase):
 
 class TestBasicGradient(TaylorTest):
     COUPLING = 'explicit'
-    OVERWRITE_LSEARCH = True
+    OVERWRITE_LSEARCH = False
     FUNCTIONAL = fsolid.FinalDisplacementNorm
-    # FUNCTIONAL = fsolid.FinalVelocityNorm
-    FUNCTIONAL = ffluid.FinalPressureNorm
-    FUNCTIONAL = fsolid.PeriodicError
+    FUNCTIONAL = fsolid.UPeriodicError
+    FUNCTIONAL = fsolid.KVDampingWork
+    FUNCTIONAL = ffluid.AcousticPower
+    # FUNCTIONAL = ffluid.SubglottalPower
 
     def setUp(self):
         """
@@ -294,10 +295,11 @@ class TestBasicGradient(TaylorTest):
         """
         self.CASE_NAME = 'singleperiod'
 
-        ## Load the model and set baseline parameters (point the model is linearized around)
-        # self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
-        self.model, self.props = get_starting_fsai_model(self.COUPLING)
+        ## Load the model
+        self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
+        # self.model, self.props = get_starting_fsai_model(self.COUPLING)
 
+        ## Set baseline parameters (point the model is linearized around)
         t_start, t_final = 0, 0.01
         times_meas = np.linspace(t_start, t_final, 32)
         self.times = linalg.BlockVec((times_meas,), ('times',))
@@ -312,23 +314,7 @@ class TestBasicGradient(TaylorTest):
         self.controls = [control]
 
         ## Specify the functional to test the gradient with
-        # self.functional = fmath.add(basic.FinalDisplacementNorm(self.model),
-        #                             basic.FinalVelocityNorm(self.model))
-
         self.functional = self.FUNCTIONAL(self.model)
-
-        func_power_cons = ffluid.AcousticPower(self.model) - 0.0
-        func_periodic_cons = fsolid.PeriodicError(self.model)
-        func = func_power_cons + func_periodic_cons
-        self.functional = ffluid.AcousticPower(self.model)
-        self.functional = facous.AcousticPower(self.model)
-
-        # self.functional = fmath.add(
-        #     fmath.mul(1e5+0.00000001, basic.FinalDisplacementNorm(self.model)),
-        #                   basic.FinalVelocityNorm(self.model))
-
-        # self.functional = self.FUNCTIONAL(self.model)
-        # self.functional.constants['n_start'] = 50
 
         ## Compute the baseline forward simulation and functional/gradient at the baseline (via adjoint)
         self.f0, self.grads = self.compute_baseline()
@@ -632,9 +618,9 @@ if __name__ == '__main__':
     test.setUp()
     test.test_emod()
     test.test_control()
-    # test.test_u0()
-    # test.test_v0()
-    # test.test_a0()
+    test.test_u0()
+    test.test_v0()
+    test.test_a0()
     # test.test_times()
 
     # test = TestBasicGradientSingleStep()

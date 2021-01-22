@@ -1,5 +1,9 @@
 """
 Functionality related to fluids
+
+TODO: Change smoothing parameters to all be expressed in units of length 
+(all the smoothing parameters have a smoothing effect that occurs over a small length. 
+The smaller the length, the sharper the smoothing. )
 """
 import warnings
 

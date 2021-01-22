@@ -554,7 +554,7 @@ class BlockVec:
 
     Parameters
     ----------
-    vecs : tuple(PETsc.Vec or dolfin.cpp.la.PETScVec or np.ndarray or float)
+    vecs : tuple(PETsc.Vec or dolfin.cpp.la.PETScVec or np.ndarray)
     keys : tuple(str)
     """
     def __init__(self, vecs, keys=None):
@@ -709,7 +709,7 @@ class BlockVec:
         vec.assemblyEnd()
         return vec
 
-    ## Basic algebra operator overloading
+    ## Basic math operator overloading
     def __eq__(self, other):
         eq = False
         if isinstance(other, BlockVec):

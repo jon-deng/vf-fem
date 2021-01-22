@@ -355,6 +355,10 @@ class FSIModel:
         b['psup'][:] = np.dot(x['p'], dp_dpsup) + np.dot(x['q'], dq_dpsup)
         return -b
 
+    def apply_dres_ddt_adj(self, x):
+        x_solid = x[:3]
+        return self.solid.apply_dres_ddt_adj(x_solid)
+
 class ExplicitFSIModel(FSIModel):
     ## These setting functions ensure explicit coupling between the domains
     def set_ini_fluid_state(self, qp0):
@@ -479,10 +483,7 @@ class ExplicitFSIModel(FSIModel):
         b['p'][:] = matvec_adj_p_rhs
         return b
     
-    # @profile
     def apply_dres_dp_adj(self, x):
-        # bsolid = self.solid.get_properties_vec()
-        # bfluid = self.fluid.get_properties_vec()
         bsolid = self.solid.apply_dres_dp_adj(x[:3])
         bfluid = self.fluid.apply_dres_dp_adj(x[3:])
         return linalg.concatenate(bsolid, bfluid)

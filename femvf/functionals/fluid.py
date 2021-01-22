@@ -1,19 +1,7 @@
 """
-This module contains definitions of various functionals.
+This module contains definitions of basic fluid functionals.
 
-A functional is mapping from the time history of all states and parameters to a real number
-.. ::math {(u, v, a, q, p; t, params)_n for n in {0, 1, ..., N-1}} .
-
-A functional should take in the entire time history of states from a forward model run and return a
-real number.
-
-For computing the sensitivity of the functional through the discrete adjoint method, you also need
-the sensitivity of the functional with respect to the n'th state. This function has the signature
-
-dfunctional_du(model, n, f, ....) -> float, dict
-
-, where the parameters have the same uses as defined previously. Parameter `n` is the state to
-compute the sensitivity with respect to.
+These act only on fluid states
 """
 
 import numpy as np
@@ -29,7 +17,7 @@ from .. import linalg
 
 class FluidFunctional(AbstractFunctional):
     """
-    This class provides an interface/method to define basic solid functionals
+    This class provides an interface/method to define basic fluid functionals
 
     To define a new FluidFunctional you need to implement the `eval`, `eval_du` ... `eval_dp`,
     `form_definitions` methods.
@@ -38,8 +26,8 @@ class FluidFunctional(AbstractFunctional):
         super().__init__(model, ())
 
     # These are written to handle the case where you have a coupled model input
-    # then the provided eval_dsl_state only supplies the solid portion and needs to be 
-    # extended
+    # The provided eval_dfl_state only supplies the fluid state component so needs to be 
+    # extended to include states of the remaining components (which are just zero)
     def eval_dstate(self, f, n):
         vecs = [self.model.solid.get_state_vec(), self.eval_dfl_state(f, n)]
 
@@ -122,7 +110,7 @@ class FinalFlowRateNorm(FluidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
-class SubglottalWork(FluidFunctional):
+class SubglottalPower(FluidFunctional):
     """
     Return the total work input into the fluid from the lungs.
     """
@@ -132,49 +120,54 @@ class SubglottalWork(FluidFunctional):
         self.constants = {'n_start': 0}
 
     def eval(self, f):
-        # meas_ind = f.get_meas_indices()
         N_START = self.constants['n_start']
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
+        times = f.get_times()
 
-        time = f.get_times()
-
-        ret = 0
+        work = 0
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            psub0 = f.get_control(ii-1)['psub'][0]
-            psub1 = f.get_control(ii)['psub'][0]
-            q0 = f.get_state(ii-1)['q'][0]
-            q1 = f.get_state(ii)['q'][0]
-            dt = time[ii] - time[ii-1]
+            state0 = f.get_state(ii-1)
+            state1 = f.get_state(ii)
+            
+            q0, psub0 = state0['q'][0], state0['p'][0]
+            q1, psub1 = state1['q'][0], state1['p'][0]
+            dt = times[ii] - times[ii-1]
 
-            ret += 0.5*(q0*psub0+q1*psub1)*dt
+            work += 0.5*(q0*psub0+q1*psub1)*dt
 
-        self.cache.update({'N_STATE': N_STATE})
-
-        return ret
+        return work/(times[N_STATE-1]-times[N_START])
 
     def eval_dfl_state(self, f, n):
-        dqp = self.model.fluid.get_state()
+        dqp = self.model.fluid.get_state_vec()
+        dqp.set(0.0)
 
         N_START = self.constants['n_start']
-        N_STATE = self.cache['N_STATE']
+        N_STATE = f.size
 
-        control_n = f.get_control(n)
         if n >= N_START:
-            # derivative from left quadrature interval
-            if n != N_START:
-                dt = f.get_time(n) - f.get_time(n-1)
-                dqp['q'][:] += 0.5*control_n['psub']*dt
+            times = f.get_times()
+            state_n = f.get_state(n)
+            q, psub = state_n['q'][0], state_n['p'][0]
 
-            # derivative from right quadrature interval
+            # derivative from 'left' quadrature interval
+            if n != N_START:
+                dt = times[n] - times[n-1]
+                dqp['q'][:] += 0.5*psub*dt
+                dqp['p'][0] += 0.5*q*dt
+
+            # derivative from 'right' quadrature interval
             if n != N_STATE-1:
-                dt = f.get_time(n+1) - f.get_time(n)
-                dqp['q'][:] += 0.5*control_n['psub']*dt
+                dt = times[n+1] - times[n]
+                dqp['q'][:] += 0.5*psub*dt
+                dqp['p'][0] += 0.5*q*dt
+
+            dqp = dqp/(times[N_STATE-1] - times[N_START])
 
         return dqp
 
     def eval_dfl_props(self, f):
-        dfluid = self.model.fluid.get_properties()
+        dfluid = self.model.fluid.get_properties_vec()
         dfluid.set(0.0)
         return dfluid
 
@@ -182,6 +175,7 @@ class SubglottalWork(FluidFunctional):
         return 0.0
 
     def eval_ddt(self, f, n):
+        # TODO: This has not been fixed
         ddt = 0.0
 
         N_START = self.constants['n_start']

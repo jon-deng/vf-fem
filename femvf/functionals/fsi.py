@@ -252,7 +252,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
     def eval_duva(self, f, n):
         duva = self.model.solid.get_state_vec()
         N_START = self.constants['n_start']
-        N_STATE = f.get_num_states()
+        N_STATE = f.size
 
         if n >= N_START:
             if n != N_START:
@@ -271,7 +271,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
     def eval_dqp(self, f, n):
         dqp = self.model.fluid.get_state_vec()
         N_START = self.constants['n_start']
-        # N_STATE = f.get_num_states()
+        # N_STATE = f.size
 
         if n >= N_START:
             if n != N_START:

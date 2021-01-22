@@ -34,11 +34,8 @@ def adjoint(model, f, functional):
         Gradients with respect to initial state, solid, fluid, and integration time points
     """
     ## Set potentially constant values
-    # Set properties
-    props = f.get_properties()
-    model.set_properties(props)
+    model.set_properties(f.get_properties())
 
-    # Check whether controls are variable in time or constant
     control0 = f.get_control(0)
     control1 = control0
 
@@ -76,7 +73,6 @@ def adjoint(model, f, functional):
         model.dt = dt1
 
         ## Do the adjoint calculations
-        # breakpoint()
         adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
 
         # Update gradients wrt parameters using the adjoint
@@ -84,7 +80,7 @@ def adjoint(model, f, functional):
         adj_controls[min(ii, len(adj_controls)-1)][:] -= model.apply_dres_dcontrol_adj(adj_state1)
         adj_props[:] = adj_props - model.apply_dres_dp_adj(adj_state1)
 
-        adj_dt1 = solve_grad_dt(model, adj_state1) + functional.ddt(f, ii)
+        adj_dt1 = functional.ddt(f, ii) - model.apply_dres_ddt_adj(adj_state1)
         adj_dt.insert(0, adj_dt1)
 
         # Find the RHS for the next iteration
@@ -112,20 +108,3 @@ def adjoint(model, f, functional):
     grad_times = linalg.BlockVec((grad_times,), ('times',))
 
     return functional_value, grad_state, grad_controls, grad_props, grad_times
-
-def solve_grad_dt(model, adj_state1):
-    """
-    Calculate the gradient wrt dt
-    """
-    # model.set_iter_params(**iter_params1)
-    dt1 = model.solid.dt
-    uva0 = model.solid.state0
-    uva1 = model.solid.state1
-
-    dfu1_ddt = dfn.assemble(model.solid.forms['form.bi.df1_dt_adj'])
-    dfv1_ddt = 0 - newmark_v_dt(uva1[0], *uva0, dt1)
-    dfa1_ddt = 0 - newmark_a_dt(uva1[0], *uva0, dt1)
-
-    adj_u1, adj_v1, adj_a1 = adj_state1[:3]
-    adj_dt1 = -(dfu1_ddt*adj_u1).sum() - dfv1_ddt.inner(adj_v1) - dfa1_ddt.inner(adj_a1)
-    return adj_dt1
