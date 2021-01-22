@@ -2,13 +2,14 @@
 Contains functionality for simulating acoustics
 """
 
+from . import base
 import numpy as np
 import jax
 from jax import numpy as jnp
 
 from femvf import linalg
 
-class Acoustic1D:
+class Acoustic1D(base.Model):
     def __init__(self, num_tube):
         assert num_tube%2 == 0
 

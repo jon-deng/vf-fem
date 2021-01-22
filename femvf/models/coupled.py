@@ -10,13 +10,13 @@ from petsc4py import PETSc
 # import ufl
 
 from . import newmark
-from . import solid, fluid
+from . import base, solid, fluid
 from .. import meshutils
 from .. import linalg
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 
-class FSIModel:
+class FSIModel(base.Model):
     """
     Represents a coupled system of a solid and a fluid model
 
@@ -315,37 +315,8 @@ class FSIModel:
     def get_properties_vec(self):
         return linalg.concatenate(self.solid.get_properties_vec(), self.fluid.get_properties_vec())
 
-    ## Solver functions
-    # Specific models must implement these
-    def res(self):
-        raise NotImplementedError
-    
-    # Forward solver methods
-    def solve_state1(self, ini_state, newton_solver_prm=None):
-        """
-        Solve for the final state given an initial guess
-        """
-        raise NotImplementedError
-
-    def solve_dres_dstate1(self, b):
-        """
-        Solve, dF/du x = f
-        """
-        raise NotImplementedError
-
-    # Adjoint solver methods
-    def solve_dres_dstate1_adj(self, b):
-        """
-        Solve, dF/du^T x = f
-        """
-        raise NotImplementedError
-
-    def apply_dres_dstate0_adj(self, x):
-        raise NotImplementedError
-
-    def apply_dres_dp_adj(self, x):
-        raise NotImplementedError
-
+    ## Residual functions
+    # The below residual function definitions are common to both explicit and implicit FSI models
     def apply_dres_dcontrol_adj(self, x):
         ## Implement here since both FSI models should use this rule
         b = self.get_control_vec()
@@ -388,7 +359,7 @@ class ExplicitFSIModel(FSIModel):
         res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
 
-        qp, *_ = self.fluid.solve_qp1()
+        qp, *_ = self.fluid.solve_state1(self.fluid.state0)
         res['q'][:] = self.fluid.state1['q'] - qp['q']
         res['p'][:] = self.fluid.state1['p'] - qp['p']
         return res
@@ -398,16 +369,15 @@ class ExplicitFSIModel(FSIModel):
         """
         Solve for the final state given an initial guess
         """
-        # Update form coefficients and initial guess
+        # Set the initial guess for the final state
         self.set_fin_state(ini_state)
 
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-
         uva1, _ = self.solid.solve_state1(ini_state, newton_solver_prm)
 
         self.set_fin_solid_state(uva1)
-        qp1, fluid_info = self.fluid.solve_qp1()
+        qp1, fluid_info = self.fluid.solve_state1(ini_state[3:])
 
         step_info = {'fluid_info': fluid_info}
 
@@ -434,8 +404,6 @@ class ExplicitFSIModel(FSIModel):
         dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
         x['v'][:] = b['v'] - dfv2_du2*x['u']
         x['a'][:] = b['a'] - dfa2_du2*x['u']
-
-        # qp1, fluid_info = self.fluid.solve_qp1()
 
         x['q'][:] = b['q'] - dfq2_du2.inner(x['u'])
         x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
@@ -521,7 +489,7 @@ class ImplicitFSIModel(FSIModel):
         res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
 
-        qp, *_ = self.fluid.solve_qp1()
+        qp, *_ = self.fluid.solve_state1(self.fluid.state0)
         res['q'][:] = self.fluid.state1['q'] - qp['q']
         res['p'][:] = self.fluid.state1['p'] - qp['p']
         return res
@@ -554,11 +522,11 @@ class ImplicitFSIModel(FSIModel):
         abs_err_prev, abs_err, rel_err = 1.0, np.inf, np.inf
         while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
             # Solve the solid with the previous iteration's fluid pressures
-            uva1, _ = self.solid.solve_state1(newton_solver_prm)
+            uva1, _ = self.solid.solve_state1(uva1, newton_solver_prm)
 
             # Compute new fluid pressures for the updated solid position
             self.set_fin_solid_state(uva1)
-            qp1, fluid_info = self.fluid.solve_qp1()
+            qp1, fluid_info = self.fluid.solve_state1(qp1)
             self.set_fin_fluid_state(qp1)
 
             # Calculate the error in the solid residual with the updated pressures
@@ -599,7 +567,6 @@ class ImplicitFSIModel(FSIModel):
         x['v'][:] = b['v'] - dfv2_du2*x['u']
         x['a'][:] = b['a'] - dfa2_du2*x['u']
 
-        # qp1, fluid_info = self.fluid.solve_qp1()
         x['q'][:] = b['q'] - dfq2_du2.inner(x['u'])
         x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
         return x
@@ -877,7 +844,7 @@ class FSAIModel(FSIModel):
 
         ## Solve the coupled fluid/acoustic system with a fixed point iteration:
         # solve fluids -> solve acoustics with updated fluids -> compute error in fluid and repeat if necessary
-        fl_state1, fluid_info = self.fluid.solve_qp1()
+        fl_state1, fluid_info = self.fluid.solve_state1(fl_state1)
         while abserr > abserr_max and relerr > relerr_max and num_it < 15:
         # while num_it < 15:
             self.set_fin_fluid_state(fl_state1)
@@ -889,7 +856,7 @@ class FSAIModel(FSIModel):
 
             # compute the error/residual. The acoustic equations were solved previously so the residual is 
             # due only to the fluid
-            fl_state1_new = self.fluid.solve_qp1()[0]
+            fl_state1_new = self.fluid.solve_state1(fl_state1)[0]
             fl_res = fl_state1 - fl_state1_new
             fl_state1 = fl_state1_new
 

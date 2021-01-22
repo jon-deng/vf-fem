@@ -14,13 +14,14 @@ import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
 
+from . import base
 from ..parameters.properties import property_vecs
 from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 from ..linalg import BlockVec, general_vec_set
 
 ## 1D Bernoulli approximation codes
 
-class QuasiSteady1DFluid:
+class QuasiSteady1DFluid(base.Model):
     """
     This class represents a 1D fluid
     """
@@ -129,54 +130,8 @@ class QuasiSteady1DFluid:
         ret.set(0.0)
         return ret
 
-    ## Methods that subclasses must implement
-    def res(self):
-        pass
-
-    def solve_qp1(self):
-        """
-        Return the final flow and pressure
-        """
-        raise NotImplementedError("Fluid models have to implement this")
-
-    def solve_dqp1_du1(self, adjoint=False):
-        """
-        Return sensitivities of the final flow and pressure
-        """
-        raise NotImplementedError("Fluid models have to implement this")
-
-    def solve_dqp1_du1_solid(self, model, adjoint=False):
-        """
-        Return sensitivities of the final flow and pressure
-        """
-        raise NotImplementedError("Fluid models have to implement this")
-    
-    ## Solver functions
-    # def res(self):
-    #     """
-    #     Return the residual vector, F
-    #     """
-    #     return res
-
-    # def solve_dres_dstate1(self, b):
-    #     """
-    #     Solve, dF/du x = f
-    #     """
-    #     return x
-
-    # def solve_dres_dstate1_adj(self, b):
-    #     """
-    #     Solve, dF/du^T x = f
-    #     """
-
-    #     return x
-
-    # def apply_dres_dstate0_adj(self, x):
-
-    # def apply_dres_dp_adj(self, x):
-
-    # def apply_dres_dcontrol_adj(self, x):
-
+    ## Residual and sensitivity methods
+    # These are all specific to the Bernoulli model below?
 
 class Bernoulli(QuasiSteady1DFluid):
     """
@@ -222,39 +177,15 @@ class Bernoulli(QuasiSteady1DFluid):
         'beta': 3/.002,
         'y_gap_min': 0.001}
 
-    def solve_qp1(self):
-        """
-        Return the final flow state
-        """
-        return self.fluid_pressure(*self.control.vecs, self.properties)
-
-    def solve_qp0(self):
-        """
-        Return the initial flow state
-        """
-        return self.fluid_pressure(*self.control.vecs, self.properties)
-
+    # TODO: Refactor as solve_dres_dcontrol
     def solve_dqp1_du1(self, adjoint=False):
         """
         Return the final flow state
         """
         return self.flow_sensitivity(*self.control.vecs, self.properties)
 
-    def solve_dqp0_du0(self, adjoint=False):
-        """
-        Return the final flow state
-        """
-        return self.flow_sensitivity(*self.control.vecs, self.properties)
-
-    # TODO: Refactor to use the DOF map from solid to fluid rather than `ForwardModel`
+    # TODO: Remove this. Coupling to the solid should be done in a coupling model
     def solve_dqp1_du1_solid(self, model, adjoint=False):
-        """
-        Return the final flow state
-        """
-        return self.flow_sensitivity_solid(model, *self.control.vecs, self.properties,
-                                           adjoint)
-
-    def solve_dqp0_du0_solid(self, model, adjoint=False):
         """
         Return the final flow state
         """
@@ -551,8 +482,21 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return dq_du, dp_du
 
+    ## Model res sensitivity interface
     def res(self):
-        return self.state1 - self.solve_qp1()[0]
+        return self.state1 - self.solve_state1(self.state0)[0]
+
+    def solve_state1(self, state1):
+        """
+        Return the final flow state
+        """
+        return self.fluid_pressure(*self.control.vecs, self.properties)
+
+    def solve_dres_dstate1(self, b):
+        return b
+
+    def solve_dres_dstate1_adj(self, x):
+        return x
         
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()

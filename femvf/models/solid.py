@@ -15,6 +15,7 @@ from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from ..parameters.properties import property_vecs
 from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
+from . import base
 from . import newmark
 from ..linalg import BlockVec, general_vec_set
 
@@ -82,7 +83,7 @@ def traction_1form(trial, test, pressure, facet_normal, traction_ds):
 # TODO: Remove PROPERTY_TYPES/PROPERTY_DEFAULTS class variables; properties can be defined based on what is exported from the UFL form representation
 # The way it is now, you have to write what the properties are twice, and manually check that the names agree
 
-class Solid:
+class Solid(base.Model):
     """
     Class representing the discretized governing equations of a solid
     """
@@ -270,7 +271,7 @@ class Solid:
             else:
                 coefficient.vector()[:] = props[key]
 
-    ## Solver functions
+    ## Residual and sensitivity functions
     def assem(self, form_name):
         """
         Assembles the form given by label `form_name`
@@ -315,8 +316,9 @@ class Solid:
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
-        x = self.get_state_vec()
+        # Solve A x = b
         bu, bv, ba = b.vecs
+        x = self.get_state_vec()
 
         self.bc_base.apply(dfu2_du2)
         dfn.solve(dfu2_du2, x['u'], bu, 'petsc')
@@ -326,40 +328,48 @@ class Solid:
         
         return x
         
-    def solve_dres_dstate1_adj(self, b):
-        dt = self.dt
+    def solve_dres_dstate1_adj(self, x):
+        # Form key matrices
         dfu2_du2 = self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
+        dfv2_du2 = 0 - newmark.newmark_v_du1(self.dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(self.dt)
 
-        x = self.get_state_vec()
-        adj_u_rhs, adj_v_rhs, adj_a_rhs = b.vecs
+        # Solve b^T A = x^T
+        xu, xv, xa = x.vecs
+        b = self.get_state_vec()
+        b['a'][:] = xa
+        b['v'][:] = xv
 
-        x['a'][:] = adj_a_rhs
-        x['v'][:] = adj_v_rhs
+        rhs_u = xu - (dfv2_du2*b['v'] + dfa2_du2*b['a'])
 
-        adj_u_rhs = adj_u_rhs - (dfv2_du2*x['v'] + dfa2_du2*x['a'])
-
-        self.bc_base.apply(dfu2_du2, adj_u_rhs)
-        dfn.solve(dfu2_du2, x['u'], adj_u_rhs, 'petsc')
-        return x
-
-    def apply_dres_dstate1(self, x):
-        raise NotImplementedError
+        self.bc_base.apply(dfu2_du2, rhs_u)
+        dfn.solve(dfu2_du2, b['u'], rhs_u, 'petsc')
+        return b
 
     def apply_dres_dstate0(self, x):
-        raise NotImplementedError
+        dt = self.dt
 
-    def apply_dres_dcontrol(self, x):
-        raise NotImplementedError
+        dfu2_du1 = dfn.assemble(self.forms['bilin.df1_du0'], tensor=dfn.PETScMatrix())
+        dfu2_dv1 = dfn.assemble(self.forms['bilin.df1_dv0'], tensor=dfn.PETScMatrix())
+        dfu2_da1 = dfn.assemble(self.forms['bilin.df1_da0'], tensor=dfn.PETScMatrix())
 
-    def apply_dres_dp(self, x):
-        raise NotImplementedError
+        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
+        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
+        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
 
-    def apply_dres_ddt(self, x):
-        raise NotImplementedError
+        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
+        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
+        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
 
-    def apply_dres_dstate0_adj(self, x):
+        ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
+        # Allocate a vector the for fluid side mat-vec multiplication
+        b = x.copy()
+        b['u'][:] = (dfu2_du1*x['u'] + dfu2_dv1*x['v'] + dfu2_da1*x['a'])
+        b['v'][:] = (dfv2_du1*x['u'] + dfv2_dv1*x['v'] + dfv2_da1*x['a'])
+        b['a'][:] = (dfa2_du1*x['u'] + dfa2_dv1*x['v'] + dfa2_da1*x['a'])
+        return b
+    
+    def apply_dres_dstate0_adj(self, b):
         dt = self.dt
 
         dfu2_du1 = self.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
@@ -369,18 +379,27 @@ class Solid:
         dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
         dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
         dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
+
         dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
         dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
         dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
 
         ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
         # Allocate a vector the for fluid side mat-vec multiplication
-        b = x.copy()
-        b['u'][:] = (dfu2_du1*x['u'] + dfv2_du1*x['v'] + dfa2_du1*x['a'])
-        b['v'][:] = (dfu2_dv1*x['u'] + dfv2_dv1*x['v'] + dfa2_dv1*x['a'])
-        b['a'][:] = (dfu2_da1*x['u'] + dfv2_da1*x['v'] + dfa2_da1*x['a'])
+        x = b.copy()
+        x['u'][:] = (dfu2_du1*b['u'] + dfv2_du1*b['v'] + dfa2_du1*b['a'])
+        x['v'][:] = (dfu2_dv1*b['u'] + dfv2_dv1*b['v'] + dfa2_dv1*b['a'])
+        x['a'][:] = (dfu2_da1*b['u'] + dfv2_da1*b['v'] + dfa2_da1*b['a'])
+        return x
 
-        return b
+    def apply_dres_dcontrol(self, x):
+        raise NotImplementedError
+
+    def apply_dres_dcontrol_adj(self, x):
+        raise NotImplementedError
+    
+    def apply_dres_dp(self, x):
+        raise NotImplementedError
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
@@ -396,7 +415,18 @@ class Solid:
             vec[:] = val
         return b
 
-    def apply_dres_ddt_adj(self, x):
+    def apply_dres_ddt(self, x):
+        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_dt'], tensor=dfn.PETScMatrix())
+        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0, self.dt)
+        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state1, self.dt)
+
+        dt = x
+        dt_vec = dfn.PETScVector(dfu_ddt.mat().getVecRight())
+        dt_vec.set(dt)
+        dres = dfu_ddt*dt_vec + dfv_ddt*dt + dfa_ddt*dt
+        return dres
+
+    def apply_dres_ddt_adj(self, b):
         # Note that dfu_ddt is a matrix because fenics doesn't allow taking derivative w.r.t a scalar
         # As a result, the time step is defined for each vertex. This is why 'ddt' is computed weirdly
         # below
@@ -404,8 +434,8 @@ class Solid:
         dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0, self.dt)
         dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state1, self.dt)
 
-        xu, xv, xa = x
-        ddt = (dfu_ddt*xu).sum() + dfv_ddt.inner(xv) + dfa_ddt.inner(xa)
+        bu, bv, ba = b
+        ddt = (dfu_ddt*bu).sum() + dfv_ddt.inner(bv) + dfa_ddt.inner(ba)
         return ddt
 
 class Rayleigh(Solid):

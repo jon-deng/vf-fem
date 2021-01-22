@@ -278,7 +278,7 @@ class TaylorTest(unittest.TestCase):
 
 class TestBasicGradient(TaylorTest):
     COUPLING = 'explicit'
-    OVERWRITE_LSEARCH = False
+    OVERWRITE_LSEARCH = True
     FUNCTIONAL = fsolid.FinalDisplacementNorm
     FUNCTIONAL = fsolid.UPeriodicError
     FUNCTIONAL = fsolid.KVDampingWork
