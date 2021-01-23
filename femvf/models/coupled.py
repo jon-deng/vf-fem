@@ -1,5 +1,9 @@
 """
 Contains the Model class that couples fluid and solid behaviour
+
+TODO: Think of a consistent strategy to handle the coupling between domains
+Currently a lot of code is being duplicated to do the coupling through different
+approaches (very confusing)
 """
 
 from os import path
@@ -317,6 +321,18 @@ class FSIModel(base.Model):
 
     ## Residual functions
     # The below residual function definitions are common to both explicit and implicit FSI models
+    def apply_dres_dcontrol(self, x):
+        ## Implement here since both FSI models should use this rule
+        dres = self.get_state_vec()
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+
+        # Only the flow rate and pressure residuals are sensitive to the 
+        # controls
+        dres.set(0.0)
+        dres['q'][:] = dp_dpsub*x['psub'] + dp_dpsup*x['psup']
+        dres['p'][:] = dq_dpsub*x['psub'] + dq_dpsup*x['psup']
+        return -dres
+
     def apply_dres_dcontrol_adj(self, x):
         ## Implement here since both FSI models should use this rule
         b = self.get_control_vec()
@@ -326,12 +342,17 @@ class FSIModel(base.Model):
         b['psup'][:] = np.dot(x['p'], dp_dpsup) + np.dot(x['q'], dq_dpsup)
         return -b
 
+    def apply_dres_ddt(self, x):
+        dres = self.get_state_vec()
+        dres[:3] = self.solid.apply_dres_ddt(x)
+        return dres
+
     def apply_dres_ddt_adj(self, x):
         x_solid = x[:3]
         return self.solid.apply_dres_ddt_adj(x_solid)
 
 class ExplicitFSIModel(FSIModel):
-    ## These setting functions ensure explicit coupling between the domains
+    ## These setting functions ensure explicit coupling occurs between fluid/solid domains
     def set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
 
@@ -392,7 +413,7 @@ class ExplicitFSIModel(FSIModel):
 
         solid = self.solid
 
-        dfu1_du1 = dfn.assemble(solid.df1_du1)
+        dfu1_du1 = dfn.assemble(solid.df1_du1, tensor=dfn.PETScMatrix())
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -401,6 +422,7 @@ class ExplicitFSIModel(FSIModel):
         dfp2_du2 = 0 - dp_du
 
         self.solid.bc_base.apply(dfu1_du1)
+        # TODO: Can refactor to use solid block's residual operations
         dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
         x['v'][:] = b['v'] - dfv2_du2*x['u']
         x['a'][:] = b['a'] - dfa2_du2*x['u']
@@ -410,7 +432,7 @@ class ExplicitFSIModel(FSIModel):
         return x
 
     # Adjoint solver methods
-    def solve_dres_dstate1_adj(self, b):
+    def solve_dres_dstate1_adj(self, x):
         """
         Solve, dF/du^T x = f
         """
@@ -420,21 +442,37 @@ class ExplicitFSIModel(FSIModel):
         dfp2_du2 = 0 - dp_du
 
         ## Do the linear algebra that solves for x
+        b = self.get_state_vec()
+        b_qp, b_uva = b[3:], b[:3]
 
-        x = self.get_state_vec()
-        x_qp = x[3:]
-        x_qp[:] = b[-2:]
+        # This performs the fluid part of the solve
+        b_qp[:] = x[3:]
+        
+        # This is the solid part of the
+        bp_vec = dfp2_du2.getVecRight()
+        bp_vec[:] = b_qp['p']
+        rhs = x[:3].copy()
+        rhs['u'] -= (dfq2_du2*b_qp['q'] + dfn.PETScVector(dfp2_du2*bp_vec))
+        b_uva[:] = self.solid.solve_dres_dstate1_adj(rhs)
 
-        x_uva = x[:3]
+        return b
 
-        _adj_p = dfp2_du2.getVecRight()
-        _adj_p[:] = x_qp['p']
+    def apply_dres_dstate0(self, x):
+        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1'], tensor=dfn.PETScMatrix())
 
-        b_uva = b[:3].copy()
-        b_uva['u'] -= (dfq2_du2*x_qp['q'] + dfn.PETScVector(dfp2_du2*_adj_p))
-        x_uva[:] = self.solid.solve_dres_dstate1_adj(b_uva)
+        # Map the fluid pressure state to the solid sides forcing pressure
+        dp_vec = dfn.PETScVector(dfu2_dp1.mat().getVecRight())
+        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
+        dp_vec[solid_dofs] = x['p'][fluid_dofs]
 
-        return x
+        b = self.get_state_vec()
+        # compute solid blocks
+        b[:3] = self.solid.apply_dres_dstate0(x[:3])
+        b['u'] += dfu2_dp1 * dp_vec
+
+        # compute fluid blocks
+        b[3:] = self.fluid.apply_dres_dstate0(x[3:]) #+ solid effect is 0
+        return b
 
     def apply_dres_dstate0_adj(self, x):
         dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
@@ -451,13 +489,20 @@ class ExplicitFSIModel(FSIModel):
         b['p'][:] = matvec_adj_p_rhs
         return b
     
+    def apply_dres_dcontrol(self, x):
+        dres = self.get_state_vec()
+        dres.set(0.0)
+        return dres
+
+    def apply_dres_dp(self, x):
+        dres = self.get_state_vec()
+        dres.set(0.0)
+        return dres
+
     def apply_dres_dp_adj(self, x):
         bsolid = self.solid.apply_dres_dp_adj(x[:3])
         bfluid = self.fluid.apply_dres_dp_adj(x[3:])
         return linalg.concatenate(bsolid, bfluid)
-
-    def apply_dres_dcontrol_adj(self, x):
-        return super().apply_dres_dcontrol_adj(x)
 
 class ImplicitFSIModel(FSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains

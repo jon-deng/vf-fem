@@ -132,6 +132,10 @@ class QuasiSteady1DFluid(base.Model):
 
     ## Residual and sensitivity methods
     # These are all specific to the Bernoulli model below?
+    def apply_dres_dstate0(self, x):
+        dres = self.get_state_vec()
+        dres.set(0.0)
+        return dres
 
 class Bernoulli(QuasiSteady1DFluid):
     """

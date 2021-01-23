@@ -349,9 +349,9 @@ class Solid(base.Model):
     def apply_dres_dstate0(self, x):
         dt = self.dt
 
-        dfu2_du1 = dfn.assemble(self.forms['bilin.df1_du0'], tensor=dfn.PETScMatrix())
-        dfu2_dv1 = dfn.assemble(self.forms['bilin.df1_dv0'], tensor=dfn.PETScMatrix())
-        dfu2_da1 = dfn.assemble(self.forms['bilin.df1_da0'], tensor=dfn.PETScMatrix())
+        dfu2_du1 = dfn.assemble(self.forms['form.bi.df1_du0'], tensor=dfn.PETScMatrix())
+        dfu2_dv1 = dfn.assemble(self.forms['form.bi.df1_dv0'], tensor=dfn.PETScMatrix())
+        dfu2_da1 = dfn.assemble(self.forms['form.bi.df1_da0'], tensor=dfn.PETScMatrix())
 
         dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
         dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
@@ -422,8 +422,10 @@ class Solid(base.Model):
 
         dt = x
         dt_vec = dfn.PETScVector(dfu_ddt.mat().getVecRight())
-        dt_vec.set(dt)
-        dres = dfu_ddt*dt_vec + dfv_ddt*dt + dfa_ddt*dt
+        dt_vec[:] = dt
+
+        dres = self.get_state_vec()
+        dres['u'] = dfu_ddt*dt_vec + dfv_ddt*dt + dfa_ddt*dt
         return dres
 
     def apply_dres_ddt_adj(self, b):
@@ -639,13 +641,17 @@ class Rayleigh(Solid):
             'form.un.f0': f0,
 
             'form.bi.df1_du1': df1_du1,
-            'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_du1_adj': df1_du1_adj,
+            'form.bi.df1_du0': dfn.adjoint(df1_du0_adj),
             'form.bi.df1_du0_adj': df1_du0_adj,
-            'form.bi.df1_dv0_adj': df1_dv0_adj,
-            'form.bi.df1_da0_adj': df1_da0_adj,
+            'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_dp1_adj': df1_dp1_adj,
-            'form.bi.df1_demod': df1_demod,
+            'form.bi.df1_dv0': dfn.adjoint(df1_dv0_adj),
+            'form.bi.df1_dv0_adj': df1_dv0_adj,
+            'form.bi.df1_da0': dfn.adjoint(df1_da0_adj),
+            'form.bi.df1_da0_adj': df1_da0_adj,
+            # 'form.bi.df1_demod': df1_demod,
+            'form.bi.df1_dt': df1_dt,
             'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,
@@ -847,13 +853,17 @@ class KelvinVoigt(Solid):
             'form.un.f0': f0,
 
             'form.bi.df1_du1': df1_du1,
-            'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_du1_adj': df1_du1_adj,
+            'form.bi.df1_du0': dfn.adjoint(df1_du0_adj),
             'form.bi.df1_du0_adj': df1_du0_adj,
-            'form.bi.df1_dv0_adj': df1_dv0_adj,
-            'form.bi.df1_da0_adj': df1_da0_adj,
+            'form.bi.df1_dp1': df1_dp1,
             'form.bi.df1_dp1_adj': df1_dp1_adj,
-            'form.bi.df1_demod': df1_demod,
+            'form.bi.df1_dv0': dfn.adjoint(df1_dv0_adj),
+            'form.bi.df1_dv0_adj': df1_dv0_adj,
+            'form.bi.df1_da0': dfn.adjoint(df1_da0_adj),
+            'form.bi.df1_da0_adj': df1_da0_adj,
+            # 'form.bi.df1_demod': df1_demod,
+            'form.bi.df1_dt': df1_dt,
             'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,
@@ -1082,7 +1092,7 @@ class IncompSwellingKelvinVoigt(Solid):
             'form.bi.df1_dv0_adj': df1_dv0_adj,
             'form.bi.df1_da0_adj': df1_da0_adj,
             'form.bi.df1_dp1_adj': df1_dp1_adj,
-            'form.bi.df1_demod': df1_demod,
+            # 'form.bi.df1_demod': df1_demod,
             'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
 
             'form.bi.df0_du0_adj': df0_du0_adj,

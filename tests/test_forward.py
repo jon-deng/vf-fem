@@ -13,14 +13,14 @@ import dolfin as dfn
 # import h5py
 
 import femvf.statefile as sf
-from femvf.forward import integrate
+from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models import load_fsi_model, load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
 from femvf import callbacks
 from femvf import linalg
 
-class TestForward(unittest.TestCase):
+class ForwardConfig(unittest.TestCase):
     def setUp(self):
         """
         Set the solid mesh
@@ -141,7 +141,9 @@ class TestForward(unittest.TestCase):
         
         return model, ini_state, controls, props
 
-    def test_integrate(self):
+class TestIntegrate(ForwardConfig):
+    
+    def test_integrate_fsai(self):
         model, ini_state, controls, props = self.config_fsai_model()
         # model, ini_state, controls, props = self.config_fsi_model()
 
@@ -181,8 +183,33 @@ class TestForward(unittest.TestCase):
         plt.show()
         fig.savefig('out/test_forward.png')
 
+    def test_integrate_linear(self):
+        model, ini_state, controls, props = self.config_fsi_model()
+        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+
+        save_path = 'out/test_forward_linear.h5'
+        try:
+            integrate(model, ini_state, controls, props, times, h5file=save_path)
+        except:
+            print("File already exists. Continuing with old file.")
+
+        dini_state = model.get_state_vec()
+        dcontrol = model.get_control_vec()
+        dprops = model.get_properties_vec()
+        # dtimes = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+        dtimes = linalg.BlockVec((np.zeros(100),), ('times',))
+        dfin_state = None
+        with sf.StateFile(model, save_path, mode='r') as f:
+            dini_state.set(1e-8)
+            for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
+                model.solid.bc_base.apply(vec)
+            dfin_state = integrate_linear(
+                model, f, dini_state, [dcontrol], dprops, dtimes)
+            print(dini_state.norm())
+            print(dfin_state.norm())
+
 if __name__ == '__main__':
-    test = TestForward()
+    test = TestIntegrate()
     test.setUp()
-    test.test_integrate()
+    test.test_integrate_linear()
     # unittest.main()

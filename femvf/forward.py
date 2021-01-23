@@ -126,10 +126,7 @@ def integrate(
 
     return h5file, h5group, info
 
-def integrate_linear(
-    model, f, dini_state, dcontrols, dprops, dtimes, idx_meas=None,
-    h5file='tmp.h5', h5group='/', newton_solver_prm=None, export_callbacks=None
-    ):
+def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     """
     Integrate the linearized forward equations and return the final linearized state
 
@@ -153,10 +150,11 @@ def integrate_linear(
         _dcontrol = dcontrols[min(n, len(dcontrols)-1)]
         _dt = dtimes[0][n]-dtimes[0][n-1]
         dres_n = (model.apply_dres_dstate0(_dini_state) 
-                  + model.apply_dres_dcontrol(_dcontrol)
-                  + model.apply_dres_dp(dprops)
-                  + model.apply_dres_ddt(_dt))
-        dfin_state_n = model.solve_dres_dstate1(dres_n)
+                  + model.apply_dres_dcontrol(_dcontrol) # ignore for ExplicitFSIModel
+                  + model.apply_dres_dp(dprops) # ignore
+                  + model.apply_dres_ddt(_dt)) # implemented
+        breakpoint()
+        dfin_state_n = model.solve_dres_dstate1(dres_n) # implemented??
 
     return dfin_state_n
         
