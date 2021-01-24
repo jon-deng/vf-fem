@@ -200,9 +200,9 @@ class TestIntegrate(ForwardConfig):
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
         dprops.set(0.0)
-        # dtimes = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
-        dtimes = linalg.BlockVec((np.zeros(100),), ('times',))
-        dini_state.set(1e-8)
+        # dtimes = linalg.BlockVec((np.linspace(0.0, 0.0, 100),), ('times',))
+        dtimes = linalg.BlockVec((np.linspace(0, 1e-4, 100),), ('times',))
+        dini_state.set(1e-12)
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
             model.solid.bc_base.apply(vec)
 
@@ -233,6 +233,7 @@ class TestIntegrate(ForwardConfig):
                 model, f, dini_state, [dcontrol], dprops, dtimes)
 
         err = dfin_state - dfin_state_fd
+        breakpoint()
         self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
 
 if __name__ == '__main__':

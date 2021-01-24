@@ -422,14 +422,16 @@ class Solid(base.Model):
         dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0, self.dt)
         dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state1, self.dt)
 
-        dt = x
-        dt_vec = dfn.PETScVector(dfu_ddt.mat().getVecRight())
-        dt_vec[:] = dt
+        ddt = x
+        ddt_vec = dfn.PETScVector(dfu_ddt.mat().getVecRight())
+        ddt_vec[:] = ddt
+        self.bc_base.zero(dfu_ddt)
+        # self.bc_base.apply(ddt_vec)
 
         dres = self.get_state_vec()
-        dres['u'][:] = dfu_ddt*dt_vec 
-        dres['v'][:] = dfv_ddt*dt
-        dres['a'][:] = dfa_ddt*dt
+        dres['u'][:] = dfu_ddt*ddt_vec 
+        dres['v'][:] = dfv_ddt*ddt
+        dres['a'][:] = dfa_ddt*ddt
         return dres
 
     def apply_dres_ddt_adj(self, b):
