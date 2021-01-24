@@ -196,6 +196,7 @@ class TestIntegrate(ForwardConfig):
         dini_state = model.get_state_vec()
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
+        # dprops.set(0.0)
         # dtimes = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
         dtimes = linalg.BlockVec((np.zeros(100),), ('times',))
         dfin_state = None

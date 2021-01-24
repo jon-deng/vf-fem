@@ -287,11 +287,6 @@ class FSIModel(base.Model):
     # Fluid 'residuals'
     # These are designed for quasi-steady, Bernoulli fluids where you don't need any iterative
     # methods to solve.
-    def solve_dqp1_du1_solid(self, adjoint=False):
-        return self.fluid.solve_dqp1_du1_solid(self, adjoint)
-
-    def solve_dqp0_du0_solid(self, adjoint=False):
-        return self.fluid.solve_dqp0_du0_solid(self, adjoint)
 
     ## Convenience functions
     def get_triangulation(self, config='ref'):
@@ -408,36 +403,27 @@ class ExplicitFSIModel(FSIModel):
         """
         Solve, dF/du x = f
         """
-        dt = self.solid.dt
         x = self.get_state_vec()
 
-        solid = self.solid
+        x[:3] = self.solid.solve_dres_dstate1(b[:3])
 
-        dfu1_du1 = dfn.assemble(solid.df1_du1, tensor=dfn.PETScMatrix())
-        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-
-        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
-        dfq2_du2 = 0 - dq_du
-        dfp2_du2 = 0 - dp_du
-
-        self.solid.bc_base.apply(dfu1_du1)
-        # TODO: Can refactor to use solid block's residual operations
-        dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
-        x['v'][:] = b['v'] - dfv2_du2*x['u']
-        x['a'][:] = b['a'] - dfa2_du2*x['u']
-
+        dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=False)
+        dfq2_du2 = 0.0 - dq_du
+        dfp2_du2 = 0.0 - dp_du
+        
         x['q'][:] = b['q'] - dfq2_du2.inner(x['u'])
-        x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
+        # _bp = dfp2_du2.getVecRight()
+        # dfp2_du2.multTranspose(x['u'].vec(), _bp)
+        # breakpoint()
+        x['p'][:] = b['p'] - dfp2_du2*x['u'].vec()
         return x
 
-    # Adjoint solver methods
     def solve_dres_dstate1_adj(self, x):
         """
         Solve, dF/du^T x = f
         """
         ## Assemble sensitivity matrices
-        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
+        dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=True)
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
@@ -459,6 +445,7 @@ class ExplicitFSIModel(FSIModel):
 
     def apply_dres_dstate0(self, x):
         dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1'], tensor=dfn.PETScMatrix())
+        self.solid.bc_base.zero(dfu2_dp1)
 
         # Map the fluid pressure state to the solid sides forcing pressure
         dp_vec = dfn.PETScVector(dfu2_dp1.mat().getVecRight())
@@ -468,14 +455,14 @@ class ExplicitFSIModel(FSIModel):
         b = self.get_state_vec()
         # compute solid blocks
         b[:3] = self.solid.apply_dres_dstate0(x[:3])
-        b['u'] += dfu2_dp1 * dp_vec
+        b['u'][:] += dfu2_dp1 * dp_vec
 
         # compute fluid blocks
         b[3:] = self.fluid.apply_dres_dstate0(x[3:]) #+ solid effect is 0
         return b
 
     def apply_dres_dstate0_adj(self, x):
-        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'], tensor=dfn.PETScMatrix())
 
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
         dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
@@ -603,7 +590,7 @@ class ImplicitFSIModel(FSIModel):
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
-        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
+        dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=False)
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
@@ -635,7 +622,7 @@ class ImplicitFSIModel(FSIModel):
         dfu2_dp2 = dfn.as_backend_type(dfu2_dp2).mat()
         dfu2_dp2 = linalg.reorder_mat_rows(dfu2_dp2, solid_dofs, fluid_dofs, self.fluid.state1['p'].size)
 
-        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
+        dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=True)
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
@@ -971,7 +958,7 @@ class FSAIModel(FSIModel):
         """
         x = self.get_state_vec()
         ## Assmeble any needed sensitivity matrices
-        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=False)
+        dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=False)
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
@@ -1028,7 +1015,7 @@ class FSAIModel(FSIModel):
         x[3:].set_vec(adj_z)
 
         ## Assemble sensitivity matrices
-        dq_du, dp_du = self.solve_dqp1_du1_solid(adjoint=True)
+        dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=True)
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 

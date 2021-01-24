@@ -352,6 +352,8 @@ class Solid(base.Model):
         dfu2_du1 = dfn.assemble(self.forms['form.bi.df1_du0'], tensor=dfn.PETScMatrix())
         dfu2_dv1 = dfn.assemble(self.forms['form.bi.df1_dv0'], tensor=dfn.PETScMatrix())
         dfu2_da1 = dfn.assemble(self.forms['form.bi.df1_da0'], tensor=dfn.PETScMatrix())
+        for mat in (dfu2_du1, dfu2_dv1, dfu2_da1):
+            self.bc_base.apply(mat)
 
         dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
         dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
@@ -363,7 +365,7 @@ class Solid(base.Model):
 
         ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
         # Allocate a vector the for fluid side mat-vec multiplication
-        b = x.copy()
+        b = self.get_state_vec()
         b['u'][:] = (dfu2_du1*x['u'] + dfu2_dv1*x['v'] + dfu2_da1*x['a'])
         b['v'][:] = (dfv2_du1*x['u'] + dfv2_dv1*x['v'] + dfv2_da1*x['a'])
         b['a'][:] = (dfa2_du1*x['u'] + dfa2_dv1*x['v'] + dfa2_da1*x['a'])
@@ -425,7 +427,9 @@ class Solid(base.Model):
         dt_vec[:] = dt
 
         dres = self.get_state_vec()
-        dres['u'] = dfu_ddt*dt_vec + dfv_ddt*dt + dfa_ddt*dt
+        dres['u'][:] = dfu_ddt*dt_vec 
+        dres['v'][:] = dfv_ddt*dt
+        dres['a'][:] = dfa_ddt*dt
         return dres
 
     def apply_dres_ddt_adj(self, b):
@@ -1137,7 +1141,7 @@ class CachedBiFormAssembler:
     def __init__(self, form, keep_diagonal=True):
         self._form = form
 
-        self._tensor = dfn.assemble(form, keep_diagonal=keep_diagonal)
+        self._tensor = dfn.assemble(form, keep_diagonal=keep_diagonal, tensor=dfn.PETScMatrix())
         self._tensor.zero()
 
     @property
