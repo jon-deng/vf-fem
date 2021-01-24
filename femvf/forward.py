@@ -153,8 +153,7 @@ def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
                   + model.apply_dres_dcontrol(_dcontrol) # ignore for ExplicitFSIModel
                   + model.apply_dres_dp(dprops) # ignore
                   + model.apply_dres_ddt(_dt)) # implemented
-        breakpoint()
-        dfin_state_n = model.solve_dres_dstate1(dres_n) # implemented??
+        dfin_state_n = model.solve_dres_dstate1(-dres_n) # implemented??
 
     return dfin_state_n
         

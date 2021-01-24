@@ -184,30 +184,56 @@ class TestIntegrate(ForwardConfig):
         fig.savefig('out/test_forward.png')
 
     def test_integrate_linear(self):
+        """
+        To test that the linearized forward integration is done properly:
+            - Integrate the forward model twice at x and x+dx for some test change, dx
+            - Compute the change in the final state using the difference
+            - Compute the change in the final state using the linearized integration and compare
+        """
+        ## Set the linearization point
         model, ini_state, controls, props = self.config_fsi_model()
+        control = controls[0]
         times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
-        save_path = 'out/test_forward_linear.h5'
-        try:
-            integrate(model, ini_state, controls, props, times, h5file=save_path)
-        except:
-            print("File already exists. Continuing with old file.")
-
+        ## Specify the test change in model parameters
         dini_state = model.get_state_vec()
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
-        # dprops.set(0.0)
+        dprops.set(0.0)
         # dtimes = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
         dtimes = linalg.BlockVec((np.zeros(100),), ('times',))
+        dini_state.set(1e-8)
+        for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
+            model.solid.bc_base.apply(vec)
+
+        ## Integrate the model at x, and x+dx
+        def _integrate(model, state, control, props, times, h5file):
+            try:
+                integrate(model, state, [control], props, times, h5file=h5file)
+            except OSError:
+                print("File already exists. Continuing with old file.")
+
+        xs = [ini_state, control, props, times]
+        dxs = [dini_state, dcontrol, dprops, dtimes]
+
+        h5file1 = 'out/test_forward_integrate_linear-1.h5'
+        _integrate(model, *xs, h5file1)
+
+        h5file2 = 'out/test_forward_integrate_linear-2.h5'
+        _integrate(model, *[x+dx for x, dx in zip(xs, dxs)], h5file2)
+
+        dfin_state_fd = None
+        with sf.StateFile(model, h5file1, mode='r') as f1, sf.StateFile(model, h5file2, mode='r') as f2:
+            dfin_state_fd = f2.get_state(f2.size-1) - f1.get_state(f1.size-1)
+        
+        ## Integrate the linearized model
         dfin_state = None
-        with sf.StateFile(model, save_path, mode='r') as f:
-            dini_state.set(1e-8)
-            for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
-                model.solid.bc_base.apply(vec)
+        with sf.StateFile(model, h5file1, mode='r') as f:
             dfin_state = integrate_linear(
                 model, f, dini_state, [dcontrol], dprops, dtimes)
-            print(dini_state.norm())
-            print(dfin_state.norm())
+
+        err = dfin_state - dfin_state_fd
+        self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
 
 if __name__ == '__main__':
     test = TestIntegrate()
