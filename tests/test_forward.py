@@ -191,23 +191,27 @@ class TestIntegrate(ForwardConfig):
             - Compute the change in the final state using the linearized integration and compare
         """
         ## Set the linearization point
+        NTIME = 50
         model, ini_state, controls, props = self.config_fsi_model()
         control = controls[0]
-        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+        times = linalg.BlockVec((np.linspace(0, 0.01, NTIME),), ('times',))
 
         ## Specify the test change in model parameters
         dini_state = model.get_state_vec()
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
         dprops.set(0.0)
-        # dtimes = linalg.BlockVec((np.linspace(0.0, 0.0, 100),), ('times',))
-        dtimes = linalg.BlockVec((np.linspace(0, 1e-4, 100),), ('times',))
-        dini_state.set(1e-12)
+        # dtimes = linalg.BlockVec([np.linspace(0, 1e-6, NTIME)], ['times'])
+        dtimes = linalg.BlockVec([np.linspace(0.0, 0.0, NTIME)], ['times'])
+        dtimes['times'][-1] = 1e-10
+        dini_state.set(0.0)
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
             model.solid.bc_base.apply(vec)
 
         ## Integrate the model at x, and x+dx
-        def _integrate(model, state, control, props, times, h5file):
+        def _integrate(model, state, control, props, times, h5file, overwrite=False):
+            if overwrite and os.path.isfile(h5file):
+                os.remove(h5file)
             try:
                 integrate(model, state, [control], props, times, h5file=h5file)
             except OSError:
@@ -220,7 +224,7 @@ class TestIntegrate(ForwardConfig):
         _integrate(model, *xs, h5file1)
 
         h5file2 = 'out/test_forward_integrate_linear-2.h5'
-        _integrate(model, *[x+dx for x, dx in zip(xs, dxs)], h5file2)
+        _integrate(model, *[x+dx for x, dx in zip(xs, dxs)], h5file2, overwrite=True)
 
         dfin_state_fd = None
         with sf.StateFile(model, h5file1, mode='r') as f1, sf.StateFile(model, h5file2, mode='r') as f2:

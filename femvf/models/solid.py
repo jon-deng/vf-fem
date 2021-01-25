@@ -144,7 +144,7 @@ class Solid(base.Model):
 
         ## Define the state/controls/properties
         self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
-        self.state1 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
+        self.state1 = BlockVec((self.u1.vector(), self.v1.vector(), self.a1.vector()), ('u', 'v', 'a'))
         self.control = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
         self.properties = self.get_properties_vec(set_default=True)
         self.set_properties(self.get_properties_vec(set_default=True))
@@ -419,14 +419,13 @@ class Solid(base.Model):
 
     def apply_dres_ddt(self, x):
         dfu_ddt = dfn.assemble(self.forms['form.bi.df1_dt'], tensor=dfn.PETScMatrix())
-        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0, self.dt)
-        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state1, self.dt)
+        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
+        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
 
         ddt = x
         ddt_vec = dfn.PETScVector(dfu_ddt.mat().getVecRight())
         ddt_vec[:] = ddt
         self.bc_base.zero(dfu_ddt)
-        # self.bc_base.apply(ddt_vec)
 
         dres = self.get_state_vec()
         dres['u'][:] = dfu_ddt*ddt_vec 
@@ -439,8 +438,8 @@ class Solid(base.Model):
         # As a result, the time step is defined for each vertex. This is why 'ddt' is computed weirdly
         # below
         dfu_ddt = dfn.assemble(self.forms['form.bi.df1_dt_adj'], tensor=dfn.PETScMatrix())
-        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0, self.dt)
-        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state1, self.dt)
+        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
+        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
 
         bu, bv, ba = b
         ddt = (dfu_ddt*bu).sum() + dfv_ddt.inner(bv) + dfa_ddt.inner(ba)

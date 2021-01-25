@@ -172,10 +172,22 @@ class TestModelResidualSensitivity(unittest.TestCase):
         self.dt = 1e-4
 
         bc_base = self.model.solid.bc_base
+        self.state0['u'][:] = 1e-4
         self.state0['v'][:] = 1e-4
+        self.state0['a'][:] = 1e-4
+        bc_base.apply(self.state0['u'])
         bc_base.apply(self.state0['v'])
+        bc_base.apply(self.state0['a'])
+
+        self.state1['u'][:] = 2.5e-4
+        self.state1['v'][:] = 2.5e-4
+        self.state1['a'][:] = 2.5e-4
+        bc_base.apply(self.state1['u'])
+        bc_base.apply(self.state1['v'])
+        bc_base.apply(self.state1['a'])
 
         self.state0['p'][:] = 800.0 * PASCAL_TO_CGS
+        self.state1['p'][:] = 800.0 * PASCAL_TO_CGS
         self.control['psub'][:] = 800 * PASCAL_TO_CGS
 
     ## Convenience functions to represent the residual being tested
@@ -254,12 +266,12 @@ class TestModelResidualSensitivity(unittest.TestCase):
         dstate0 = self.model.get_state_vec()
         dcontrol = self.model.get_control_vec()
         dprops = self.model.get_properties_vec()
-        ddt = 1e-10
+        ddt = 1e-9
 
         bc_base = self.model.solid.bc_base
         dstate0['u'][:] = 1e-4
-        dstate0['v'][:] = 0.0
-        dstate0['a'][:] = 0.0
+        dstate0['v'][:] = 1e-4
+        dstate0['a'][:] = 1e-4
         dstate0['q'][:] = 0.0
         dstate0['p'][:] = 1e4
         for name in ('u', 'v', 'a'):
@@ -284,9 +296,9 @@ class TestModelResidualSensitivity(unittest.TestCase):
         _test(xxs, dxxs)
 
         ## Test dstate steps
-        # xxs = (self.state0, self.control, self.props, self.dt)
-        # dxxs = (dstate0, 0.0*dcontrol, 0.0*dprops, 0*ddt)
-        # _test(xxs, dxxs)
+        xxs = (self.state0, self.control, self.props, self.dt)
+        dxxs = (dstate0, 0.0*dcontrol, 0.0*dprops, 0*ddt)
+        _test(xxs, dxxs)
         
     def test_solve_dres_dxx_adj(self):
         raise NotImplementedError

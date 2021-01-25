@@ -137,22 +137,24 @@ def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     model.set_properties(f.get_properties())
 
     dfin_state_n = dini_state
+    ts = f.get_times()
     for n in range(1, f.size):
         # Set the linearization point
         # This represents the residual F^n
         model.set_ini_state(f.get_state(n-1))
         model.set_fin_state(f.get_state(n))
         model.set_control(f.get_control(n))
+        model.dt = ts[n] - ts[n-1]
 
         # Compute the action of the n'th time step
         # note that the input "dx^{n-1}" vector is the previous output "dx"
         _dini_state = dfin_state_n
         _dcontrol = dcontrols[min(n, len(dcontrols)-1)]
-        _dt = dtimes[0][n]-dtimes[0][n-1]
+        _ddt = dtimes[0][n]-dtimes[0][n-1]
         dres_n = (model.apply_dres_dstate0(_dini_state) 
                   + model.apply_dres_dcontrol(_dcontrol)
                   + model.apply_dres_dp(dprops)
-                  + model.apply_dres_ddt(_dt))
+                  + model.apply_dres_ddt(_ddt))
         dfin_state_n = model.solve_dres_dstate1(-dres_n)
 
     return dfin_state_n
