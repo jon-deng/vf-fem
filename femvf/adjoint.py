@@ -1,6 +1,13 @@
 """
 Adjoint model.
 
+The forward model is represented by a mapping from 
+..math: (x^0, g, p) -> (x^n; n>1)
+i.e. the initial state and control/parameter vectors map to a sequence of output
+states corresponding to the state vectors at a sequence of time steps. This relationship
+comes from the recursive relation between states over a single time step, represented by the 
+model residual function.
+
 I'm using CGS : cm-g-s units
 """
 
@@ -13,8 +20,82 @@ from .models.newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmar
                              newmark_a_du1, newmark_a_du0, newmark_a_dv0, newmark_a_da0, newmark_a_dt)
 from . import linalg
 
-# @profile
-def adjoint(model, f, functional):
+def integrate_adjoint(model, f, dfin_state):
+    """
+    Given a list of adjoint output state vectors, x^n (n>1), integrate the adjoint model
+
+    Since there can be many output states, `dfin_state` is a callable that returns the 
+    appropriate dx_n vector at index n without having an explicit list of the vectors for all
+    n.
+
+    Parameters
+    ----------
+    model : .models.base.Model
+    f : statefile.StateFile
+    dfin_state : callable with signature dfin_state(f, i) -> dx^i vector
+    """
+    ## Set potentially constant values
+    model.set_properties(f.get_properties())
+
+    control0 = f.get_control(0)
+    control1 = control0
+
+    ## Allocate space for the adjoints of all the parameters
+    adj_dt = []
+    adj_props = model.get_properties_vec()
+    adj_props.set(0.0)
+    adj_controls = [model.get_control_vec() for i in range(f.num_controls)]
+
+    ## Load states/parameters
+    N = f.size
+    times = f.get_times()
+    
+    ## Loop through states for adjoint computation
+    # Initialize the adj rhs
+    adj_state1 = dfin_state(f, N-1)
+    dres1 = None
+    for ii in range(N-1, 0, -1):
+        ## Linearize the model about time step `ii`
+        dt1 = times[ii] - times[ii-1]
+        state0, state1 = f.get_state(ii-1), f.get_state(ii)
+        control1 = f.get_control(ii)
+
+        model.set_ini_state(state0)
+        model.set_fin_state(state1)
+        model.set_control(control1)
+        model.dt = dt1
+
+        ## Perform adjoint calculations
+        dres1 = model.solve_dres_dstate1_adj(adj_state1)
+
+        # Update adjoint output variables using the adjoint
+        # this logic assumes the last control applies over all remaining time steps (which is correct)
+        adj_controls[min(ii, len(adj_controls)-1)] -= model.apply_dres_dcontrol_adj(dres1)
+        adj_props -= model.apply_dres_dp_adj(dres1)
+        adj_dt.insert(0, model.apply_dres_ddt_adj(dres1))
+
+        # Update the RHS for the next iteration
+        adj_state1 = dfin_state(f, ii-1) - model.apply_dres_dstate0_adj(dres1)
+
+    ## Compute adjoint input variables
+    adj_ini_state = adj_state1
+
+    
+
+    # Calculate sensitivities w.r.t integration times
+    grad_dt = np.array(adj_dt)
+
+    # Convert adjoint variables in terms of time steps to variables in 
+    # terms of start/end integration times. This uses the fact that
+    # dt^{n} = t^{n} - t^{n-1}
+    adj_times = np.zeros(N)
+    adj_times[1:] = grad_dt
+    adj_times[:-1] -= grad_dt
+    adj_times = linalg.BlockVec((adj_times,), ('times',))
+
+    return adj_ini_state, adj_controls, adj_props, adj_times
+
+def integrate_grad(model, f, functional):
     """
     Returns the gradient of the cost function using the adjoint model.
 
@@ -33,78 +114,20 @@ def adjoint(model, f, functional):
     grad_uva, grad_solid, grad_fluid, grad_times
         Gradients with respect to initial state, solid, fluid, and integration time points
     """
-    ## Set potentially constant values
-    model.set_properties(f.get_properties())
-
-    control0 = f.get_control(0)
-    control1 = control0
-
-    # run the functional once to initialize any cached values
     functional_value = functional(f)
 
-    ## Allocate space for the adjoints of all the parameters
-    adj_dt = []
-    adj_props = model.get_properties_vec()
-    adj_props.set(0.0)
-    adj_controls = [model.get_control_vec() for i in range(f.num_controls)]
-
-    ## Load states/parameters
-    N = f.size
-    times = f.get_times()
-
-    ## Initialize the adj rhs
-    adj_state1_rhs = functional.dstate(f, N-1)
+    def dfin_state(f, n):
+        return functional.dstate(f, n)
     
-    ## Loop through states for adjoint computation
-    # Note that ii corresponds to the time index of the adjoint state we are solving for.
-    # In a given loop, adj^{ii+1} is known, and the iteration of the loop finds adj^{ii}
-    for ii in range(N-1, 0, -1):
-        ## Set the properties of the system to that of the `ii` iteration
-        # Properties at index 2 through 1 were loaded during initialization, so we only need to read
-        # index 0
-        dt1 = times[ii] - times[ii-1]
-        state0, state1 = f.get_state(ii-1), f.get_state(ii)
-        control1 = f.get_control(ii)
-        # breakpoint()
+    # The result of integrating the adjoint are the partial sensitivity components due only to the
+    # model 
+    dini_state, dcontrols, dprops, dtimes = integrate_adjoint(model, f, dfin_state)
 
-        model.set_ini_state(state0)
-        model.set_fin_state(state1)
-        model.set_control(control1)
-        model.dt = dt1
+    # To form the final gradient term, add partial sensitivity components due to the functional
+    dprops += functional.dprops(f)
 
-        ## Do the adjoint calculations
-        adj_state1 = model.solve_dres_dstate1_adj(adj_state1_rhs)
+    ddts = [functional.ddt(f, n) for n in range(1, f.size)]
+    dtimes_functional = linalg.BlockVec([np.cumsum([0] + ddts)], ['times'])
+    dtimes += dtimes_functional
 
-        # Update gradients wrt parameters using the adjoint
-        # this logic assumes the last control applies over all remaining time steps (which is correct)
-        adj_controls[min(ii, len(adj_controls)-1)][:] -= model.apply_dres_dcontrol_adj(adj_state1)
-        adj_props[:] = adj_props - model.apply_dres_dp_adj(adj_state1)
-
-        adj_dt1 = functional.ddt(f, ii) - model.apply_dres_ddt_adj(adj_state1)
-        adj_dt.insert(0, adj_dt1)
-
-        # Find the RHS for the next iteration
-        dcost_dstate0 = functional.dstate(f, ii-1)
-        adj_state0_rhs = dcost_dstate0 - model.apply_dres_dstate0_adj(adj_state1)
-
-        adj_state1_rhs = adj_state0_rhs
-
-    ## Calculate gradients
-    grad_state = adj_state1_rhs
-
-    # Finally, if the functional is sensitive to the parameters, you have to add their sensitivity
-    # components once
-    grad_props = adj_props + functional.dprops(f)
-
-    grad_controls = adj_controls
-
-    # Calculate sensitivities w.r.t integration times
-    grad_dt = np.array(adj_dt)
-
-    grad_times = np.zeros(N)
-    # the conversion below is becase dt = t1 - t0
-    grad_times[1:] = grad_dt
-    grad_times[:-1] -= grad_dt
-    grad_times = linalg.BlockVec((grad_times,), ('times',))
-
-    return functional_value, grad_state, grad_controls, grad_props, grad_times
+    return functional_value, dini_state, dcontrols, dprops, dtimes

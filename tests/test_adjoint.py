@@ -27,7 +27,7 @@ from femvf.models import (
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
 
 from femvf.forward import integrate
-from femvf.adjoint import adjoint
+from femvf import adjoint
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
 from femvf.functionals import solid as fsolid, fluid as ffluid, acoustic as facous
@@ -79,7 +79,7 @@ class TaylorTest(unittest.TestCase):
 
         f0, grads = None, None
         with sf.StateFile(self.model, base_path, mode='r') as f:
-            f0, *grads = adjoint(self.model, f, self.functional)
+            f0, *grads = adjoint.integrate_grad(self.model, f, self.functional)
 
         print(f"Duration {perf_counter()-t_start:.4f} s")
         
