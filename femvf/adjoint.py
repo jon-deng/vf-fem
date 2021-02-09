@@ -20,7 +20,7 @@ from .models.newmark import (newmark_v_du1, newmark_v_du0, newmark_v_dv0, newmar
                              newmark_a_du1, newmark_a_du0, newmark_a_dv0, newmark_a_da0, newmark_a_dt)
 from . import linalg
 
-def integrate_adjoint(model, f, dfin_state):
+def integrate(model, f, dfin_state):
     """
     Given a list of adjoint output state vectors, x^n (n>1), integrate the adjoint model
 
@@ -72,7 +72,7 @@ def integrate_adjoint(model, f, dfin_state):
         # this logic assumes the last control applies over all remaining time steps (which is correct)
         adj_controls[min(ii, len(adj_controls)-1)] -= model.apply_dres_dcontrol_adj(dres1)
         adj_props -= model.apply_dres_dp_adj(dres1)
-        adj_dt.insert(0, model.apply_dres_ddt_adj(dres1))
+        adj_dt.insert(0, -model.apply_dres_ddt_adj(dres1))
 
         # Update the RHS for the next iteration
         adj_state1 = dfin_state(f, ii-1) - model.apply_dres_dstate0_adj(dres1)
@@ -80,16 +80,15 @@ def integrate_adjoint(model, f, dfin_state):
     ## Compute adjoint input variables
     adj_ini_state = adj_state1
 
-    
-
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)
 
     # Convert adjoint variables in terms of time steps to variables in 
     # terms of start/end integration times. This uses the fact that
-    # dt^{n} = t^{n} - t^{n-1}
+    # dt^{n} = t^{n} - t^{n-1}, therefore
+    # df/d[t^{n}, t^{n-1}] = df/ddt^{n} * ddt^{n}/d[t^{n}, t^{n-1}]
     adj_times = np.zeros(N)
-    adj_times[1:] = grad_dt
+    adj_times[1:] += grad_dt
     adj_times[:-1] -= grad_dt
     adj_times = linalg.BlockVec((adj_times,), ('times',))
 
@@ -121,7 +120,7 @@ def integrate_grad(model, f, functional):
     
     # The result of integrating the adjoint are the partial sensitivity components due only to the
     # model 
-    dini_state, dcontrols, dprops, dtimes = integrate_adjoint(model, f, dfin_state)
+    dini_state, dcontrols, dprops, dtimes = integrate(model, f, dfin_state)
 
     # To form the final gradient term, add partial sensitivity components due to the functional
     dprops += functional.dprops(f)
