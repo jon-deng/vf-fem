@@ -31,7 +31,7 @@ def line_search(hs, model,
 
         ## Run simulations at the step
         runtime_start = perf_counter()
-        with sf.StateFile(model, filepath, group=f'{n}') as f:
+        with sf.StateFile(model, filepath, group=f'{n}', mode='a') as f:
             info = integrate(model, f, state_n, controls_n, props_n, times_n)
         runtime_end = perf_counter()
 
@@ -61,7 +61,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()
-        with sf.StateFile(model, filepath, group=f'{n}') as f:
+        with sf.StateFile(model, filepath, group=f'{n}', mode='a') as f:
             info = integrate(model, f, uva_n, solid_props_n, fluid_props_n, times_n)
         runtime_end = perf_counter()
 
