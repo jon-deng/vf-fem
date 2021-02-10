@@ -32,13 +32,13 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     k_coll = 1e11
     y_gap = 0.02
     y_coll_offset = 0.01
-    alpha, k, sigma = -3000, 50, 0.002
+    zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
 
     fluid_props = model.fluid.get_properties_vec()
     fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-    fluid_props['alpha'][()] = alpha
-    fluid_props['k'][()] = k
-    fluid_props['sigma'][()] = sigma
+    fluid_props['zeta_amin'][()] = zeta_amin
+    fluid_props['zeta_sep'][()] = zeta_sep
+    fluid_props['zeta_ainv'][()] = zeta_ainv
 
     solid_props = model.solid.get_properties_vec()
     solid_props['emod'][:] = emod
@@ -68,13 +68,13 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
 
     y_gap = 0.01
     y_coll_offset = 0.0025
-    alpha, k, sigma = -3000, 50, 0.002
+    zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
 
     fluid_props = model.fluid.get_properties_vec()
     fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-    fluid_props['alpha'][()] = alpha
-    fluid_props['k'][()] = k
-    fluid_props['sigma'][()] = sigma
+    fluid_props['zeta_amin'][()] = zeta_amin
+    fluid_props['zeta_sep'][()] = zeta_sep
+    fluid_props['zeta_ainv'][()] = zeta_ainv
     fluid_props['y_gap_min'][()] = y_coll_offset
     # fluid_props['y_gap_min'][()] = -10000
 
@@ -100,13 +100,13 @@ def load_fsai_rayleigh_model(coupling='explicit'):
 
     # Set the properties
     y_gap = 0.01
-    alpha, k, sigma = -3000, 50, 0.002
+    zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
 
     fl_props = model.fluid.get_properties_vec(set_default=True)
     fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-    fl_props['alpha'][()] = alpha
-    fl_props['k'][()] = k
-    fl_props['sigma'][()] = sigma
+    fl_props['zeta_amin'][()] = zeta_amin
+    fl_props['zeta_sep'][()] = zeta_sep
+    fl_props['zeta_ainv'][()] = zeta_ainv
 
     sl_props = model.solid.get_properties_vec(set_default=True)
     xy = model.solid.scalar_fspace.tabulate_dof_coordinates()

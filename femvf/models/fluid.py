@@ -146,16 +146,25 @@ class Bernoulli(QuasiSteady1DFluid):
     One of the properties should be the mapping from the reference configuration to the current
     configuration that would be used in ALE.
 
+    Note there are a total of 4 smoothing properties that are meant to approximate the
+    ad-hoc separation criteria used in the literature.
+        zeta_amin :
+            Factor controlling the smoothness of the approximation of minimum area.
+            A value of 0 weights areas of all nodes evenly, while a value of -inf
+            returns the exact minimum area. Large negative values return an
+            average of the smallest areas.
+        zeta_ainv :
+            Approximates smoothing for an inverse area function; given an area, return the surface
+            coordinate
+        zeta_sep :
+            Controls the sharpness of the cutoff that models separation. as zeta_sep approaches inf,
+            the sharpness will approach an instantaneous jump from 1 to 0
+        zeta_lb : 
+            Controls the smoothness of a lower bound function that prevents negative glottal areas
+
     Properties
     ----------
-    alpha :
-        Factor controlling the smoothness of the approximation of minimum area.
-        A value of 0 weights areas of all nodes evenly, while a value of -inf
-        returns the exact minimum area. Large negative values return an
-        average of the smallest areas.
-    k :
-        Controls the sharpness of the cutoff that models separation. as k approaches inf,
-        the sharpness will approach an instantaneous jump from 1 to 0
+    
     """
     PROPERTY_TYPES = {
         'y_midline': ('const', ()),
@@ -163,10 +172,10 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sup': ('const', ()),
         'rho_air': ('const', ()),
         'r_sep': ('const', ()),
-        'alpha': ('const', ()),
-        'k': ('const', ()),
-        'sigma': ('const', ()),
-        'beta': ('const', ()),
+        'zeta_amin': ('const', ()),
+        'zeta_sep': ('const', ()),
+        'zeta_ainv': ('const', ()),
+        'zeta_lb': ('const', ()),
         'y_gap_min': ('const', ())}
 
     PROPERTY_DEFAULTS = {
@@ -175,10 +184,10 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sup': 0.6,
         'r_sep': 1.0,
         'rho_air': 1.1225 * SI_DENSITY_TO_CGS,
-        'alpha': -3/0.002,
-        'k': 3/0.002,
-        'sigma': 2.5*0.002,
-        'beta': 3/.002,
+        'zeta_amin': 0.002/3,
+        'zeta_sep': 0.002/3,
+        'zeta_ainv': 2.5*0.002,
+        'zeta_lb': 0.002/3,
         'y_gap_min': 0.001}
 
     # TODO: Refactor as solve_dres_dcontrol
@@ -204,7 +213,7 @@ class Bernoulli(QuasiSteady1DFluid):
         log_wsep = None
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-            log_wsep = np.log(1-smoothstep(s, smin, fluid_props['k'])) +  log_gaussian(area, asep, fluid_props['sigma'])
+            log_wsep = np.log(1-smoothstep(s, smin, fluid_props['zeta_sep'])) +  log_gaussian(area, asep, fluid_props['zeta_ainv'])
         wsep = np.exp(log_wsep - log_wsep.max())
         ssep = wavg(s, s, wsep)
 
@@ -220,18 +229,18 @@ class Bernoulli(QuasiSteady1DFluid):
         dasep_da = 0.0
 
         # This ensures the separation area is selected at a point past the minimum area
-        wpostsep = 1-smoothstep(s, smin, fluid_props['k'])
-        dwpostsep_dsmin = -dsmoothstep_dx0(s, smin, fluid_props['k'])
+        wpostsep = 1-smoothstep(s, smin, fluid_props['zeta_sep'])
+        dwpostsep_dsmin = -dsmoothstep_dx0(s, smin, fluid_props['zeta_sep'])
 
-        wgaussian = gaussian(a, asep, fluid_props['sigma'])
-        dwgaussian_da = dgaussian_dx(a, asep, fluid_props['sigma'])
-        dwgaussian_damin = dgaussian_dx0(a, asep, fluid_props['sigma']) * dasep_damin
+        wgaussian = gaussian(a, asep, fluid_props['zeta_ainv'])
+        dwgaussian_da = dgaussian_dx(a, asep, fluid_props['zeta_ainv'])
+        dwgaussian_damin = dgaussian_dx0(a, asep, fluid_props['zeta_ainv']) * dasep_damin
 
         # wsep = wpostsep * wgaussian
         log_wsep = None
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-            log_wsep = np.log(wpostsep) +  log_gaussian(a, asep, fluid_props['sigma'])
+            log_wsep = np.log(wpostsep) +  log_gaussian(a, asep, fluid_props['zeta_ainv'])
         wsep = np.exp(log_wsep - log_wsep.max())
 
         dwsep_dsmin = dwpostsep_dsmin * wgaussian
@@ -250,8 +259,7 @@ class Bernoulli(QuasiSteady1DFluid):
         return dssep_damin, dssep_dsmin, dssep_da, dasep_damin, dasep_dsmin, dasep_da
 
     def min_area(self, s, a, fluid_props):
-        alpha = fluid_props['alpha']
-        wmin = expweight(a, alpha)
+        wmin = expweight(a, fluid_props['zeta_amin'])
         amin = wavg(s, a, wmin)
         return amin
 
@@ -284,17 +292,16 @@ class Bernoulli(QuasiSteady1DFluid):
         assert psub > psup
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
-        alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
 
         # x = surface_state[0][:-1:2]
         y = usurf[1::2]
 
         a = 2 * (fluid_props['y_midline'] - y)
-        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
+        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['zeta_lb'])
 
         # Calculate minimum and separation areas/locations
-        wmin = expweight(asafe, alpha)
+        wmin = expweight(asafe, fluid_props['zeta_amin'])
         amin = wavg(s, asafe, wmin)
         smin = wavg(s, s, wmin)
 
@@ -306,7 +313,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
 
-        sep_multiplier = smoothstep(self.s_vertices, ssep, k=k)
+        sep_multiplier = smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
 
         p = sep_multiplier * pbern
         q = qsqr**0.5
@@ -345,7 +352,6 @@ class Bernoulli(QuasiSteady1DFluid):
         assert usurf.size%2 == 0
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
-        alpha, k = fluid_props['alpha'], fluid_props['k']
         s = self.s_vertices
 
         # x = surface_state[0][:-1:2]
@@ -354,11 +360,11 @@ class Bernoulli(QuasiSteady1DFluid):
         a = 2 * (fluid_props['y_midline'] - y)
         da_dy = -2
 
-        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
-        dasafe_da = dsmoothlb_df(a, 2*fluid_props['y_gap_min'], fluid_props['beta'])
+        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['zeta_lb'])
+        dasafe_da = dsmoothlb_df(a, 2*fluid_props['y_gap_min'], fluid_props['zeta_lb'])
 
-        wmin = expweight(asafe, alpha)
-        dwmin_da = dexpweight_df(asafe, alpha) * dasafe_da
+        wmin = expweight(asafe, fluid_props['zeta_amin'])
+        dwmin_da = dexpweight_df(asafe, fluid_props['zeta_amin']) * dasafe_da
 
         amin = wavg(s, asafe, wmin)
         damin_da = dwavg_df(s, asafe, wmin)*dasafe_da + \
@@ -391,8 +397,8 @@ class Bernoulli(QuasiSteady1DFluid):
         dpbern_dpsup = 1/2*rho*dqsqr_dpsup*(asub**-2 - asafe**-2)
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
-        sepweight = smoothstep(self.s_vertices, ssep, k=k)
-        dsepweight_dy = dsmoothstep_dx0(self.s_vertices, ssep, k=k)[:, None] * dssep_dy
+        sepweight = smoothstep(self.s_vertices, ssep, fluid_props['zeta_sep'])
+        dsepweight_dy = dsmoothstep_dx0(self.s_vertices, ssep, fluid_props['zeta_sep'])[:, None] * dssep_dy
 
         # p = sepweight * pbern
         dp_dy = sepweight[:, None]*dpbern_dy + dsepweight_dy*pbern[:, None]
@@ -507,10 +513,8 @@ class Bernoulli(QuasiSteady1DFluid):
         b.set(0.0)
         return b
 
-# Below are a collection of smoothened functions for selecting the minimum area, separation point,
-# and simulating separation
-
-def smoothlb(f, f_lb, beta=100):
+## Smoothed lower bound function
+def smoothlb(f, f_lb, alpha=1.0):
     """
     Return the value of `f` subject to a smooth lower bound `f_lb`
 
@@ -518,30 +522,30 @@ def smoothlb(f, f_lb, beta=100):
     smoothly blends a constant function when f<f_lb with a linear function when f>f_lb.
 
     The 'region' of smoothness is roughly characterized by 'df = f-f_lb', where the function is 95%
-    a straight line when `beta*df = 3`.
+    a straight line when `df/alpha = 3`.
 
     Parameters
     ----------
     f : array_like
     f_lb : float
         The minimum possible value of `f`
-    beta : float
+    alpha : float
         The level of smoothness of the bounded function. This quantity has units of [cm^-1] if `f`
-        has units of [cm]. Larger values of beta increase the sharpness of the bound.
+        has units of [cm]. Larger values of alpha increase the sharpness of the bound.
     """
     # Manually return 1 if the exponent is large enough to cause overflow
-    exponent = beta*(f-f_lb)
+    exponent = (f-f_lb)/alpha
     idx_underflow = exponent <= -50.0
     idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
     idx_overflow = exponent > 50.0
 
     out = np.zeros(exponent.shape)
     out[idx_underflow] = f_lb
-    out[idx_normal] = 1/beta*np.log(1 + np.exp(exponent[idx_normal])) + f_lb
+    out[idx_normal] = alpha*np.log(1 + np.exp(exponent[idx_normal])) + f_lb
     out[idx_overflow] = f[idx_overflow]
     return out
 
-def dsmoothlb_df(f, f_lb, beta=100):
+def dsmoothlb_df(f, f_lb, alpha=1.0):
     """
     Return the sensitivity of `smooth_lower_bound` to `f`
 
@@ -550,12 +554,12 @@ def dsmoothlb_df(f, f_lb, beta=100):
     f : array_like
     f_lb : float
         The minimum possible value of `f`
-    beta : float
+    alpha : float
         The level of smoothness of the bounded function. This quantity has units of [cm^-1] if `f`
-        has units of [cm]. Larger values of beta increase the sharpness of the bound.
+        has units of [cm]. Larger values of alpha increase the sharpness of the bound.
     """
     # Manually return limiting values if the exponents are large enough to cause overflow
-    exponent = beta*(f-f_lb)
+    exponent = (f-f_lb)/alpha
     # idx_underflow = exponent <= -50.0
     idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
     idx_overflow = exponent > 50.0
@@ -566,22 +570,23 @@ def dsmoothlb_df(f, f_lb, beta=100):
     out[idx_overflow] = 1.0
     return out
 
-def expweight(f, alpha=-1000.0):
+## Exponential weighting function
+def expweight(f, alpha=1.0):
     """
-    Return exponential weights as exp(alpha*f) 
+    Return exponential weights as exp(-1*alpha*f) 
     """
     # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
     # being too large (overflow). This constant factors when you weights in an average
-    K_STABILITY = np.max(alpha*f)
-    w = np.exp(alpha*f - K_STABILITY)
+    K_STABILITY = np.max(-f/alpha)
+    w = np.exp(-f/alpha - K_STABILITY)
     return w
 
-def dexpweight_df(f, alpha=-1000.0):
-    K_STABILITY = np.max(alpha*f)
-    # w = np.exp(alpha*f - K_STABILITY)
-    dw_df = alpha*np.exp(alpha*f - K_STABILITY)
+def dexpweight_df(f, alpha=1.0):
+    K_STABILITY = np.max(-f/alpha)
+    dw_df = -1/alpha*np.exp(-f/alpha - K_STABILITY)
     return dw_df
 
+## Weighted average function
 def wavg(s, f, w):
     """
     Return the weighted average of 'f(s)' with weight 'w(s)'
@@ -610,56 +615,7 @@ def dwavg_dw(s, f, w):
 
     return (dnum_dw*den - num*dden_dw)/den**2
 
-def smoothmin(f, s, alpha=-1000):
-    """
-    Return the smooth approximation to the minimum element of f integrated over s.
-
-    The 'region' of smoothness is roughly characterized by 'df'. If f_min has the maximum weight,
-    a value at f_min+df will have 5% of that weight if alpha*df = -3.
-
-    Parameters
-    ----------
-    f : array_like
-        Array of values to compute the minimum of
-    s : array_like
-        surface coordinates of each value
-    alpha : float
-        Factor that control the sharpness of the minimum. The function approaches the true minimum
-        as `alpha` approachs negative infinity.
-    """
-    # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
-    # being too small or too large. This constant factors out due to the division.
-    K_STABILITY = np.max(alpha*f)
-    w = np.exp(alpha*f - K_STABILITY)
-
-    return trapz(f*w, s) / trapz(w, s)
-
-# dsmooth_minimum_df = autograd.grad(smooth_minimum, 0)
-
-def dsmoothmin_df(f, s, alpha=-1000):
-    """
-    Return the derivative of the smooth minimum with respect to x.
-
-    Parameters
-    ----------
-    f : array_like
-        Array of values to compute the minimum of
-    alpha : float
-        Factor that control the sharpness of the minimum. The function approaches the true minimum
-        function as `alpha` approachs negative infinity.
-    """
-    K_STABILITY = np.max(alpha*f)
-    w = np.exp(alpha*f - K_STABILITY)
-    dw_df = alpha*np.exp(alpha*f - K_STABILITY)
-
-    num = trapz(f*w, s)
-    den = trapz(w, s)
-
-    dnum_df = dtrapz_df(f*w, s)*(w + f*dw_df)
-    dden_df = dtrapz_df(w, s)*dw_df
-
-    return dnum_df/den - num/den**2 * dden_df
-
+## Trapezoidal integration rule
 def trapz(f, s):
     """
     Return the integral of `f` over `s` using the trapezoidal rule
@@ -678,6 +634,7 @@ def dtrapz_df(f, s):
     out[1:] += (s[1:]-s[:-1]) / 2
     return out
 
+## Smoothed Heaviside cutoff function
 def sigmoid(x):
     """
     Return the sigmoid function evaluated at `x`
@@ -703,54 +660,55 @@ def dsigmoid_dx(x):
     sig = sigmoid(x)
     return sig * (1-sig)
 
-def smoothstep(x, x0, k=100):
+def smoothstep(x, x0, alpha=1.0):
     """
     Return the mirrored logistic function evaluated at x-x0
 
     This steps from 1.0 when x << x0 to 0.0 when x >> x0.
 
     The 'region' of smoothness is roughly characterized by dx. If x = x0 + dx, the cutoff function
-    will drop to just 5% if k*dx = 3.
+    will drop to just 5% if dx/alpha = 3.
     """
-    arg = -k*(x-x0)
+    arg = -(x-x0)/alpha
     return sigmoid(arg)
 
-def dsmoothstep_dx(x, x0, k=100):
+def dsmoothstep_dx(x, x0, alpha=1.0):
     """
     Return the logistic function evaluated at x-xref
     """
-    arg = -k*(x-x0)
-    darg_dx = -k
+    arg = -(x-x0)/alpha
+    darg_dx = -1/alpha
     return dsigmoid_dx(arg) * darg_dx
 
-def dsmoothstep_dx0(x, x0, k=100):
+def dsmoothstep_dx0(x, x0, alpha=1.0):
     """
     Return the logistic function evaluated at x-xref
     """
-    arg = -k*(x-x0)
-    darg_dx0 = k
+    arg = -(x-x0)/alpha
+    darg_dx0 = 1/alpha
     return dsigmoid_dx(arg) * darg_dx0
 
-def log_gaussian(x, x0, sigma=1.0):
+## Smoothed gaussian selection function
+def log_gaussian(x, x0, alpha=1.0):
     """
-    Return the log of the gaussian with mean `x0` and variance `sigma`
+    Return the log of the gaussian with mean `x0` and variance `alpha`
     """
-    return -((x-x0)/sigma)**2
+    return -((x-x0)/alpha)**2
 
-def gaussian(x, x0, sigma=1.0):
+def gaussian(x, x0, alpha=1.0):
     """
-    Return the 'gaussian' with mean `x0` and variance `sigma`
+    Return the 'gaussian' with mean `x0` and variance `alpha`
     """
-    return np.exp(-((x-x0)/sigma)**2)
+    return np.exp(-((x-x0)/alpha)**2)
 
-def dgaussian_dx(x, x0, sigma=1.0):
+def dgaussian_dx(x, x0, alpha=1.0):
     """
     Return the sensitivity of `gaussian` to `x`
     """
-    return gaussian(x, x0, sigma) * -2*((x-x0)/sigma) / sigma
+    return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / alpha
 
-def dgaussian_dx0(x, x0, sigma=1.0):
+def dgaussian_dx0(x, x0, alpha=1.0):
     """
     Return the sensitivity of `gaussian` to `x0`
     """
-    return gaussian(x, x0, sigma) * -2*((x-x0)/sigma) / -sigma
+    return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / -alpha

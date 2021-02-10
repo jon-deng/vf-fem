@@ -25,7 +25,6 @@ import ufl
 
 from .. import linalg
 from .base import AbstractFunctional
-from ..models.fluid import smoothmin, dsmoothmin_df
 from ..models.solid import strain, Solid
 
 class SolidFunctional(AbstractFunctional):
@@ -714,6 +713,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
     }
 
     def eval(self, f):
+        raise NotImplementedError("Need to fix this")
         model = self.model
 
         # Get the initial locations of the nodes
@@ -728,7 +728,9 @@ class GlottalWidthErrorNorm(SolidFunctional):
             u = f.get_state(n)[0]
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
             y_surf = xy_surf[1::2]
-            gw = smoothmin(y_surf, alpha=self.constants['smooth_min_alpha'])
+            # TODO: Fix this if you're going to use it
+            # gw = smoothmin(y_surf, alpha=self.constants['smooth_min_alpha'])
+            gw = 0.0
             gw_model.append(gw)
 
         return np.sum((np.array(gw_model) - self.constants['gw_meas'])**2)

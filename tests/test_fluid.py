@@ -8,9 +8,9 @@ import dolfin as dfn
 
 # import pandas as pd
 import matplotlib.pyplot as plt
-import autograd
-import autograd.numpy as np
-# import numpy as np
+# import autograd
+# import autograd.numpy as np
+import numpy as np
 
 import petsc4py
 petsc4py.init()
@@ -45,7 +45,7 @@ class CommonSetup(unittest.TestCase):
         self.fluid_properties = self.fluid.get_properties_vec()
         self.fluid_properties['y_midline'][()] = y.max()+1e-3
         self.fluid_properties['y_gap_min'][()] = 1e-3
-        self.fluid_properties['beta'][()] = 100
+        self.fluid_properties['zeta_lb'][()] = 1/100
         self.fluid_properties['r_sep'][()] = 1.0
 
         self.area = 2*(self.fluid_properties['y_midline'] - y)
@@ -84,7 +84,6 @@ class TestBernoulli(CommonSetup):
 
         plt.show()
         
-
     def test_flow_sensitivity(self):
         """
         Test if derivatives of the flow quantities/residuals are correct using finite differences
@@ -100,11 +99,12 @@ class TestBernoulli(CommonSetup):
         ## Set a surface state step direction and step sizes
         hs = np.concatenate([[0], 2**np.arange(-5, 5, dtype=np.float)])
         du = np.zeros(fluid.control['usurf'].size)
-        du[:] = np.random.rand(du.size)*1e-5
-        du[:] = 0.0
+        du[:] = np.linspace(0, 1.0e-5, du.size)
+        # du[:] = np.random.rand(du.size)*1e-5
+        # du[:] = 0.0
 
-        dpsub = 0.0
-        dpsup = 10.0
+        dpsub = 100.0
+        dpsup = 0.0
 
         ## Calculate p/q sensitivity and convergence order using FD
         # Calculate perturbed flow states
@@ -131,18 +131,18 @@ class TestBernoulli(CommonSetup):
         dq = dq_du.dot(du) + dq_dpsub*dpsub + dq_dpsup*dpsup
         dp = dp_du@du + dp_dpsub*dpsub + dp_dpsup*dpsup
 
-        taylor_remainder_2 = np.abs(ps[1:, :] - ps[0, :] - hs[1:][:, None]*dp)
+        taylor_remainder_2 = np.abs(ps[1:] - ps[0] - hs[1:, None]*dp)
         p_order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
         print("2nd order Taylor (p)", p_order_2)
 
-        relerr = np.abs(dp - dp_fd)/np.abs(dp)
+        relerr = np.abs(dp - dp_fd)/np.abs(dp_fd)
         print("Relative error (p)", relerr)
 
         taylor_remainder_2 = np.abs(qs[1:] - qs[0] - hs[1:]*dq)
         q_order_2 = np.log(taylor_remainder_2[1:]/taylor_remainder_2[:-1]) / np.log(2)
         print("2nd order Taylor (q)", q_order_2)
 
-        relerr = np.abs(dq - dq_fd)/np.abs(dq)
+        relerr = np.abs(dq - dq_fd)/np.abs(dq_fd)
         print("Relative error (q)", relerr)
         
         # print(p_order_2[:, 25])
@@ -324,10 +324,10 @@ class TestSmoothApproximations(CommonSetup):
 
         da = 1e-6
 
-        df_da = fluid.dsmoothlb_df(a0, a_lb, beta=self.fluid_properties['beta'])
+        df_da = fluid.dsmoothlb_df(a0, a_lb, alpha=self.fluid_properties['zeta_lb'])
 
-        f0 = fluid.smoothlb(a0, a_lb, beta=self.fluid_properties['beta'])
-        f1 = fluid.smoothlb(a0+da, a_lb, beta=self.fluid_properties['beta'])
+        f0 = fluid.smoothlb(a0, a_lb, alpha=self.fluid_properties['zeta_lb'])
+        f1 = fluid.smoothlb(a0+da, a_lb, alpha=self.fluid_properties['zeta_lb'])
         df_da_fd = (f1-f0)/da
         
 
@@ -344,10 +344,10 @@ class TestSmoothApproximations(CommonSetup):
         area = 2 * (fluid_props['y_midline'] - y)
 
         # print(fluid_props.)
-        print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
+        print([fluid_props[key] for key in ('zeta_amin', 'zeta_sep', 'zeta_ainv')])
         
-        K_STABILITY = np.max(fluid_props['alpha']*area)
-        w_smooth_min = np.exp(fluid_props['alpha']*area - K_STABILITY)
+        K_STABILITY = np.max(fluid_props['zeta_amin']*area)
+        w_smooth_min = np.exp(fluid_props['zeta_amin']*area - K_STABILITY)
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(fluid.x_vertices, y)
@@ -368,8 +368,8 @@ class TestSmoothApproximations(CommonSetup):
         area = 2 * (fluid_props['y_midline'] - y)
 
         # print(fluid_props.)
-        print([fluid_props[key] for key in ('alpha', 'k', 'sigma')])
-        log_w = fluid.log_gaussian(area, np.min(area), fluid_props['sigma'])
+        print([fluid_props[key] for key in ('zeta_amin', 'zeta_sep', 'zeta_ainv')])
+        log_w = fluid.log_gaussian(area, np.min(area), fluid_props['zeta_ainv'])
         w = np.exp(log_w - np.max(log_w))
 
         fig, ax = plt.subplots(1, 1)
@@ -385,7 +385,7 @@ class TestSmoothApproximations(CommonSetup):
         """
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]
-        w = fluid.smoothstep(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['k'])
+        w = fluid.smoothstep(fluid.s_vertices, np.mean(fluid.s_vertices), fluid_props['zeta_sep'])
 
         fig, ax = plt.subplots(1, 1)
         ax.plot(fluid.x_vertices, y)

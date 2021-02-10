@@ -12,7 +12,6 @@ import scipy.signal as sig
 # import ufl
 
 from .base import AbstractFunctional
-from ..models.fluid import QuasiSteady1DFluid, smoothmin, dsmoothmin_df
 from .. import linalg
 
 class FluidFunctional(AbstractFunctional):
