@@ -163,8 +163,8 @@ class TestIntegrate(ForwardConfig):
         cbs = {'glottal_width': callbacks.safe_glottal_width}
         print("Running forward model")
         runtime_start = perf_counter()
-        h5file, h5group, info = integrate(model, ini_state, controls, props, times, 
-            h5file=save_path, h5group='/', export_callbacks=cbs)
+        with sf.StateFile(model, save_path, mode='w') as f:
+            info = integrate(model, f, ini_state, controls, props, times, export_callbacks=cbs)
 
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -210,12 +210,11 @@ class TestIntegrate(ForwardConfig):
 
         ## Integrate the model at x, and x+dx
         def _integrate(model, state, control, props, times, h5file, overwrite=False):
-            if overwrite and os.path.isfile(h5file):
-                os.remove(h5file)
-            try:
-                integrate(model, state, [control], props, times, h5file=h5file)
-            except OSError:
+            if not overwrite and os.path.isfile(h5file):
                 print("File already exists. Continuing with old file.")
+            else:
+                with sf.StateFile(model, h5file, mode='w') as f:
+                    integrate(model, f, state, [control], props, times)
 
         xs = [ini_state, control, props, times]
         dxs = [dini_state, dcontrol, dprops, dtimes]
@@ -243,5 +242,6 @@ class TestIntegrate(ForwardConfig):
 if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
+    test.test_integrate_fsai()
     test.test_integrate_linear()
     # unittest.main()

@@ -71,8 +71,8 @@ class TaylorTest(unittest.TestCase):
         if self.OVERWRITE_LSEARCH or not os.path.isfile(base_path):
             if os.path.isfile(base_path):
                 os.remove(base_path)
-            integrate(self.model, self.state0, self.controls, self.props, self.times,
-                      h5file=base_path)
+            with sf.StateFile(self.model, base_path, mode='w') as f:
+                integrate(self.model, f, self.state0, self.controls, self.props, self.times)
 
         print("Computing gradient via adjoint")
         t_start = perf_counter()
@@ -167,7 +167,7 @@ class TaylorTest(unittest.TestCase):
 
 class TestBasicGradient(TaylorTest):
     COUPLING = 'explicit'
-    OVERWRITE_LSEARCH = False
+    OVERWRITE_LSEARCH = True
     FUNCTIONAL = fsolid.FinalDisplacementNorm
     FUNCTIONAL = fsolid.UPeriodicError
     FUNCTIONAL = fsolid.KVDampingWork

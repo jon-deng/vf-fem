@@ -87,8 +87,9 @@ class TestFunctionals(unittest.TestCase):
                 os.remove(h5file)
             print("Running forward model to generate data.")
             adaptive_step_prm = {'abs_tol': None}
-            info = integrate(model, (0, 0, 0), solid_props, fluid_props, timing_props,
-                             h5file=h5file, adaptive_step_prm=adaptive_step_prm)
+            with sf.StateFile(model, h5file, mode='w') as f:
+                info = integrate(model, f, (0, 0, 0), solid_props, fluid_props, timing_props,
+                                 adaptive_step_prm=adaptive_step_prm)
 
         self.h5file = h5file
         self.model = model

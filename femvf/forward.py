@@ -18,8 +18,8 @@ from . import linalg
 # TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile
 def integrate(
-    model, ini_state, controls, props, times, idx_meas=None,
-    h5file='tmp.h5', h5group='/', newton_solver_prm=None, export_callbacks=None
+    model, f, ini_state, controls, props, times, idx_meas=None, 
+    newton_solver_prm=None, export_callbacks=None
     ):
     """
     Integrate the model over each time in `times` for the specified parameters
@@ -27,6 +27,7 @@ def integrate(
     Parameters
     ----------
     model : model.ForwardModel
+    f : sf.StateFile
     ini_state : BlockVec
         Initial state of the system (for example: displacement, velocity, acceleration)
     controls : list(BlockVec)
@@ -47,7 +48,7 @@ def integrate(
     info : dict
         Any exported quantites are contained in here
     """
-    # Initialize storage of exported quantites
+    # Initialize storage for exported quantites
     if export_callbacks is None:
         export_callbacks = {}
     info = {key: [] for key in export_callbacks}
@@ -80,51 +81,46 @@ def integrate(
         info[key].append(func(model, state0, control0, props, times[0]))
 
     ## Initialize datasets and save initial states to the h5 file
-    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        f.init_layout()
-
-        f.append_state(state0)
-        f.append_control(control0)
-        f.append_properties(props)
-        f.append_time(times[0])
-        
-        if 0 in idx_meas:
-            f.append_meas_index(0)
+    f.init_layout()
+    f.append_state(state0)
+    f.append_control(control0)
+    f.append_properties(props)
+    f.append_time(times[0])
+    if 0 in idx_meas:
+        f.append_meas_index(0)
 
     ## Integrate the system over the specified times
-    with sf.StateFile(model, h5file, group=h5group, mode='a') as f:
-        for n in range(1, times.size):
-            if variable_controls:
-                control1 = controls[n]
-            else:
-                control1 = control0
+    for n in range(1, times.size):
+        if variable_controls:
+            control1 = controls[n]
+        else:
+            control1 = control0
 
-            dt = times[n] - times[n-1]
+        dt = times[n] - times[n-1]
 
-            model.dt = dt
-            model.set_ini_state(state0)
-            model.set_control(control1)
-            
-            state1, step_info = model.solve_state1(state0)
-            # model.set_fin_state(state1)
-            for key, func in export_callbacks.items():
-                info[key].append(func(model, state1, control1, props, times[n]))
+        model.dt = dt
+        model.set_ini_state(state0)
+        model.set_control(control1)
+        
+        state1, _step_info = model.solve_state1(state0)
+        for key, func in export_callbacks.items():
+            info[key].append(func(model, state1, control1, props, times[n]))
 
-            # Write the solution outputs to a file
-            f.append_state(state1)
-            f.append_time(times[n])
-            if n in idx_meas:
-                f.append_meas_index(n)
+        # Write the solution outputs to a file
+        f.append_state(state1)
+        f.append_time(times[n])
+        if n in idx_meas:
+            f.append_meas_index(n)
 
-            # Update initial conditions for the next time step
-            state0 = state1
-            control0 = control1
+        # Update initial conditions for the next time step
+        state0 = state1
+        control0 = control1
 
-        info['times'] = np.array(times)
-        for key, value in info.items():
-            f.root_group[f'exports/{key}'] = value
+    info['times'] = np.array(times)
+    for key, value in info.items():
+        f.root_group[f'exports/{key}'] = value
 
-    return h5file, h5group, info
+    return info
 
 def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     """
