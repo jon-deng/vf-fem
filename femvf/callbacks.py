@@ -13,16 +13,15 @@ def safe_glottal_width(model, state, control, props, time):
     model.set_fin_state(state)
     model.set_control(control)
 
-    usurf, vsurf, psub, psup = model.fluid.control.vecs
-    alpha = props['alpha']
+    usurf, *_ = model.fluid.control.vecs
 
     y = usurf[1::2]
     a = 2 * (props['y_midline'] - y)
     s = model.fluid.s_vertices
 
-    asafe = smoothlb(a, 2*props['y_gap_min'], props['beta'])
+    asafe = smoothlb(a, 2*props['y_gap_min'], props['zeta_lb'])
 
-    wmin = expweight(asafe, alpha)
+    wmin = expweight(asafe, props['zeta_amin'])
     amin = wavg(s, asafe, wmin)
 
     return amin

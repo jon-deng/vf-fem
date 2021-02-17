@@ -47,13 +47,9 @@ class ForwardConfig(unittest.TestCase):
 
         # Set the properties
         y_gap = 0.01
-        alpha, k, sigma = -3000, 50, 0.002
 
         fl_props = model.fluid.get_properties_vec(set_default=True)
         fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-        fl_props['alpha'][()] = alpha
-        fl_props['k'][()] = k
-        fl_props['sigma'][()] = sigma
 
         sl_props = model.solid.get_properties_vec(set_default=True)
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
@@ -100,13 +96,9 @@ class ForwardConfig(unittest.TestCase):
 
         # Set the properties
         y_gap = 0.01
-        alpha, k, sigma = -3000, 50, 0.002
 
         fl_props = model.fluid.get_properties_vec(set_default=True)
         fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-        fl_props['alpha'][()] = alpha
-        fl_props['k'][()] = k
-        fl_props['sigma'][()] = sigma
 
         sl_props = model.solid.get_properties_vec(set_default=True)
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
