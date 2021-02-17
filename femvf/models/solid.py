@@ -80,8 +80,6 @@ def traction_1form(trial, test, pressure, facet_normal, traction_ds):
     traction = ufl.dot(fluid_force, test)*traction_ds
     return traction
 
-# TODO: Remove PROPERTY_TYPES/PROPERTY_DEFAULTS class variables; properties can be defined based on what is exported from the UFL form representation
-# The way it is now, you have to write what the properties are twice, and manually check that the names agree
 
 def gen_residual_bilinear_forms(forms):
     """
@@ -111,22 +109,20 @@ def gen_residual_bilinear_forms(forms):
         forms[form_name] = dfn.derivative(f, x)
         forms[f'{form_name}_adj'] = dfn.adjoint(forms[form_name])
 
-def gen_residual_bilinear_property_forms(f1, forms, property_labels, scalar_trial):
+def gen_residual_bilinear_property_forms(forms):
     """
     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
     """
     df1_dsolid = {}
-    for key in property_labels:
+    property_labels = [form_name.split('.')[-1] for form_name in forms.keys() 
+                       if 'coeff.prop' in form_name]
+    for prop_name in property_labels:
         try:
-            df1_dsolid[key] = dfn.adjoint(ufl.derivative(f1, forms[f'coeff.prop.{key}'], scalar_trial))
+            df1_dsolid[prop_name] = dfn.adjoint(
+                dfn.derivative(forms['form.un.f1'], forms[f'coeff.prop.{prop_name}']))
         except RuntimeError:
-            df1_dsolid[key] = None
+            df1_dsolid[prop_name] = None
 
-        if df1_dsolid[key] is not None:
-            try:
-                dfn.assemble(df1_dsolid[key])
-            except RuntimeError:
-                df1_dsolid[key] = None
     return df1_dsolid
 
 class Solid(base.Model):
@@ -134,7 +130,6 @@ class Solid(base.Model):
     Class representing the discretized governing equations of a solid
     """
     # Subclasses have to set these values
-    PROPERTY_TYPES = None
     PROPERTY_DEFAULTS = None
 
     def __init__(self, mesh, facet_func, facet_labels, cell_func, cell_labels, 
@@ -176,7 +171,7 @@ class Solid(base.Model):
 
         self.f1 = self.forms['form.un.f1']
         self.df1_du1 = self.forms['form.bi.df1_du1']
-        self.df1_dsolid = gen_residual_bilinear_property_forms(self.f1, self.forms, self.PROPERTY_TYPES.keys(), self.scalar_trial)
+        self.df1_dsolid = gen_residual_bilinear_property_forms(self.forms)
 
         ## Measures and boundary conditions
         self.dx = self.forms['measure.dx']
@@ -230,7 +225,8 @@ class Solid(base.Model):
         You have to implement this along with a description of the properties to make a subclass of
         the `Solid`.
         """
-        return NotImplementedError("Subclasses must implement this function")
+        raise NotImplementedError("Subclasses must implement this function")
+        return {}
 
     ## Functions for getting empty parameter vectors
     def get_state_vec(self):
@@ -245,19 +241,24 @@ class Solid(base.Model):
         return ret
 
     def get_properties_vec(self, set_default=True):
-        labels = tuple(self.PROPERTY_TYPES.keys())
+        labels = [form_name.split('.')[-1] for form_name in self.forms.keys() 
+                  if 'coeff.prop' in form_name]
         vecs = []
         for label in labels:
             coefficient = self.forms['coeff.prop.'+label]
 
             vec = None
-            if isinstance(coefficient, dfn.function.constant.Constant):
+            # Generally the size of the vector comes directly from the property,
+            # for examples, constants are size 1, scalar fields have size matching number of dofs
+            # Time step is a special case since it is size 1 but is made to be a field as 
+            # a workaround
+            if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
                 vec = np.ones(1)
             else:
                 vec = coefficient.vector().copy()
             
             if set_default:
-                vec[:] = self.PROPERTY_DEFAULTS[label]
+                vec[:] = self.PROPERTY_DEFAULTS.get(label, 0.0)
 
             vecs.append(vec)
 
@@ -453,14 +454,20 @@ class Solid(base.Model):
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
         # breakpoint()
-        for key, vec in zip(b.keys, b.vecs):
+        for prop_name, vec in zip(b.keys, b.vecs):
             # assert self.df1_dsolid[key] is not None
-            df1_dkey = dfn.assemble(self.df1_dsolid[key])
-            val = df1_dkey*x['u']
+            df1_dprop = None
+            if self.df1_dsolid[prop_name] is None:
+                df1_dprop = 0.0
+            else:
+                df1_dprop = dfn.assemble(self.df1_dsolid[prop_name])
+            val = df1_dprop*x['u']
+
+            # Note this is a workaround because some properties are scalar values but stored as 
+            # vectors in order to take their derivatives. This is the case for time step, `dt`
             if vec.size == 1:
                 val = val.sum()
-                # Note this is a hack because some properties are scalar values but stored as vectors
-                # throughout the domain (specifically, the time step)
+                
             vec[:] = val
         return b
 
@@ -496,15 +503,6 @@ class Rayleigh(Solid):
     """
     Represents the governing equations of Rayleigh damped solid
     """
-    PROPERTY_TYPES = {
-        'emod': ('field', ()),
-        'nu': ('const', ()),
-        'rho': ('const', ()),
-        'rayleigh_m': ('const', ()),
-        'rayleigh_k': ('const', ()),
-        'y_collision': ('const', ()),
-        'k_collision': ('const', ())}
-
     PROPERTY_DEFAULTS = {
         'emod': 10e3 * PASCAL_TO_CGS,
         'nu': 0.49,
@@ -675,14 +673,6 @@ class KelvinVoigt(Solid):
     """
     Represents the governing equations of a Kelvin-Voigt damped solid
     """
-    PROPERTY_TYPES = {
-        'emod': ('field', ()),
-        'nu': ('const', ()),
-        'rho': ('const', ()),
-        'eta': ('field', ()),
-        'y_collision': ('const', ()),
-        'k_collision': ('const', ())}
-
     PROPERTY_DEFAULTS = {
         'emod': 10e3 * PASCAL_TO_CGS,
         'nu': 0.49,
@@ -825,15 +815,6 @@ class IncompSwellingKelvinVoigt(Solid):
     """
     Kelvin Voigt model allowing for a swelling field
     """
-    PROPERTY_TYPES = {
-        'emod': ('field', ()),
-        'k_swelling': ('const', ()),
-        'v_swelling' : ('field', ()),
-        'rho': ('const', ()),
-        'eta': ('field', ()),
-        'y_collision': ('const', ()),
-        'k_collision': ('const', ())}
-
     PROPERTY_DEFAULTS = {
         'emod': 10e3 * PASCAL_TO_CGS,
         'v_swelling': 1.0,
