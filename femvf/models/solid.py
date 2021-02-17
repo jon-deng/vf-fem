@@ -83,6 +83,52 @@ def traction_1form(trial, test, pressure, facet_normal, traction_ds):
 # TODO: Remove PROPERTY_TYPES/PROPERTY_DEFAULTS class variables; properties can be defined based on what is exported from the UFL form representation
 # The way it is now, you have to write what the properties are twice, and manually check that the names agree
 
+def gen_residual_bilinear_forms(forms):
+    """
+    Adds bilinear forms to a dictionary defining the residual and state variables
+    """
+    # Derivatives of the displacement residual form wrt variables of interest
+    for full_var_name in (
+        [f'coeff.state.{y}' for y in ['u0', 'v0', 'a0', 'u1']] + 
+        ['coeff.time.dt', 'coeff.fsi.p1']):
+        f = forms['form.un.f1']
+        x = forms[full_var_name]
+
+        var_name = full_var_name.split(".")[-1]
+        form_name = f'form.bi.df1_d{var_name}'
+        forms[form_name] = dfn.derivative(f, x)
+        forms[f'{form_name}_adj'] = dfn.adjoint(forms[form_name])
+
+    # Derivatives of the u/v/a residual form wrt variables of interest
+    for full_var_name in (
+        [f'coeff.state.{y}' for y in ['u1', 'v1', 'a1']] + 
+        ['coeff.fsi.p1']):
+        f = forms['form.un.f1uva']
+        x = forms[full_var_name]
+
+        var_name = full_var_name.split(".")[-1]
+        form_name = f'form.bi.df1uva_d{var_name}'
+        forms[form_name] = dfn.derivative(f, x)
+        forms[f'{form_name}_adj'] = dfn.adjoint(forms[form_name])
+
+def gen_residual_bilinear_property_forms(f1, forms, property_labels, scalar_trial):
+    """
+    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
+    """
+    df1_dsolid = {}
+    for key in property_labels:
+        try:
+            df1_dsolid[key] = dfn.adjoint(ufl.derivative(f1, forms[f'coeff.prop.{key}'], scalar_trial))
+        except RuntimeError:
+            df1_dsolid[key] = None
+
+        if df1_dsolid[key] is not None:
+            try:
+                dfn.assemble(df1_dsolid[key])
+            except RuntimeError:
+                df1_dsolid[key] = None
+    return df1_dsolid
+
 class Solid(base.Model):
     """
     Class representing the discretized governing equations of a solid
@@ -98,6 +144,7 @@ class Solid(base.Model):
 
         self._forms = self.form_definitions(mesh, facet_func, facet_labels,
                                             cell_func, cell_labels, fsi_facet_labels, fixed_facet_labels)
+        gen_residual_bilinear_forms(self._forms)
 
         ## Store mesh related quantities
         self.mesh = mesh
@@ -129,7 +176,7 @@ class Solid(base.Model):
 
         self.f1 = self.forms['form.un.f1']
         self.df1_du1 = self.forms['form.bi.df1_du1']
-        self.df1_dsolid = get_df1_dsolid_forms(self.f1, self.forms, self.PROPERTY_TYPES.keys(), self.scalar_trial)
+        self.df1_dsolid = gen_residual_bilinear_property_forms(self.f1, self.forms, self.PROPERTY_TYPES.keys(), self.scalar_trial)
 
         ## Measures and boundary conditions
         self.dx = self.forms['measure.dx']
@@ -418,7 +465,7 @@ class Solid(base.Model):
         return b
 
     def apply_dres_ddt(self, x):
-        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_dt'], tensor=dfn.PETScMatrix())
+        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_ddt'], tensor=dfn.PETScMatrix())
         dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
         dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
 
@@ -437,7 +484,7 @@ class Solid(base.Model):
         # Note that dfu_ddt is a matrix because fenics doesn't allow taking derivative w.r.t a scalar
         # As a result, the time step is defined for each vertex. This is why 'ddt' is computed weirdly
         # below
-        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_dt_adj'], tensor=dfn.PETScMatrix())
+        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_ddt_adj'], tensor=dfn.PETScMatrix())
         dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
         dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
 
@@ -497,9 +544,9 @@ class Rayleigh(Solid):
 
         emod.vector()[:] = 1.0
 
-        # NOTE: Fenics doesn't support form derivatives w.r.t Constant. This is a hack making time step
-        # vary in space so you can take the derivative. You *must* set the time step equal at every DOF
-        # dt = dfn.Constant(1e-4)
+        # NOTE: Fenics doesn't support form derivatives w.r.t Constant. By making time step
+        # vary in space, you can take the derivative. As a result you have to set the time step 
+        # the same at every DOF
         dt = dfn.Function(scalar_fspace)
         dt.vector()[:] = 1e-4
 
@@ -517,7 +564,6 @@ class Rayleigh(Solid):
         a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
-        p0 = dfn.Function(scalar_fspace)
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
@@ -535,7 +581,6 @@ class Rayleigh(Solid):
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
-        
         facet_normal = dfn.FacetNormal(mesh)
         traction_ds = ds(facet_labels[fsi_facet_labels[0]])
         for fsi_edge in fsi_facet_labels[1:]:
@@ -561,9 +606,8 @@ class Rayleigh(Solid):
 
         penalty = penalty_1form(u1)
 
-        f1_linear = inertia + stiffness + damping
-        f1_nonlin = -traction - penalty
-        f1_uva = f1_linear + f1_nonlin
+
+        f1_uva = inertia + stiffness + damping -traction - penalty
 
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1:a1_nmk})
 
@@ -585,25 +629,8 @@ class Rayleigh(Solid):
 
         df1_du1_adj = dfn.adjoint(df1_du1)
 
-        df1_demod = ufl.derivative(f1, emod, scalar_trial)
         df1_dp1_adj = dfn.adjoint(df1_dp1)
         df1_dt = ufl.derivative(f1, dt, scalar_trial)
-
-        # Also define an 'f0' form that solves for a0, given u0 and v0
-        # This is needed to solve for the first 'a0' given u0, v0 initial states
-        f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
-            + stiffness_2form(u0, vector_test, emod, nu) \
-            - traction_1form(u0, vector_test, p0, facet_normal, traction_ds) \
-            - penalty_1form(u0)
-        df0_du0 = ufl.derivative(f0, u0, vector_trial)
-        df0_dv0 = ufl.derivative(f0, v0, vector_trial)
-        df0_da0 = ufl.derivative(f0, a0, vector_trial)
-        df0_dp0 = ufl.derivative(f0, p0, scalar_trial)
-
-        df0_du0_adj = dfn.adjoint(df0_du0)
-        df0_dv0_adj = dfn.adjoint(df0_dv0)
-        df0_da0_adj = dfn.adjoint(df0_da0)
-        df0_dp0_adj = dfn.adjoint(df0_dp0)
 
         forms = {
             'measure.dx': dx,
@@ -618,7 +645,6 @@ class Rayleigh(Solid):
             'trial.vector': vector_trial,
             'trial.scalar': scalar_trial,
 
-
             'coeff.time.dt': dt,
             'coeff.time.gamma': gamma,
             'coeff.time.beta': beta,
@@ -630,7 +656,6 @@ class Rayleigh(Solid):
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
 
-            'coeff.fsi.p0': p0,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
@@ -641,32 +666,9 @@ class Rayleigh(Solid):
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
 
-            'form.un.f1_uva': f1_uva,
-            'form.un.f1': f1,
-            'form.un.f0': f0,
+            'form.un.f1uva': f1_uva,
+            'form.un.f1': f1}
 
-            'form.bi.df1_du1': df1_du1,
-            'form.bi.df1_du1_adj': df1_du1_adj,
-            'form.bi.df1_du0': dfn.adjoint(df1_du0_adj),
-            'form.bi.df1_du0_adj': df1_du0_adj,
-            'form.bi.df1_dp1': df1_dp1,
-            'form.bi.df1_dp1_adj': df1_dp1_adj,
-            'form.bi.df1_dv0': dfn.adjoint(df1_dv0_adj),
-            'form.bi.df1_dv0_adj': df1_dv0_adj,
-            'form.bi.df1_da0': dfn.adjoint(df1_da0_adj),
-            'form.bi.df1_da0_adj': df1_da0_adj,
-            # 'form.bi.df1_demod': df1_demod,
-            'form.bi.df1_dt': df1_dt,
-            'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
-
-            'form.bi.df0_du0_adj': df0_du0_adj,
-            'form.bi.df0_dv0_adj': df0_dv0_adj,
-            'form.bi.df0_da0_adj': df0_da0_adj,
-            'form.bi.df0_dp0_adj': df0_dp0_adj,
-            'form.bi.df0_du0': df0_du0,
-            'form.bi.df0_dv0': df0_dv0,
-            'form.bi.df0_da0': df0_da0,
-            'form.bi.df0_dp0': df0_dp0}
         return forms
 
 class KelvinVoigt(Solid):
@@ -734,7 +736,6 @@ class KelvinVoigt(Solid):
         a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
-        p0 = dfn.Function(scalar_fspace)
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
@@ -775,49 +776,13 @@ class KelvinVoigt(Solid):
         # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
         penalty = penalty_1form(u1)
 
-        f1_linear = inertia + stiffness + kv_damping
-        f1_nonlin = -traction - penalty
-        f1_uva = f1_linear + f1_nonlin
-
+        f1_uva = inertia + stiffness + kv_damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
-
-        df1_du1 = ufl.derivative(f1, u1, vector_trial)
-
-        df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
                                   facet_func, facet_labels['fixed'])
-
-        ## Adjoint forms
-        df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))
-
-        df1_dv0_adj = dfn.adjoint(ufl.derivative(f1, v0, vector_trial))
-
-        df1_da0_adj = dfn.adjoint(ufl.derivative(f1, a0, vector_trial))
-
-        # df1_du1_adj_linear = dfn.adjoint(df1_du1_linear)
-        # df1_du1_adj_nonlin = dfn.adjoint(df1_du1_nonlin)
-        df1_du1_adj = dfn.adjoint(df1_du1)
-
-        df1_demod = ufl.derivative(f1, emod, scalar_trial)
-        df1_dp1_adj = dfn.adjoint(df1_dp1)
-        df1_dt = ufl.derivative(f1, dt, scalar_trial)
-
-        f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
-             + stiffness_2form(u0, vector_test, emod, nu) \
-             - traction_1form(u0, vector_test, p0, facet_normal, traction_ds) \
-             - penalty_1form(u0)
-        df0_du0 = ufl.derivative(f0, u0, vector_trial)
-        df0_dv0 = ufl.derivative(f0, v0, vector_trial)
-        df0_da0 = ufl.derivative(f0, a0, vector_trial)
-        df0_dp0 = ufl.derivative(f0, p0, scalar_trial)
-
-        df0_du0_adj = dfn.adjoint(df0_du0)
-        df0_dv0_adj = dfn.adjoint(df0_dv0)
-        df0_da0_adj = dfn.adjoint(df0_da0)
-        df0_dp0_adj = dfn.adjoint(df0_dp0)
 
         forms = {
             'measure.dx': dx,
@@ -843,7 +808,6 @@ class KelvinVoigt(Solid):
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
 
-            'coeff.fsi.p0': p0,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
@@ -853,32 +817,8 @@ class KelvinVoigt(Solid):
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
 
-            'form.un.f1_uva': f1_uva,
-            'form.un.f1': f1,
-            'form.un.f0': f0,
-
-            'form.bi.df1_du1': df1_du1,
-            'form.bi.df1_du1_adj': df1_du1_adj,
-            'form.bi.df1_du0': dfn.adjoint(df1_du0_adj),
-            'form.bi.df1_du0_adj': df1_du0_adj,
-            'form.bi.df1_dp1': df1_dp1,
-            'form.bi.df1_dp1_adj': df1_dp1_adj,
-            'form.bi.df1_dv0': dfn.adjoint(df1_dv0_adj),
-            'form.bi.df1_dv0_adj': df1_dv0_adj,
-            'form.bi.df1_da0': dfn.adjoint(df1_da0_adj),
-            'form.bi.df1_da0_adj': df1_da0_adj,
-            # 'form.bi.df1_demod': df1_demod,
-            'form.bi.df1_dt': df1_dt,
-            'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
-
-            'form.bi.df0_du0_adj': df0_du0_adj,
-            'form.bi.df0_dv0_adj': df0_dv0_adj,
-            'form.bi.df0_da0_adj': df0_da0_adj,
-            'form.bi.df0_dp0_adj': df0_dp0_adj,
-            'form.bi.df0_du0': df0_du0,
-            'form.bi.df0_dv0': df0_dv0,
-            'form.bi.df0_da0': df0_da0,
-            'form.bi.df0_dp0': df0_dp0}
+            'form.un.f1uva': f1_uva,
+            'form.un.f1': f1}
         return forms
 
 class IncompSwellingKelvinVoigt(Solid):
@@ -952,7 +892,6 @@ class IncompSwellingKelvinVoigt(Solid):
         a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
-        p0 = dfn.Function(scalar_fspace)
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
@@ -1006,49 +945,13 @@ class IncompSwellingKelvinVoigt(Solid):
         # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
         penalty = penalty_1form(u1)
 
-        f1_linear = inertia + stiffness + kv_damping
-        f1_nonlin = -traction - penalty
-        f1_uva = f1_linear + f1_nonlin
-
+        f1_uva = inertia + stiffness + kv_damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
-
-        df1_du1 = ufl.derivative(f1, u1, vector_trial)
-
-        df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
                                   facet_func, facet_labels['fixed'])
-
-        ## Adjoint forms
-        df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))
-
-        df1_dv0_adj = dfn.adjoint(ufl.derivative(f1, v0, vector_trial))
-
-        df1_da0_adj = dfn.adjoint(ufl.derivative(f1, a0, vector_trial))
-
-        # df1_du1_adj_linear = dfn.adjoint(df1_du1_linear)
-        # df1_du1_adj_nonlin = dfn.adjoint(df1_du1_nonlin)
-        df1_du1_adj = dfn.adjoint(df1_du1)
-
-        df1_demod = ufl.derivative(f1, emod, scalar_trial)
-        df1_dp1_adj = dfn.adjoint(df1_dp1)
-        df1_dt = ufl.derivative(f1, dt, scalar_trial)
-
-        f0 = inertia_2form(a0, vector_test, rho) + damping_2form(v0, vector_test) \
-             + stiffness_2form_swelling(u0, vector_test, emod, v_swelling, k_swelling) \
-             - traction_1form(u0, vector_test, p0, facet_normal, traction_ds) \
-             - penalty_1form(u0)
-        df0_du0 = ufl.derivative(f0, u0, vector_trial)
-        df0_dv0 = ufl.derivative(f0, v0, vector_trial)
-        df0_da0 = ufl.derivative(f0, a0, vector_trial)
-        df0_dp0 = ufl.derivative(f0, p0, scalar_trial)
-
-        df0_du0_adj = dfn.adjoint(df0_du0)
-        df0_dv0_adj = dfn.adjoint(df0_dv0)
-        df0_da0_adj = dfn.adjoint(df0_da0)
-        df0_dp0_adj = dfn.adjoint(df0_dp0)
 
         forms = {
             'measure.dx': dx,
@@ -1074,7 +977,6 @@ class IncompSwellingKelvinVoigt(Solid):
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
 
-            'coeff.fsi.p0': p0,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
@@ -1087,46 +989,8 @@ class IncompSwellingKelvinVoigt(Solid):
             'coeff.prop.k_collision': k_collision,
 
             'form.un.f1_uva': f1_uva,
-            'form.un.f1': f1,
-            'form.un.f0': f0,
-
-            'form.bi.df1_du1': df1_du1,
-            'form.bi.df1_dp1': df1_dp1,
-            'form.bi.df1_du1_adj': df1_du1_adj,
-            'form.bi.df1_du0_adj': df1_du0_adj,
-            'form.bi.df1_dv0_adj': df1_dv0_adj,
-            'form.bi.df1_da0_adj': df1_da0_adj,
-            'form.bi.df1_dp1_adj': df1_dp1_adj,
-            # 'form.bi.df1_demod': df1_demod,
-            'form.bi.df1_dt_adj': dfn.adjoint(df1_dt),
-
-            'form.bi.df0_du0_adj': df0_du0_adj,
-            'form.bi.df0_dv0_adj': df0_dv0_adj,
-            'form.bi.df0_da0_adj': df0_da0_adj,
-            'form.bi.df0_dp0_adj': df0_dp0_adj,
-            'form.bi.df0_du0': df0_du0,
-            'form.bi.df0_dv0': df0_dv0,
-            'form.bi.df0_da0': df0_da0,
-            'form.bi.df0_dp0': df0_dp0}
+            'form.un.f1': f1}
         return forms
-
-def get_df1_dsolid_forms(f1, forms, property_labels, scalar_trial):
-    """
-    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
-    """
-    df1_dsolid = {}
-    for key in property_labels:
-        try:
-            df1_dsolid[key] = dfn.adjoint(ufl.derivative(f1, forms[f'coeff.prop.{key}'], scalar_trial))
-        except RuntimeError:
-            df1_dsolid[key] = None
-
-        if df1_dsolid[key] is not None:
-            try:
-                dfn.assemble(df1_dsolid[key])
-            except RuntimeError:
-                df1_dsolid[key] = None
-    return df1_dsolid
 
 class CachedBiFormAssembler:
     """
