@@ -973,6 +973,160 @@ class IncompSwellingKelvinVoigt(Solid):
             'form.un.f1': f1}
         return forms
 
+class Approximate3DKelvinVoigt(Solid):
+    PROPERTY_DEFAULTS = {
+        'emod': 10e3 * PASCAL_TO_CGS,
+        'nu': 0.49,
+        'rho': 1000 * SI_DENSITY_TO_CGS,
+        'eta': 3.0,
+        'y_collision': 0.61-0.001,
+        'k_collision': 1e11}
+
+    @staticmethod
+    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels,
+                         fsi_facet_labels, fixed_facet_labels):
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+
+        scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
+        vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
+
+        vector_trial = dfn.TrialFunction(vector_fspace)
+        vector_test = dfn.TestFunction(vector_fspace)
+
+        scalar_trial = dfn.TrialFunction(scalar_fspace)
+        scalar_test = dfn.TestFunction(scalar_fspace)
+
+        # Length parameter to approximate 3D effect
+        length = dfn.Function(scalar_fspace)
+        length.vector()[:] = 1.0
+        muscle_stress = dfn.Function(scalar_fspace)
+
+        # Newmark update parameters
+        gamma = dfn.Constant(1/2)
+        beta = dfn.Constant(1/4)
+
+        # Solid material properties
+        y_collision = dfn.Constant(1.0)
+        k_collision = dfn.Constant(1.0)
+        rho = dfn.Constant(1.0)
+        nu = dfn.Constant(1.0)
+        emod = dfn.Function(scalar_fspace)
+        kv_eta = dfn.Function(scalar_fspace)
+
+        emod.vector()[:] = 1.0
+
+        # Initial and final states
+        dt = dfn.Function(scalar_fspace)
+        dt.vector()[:] = 1e-4
+
+        u0 = dfn.Function(vector_fspace)
+        v0 = dfn.Function(vector_fspace)
+        a0 = dfn.Function(vector_fspace)
+
+        u1 = dfn.Function(vector_fspace)
+        v1 = dfn.Function(vector_fspace)
+        a1 = dfn.Function(vector_fspace)
+
+        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+
+        # Surface pressures
+        p1 = dfn.Function(scalar_fspace)
+
+        # Symbolic calculations to get the variational form for a linear-elastic solid
+        def damping_2form(trial, test):
+            kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * ufl.dx
+            return kv_damping
+
+        inertia = inertia_2form(a1, vector_test, rho)
+        stiffness = stiffness_2form(u1, vector_test, emod, nu)
+        kv_damping = damping_2form(v1, vector_test)
+
+        # Compute the pressure loading using Neumann boundary conditions on the reference configuration
+        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+
+        facet_normal = dfn.FacetNormal(mesh)
+        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
+        for fsi_edge in fsi_facet_labels[1:]:
+            traction_ds += ds(facet_labels[fsi_edge])
+        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
+
+        # Use the penalty method to account for collision
+        def penalty_1form(u):
+            collision_normal = dfn.Constant([0.0, 1.0])
+            x_reference = dfn.Function(vector_fspace)
+
+            vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
+            x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
+
+            gap = ufl.dot(x_reference+u, collision_normal) - y_collision
+            positive_gap = (gap + abs(gap)) / 2
+
+            # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
+            penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
+                      * traction_ds
+            return penalty
+        penalty = penalty_1form(u1)
+
+        # Approximate a 3D type effect using an out-of-plane force
+        # this is a second order finite difference approximation for the second derivative
+        lame_mu = emod/2/(1+nu)
+        u_ant = dfn.Function(vector_fspace) # zero values by default
+        u_pos = dfn.Function(vector_fspace)  
+        d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
+        out_of_plane_force = (lame_mu+muscle_stress)*d2u_dz2
+        out_of_plane_form = ufl.inner(out_of_plane_force, vector_test) * dx
+
+        f1_uva = inertia + stiffness + kv_damping - traction - penalty - out_of_plane_form
+        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
+
+        ## Boundary conditions
+        # Specify DirichletBC at the VF base
+        bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
+                                  facet_func, facet_labels['fixed'])
+
+        forms = {
+            'measure.dx': dx,
+            'measure.ds': ds,
+            'bcs.base': bc_base,
+
+            'fspace.vector': vector_fspace,
+            'fspace.scalar': scalar_fspace,
+
+            'test.vector': vector_test,
+            'test.scalar': scalar_test,
+            'trial.vector': vector_trial,
+            'trial.scalar': scalar_trial,
+
+            'coeff.time.dt': dt,
+            'coeff.time.gamma': gamma,
+            'coeff.time.beta': beta,
+
+            'coeff.state.u0': u0,
+            'coeff.state.v0': v0,
+            'coeff.state.a0': a0,
+            'coeff.state.u1': u1,
+            'coeff.state.v1': v1,
+            'coeff.state.a1': a1,
+
+            'coeff.fsi.p1': p1,
+
+            'coeff.prop.rho': rho,
+            'coeff.prop.eta': kv_eta,
+            'coeff.prop.emod': emod,
+            'coeff.prop.nu': nu,
+            'coeff.prop.y_collision': y_collision,
+            'coeff.prop.k_collision': k_collision,
+            'coeff.prop.length': length,
+            'coeff.prop.muscle_stress': muscle_stress,
+
+            'form.un.f1uva': f1_uva,
+            'form.un.f1': f1}
+        return forms
+
+
 class CachedBiFormAssembler:
     """
     Assembles a bilinear form using a cached sparsity pattern
