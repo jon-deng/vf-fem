@@ -183,7 +183,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sub': 100000,
         'a_sup': 0.6,
         'r_sep': 1.0,
-        'rho_air': 1.1225 * SI_DENSITY_TO_CGS,
+        'rho_air': 1.225 * SI_DENSITY_TO_CGS,
         'zeta_amin': 0.002/3,
         'zeta_sep': 0.002/3,
         'zeta_ainv': 2.5*0.002,

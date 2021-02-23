@@ -19,7 +19,7 @@ from . import linalg
 # @profile
 def integrate(
     model, f, ini_state, controls, props, times, idx_meas=None, 
-    newton_solver_prm=None, export_callbacks=None
+    newton_solver_prm=None, export_callbacks=None, write=True
     ):
     """
     Integrate the model over each time in `times` for the specified parameters
@@ -45,6 +45,7 @@ def integrate(
 
     Returns
     -------
+    fin_state 
     info : dict
         Any exported quantites are contained in here
     """
@@ -81,13 +82,14 @@ def integrate(
         info[key].append(func(model, state0, control0, props, times[0]))
 
     ## Initialize datasets and save initial states to the h5 file
-    f.init_layout()
-    f.append_state(state0)
-    f.append_control(control0)
-    f.append_properties(props)
-    f.append_time(times[0])
-    if 0 in idx_meas:
-        f.append_meas_index(0)
+    if write:
+        f.init_layout()
+        f.append_state(state0)
+        f.append_control(control0)
+        f.append_properties(props)
+        f.append_time(times[0])
+        if 0 in idx_meas:
+            f.append_meas_index(0)
 
     ## Integrate the system over the specified times
     for n in range(1, times.size):
@@ -106,21 +108,26 @@ def integrate(
         for key, func in export_callbacks.items():
             info[key].append(func(model, state1, control1, props, times[n]))
 
-        # Write the solution outputs to a file
-        f.append_state(state1)
-        f.append_time(times[n])
-        if n in idx_meas:
-            f.append_meas_index(n)
+        # Write the solution outputs to the h5 file
+        if write:
+            f.append_state(state1)
+            f.append_time(times[n])
+            if n in idx_meas:
+                f.append_meas_index(n)
 
         # Update initial conditions for the next time step
         state0 = state1
         control0 = control1
 
     info['times'] = np.array(times)
-    for key, value in info.items():
-        f.root_group[f'exports/{key}'] = value
 
-    return info
+    ## Write exported values to h5 file
+    if write:
+        for key, value in info.items():
+            f.root_group[f'exports/{key}'] = value
+
+    fin_state = state0
+    return fin_state, info
 
 def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     """
