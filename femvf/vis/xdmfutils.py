@@ -42,32 +42,34 @@ def export_vertex_values(model, statefile_path, export_path):
             ## Prepare constant variables describing the shape
             N_TIME = fi.size
             N_VERT = solid.mesh.num_vertices()
+            VECTOR_VALUE_SHAPE = tuple(vector_func.value_shape())
+            SCALAR_VALUE_SHAPE = tuple(scalar_func.value_shape())
 
-            ## Write (u, v, a) vertex values
-            VALUE_SHAPE = tuple(vector_func.value_shape())
-
+            ## Initialize solid/fluid state variables
             for label in ['u', 'v', 'a']:
-                fo.create_dataset(label, shape=(N_TIME, N_VERT, *VALUE_SHAPE), dtype=np.float64)
-
-            for ii in range(N_TIME):
-                u, v, a = fi.get_state(ii)
-                
-                for label, vector in zip(['u', 'v', 'a'], [u, v, a]):
-                    vector_func.vector()[:] = vector
-                    fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VALUE_SHAPE)
-
-            ## Write (q, p) vertex values (pressure only defined)
-            VALUE_SHAPE = tuple(scalar_func.value_shape())
+                fo.create_dataset(label, shape=(N_TIME, N_VERT, *VECTOR_VALUE_SHAPE), dtype=np.float64)
 
             for label in ['p']:
-                fo.create_dataset(label, shape=(N_TIME, N_VERT, *VALUE_SHAPE), dtype=np.float64)
+                fo.create_dataset(label, shape=(N_TIME, N_VERT, *SCALAR_VALUE_SHAPE), dtype=np.float64)
 
+            ## Write solid/fluid state variables in vertex order
             for ii in range(N_TIME):
-                _, p = fi.get_fluid_state(ii)
+                state = fi.get_state(ii)
 
+                u, v, a = state['u'], state['v'], state['a']
+                for label, vector in zip(['u', 'v', 'a'], [u, v, a]):
+                    vector_func.vector()[:] = vector
+                    fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VECTOR_VALUE_SHAPE)
+
+                p = state['p']
                 for label, vector in zip(['p'], [p]):
                     scalar_func.vector()[:] = model.map_fsi_scalar_from_fluid_to_solid(p)
-                    fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *VALUE_SHAPE))
+                    fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *SCALAR_VALUE_SHAPE))
+
+            ## Write (q, p) vertex values (pressure only defined)
+            
+
+            
 
 def write_xdmf(model, h5file_path, xdmf_name=None):
     """

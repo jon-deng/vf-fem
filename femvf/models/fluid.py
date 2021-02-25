@@ -176,7 +176,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'zeta_sep': ('const', ()),
         'zeta_ainv': ('const', ()),
         'zeta_lb': ('const', ()),
-        'y_gap_min': ('const', ())}
+        'ygap_lb': ('const', ())}
 
     PROPERTY_DEFAULTS = {
         'y_midline': 1e6,
@@ -188,7 +188,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'zeta_sep': 0.002/3,
         'zeta_ainv': 2.5*0.002,
         'zeta_lb': 0.002/3,
-        'y_gap_min': 0.001}
+        'ygap_lb': 0.001}
 
     # TODO: Refactor as solve_dres_dcontrol
     def solve_dqp1_du1(self, adjoint=False):
@@ -298,7 +298,7 @@ class Bernoulli(QuasiSteady1DFluid):
         y = usurf[1::2]
 
         a = 2 * (fluid_props['y_midline'] - y)
-        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['zeta_lb'])
+        asafe = smoothlb(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
 
         # Calculate minimum and separation areas/locations
         wmin = expweight(asafe, fluid_props['zeta_amin'])
@@ -360,8 +360,8 @@ class Bernoulli(QuasiSteady1DFluid):
         a = 2 * (fluid_props['y_midline'] - y)
         da_dy = -2
 
-        asafe = smoothlb(a, 2*fluid_props['y_gap_min'], fluid_props['zeta_lb'])
-        dasafe_da = dsmoothlb_df(a, 2*fluid_props['y_gap_min'], fluid_props['zeta_lb'])
+        asafe = smoothlb(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
+        dasafe_da = dsmoothlb_df(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
 
         wmin = expweight(asafe, fluid_props['zeta_amin'])
         dwmin_da = dexpweight_df(asafe, fluid_props['zeta_amin']) * dasafe_da

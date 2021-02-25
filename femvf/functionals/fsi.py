@@ -24,12 +24,11 @@ import dolfin as dfn
 import ufl
 
 from .solid import SolidFunctional
-from ..models.fluid import smoothmin, dsmoothmin_df
 from ..models.solid import strain
 
 class FSIFunctional(SolidFunctional):
     def __init__(self, model):
-        super().__init__()
+        super().__init__(model)
         self.fluid = model.fluid
 
     # These are written to handle the case where you have a coupled model input
@@ -69,18 +68,18 @@ class TransferWorkbyVelocity(FSIFunctional):
         vector_trial = solid.forms['trial.vector']
         scalar_trial = solid.forms['trial.scalar']
 
-        pressure = solid.forms['coeff.fsi.p0']
-        u0 = solid.forms['coeff.state.u0']
-        v0 = solid.forms['coeff.state.v0']
+        pressure = solid.forms['coeff.fsi.p1']
+        u1 = solid.forms['coeff.state.u1']
+        v1 = solid.forms['coeff.state.v1']
 
-        deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
+        deformation_gradient = ufl.grad(u1) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
 
         forms = {}
-        forms['fluid_power'] = ufl.inner(fluid_force, v0) * ds(solid.facet_labels['pressure'])
-        forms['dfluid_power_du'] = ufl.derivative(forms['fluid_power'], u0, vector_trial)
-        forms['dfluid_power_dv'] = ufl.derivative(forms['fluid_power'], v0, vector_trial)
+        forms['fluid_power'] = ufl.inner(fluid_force, v1) * ds(solid.facet_labels['pressure'])
+        forms['dfluid_power_du'] = ufl.derivative(forms['fluid_power'], u1, vector_trial)
+        forms['dfluid_power_dv'] = ufl.derivative(forms['fluid_power'], v1, vector_trial)
         forms['dfluid_power_dpressure'] = ufl.derivative(forms['fluid_power'], pressure, scalar_trial)
         return forms
 
@@ -91,10 +90,11 @@ class TransferWorkbyVelocity(FSIFunctional):
         # Calculate the power at `ii` and `ii+1` then use trapezoidal rule to integrate
         # the power over that time increment to get the work done
         work = 0
-        self.model.set_params_fromfile(f, N_START)
+        self.model.set_properties(f.get_properties())
+        self.model.set_fin_state(f.get_state(N_START))
         fluid_power0 = dfn.assemble(self.forms['fluid_power'])
         for ii in range(N_START, N_STATE-1):
-            self.model.set_params_fromfile(f, ii+1)
+            self.model.set_fin_state(f.get_state(ii+1))
             fluid_power1 = dfn.assemble(self.forms['fluid_power'])
 
             ts = f['time'][ii:ii+2]
