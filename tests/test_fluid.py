@@ -44,7 +44,7 @@ class CommonSetup(unittest.TestCase):
         p_sup = 0*PASCAL_TO_CGS
         self.fluid_properties = self.fluid.get_properties_vec()
         self.fluid_properties['y_midline'][()] = y.max()+1e-3
-        self.fluid_properties['y_gap_min'][()] = 1e-3
+        self.fluid_properties['ygap_lb'][()] = 1e-3
         self.fluid_properties['zeta_lb'][()] = 1/100
         self.fluid_properties['r_sep'][()] = 1.0
 

@@ -75,8 +75,8 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     fluid_props['zeta_amin'][()] = zeta_amin
     fluid_props['zeta_sep'][()] = zeta_sep
     fluid_props['zeta_ainv'][()] = zeta_ainv
-    fluid_props['y_gap_min'][()] = y_coll_offset
-    # fluid_props['y_gap_min'][()] = -10000
+    fluid_props['ygap_lb'][()] = y_coll_offset
+    # fluid_props['ygap_lb'][()] = -10000
 
     solid_props = model.solid.get_properties_vec()
     solid_props['emod'][:] = emod
