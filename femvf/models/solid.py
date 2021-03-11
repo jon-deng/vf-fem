@@ -1045,17 +1045,16 @@ class Approximate3DKelvinVoigt(Solid):
 
         ## Approximate 3D type effects using an out-of-plane force
         # this is a second order finite difference approximation for displacements
-        def out_of_plane_2form(u1, v1, uanterior, uposterior, k):
-            d2u_dz2 = (uanterior - 2*u1 + uposterior) / length**2
-            # out_of_plane_force = (lame_mu+muscle_stress)*d2u_dz2
-            out_of_plane_force = k*1/2*d2u_dz2 # factor of 1/2 is due to definition of infinitesimal strain as 1/2(e+e^T)
+        def out_of_plane_2form(u1, v1, uanterior, uposterior, dantpost, k):
+            d2u_dz2 = (uanterior - 2*u1 + uposterior) / dantpost**2
+            out_of_plane_force = k*d2u_dz2
             return ufl.inner(out_of_plane_force, v1) * dx
         
         lame_mu = emod/2/(1+nu)
         u_ant = dfn.Function(vector_fspace) # zero values by default
         u_pos = dfn.Function(vector_fspace)  
-        stiffness += out_of_plane_2form(u1, vector_test, u_ant, u_pos, 2*lame_mu+2*muscle_stress)
-        kv_damping += out_of_plane_2form(v1, vector_test, u_ant, u_pos, kv_eta)
+        stiffness -= out_of_plane_2form(u1, vector_test, u_ant, u_pos, length, lame_mu+muscle_stress)
+        kv_damping -= out_of_plane_2form(v1, vector_test, u_ant, u_pos, length, 0.5*kv_eta)
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
@@ -1084,7 +1083,7 @@ class Approximate3DKelvinVoigt(Solid):
             return penalty
         penalty = penalty_1form(u1)
 
-        f1_uva = inertia + stiffness + kv_damping - traction - penalty - out_of_plane_form
+        f1_uva = inertia + stiffness + kv_damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
 
         ## Boundary conditions
