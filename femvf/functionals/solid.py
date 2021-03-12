@@ -152,10 +152,9 @@ class PeriodicError(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
-
-class _PeriodicError(SolidFunctional):
+class ComponentPeriodicError(SolidFunctional):
     r"""
-    SolidFunctional that measures the periodicity of a simulation
+    SolidFunctional that measures the periodicity of a single state component
 
     This returns
     .. math:: \int_\Omega ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 \, dx ,
@@ -201,15 +200,14 @@ class _PeriodicError(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
-class UPeriodicError(_PeriodicError):
+class UPeriodicError(ComponentPeriodicError):
     IDX_COMP = 0
 
-class VPeriodicError(_PeriodicError):
+class VPeriodicError(ComponentPeriodicError):
     IDX_COMP = 1
 
-class APeriodicError(_PeriodicError):
+class APeriodicError(ComponentPeriodicError):
     IDX_COMP = 2
-
 
 class PeriodicEnergyError(SolidFunctional):
     r"""
@@ -516,6 +514,115 @@ class ElasticEnergyDifference(SolidFunctional):
 
     def eval_ddt(self, f, n):
         return 0.0
+
+class StrainRateDampingWork(SolidFunctional):
+    """
+    Returns the work dissipated in the tissue due to damping
+    """
+    func_types = ()
+    default_constants = {
+        'n_start': 0
+    }
+
+    @staticmethod
+    def form_definitions(solid):
+        solid = solid
+
+        # Load some ufl forms from the solid model
+        f1uva = solid.forms['form.un.f1uva']
+        v1 = solid.forms['coeff.state.v1']
+        eta = solid.forms['coeff.prop.eta']
+
+        forms = {}
+        stress_damping = dfn.derivative(f1uva, v1)
+        forms['damping_power'] = ufl.inner(stress_damping, strain(v1)) * ufl.dx
+        forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
+        forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
+        return forms
+
+    def eval(self, f):
+        solid = self.model.solid
+        N_START = self.constants['n_start']
+        N_STATE = f.size
+
+        res = 0
+        # Calculate total damped work by the trapezoidal rule
+        time = f.get_times()
+        self.model.set_fin_state(f.get_state(N_START))
+        power_left = dfn.assemble(self.forms['damping_power'])
+        for ii in range(N_START+1, N_STATE):
+            # Set form coefficients to represent the equation from state ii to ii+1
+            # self.model.set_params_fromfile(f, ii, update_props=False)
+            self.model.set_fin_state(f.get_state(ii))
+
+            power_right = dfn.assemble(self.forms['damping_power'])
+            res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
+            power_left = power_right
+
+        return res
+
+    def eval_dsl_state(self, f, n):
+        duva = self.solid.get_state_vec()
+        N_START = self.constants['n_start']
+        N_STATE = f.size
+        time = f.get_times()
+
+        if n >= N_START:
+            self.model.set_fin_state(f.get_state(n))
+            dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
+
+            if n > N_START:
+                # Add the sensitivity to `v` from the left interval's right integration point
+                duva['v'][:] += 0.5*dpower_dvn*(time[n] - time[n-1])
+            if n < N_STATE-1:
+                # Add the sensitivity to `v` from the right interval's left integration point
+                duva['v'][:] += 0.5*dpower_dvn*(time[n+1] - time[n])
+
+        return duva
+
+    def eval_dsl_props(self, f):
+        dsolid = self.solid.get_properties_vec()
+        dsolid.set(0.0)
+
+        N_START = N_START = self.constants['n_start']
+        N_STATE = f.size
+
+        dwork_deta = dfn.Function(self.solid.scalar_fspace).vector()
+        # Calculate total damped work by the trapezoidal rule
+        time = f.get_times()
+        self.model.set_properties(f.get_properties())
+        dpower_left_deta = dfn.assemble(self.forms['ddamping_power_deta'])
+        for ii in range(N_START+1, N_STATE):
+            # Set form coefficients to represent the equation from state ii to ii+1
+            self.model.set_fin_state(f.get_state(ii))
+            dpower_right_deta = dfn.assemble(self.forms['ddamping_power_deta'])
+            dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
+
+        dsolid['eta'][:] = dwork_deta
+        return dsolid
+
+    def eval_dt0(self, f, n):
+        dt0 = 0
+
+        return dt0
+
+    def eval_ddt(self, f, n):
+        ddt = 0
+        N_START = N_START = self.constants['n_start']
+        N_STATE = f.size
+        if n >= N_START+1:
+            # Calculate damped work over n-1 -> n
+            # time = f.get_times()
+
+            self.model.set_fin_state(f.get_state(n-1))
+            power_left = dfn.assemble(self.forms['damping_power'])
+
+            self.model.set_fin_state(f.get_state(n))
+            power_right = dfn.assemble(self.forms['damping_power'])
+            # res += (power_left+power_right)/2 * (time[n]-time[n-1])
+            ddt = (power_left+power_right)/2
+
+        return ddt
 
 class KVDampingWork(SolidFunctional):
     """
