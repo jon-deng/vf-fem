@@ -515,7 +515,7 @@ class ElasticEnergyDifference(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
-class StrainRateDampingWork(SolidFunctional):
+class KV3DDampingWork(SolidFunctional):
     """
     Returns the work dissipated in the tissue due to damping
     """
@@ -529,15 +529,18 @@ class StrainRateDampingWork(SolidFunctional):
         solid = solid
 
         # Load some ufl forms from the solid model
-        f1uva = solid.forms['form.un.f1uva']
-        v1 = solid.forms['coeff.state.v1']
+        vector_trial = solid.forms['trial.vector']
+        scalar_trial = solid.forms['trial.scalar']
+        v0 = solid.forms['coeff.state.v0']
         eta = solid.forms['coeff.prop.eta']
 
+        d2v_dz2 = (0.0 - 2*v0 + 0.0) / solid.forms['coeff.props.length']**2
+
         forms = {}
-        stress_damping = dfn.derivative(f1uva, v1)
-        forms['damping_power'] = ufl.inner(stress_damping, strain(v1)) * ufl.dx
-        forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
-        forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
+        forms['damping_power'] = ufl.inner(eta*strain(v0)-0.5*eta*d2v_dz2, strain(v0)) * ufl.dx
+
+        forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
+        forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
         return forms
 
     def eval(self, f):
@@ -548,12 +551,12 @@ class StrainRateDampingWork(SolidFunctional):
         res = 0
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        self.model.set_fin_state(f.get_state(N_START))
+        self.model.set_ini_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
             # self.model.set_params_fromfile(f, ii, update_props=False)
-            self.model.set_fin_state(f.get_state(ii))
+            self.model.set_ini_state(f.get_state(ii))
 
             power_right = dfn.assemble(self.forms['damping_power'])
             res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
@@ -568,14 +571,15 @@ class StrainRateDampingWork(SolidFunctional):
         time = f.get_times()
 
         if n >= N_START:
-            self.model.set_fin_state(f.get_state(n))
+            # self.model.set_params_fromfile(f, n)
+            self.model.set_ini_state(f.get_state(n))
             dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
 
             if n > N_START:
-                # Add the sensitivity to `v` from the left interval's right integration point
+                # Add the sensitivity to `v` from the left intervals right integration point
                 duva['v'][:] += 0.5*dpower_dvn*(time[n] - time[n-1])
             if n < N_STATE-1:
-                # Add the sensitivity to `v` from the right interval's left integration point
+                # Add the sensitivity to `v` from the right intervals left integration point
                 duva['v'][:] += 0.5*dpower_dvn*(time[n+1] - time[n])
 
         return duva
@@ -590,11 +594,11 @@ class StrainRateDampingWork(SolidFunctional):
         dwork_deta = dfn.Function(self.solid.scalar_fspace).vector()
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        self.model.set_properties(f.get_properties())
+        self.model.set_params_fromfile(f, 0)
         dpower_left_deta = dfn.assemble(self.forms['ddamping_power_deta'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
-            self.model.set_fin_state(f.get_state(ii))
+            self.model.set_params_fromfile(f, ii)
             dpower_right_deta = dfn.assemble(self.forms['ddamping_power_deta'])
             dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
 
@@ -614,10 +618,10 @@ class StrainRateDampingWork(SolidFunctional):
             # Calculate damped work over n-1 -> n
             # time = f.get_times()
 
-            self.model.set_fin_state(f.get_state(n-1))
+            self.model.set_params_fromfile(f, n-1)
             power_left = dfn.assemble(self.forms['damping_power'])
 
-            self.model.set_fin_state(f.get_state(n))
+            self.model.set_params_fromfile(f, n)
             power_right = dfn.assemble(self.forms['damping_power'])
             # res += (power_left+power_right)/2 * (time[n]-time[n-1])
             ddt = (power_left+power_right)/2
