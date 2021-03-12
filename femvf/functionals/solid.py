@@ -533,11 +533,13 @@ class KV3DDampingWork(SolidFunctional):
         scalar_trial = solid.forms['trial.scalar']
         v0 = solid.forms['coeff.state.v0']
         eta = solid.forms['coeff.prop.eta']
+        uant, upos = dfn.Function(solid.vector_fspace), dfn.Function(solid.vector_fspace)
 
-        d2v_dz2 = (0.0 - 2*v0 + 0.0) / solid.forms['coeff.props.length']**2
+        d2v_dz2 = (uant - 2*v0 + upos) / solid.forms['coeff.prop.length']**2
 
         forms = {}
-        forms['damping_power'] = ufl.inner(eta*strain(v0)-0.5*eta*d2v_dz2, strain(v0)) * ufl.dx
+        forms['damping_power'] = (ufl.inner(eta*strain(v0), strain(v0)) 
+                                  + ufl.inner(-0.5*eta*d2v_dz2, v0)) * ufl.dx
 
         forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
         forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
