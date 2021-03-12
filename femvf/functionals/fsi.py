@@ -65,9 +65,6 @@ class TransferWorkbyVelocity(FSIFunctional):
         mesh = solid.mesh
         ds = solid.ds
 
-        vector_trial = solid.forms['trial.vector']
-        scalar_trial = solid.forms['trial.scalar']
-
         pressure = solid.forms['coeff.fsi.p1']
         u1 = solid.forms['coeff.state.u1']
         v1 = solid.forms['coeff.state.v1']
@@ -78,9 +75,9 @@ class TransferWorkbyVelocity(FSIFunctional):
 
         forms = {}
         forms['fluid_power'] = ufl.inner(fluid_force, v1) * ds(solid.facet_labels['pressure'])
-        forms['dfluid_power_du'] = ufl.derivative(forms['fluid_power'], u1, vector_trial)
-        forms['dfluid_power_dv'] = ufl.derivative(forms['fluid_power'], v1, vector_trial)
-        forms['dfluid_power_dpressure'] = ufl.derivative(forms['fluid_power'], pressure, scalar_trial)
+        forms['dfluid_power_du'] = dfn.derivative(forms['fluid_power'], u1)
+        forms['dfluid_power_dv'] = dfn.derivative(forms['fluid_power'], v1)
+        forms['dfluid_power_dpressure'] = dfn.derivative(forms['fluid_power'], pressure)
         return forms
 
     def eval(self, f):
