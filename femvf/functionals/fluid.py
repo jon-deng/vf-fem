@@ -109,9 +109,9 @@ class FinalFlowRateNorm(FluidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
-class SubglottalPower(FluidFunctional):
+class AvgSubglottalPower(FluidFunctional):
     """
-    Return the total work input into the fluid from the lungs.
+    Return the average subglottal power input
     """
     def __init__(self, model):
         super().__init__(model)
@@ -191,7 +191,7 @@ class SubglottalPower(FluidFunctional):
 
         return ddt
 
-class AcousticPower(FluidFunctional):
+class AvgAcousticPower(FluidFunctional):
     """
     Return the mean acoustic power.
     """
@@ -203,7 +203,7 @@ class AcousticPower(FluidFunctional):
             'rho': 0.001225,
             'c': 350*1e2,
             'a': 0.5,
-            'tukey_alpha': 0.1}
+            'tukey_alpha': 0.05}
 
     def eval(self, f):
         ## Load the flow rate vector
@@ -216,13 +216,14 @@ class AcousticPower(FluidFunctional):
 
         ## Multiply the flow rate vector data by a tukey window
         tukey_window = sig.tukey(q.size, alpha=self.constants['tukey_alpha'])
-        q_tukey = tukey_window * q
+        qw = tukey_window*q
 
         ## Calculate the DFT of flow rate
-        dft_q_tukey = np.fft.fft(q_tukey, n=q.size)
-        dft_freq = np.fft.fftfreq(q.size, d=time[1]-time[0])
+        dft_qw = np.fft.fft(qw, n=qw.size)
+        dft_freq = np.fft.fftfreq(qw.size, d=time[1]-time[0])
 
-        ## Calculate the normalized radiation impedance, so it's equal to pressure/flow rate
+        ## Calculate the normalized radiation impedance, which is
+        # complex pressure/flow rate (rather than complex pressure/velocity) 
         rho = self.constants['rho']
         c = self.constants['c']
         a = self.constants['a']
@@ -233,9 +234,12 @@ class AcousticPower(FluidFunctional):
 
         ## Compute power spectral density of acoustic power
         # psd_acoustic = np.real(z_radiation) * (dft_q * np.conj(dft_q))
-        psd_acoustic = np.real(z_radiation) * np.abs(dft_q_tukey)**2
+        psd_acoustic = np.real(z_radiation) * np.abs(dft_qw)**2
 
-        res = np.sum(psd_acoustic) / q.size**2
+        # By Plancherel's theorem
+        # sum(p[k] q*[k]) = 1/N sum(P[k] Q*[k])
+        # Divide by the number of power samples to get the average power
+        res = np.sum(psd_acoustic)/qw.size/qw.size
         return res
 
     def eval_dfl_state(self, f, n):
