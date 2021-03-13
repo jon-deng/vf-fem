@@ -1036,7 +1036,7 @@ class Approximate3DKelvinVoigt(Solid):
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * ufl.dx
+            kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * dx
             return kv_damping
 
         inertia = inertia_2form(a1, vector_test, rho)
@@ -1045,16 +1045,16 @@ class Approximate3DKelvinVoigt(Solid):
 
         ## Approximate 3D type effects using an out-of-plane force
         # this is a second order finite difference approximation for displacements
-        def out_of_plane_2form(u1, v1, uanterior, uposterior, dantpost, k):
+        def out_of_plane_2form(u1, test, uanterior, uposterior, dantpost, k):
             d2u_dz2 = (uanterior - 2*u1 + uposterior) / dantpost**2
             out_of_plane_force = k*d2u_dz2
-            return ufl.inner(out_of_plane_force, v1) * dx
+            return ufl.dot(out_of_plane_force, test) * dx
         
         lame_mu = emod/2/(1+nu)
         u_ant = dfn.Function(vector_fspace) # zero values by default
         u_pos = dfn.Function(vector_fspace)  
-        stiffness -= out_of_plane_2form(u1, vector_test, u_ant, u_pos, length, lame_mu+muscle_stress)
-        kv_damping -= out_of_plane_2form(v1, vector_test, u_ant, u_pos, length, 0.5*kv_eta)
+        stiffness = stiffness - out_of_plane_2form(u1, vector_test, u_ant, u_pos, length, lame_mu+muscle_stress)
+        kv_damping = kv_damping - out_of_plane_2form(v1, vector_test, u_ant, u_pos, length, 0.5*kv_eta)
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.

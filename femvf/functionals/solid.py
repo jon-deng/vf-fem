@@ -529,36 +529,33 @@ class KV3DDampingWork(SolidFunctional):
         solid = solid
 
         # Load some ufl forms from the solid model
-        vector_trial = solid.forms['trial.vector']
-        scalar_trial = solid.forms['trial.scalar']
-        v0 = solid.forms['coeff.state.v0']
+        v1 = solid.forms['coeff.state.v1']
         eta = solid.forms['coeff.prop.eta']
         uant, upos = dfn.Function(solid.vector_fspace), dfn.Function(solid.vector_fspace)
 
-        d2v_dz2 = (uant - 2*v0 + upos) / solid.forms['coeff.prop.length']**2
+        d2v_dz2 = (uant - 2*v1 + upos) / solid.forms['coeff.prop.length']**2
 
         forms = {}
-        forms['damping_power'] = (ufl.inner(eta*strain(v0), strain(v0)) 
-                                  + ufl.inner(-0.5*eta*d2v_dz2, v0)) * ufl.dx
-
-        forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
-        forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
+        forms['damping_power'] = (ufl.inner(eta*strain(v1), strain(v1)) 
+                                  + ufl.inner(-0.5*eta*d2v_dz2, v1)) * ufl.dx
+        forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
+        forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
         return forms
 
     def eval(self, f):
         solid = self.model.solid
+        self.model.set_properties(f.get_properties())
         N_START = self.constants['n_start']
         N_STATE = f.size
 
         res = 0
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        self.model.set_ini_state(f.get_state(N_START))
+        self.model.set_fin_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
-            # self.model.set_params_fromfile(f, ii, update_props=False)
-            self.model.set_ini_state(f.get_state(ii))
+            self.model.set_fin_state(f.get_state(ii))
 
             power_right = dfn.assemble(self.forms['damping_power'])
             res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
@@ -644,32 +641,30 @@ class KVDampingWork(SolidFunctional):
         solid = solid
 
         # Load some ufl forms from the solid model
-        vector_trial = solid.forms['trial.vector']
-        scalar_trial = solid.forms['trial.scalar']
-        v0 = solid.forms['coeff.state.v0']
+        v1 = solid.forms['coeff.state.v1']
         eta = solid.forms['coeff.prop.eta']
 
         forms = {}
-        forms['damping_power'] = ufl.inner(eta*strain(v0), strain(v0)) * ufl.dx
-
-        forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
-        forms['ddamping_power_deta'] = ufl.derivative(forms['damping_power'], eta, scalar_trial)
+        forms['damping_power'] = ufl.inner(eta*strain(v1), strain(v1)) * ufl.dx
+        forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
+        forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
         return forms
 
     def eval(self, f):
         solid = self.model.solid
+        self.model.set_properties(f.get_properties())
         N_START = self.constants['n_start']
         N_STATE = f.size
 
         res = 0
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        self.model.set_ini_state(f.get_state(N_START))
+        
+        self.model.set_fin_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
-            # self.model.set_params_fromfile(f, ii, update_props=False)
-            self.model.set_ini_state(f.get_state(ii))
+            self.model.set_fin_state(f.get_state(ii))
 
             power_right = dfn.assemble(self.forms['damping_power'])
             res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
@@ -684,9 +679,8 @@ class KVDampingWork(SolidFunctional):
         time = f.get_times()
 
         if n >= N_START:
-            # self.model.set_params_fromfile(f, n)
-            self.model.set_ini_state(f.get_state(n))
-            dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
+            self.model.set_fin_state(f.get_state(n))
+            dpower_dvn = dfn.assemble(self.forms['dsdamping_power_dv'])
 
             if n > N_START:
                 # Add the sensitivity to `v` from the left intervals right integration point

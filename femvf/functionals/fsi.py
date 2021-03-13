@@ -56,41 +56,43 @@ class TransferWorkbyVelocity(FSIFunctional):
     """
     func_types = ()
     default_constants = {
-        'n_start': 10
+        'n_start': 0
     }
 
     @staticmethod
     def form_definitions(model):
         solid = model.solid
-        mesh = solid.mesh
         ds = solid.ds
 
-        pressure = solid.forms['coeff.fsi.p1']
+        p = solid.forms['coeff.fsi.p1']
         u1 = solid.forms['coeff.state.u1']
         v1 = solid.forms['coeff.state.v1']
 
         deformation_gradient = ufl.grad(u1) + ufl.Identity(2)
         deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-        fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
+        fluid_force = -p*deformation_cofactor*dfn.FacetNormal(solid.mesh)
 
         forms = {}
         forms['fluid_power'] = ufl.inner(fluid_force, v1) * ds(solid.facet_labels['pressure'])
         forms['dfluid_power_du'] = dfn.derivative(forms['fluid_power'], u1)
         forms['dfluid_power_dv'] = dfn.derivative(forms['fluid_power'], v1)
-        forms['dfluid_power_dpressure'] = dfn.derivative(forms['fluid_power'], pressure)
+        forms['dfluid_power_dpressure'] = dfn.derivative(forms['fluid_power'], p)
         return forms
 
     def eval(self, f):
+        self.model.set_properties(f.get_properties())
         N_START = self.constants['n_start']
         N_STATE = f.size
 
         # Calculate the power at `ii` and `ii+1` then use trapezoidal rule to integrate
         # the power over that time increment to get the work done
         work = 0
-        self.model.set_properties(f.get_properties())
+        # Both states are set here due to differences in explicit/implicit FSI coupling strategies
+        self.model.set_ini_state(f.get_state(N_START))
         self.model.set_fin_state(f.get_state(N_START))
         fluid_power0 = dfn.assemble(self.forms['fluid_power'])
         for ii in range(N_START, N_STATE-1):
+            self.model.set_ini_state(f.get_state(ii+1))
             self.model.set_fin_state(f.get_state(ii+1))
             fluid_power1 = dfn.assemble(self.forms['fluid_power'])
 
