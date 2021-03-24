@@ -68,9 +68,6 @@ def export_vertex_values(model, statefile_path, export_path):
 
             ## Write (q, p) vertex values (pressure only defined)
             
-
-            
-
 def write_xdmf(model, h5file_path, xdmf_name=None):
     """
     Parameters

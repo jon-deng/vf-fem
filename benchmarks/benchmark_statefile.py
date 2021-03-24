@@ -17,7 +17,7 @@ from femvf.statefile import StateFile
 h5path = f'out/benchmark_statefile.h5'
 
 mesh_path = '../meshes/M5-3layers-cl0_50.xml'
-model = fvf.load_fsi_model(mesh_path, None, Solid=fvf.solid.KelvinVoigt, Fluid=fvf.fluid.Bernoulli)
+model = fvf.load_fsi_model(mesh_path, None, SolidType=fvf.solid.KelvinVoigt, FluidType=fvf.fluid.Bernoulli)
 
 def benchmark_chunksize(ntime_chunks=10):
     if os.path.isfile(h5path):

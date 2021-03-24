@@ -7,7 +7,26 @@ import numpy as np
 from .. import meshutils
 from .coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel, solid, fluid)
 
-def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.Bernoulli, 
+def load_solid_model(solid_mesh, SolidType, 
+    pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',)):
+    # Process the mesh file(s)
+    mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
+    if isinstance(solid_mesh, str):
+        ext = path.splitext(solid_mesh)[1]
+        # if no extension is supplied, assume it's a fenics xml mesh
+        if ext == '':
+            ext = '.xml'
+
+        if ext.lower() == '.xml':
+            # The solid mesh is an xml file
+            mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
+        else:
+            raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
+    solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels, 
+                      pressure_facet_labels, fixed_facet_labels)
+    return solid
+
+def load_fsi_model(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli, 
                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     """
     Factory function that loads a model based on input solid/fluid meshes.
@@ -19,7 +38,7 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.
     ----------
     """
     solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh, 
-        Solid=Solid, Fluid=Fluid, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
+        SolidType=SolidType, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
     
     if coupling == 'explicit':
         model = ExplicitFSIModel(solid, fluid, fsi_verts)
@@ -28,14 +47,14 @@ def load_fsi_model(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.
 
     return model
 
-def load_fsai_model(solid_mesh, fluid_mesh, acoustic, Solid=solid.KelvinVoigt, Fluid=fluid.Bernoulli, 
+def load_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli, 
                     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh, 
-        Solid=Solid, Fluid=Fluid, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
+        SolidType=SolidType, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
 
     return FSAIModel(solid, fluid, acoustic, fsi_verts)
 
-def process_fsi(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.Bernoulli, 
+def process_fsi(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli, 
                 fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     ## Load the solid
     mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
@@ -50,7 +69,7 @@ def process_fsi(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.Ber
             mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
         else:
             raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
-    solid = Solid(mesh, facet_func, facet_labels, cell_func, cell_labels, 
+    solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels, 
                   fsi_facet_labels, fixed_facet_labels)
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
@@ -68,10 +87,10 @@ def process_fsi(solid_mesh, fluid_mesh, Solid=solid.KelvinVoigt, Fluid=fluid.Ber
 
     # Load the fluid
     fluid_model = None
-    if fluid_mesh is None and issubclass(Fluid, fluid.QuasiSteady1DFluid):
+    if fluid_mesh is None and issubclass(FluidType, fluid.QuasiSteady1DFluid):
         xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
-        fluid_model = Fluid(xfluid, yfluid)
-    elif fluid_mesh is None and not issubclass(Fluid, fluid.QuasiSteady1DFluid):
+        fluid_model = FluidType(xfluid, yfluid)
+    elif fluid_mesh is None and not issubclass(FluidType, fluid.QuasiSteady1DFluid):
         raise ValueError(f"`fluid_mesh` cannot be `None` if the fluid is not 1D")
     else:
         raise ValueError(f"This function does not yet support input fluid meshes.")

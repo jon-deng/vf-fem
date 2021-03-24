@@ -24,7 +24,7 @@ import dolfin as dfn
 import ufl
 
 from .solid import SolidFunctional
-from ..models.solid import strain
+from ..models.solid import form_inf_strain
 
 class FSIFunctional(SolidFunctional):
     def __init__(self, model):

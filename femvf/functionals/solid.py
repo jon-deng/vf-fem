@@ -25,7 +25,7 @@ import ufl
 
 from .. import linalg
 from .base import AbstractFunctional
-from ..models.solid import strain, Solid
+from ..models.solid import form_inf_strain, Solid
 
 class SolidFunctional(AbstractFunctional):
     """
@@ -536,7 +536,7 @@ class KV3DDampingWork(SolidFunctional):
         d2v_dz2 = (uant - 2*v1 + upos) / solid.forms['coeff.prop.length']**2
 
         forms = {}
-        forms['damping_power'] = (ufl.inner(eta*strain(v1), strain(v1)) 
+        forms['damping_power'] = (ufl.inner(eta*form_inf_strain(v1), form_inf_strain(v1)) 
                                   + ufl.inner(-0.5*eta*d2v_dz2, v1)) * ufl.dx
         forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
         forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
@@ -645,7 +645,7 @@ class KVDampingWork(SolidFunctional):
         eta = solid.forms['coeff.prop.eta']
 
         forms = {}
-        forms['damping_power'] = ufl.inner(eta*strain(v1), strain(v1)) * ufl.dx
+        forms['damping_power'] = ufl.inner(eta*form_inf_strain(v1), form_inf_strain(v1)) * ufl.dx
         forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
         forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
         return forms

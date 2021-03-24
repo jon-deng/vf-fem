@@ -11,7 +11,7 @@ class TestParameterization(unittest.TestCase):
     
     def setUp(self):
         mesh_path = '../meshes/M5-3layers.xml'
-        model = load_fsi_model(mesh_path, None, Solid=solid.KelvinVoigt, Fluid=fluid.Bernoulli)
+        model = load_fsi_model(mesh_path, None, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli)
 
         control = model.get_control_vec()
         control['psub'][:] = 8000.0

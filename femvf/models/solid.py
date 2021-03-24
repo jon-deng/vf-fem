@@ -20,7 +20,7 @@ from . import newmark
 from ..linalg import BlockVec, general_vec_set
 
 
-def cauchy_stress(u, emod, nu):
+def form_lin_iso_cauchy_stress(u, emod, nu):
     """
     Returns the Cauchy stress for a small-strain displacement field
 
@@ -36,9 +36,9 @@ def cauchy_stress(u, emod, nu):
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     lame_mu = emod/2/(1+nu)
 
-    return 2*lame_mu*strain(u) + lame_lambda*ufl.tr(strain(u))*ufl.Identity(u.geometric_dimension())
+    return 2*lame_mu*form_inf_strain(u) + lame_lambda*ufl.tr(form_inf_strain(u))*ufl.Identity(u.geometric_dimension())
 
-def strain(u):
+def form_inf_strain(u):
     """
     Returns the strain tensor for a displacement field.
 
@@ -49,27 +49,45 @@ def strain(u):
     """
     return 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
 
-def biform_k(trial, test, emod, nu):
+def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
+    """
+    Return the contact pressure expression according to the penalty method
+
+    Parameters
+    ----------
+    xref : dfn.Function
+        Reference configuration coordinates
+    u : dfn.Function
+        Displacement
+    k : float or dfn.Constant
+        Penalty contact spring value
+    d : float or dfn.Constant
+        y location of the contact plane
+    n : dfn.Constant
+        Contact plane normal, facing away from the vocal folds
+    """
+    gap = ufl.dot(xref+u, n) - ycoll
+    positive_gap = (gap + abs(gap)) / 2
+
+    # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
+    return -k*positive_gap**3
+
+
+def stiffness_1form(trial, test, emod, nu):
     """
     Return stiffness bilinear form
 
     Integrates linear_elasticity(a) with the strain(b)
     """
-    return ufl.inner(cauchy_stress(trial, emod, nu), strain(test))*ufl.dx
+    return ufl.inner(form_lin_iso_cauchy_stress(trial, emod, nu), form_inf_strain(test))*ufl.dx
 
-def biform_m(trial, test, rho):
+def inertia_1form(trial, test, rho):
     """
     Return the mass bilinear form
 
     Integrates a with b
     """
     return rho*ufl.dot(trial, test) * ufl.dx
-
-def inertia_2form(trial, test, rho):
-    return biform_m(trial, test, rho)
-
-def stiffness_2form(trial, test, emod, nu):
-    return biform_k(trial, test, emod, nu)
 
 def traction_1form(trial, test, pressure, facet_normal, traction_ds):
     deformation_gradient = ufl.grad(trial) + ufl.Identity(2)
@@ -80,10 +98,17 @@ def traction_1form(trial, test, pressure, facet_normal, traction_ds):
     traction = ufl.dot(fluid_force, test)*traction_ds
     return traction
 
+def penalty_1form(p, test, traction_ds, n=dfn.Constant([0.0, 1.0])):
+    """
+    p : ufl.Expression
+        Contact pressure
+    """
+    return ufl.dot(p*n, test) * traction_ds
+
 
 def gen_residual_bilinear_forms(forms):
     """
-    Adds bilinear forms to a dictionary defining the residual and state variables
+    Add bilinear forms to a dictionary defining the residual and state variables
     """
     # Derivatives of the displacement residual form wrt variables of interest
     for full_var_name in (
@@ -124,6 +149,7 @@ def gen_residual_bilinear_property_forms(forms):
             df1_dsolid[prop_name] = None
 
     return df1_dsolid
+
 
 class Solid(base.Model):
     """
@@ -566,12 +592,12 @@ class Rayleigh(Solid):
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
-            return rayleigh_m * biform_m(trial, test, rho) \
-                   + rayleigh_k * biform_k(trial, test, emod, nu)
+            return rayleigh_m * inertia_1form(trial, test, rho) \
+                   + rayleigh_k * stiffness_1form(trial, test, emod, nu)
 
-        inertia = inertia_2form(a1, vector_test, rho)
+        inertia = inertia_1form(a1, vector_test, rho)
 
-        stiffness = stiffness_2form(u1, vector_test, emod, nu)
+        stiffness = stiffness_1form(u1, vector_test, emod, nu)
 
         damping = damping_2form(v1, vector_test)
 
@@ -597,7 +623,7 @@ class Rayleigh(Solid):
             positive_gap = (gap + abs(gap)) / 2
 
             # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-            penalty = ufl.dot(k_collision*positive_gap**2*-1*collision_normal, vector_test) \
+            penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
                       * traction_ds
 
             return penalty
@@ -730,11 +756,11 @@ class KelvinVoigt(Solid):
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * ufl.dx
+            kv_damping = ufl.inner(kv_eta*form_inf_strain(trial), form_inf_strain(test)) * ufl.dx
             return kv_damping
 
-        inertia = inertia_2form(a1, vector_test, rho)
-        stiffness = stiffness_2form(u1, vector_test, emod, nu)
+        inertia = inertia_1form(a1, vector_test, rho)
+        stiffness = stiffness_1form(u1, vector_test, emod, nu)
         kv_damping = damping_2form(v1, vector_test)
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
@@ -877,10 +903,10 @@ class IncompSwellingKelvinVoigt(Solid):
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * ufl.dx
+            kv_damping = ufl.inner(kv_eta*form_inf_strain(trial), form_inf_strain(test)) * ufl.dx
             return kv_damping
 
-        inertia = inertia_2form(a1, vector_test, rho)
+        inertia = inertia_1form(a1, vector_test, rho)
 
         def stiffness_2form_swelling(trial, test, emod, vswell, kswell):
             nu = 0.5
@@ -891,8 +917,8 @@ class IncompSwellingKelvinVoigt(Solid):
             # cauchy_stress = 2*lame_mu*strain(u1) + lame_lambda*ufl.tr(strain(u))*ufl.Identity(u.geometric_dimension())
 
             # for incomp. swelling approximate by
-            cauchy_stress = 2*lame_mu*strain(trial) + kswell*(ufl.tr(strain(trial)) - (vswell-1.0))*ufl.Identity(test.geometric_dimension())
-            return ufl.inner(cauchy_stress, strain(test))*ufl.dx
+            cauchy_stress = 2*lame_mu*form_inf_strain(trial) + kswell*(ufl.tr(form_inf_strain(trial)) - (vswell-1.0))*ufl.Identity(test.geometric_dimension())
+            return ufl.inner(cauchy_stress, form_inf_strain(test))*ufl.dx
         
         stiffness = stiffness_2form_swelling(u1, vector_test, emod, v_swelling, k_swelling)
         kv_damping = damping_2form(v1, vector_test)
@@ -1036,11 +1062,11 @@ class Approximate3DKelvinVoigt(Solid):
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*strain(trial), strain(test)) * dx
+            kv_damping = ufl.inner(kv_eta*form_inf_strain(trial), form_inf_strain(test)) * dx
             return kv_damping
 
-        inertia = inertia_2form(a1, vector_test, rho)
-        stiffness = stiffness_2form(u1, vector_test, emod, nu)
+        inertia = inertia_1form(a1, vector_test, rho)
+        stiffness = stiffness_1form(u1, vector_test, emod, nu)
         kv_damping = damping_2form(v1, vector_test)
 
         ## Approximate 3D type effects using an out-of-plane force

@@ -24,7 +24,7 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli, coupling=coupling)
+    model = load_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling=coupling)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -56,7 +56,7 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     mesh_base_filename = 'M5-3layers-medial-surface-refinement'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_fsi_model(mesh_path, None, Solid=KelvinVoigt, Fluid=Bernoulli, coupling=coupling)
+    model = load_fsi_model(mesh_path, None, SolidType=KelvinVoigt, FluidType=Bernoulli, coupling=coupling)
 
     ## Set the fluid/solid parameters
     emod = 6e3 * PASCAL_TO_CGS
@@ -95,7 +95,7 @@ def load_fsai_rayleigh_model(coupling='explicit'):
 
     ## Configure the model and its parameters
     acoustic = WRAnalog(44)
-    model = load_fsai_model(mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
+    model = load_fsai_model(mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
                             coupling='explicit')
 
     # Set the properties

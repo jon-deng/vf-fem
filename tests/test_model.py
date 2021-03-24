@@ -27,7 +27,7 @@ class TestFSAIModel(unittest.TestCase):
     def config_fsai_model(self):
         ## Configure the model and its parameters
         acoustic = WRAnalog(44)
-        model = load_fsai_model(self.mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
+        model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
                                 coupling='explicit')
 
         # Set the control vector

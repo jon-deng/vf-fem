@@ -35,7 +35,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_model(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli, coupling='explicit')
+        model = load_fsi_model(self.mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500
@@ -84,7 +84,7 @@ class ForwardConfig(unittest.TestCase):
     def config_fsai_model(self):
         ## Configure the model and its parameters
         acoustic = WRAnalog(44)
-        model = load_fsai_model(self.mesh_path, None, acoustic, Solid=Rayleigh, Fluid=Bernoulli,
+        model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
                                 coupling='explicit')
 
         # Set the control vector
