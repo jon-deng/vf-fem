@@ -304,6 +304,12 @@ class Bernoulli(QuasiSteady1DFluid):
         wmin = expweight(asafe, fluid_props['zeta_amin'])
         amin = wavg(s, asafe, wmin)
         smin = wavg(s, s, wmin)
+        asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
+        # Bound all areas to the 'smooth' minimum area above
+        # due to the weighting scheme, the smooth min area is always slightly larger than
+        # the actual min area. This can lead to problems in the calculated pressures at very small areas
+        # since the ratio between the 'smooth' min area and actual nodal areas results in very large 
+        # negative pressures
 
         ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
         
