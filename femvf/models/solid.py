@@ -20,7 +20,7 @@ from . import newmark
 from ..linalg import BlockVec, general_vec_set
 
 
-def form_lin_iso_cauchy_stress(u, emod, nu):
+def form_lin_iso_cauchy_stress(strain, emod, nu):
     """
     Returns the Cauchy stress for a small-strain displacement field
 
@@ -36,7 +36,7 @@ def form_lin_iso_cauchy_stress(u, emod, nu):
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     lame_mu = emod/2/(1+nu)
 
-    return 2*lame_mu*form_inf_strain(u) + lame_lambda*ufl.tr(form_inf_strain(u))*ufl.Identity(u.geometric_dimension())
+    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(u.geometric_dimension())
 
 def form_inf_strain(u):
     """
@@ -549,6 +549,7 @@ class Rayleigh(Solid):
 
         vector_trial = dfn.TrialFunction(vector_fspace)
         vector_test = dfn.TestFunction(vector_fspace)
+        strain_test = form_inf_strain(vector_test)
 
         scalar_trial = dfn.TrialFunction(scalar_fspace)
         scalar_test = dfn.TestFunction(scalar_fspace)
@@ -591,15 +592,15 @@ class Rayleigh(Solid):
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
-        def damping_2form(trial, test):
-            return rayleigh_m * inertia_1form(trial, test, rho) \
-                   + rayleigh_k * stiffness_1form(trial, test, emod, nu)
+        inf_strain = form_inf_strain(u1)
+        force_inertial = rho*a1 
+        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        force_visco = rayleigh_m * ufl.replace(force_inertial, {a1: v1})
+        stress_visco = rayleigh_k * ufl.replace(stress_elastic, {u1: v1})
 
-        inertia = inertia_1form(a1, vector_test, rho)
-
-        stiffness = stiffness_1form(u1, vector_test, emod, nu)
-
-        damping = damping_2form(v1, vector_test)
+        inertia = ufl.inner(force_inertial, vector_test) * dx
+        stiffness = ufl.inner(stress_elastic, strain_test) * dx
+        damping = (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
