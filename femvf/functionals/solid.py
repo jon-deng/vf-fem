@@ -391,7 +391,7 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
         solid = solid
         forms = {}
         forms['u'] = dfn.Function(solid.vector_fspace)
-        forms['res'] = ufl.inner(forms['u'], forms['u']) * solid.ds(solid.facet_labels['pressure'])
+        forms['res'] = ufl.inner(forms['u'], forms['u']) * solid.ds(solid.facet_label_to_id['pressure'])
 
         forms['dres_du'] = ufl.derivative(forms['res'], forms['u'], solid.vector_trial)
         return forms

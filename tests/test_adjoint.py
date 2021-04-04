@@ -171,7 +171,7 @@ class TestBasicGradient(TaylorTest):
     FUNCTIONAL = fsolid.FinalDisplacementNorm
     FUNCTIONAL = fsolid.UPeriodicError
     FUNCTIONAL = fsolid.KVDampingWork
-    FUNCTIONAL = ffluid.AcousticPower
+    FUNCTIONAL = ffluid.AvgAcousticPower
     # FUNCTIONAL = ffluid.SubglottalPower
 
     def setUp(self):

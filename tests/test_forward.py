@@ -156,7 +156,7 @@ class TestIntegrate(ForwardConfig):
         print("Running forward model")
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, mode='w') as f:
-            info = integrate(model, f, ini_state, controls, props, times, export_callbacks=cbs)
+            fin_state, info = integrate(model, f, ini_state, controls, props, times, export_callbacks=cbs)
 
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
@@ -168,6 +168,7 @@ class TestIntegrate(ForwardConfig):
         #     psubs = f.get_control
 
         fig, ax = plt.subplots(1, 1)
+        breakpoint()
         ax.plot(times['times'], info['glottal_width'])
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")

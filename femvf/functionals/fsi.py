@@ -73,7 +73,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         fluid_force = -p*deformation_cofactor*dfn.FacetNormal(solid.mesh)
 
         forms = {}
-        forms['fluid_power'] = ufl.inner(fluid_force, v1) * ds(solid.facet_labels['pressure'])
+        forms['fluid_power'] = ufl.inner(fluid_force, v1) * ds(solid.facet_label_to_id['pressure'])
         forms['dfluid_power_du'] = dfn.derivative(forms['fluid_power'], u1)
         forms['dfluid_power_dv'] = dfn.derivative(forms['fluid_power'], v1)
         forms['dfluid_power_dpressure'] = dfn.derivative(forms['fluid_power'], p)
@@ -227,7 +227,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         fluid_force = -pressure*deformation_cofactor*dfn.FacetNormal(mesh)
 
         forms = {}
-        forms['fluid_work'] = ufl.inner(fluid_force, u1-u0) * ds(solid.facet_labels['pressure'])
+        forms['fluid_work'] = ufl.inner(fluid_force, u1-u0) * ds(solid.facet_label_to_id['pressure'])
         forms['dfluid_work_du0'] = ufl.derivative(forms['fluid_work'], u0, vector_trial)
         forms['dfluid_work_du1'] = ufl.derivative(forms['fluid_work'], u1, vector_trial)
         forms['dfluid_work_dpressure'] = ufl.derivative(forms['fluid_work'], pressure, scalar_trial)

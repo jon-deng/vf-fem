@@ -74,7 +74,7 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=f
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
-    fsi_facet_ids = [solid.facet_labels[name] for name in solid.fsi_facet_labels]
+    fsi_facet_ids = [solid.facet_label_to_id[name] for name in solid.fsi_facet_labels]
     fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.facet_func.array()) 
                                 if fedge in set(fsi_facet_ids)])
     fsi_verts = meshutils.vertices_from_edges(fsi_edges, solid.mesh)

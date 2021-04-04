@@ -36,7 +36,7 @@ def form_lin_iso_cauchy_stress(strain, emod, nu):
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     lame_mu = emod/2/(1+nu)
 
-    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(u.geometric_dimension())
+    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.geometric_dimension())
 
 def form_inf_strain(u):
     """
@@ -71,6 +71,28 @@ def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0]))
 
     # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
     return -k*positive_gap**3
+
+def form_pressure_as_reference_traction(p, u, n):
+    """
+
+    Parameters
+    ----------
+    p : Pressure load
+    u : displacement
+    n : facet outer normal
+    """
+    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
+    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+
+    return -p*deformation_cofactor*n
+
+def form_cubic_penalty_pressure(gap, kcoll):
+    positive_gap = (gap + abs(gap)) / 2
+    return kcoll*positive_gap**3
+
+def form_quad_penalty_pressure(gap, kcoll):
+    positive_gap = (gap + abs(gap)) / 2
+    return kcoll*positive_gap**2
 
 
 def stiffness_1form(trial, test, emod, nu):
@@ -158,21 +180,21 @@ class Solid(base.Model):
     # Subclasses have to set these values
     PROPERTY_DEFAULTS = None
 
-    def __init__(self, mesh, facet_func, facet_labels, cell_func, cell_labels, 
+    def __init__(self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
                  fsi_facet_labels, fixed_facet_labels):
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
 
-        self._forms = self.form_definitions(mesh, facet_func, facet_labels,
-                                            cell_func, cell_labels, fsi_facet_labels, fixed_facet_labels)
+        self._forms = self.form_definitions(mesh, facet_func, facet_label_to_id,
+                                            cell_func, cell_label_to_id, fsi_facet_labels, fixed_facet_labels)
         gen_residual_bilinear_forms(self._forms)
 
         ## Store mesh related quantities
         self.mesh = mesh
         self.facet_func = facet_func
         self.cell_func = cell_func
-        self.facet_labels = facet_labels
-        self.cell_labels = cell_labels
+        self.facet_label_to_id = facet_label_to_id
+        self.cell_label_to_id = cell_label_to_id
 
         self.fsi_facet_labels = fsi_facet_labels
         self.fixed_facet_labels = fixed_facet_labels
@@ -243,7 +265,7 @@ class Solid(base.Model):
         self.dt_form.vector()[:] = value
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels, 
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
                          fsi_facet_labels, fixed_facet_labels):
         """
         Return a dictionary of ufl forms representing the solid in Fenics.
@@ -479,7 +501,6 @@ class Solid(base.Model):
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
-        # breakpoint()
         for prop_name, vec in zip(b.keys, b.vecs):
             # assert self.df1_dsolid[key] is not None
             df1_dprop = None
@@ -539,7 +560,7 @@ class Rayleigh(Solid):
         'k_collision': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels, 
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
                          fsi_facet_labels, fixed_facet_labels):
         dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
@@ -553,6 +574,10 @@ class Rayleigh(Solid):
 
         scalar_trial = dfn.TrialFunction(scalar_fspace)
         scalar_test = dfn.TestFunction(scalar_fspace)
+
+        vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
+        XREF = dfn.Function(vector_fspace)
+        XREF.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
 
         # Newmark update parameters
         gamma = dfn.Constant(1/2)
@@ -588,10 +613,10 @@ class Rayleigh(Solid):
         v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
         a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
-        # Surface pressures
+        # Surface pressure
         p1 = dfn.Function(scalar_fspace)
 
-        # Symbolic calculations to get the variational form for a linear-elastic solid
+        ## Symbolic calculations to get the variational form for a linear-elastic solid
         inf_strain = form_inf_strain(u1)
         force_inertial = rho*a1 
         stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
@@ -604,58 +629,27 @@ class Rayleigh(Solid):
 
         # Compute the pressure loading Neumann boundary condition on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-
         facet_normal = dfn.FacetNormal(mesh)
-        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
-        for fsi_edge in fsi_facet_labels[1:]:
-            traction_ds += ds(facet_labels[fsi_edge])
-        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
+        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
+        traction_ds = sum(traction_dss[1:], traction_dss[0])
+        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
+
+        traction = ufl.inner(reference_traction, vector_test) * traction_ds
 
         # Use the penalty method to account for collision
-        def penalty_1form(u):
-            collision_normal = dfn.Constant([0.0, 1.0])
-            x_reference = dfn.Function(vector_fspace)
+        ncoll = dfn.Constant([0.0, 1.0])
+        gap = ufl.dot(XREF+u1, ncoll) - y_collision
+        contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
+        penalty = ufl.inner(-contact_pressure*ncoll, vector_test)*traction_ds
 
-            vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
-            x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
-
-            gap = ufl.dot(x_reference+u, collision_normal) - y_collision
-            positive_gap = (gap + abs(gap)) / 2
-
-            # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-            penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
-                      * traction_ds
-
-            return penalty
-
-        penalty = penalty_1form(u1)
-
-
-        f1_uva = inertia + stiffness + damping -traction - penalty
+        f1_uva = inertia + stiffness + damping - traction - penalty
 
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1:a1_nmk})
-
-        df1_du1 = ufl.derivative(f1, u1, vector_trial)
-
-        df1_dp1 = ufl.derivative(f1, p1, scalar_trial)
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_labels['fixed'])
-
-        ## Adjoint forms
-        df1_du0_adj = dfn.adjoint(ufl.derivative(f1, u0, vector_trial))
-
-        df1_dv0_adj = dfn.adjoint(ufl.derivative(f1, v0, vector_trial))
-
-        df1_da0_adj = dfn.adjoint(ufl.derivative(f1, a0, vector_trial))
-
-        df1_du1_adj = dfn.adjoint(df1_du1)
-
-        df1_dp1_adj = dfn.adjoint(df1_dp1)
-        df1_dt = ufl.derivative(f1, dt, scalar_trial)
+                                  facet_func, facet_label_to_id['fixed'])
 
         forms = {
             'measure.dx': dx,
@@ -691,6 +685,8 @@ class Rayleigh(Solid):
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
 
+            'expr.contact_pressure': contact_pressure,
+
             'form.un.f1uva': f1_uva,
             'form.un.f1': f1}
 
@@ -709,7 +705,7 @@ class KelvinVoigt(Solid):
         'k_collision': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels,
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
         dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
@@ -722,6 +718,11 @@ class KelvinVoigt(Solid):
 
         scalar_trial = dfn.TrialFunction(scalar_fspace)
         scalar_test = dfn.TestFunction(scalar_fspace)
+        strain_test = form_inf_strain(vector_test)
+
+        vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
+        XREF = dfn.Function(vector_fspace)
+        XREF.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
 
         # Newmark update parameters
         gamma = dfn.Constant(1/2)
@@ -756,50 +757,37 @@ class KelvinVoigt(Solid):
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
-        def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*form_inf_strain(trial), form_inf_strain(test)) * ufl.dx
-            return kv_damping
+        inf_strain = form_inf_strain(u1)
+        force_inertial = rho*a1 
+        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        stress_visco = kv_eta*form_inf_strain(v1)
 
-        inertia = inertia_1form(a1, vector_test, rho)
-        stiffness = stiffness_1form(u1, vector_test, emod, nu)
-        kv_damping = damping_2form(v1, vector_test)
+        inertia = ufl.inner(force_inertial, vector_test) * dx
+        stiffness = ufl.inner(stress_elastic, strain_test) * dx
+        damping = ufl.inner(stress_visco, strain_test) * dx
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-
         facet_normal = dfn.FacetNormal(mesh)
-        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
-        for fsi_edge in fsi_facet_labels[1:]:
-            traction_ds += ds(facet_labels[fsi_edge])
-        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
+        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
+        traction_ds = sum(traction_dss[1:], traction_dss[0])
+        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
+
+        traction = ufl.inner(reference_traction, vector_test) * traction_ds
 
         # Use the penalty method to account for collision
-        def penalty_1form(u):
-            collision_normal = dfn.Constant([0.0, 1.0])
-            x_reference = dfn.Function(vector_fspace)
+        ncoll = dfn.Constant([0.0, 1.0])
+        gap = ufl.dot(XREF+u1, ncoll) - y_collision
+        contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
+        penalty = ufl.inner(-contact_pressure*ncoll, vector_test) * traction_ds
 
-            vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
-            x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
-
-            gap = ufl.dot(x_reference+u, collision_normal) - y_collision
-            positive_gap = (gap + abs(gap)) / 2
-
-            # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-            penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
-                      * traction_ds
-            return penalty
-
-        # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-        penalty = penalty_1form(u1)
-
-        f1_uva = inertia + stiffness + kv_damping - traction - penalty
+        f1_uva = inertia + stiffness + damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_labels['fixed'])
+                                  facet_func, facet_label_to_id['fixed'])
 
         forms = {
             'measure.dx': dx,
@@ -852,7 +840,7 @@ class IncompSwellingKelvinVoigt(Solid):
         'k_collision': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels,
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
         dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
@@ -865,6 +853,11 @@ class IncompSwellingKelvinVoigt(Solid):
 
         scalar_trial = dfn.TrialFunction(scalar_fspace)
         scalar_test = dfn.TestFunction(scalar_fspace)
+        strain_test = form_inf_strain(vector_test)
+
+        vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
+        XREF = dfn.Function(vector_fspace)
+        XREF.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
 
         # Newmark update parameters
         gamma = dfn.Constant(1/2)
@@ -903,63 +896,39 @@ class IncompSwellingKelvinVoigt(Solid):
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
-        def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*form_inf_strain(trial), form_inf_strain(test)) * ufl.dx
-            return kv_damping
+        inf_strain = form_inf_strain(u1)
+        force_inertial = rho*a1 
 
-        inertia = inertia_1form(a1, vector_test, rho)
+        lame_mu = emod/2/(1+0.5) # This is a poisson's ratio of 0.5
+        stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(u1.geometric_dimension())
+        stress_visco = kv_eta*form_inf_strain(v1)
 
-        def stiffness_2form_swelling(trial, test, emod, vswell, kswell):
-            nu = 0.5
-            # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-            lame_mu = emod/2/(1+nu)
-
-            # normally the small stress-stain relation, would be given by:
-            # cauchy_stress = 2*lame_mu*strain(u1) + lame_lambda*ufl.tr(strain(u))*ufl.Identity(u.geometric_dimension())
-
-            # for incomp. swelling approximate by
-            cauchy_stress = 2*lame_mu*form_inf_strain(trial) + kswell*(ufl.tr(form_inf_strain(trial)) - (vswell-1.0))*ufl.Identity(test.geometric_dimension())
-            return ufl.inner(cauchy_stress, form_inf_strain(test))*ufl.dx
-        
-        stiffness = stiffness_2form_swelling(u1, vector_test, emod, v_swelling, k_swelling)
-        kv_damping = damping_2form(v1, vector_test)
+        inertia = ufl.inner(force_inertial, vector_test) * dx
+        stiffness = ufl.inner(stress_elastic, strain_test) * dx
+        damping = ufl.inner(stress_visco, strain_test) * dx
 
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-
         facet_normal = dfn.FacetNormal(mesh)
-        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
-        for fsi_edge in fsi_facet_labels[1:]:
-            traction_ds += ds(facet_labels[fsi_edge])
-        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
+        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
+        traction_ds = sum(traction_dss[1:], traction_dss[0])
+        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
+
+        traction = ufl.inner(reference_traction, vector_test) * traction_ds
 
         # Use the penalty method to account for collision
-        def penalty_1form(u):
-            collision_normal = dfn.Constant([0.0, 1.0])
-            x_reference = dfn.Function(vector_fspace)
+        ncoll = dfn.Constant([0.0, 1.0])
+        gap = ufl.dot(XREF+u1, ncoll) - y_collision
+        contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
+        penalty = ufl.inner(-contact_pressure*ncoll, vector_test) * traction_ds
 
-            vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
-            x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
-
-            gap = ufl.dot(x_reference+u, collision_normal) - y_collision
-            positive_gap = (gap + abs(gap)) / 2
-
-            # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-            penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
-                      * traction_ds
-            return penalty
-
-        # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-        penalty = penalty_1form(u1)
-
-        f1_uva = inertia + stiffness + kv_damping - traction - penalty
+        f1_uva = inertia + stiffness + damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_labels['fixed'])
+                                  facet_func, facet_label_to_id['fixed'])
 
         forms = {
             'measure.dx': dx,
@@ -1010,7 +979,7 @@ class Approximate3DKelvinVoigt(Solid):
         'k_collision': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_labels, cell_func, cell_labels,
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
         dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
         ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
@@ -1023,6 +992,11 @@ class Approximate3DKelvinVoigt(Solid):
 
         scalar_trial = dfn.TrialFunction(scalar_fspace)
         scalar_test = dfn.TestFunction(scalar_fspace)
+        strain_test = form_inf_strain(vector_test)
+
+        vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
+        XREF = dfn.Function(vector_fspace)
+        XREF.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
 
         # Length parameter to approximate 3D effect
         length = dfn.Function(scalar_fspace)
@@ -1062,61 +1036,49 @@ class Approximate3DKelvinVoigt(Solid):
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
-        def damping_2form(trial, test):
-            kv_damping = ufl.inner(kv_eta*form_inf_strain(trial), form_inf_strain(test)) * dx
-            return kv_damping
+        inf_strain = form_inf_strain(u1)
+        force_inertial = rho*a1 
+        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        stress_visco = kv_eta*form_inf_strain(v1)
 
-        inertia = inertia_1form(a1, vector_test, rho)
-        stiffness = stiffness_1form(u1, vector_test, emod, nu)
-        kv_damping = damping_2form(v1, vector_test)
-
-        ## Approximate 3D type effects using an out-of-plane force
+        # Approximate 3D type effects using out-of-plane body forces
         # this is a second order finite difference approximation for displacements
-        def out_of_plane_2form(u1, test, uanterior, uposterior, dantpost, k):
-            d2u_dz2 = (uanterior - 2*u1 + uposterior) / dantpost**2
-            out_of_plane_force = k*d2u_dz2
-            return ufl.dot(out_of_plane_force, test) * dx
-        
         lame_mu = emod/2/(1+nu)
         u_ant = dfn.Function(vector_fspace) # zero values by default
         u_pos = dfn.Function(vector_fspace)  
-        stiffness = stiffness - out_of_plane_2form(u1, vector_test, u_ant, u_pos, length, lame_mu+muscle_stress)
-        kv_damping = kv_damping - out_of_plane_2form(v1, vector_test, u_ant, u_pos, length, 0.5*kv_eta)
+        d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
+        d2v_dz2 = (u_ant - 2*v1 + u_pos) / length**2
+        force_elast_ap = (lame_mu+muscle_stress)*d2u_dz2
+        force_visco_ap = 0.5*kv_eta*d2v_dz2
 
+        inertia = ufl.inner(force_inertial, vector_test) * dx
+        stiffness = (ufl.inner(stress_elastic, strain_test) + 
+                     ufl.inner(force_elast_ap, vector_test)) * dx
+        damping = (ufl.inner(stress_visco, strain_test) + 
+                   ufl.inner(force_visco_ap, vector_test)) * dx
+        
         # Compute the pressure loading using Neumann boundary conditions on the reference configuration
         # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-
         facet_normal = dfn.FacetNormal(mesh)
-        traction_ds = ds(facet_labels[fsi_facet_labels[0]])
-        for fsi_edge in fsi_facet_labels[1:]:
-            traction_ds += ds(facet_labels[fsi_edge])
-        traction = traction_1form(u1, vector_test, p1, facet_normal, traction_ds)
+        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
+        traction_ds = sum(traction_dss[1:], traction_dss[0])
+        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
+
+        traction = ufl.inner(reference_traction, vector_test) * traction_ds
 
         # Use the penalty method to account for collision
-        def penalty_1form(u):
-            collision_normal = dfn.Constant([0.0, 1.0])
-            x_reference = dfn.Function(vector_fspace)
+        ncoll = dfn.Constant([0.0, 1.0])
+        gap = ufl.dot(XREF+u1, ncoll) - y_collision
+        contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
+        penalty = ufl.inner(-contact_pressure*ncoll, vector_test) * traction_ds
 
-            vert_to_vdof = dfn.vertex_to_dof_map(vector_fspace)
-            x_reference.vector()[vert_to_vdof.reshape(-1)] = mesh.coordinates().reshape(-1)
-
-            gap = ufl.dot(x_reference+u, collision_normal) - y_collision
-            positive_gap = (gap + abs(gap)) / 2
-
-            # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-            penalty = ufl.dot(k_collision*positive_gap**3*-1*collision_normal, vector_test) \
-                      * traction_ds
-            return penalty
-        penalty = penalty_1form(u1)
-
-        f1_uva = inertia + stiffness + kv_damping - traction - penalty
+        f1_uva = inertia + stiffness + damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
 
         ## Boundary conditions
         # Specify DirichletBC at the VF base
         bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_labels['fixed'])
+                                  facet_func, facet_label_to_id['fixed'])
 
         forms = {
             'measure.dx': dx,
