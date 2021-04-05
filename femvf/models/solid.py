@@ -822,6 +822,8 @@ class KelvinVoigt(Solid):
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
 
+            'expr.contact_pressure': contact_pressure,
+
             'form.un.f1uva': f1_uva,
             'form.un.f1': f1}
         return forms
@@ -964,6 +966,8 @@ class IncompSwellingKelvinVoigt(Solid):
             # 'coeff.prop.nu': nu,
             'coeff.prop.y_collision': y_collision,
             'coeff.prop.k_collision': k_collision,
+
+            'expr.contact_pressure': contact_pressure,
 
             'form.un.f1_uva': f1_uva,
             'form.un.f1': f1}
@@ -1114,6 +1118,8 @@ class Approximate3DKelvinVoigt(Solid):
             'coeff.prop.k_collision': k_collision,
             'coeff.prop.length': length,
             'coeff.prop.muscle_stress': muscle_stress,
+
+            'expr.contact_pressure': contact_pressure,
 
             'form.un.f1uva': f1_uva,
             'form.un.f1': f1}
