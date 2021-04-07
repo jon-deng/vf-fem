@@ -153,3 +153,11 @@ def verts_from_facet_function(mesh, facet_func, id):
             verts += [vert.index() for vert in dfn.vertices(facet)]
 
     return np.unique(verts)
+
+def dofs_from_cell_function(mesh, cell_func, id, dofmap):
+    dofs = []
+    for cell in dfn.SubsetIterator(cell_func, id): 
+        if cell.index() == id:
+            dofs += dofmap.cell_dofs(cell.index()).tolist()
+
+    return np.unique(dofs)

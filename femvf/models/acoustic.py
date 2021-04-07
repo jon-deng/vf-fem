@@ -292,7 +292,6 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         db1 = (db1_df1, db1_db2, db1_df1prev, db1_db1prev, db1_df2prev, db1_db2prev, db1_dq)
         return db1, df2 
 
-
     def reflect05(pinc):
         z1_ = z2[:-1]
         z2_ = z1[1:]

@@ -1120,6 +1120,8 @@ class Approximate3DKelvinVoigt(Solid):
             'coeff.prop.muscle_stress': muscle_stress,
 
             'expr.contact_pressure': contact_pressure,
+            'expr.stress_elastic': stress_elastic,
+            'expr.stress_visco': stress_visco,
 
             'form.un.f1uva': f1_uva,
             'form.un.f1': f1}
