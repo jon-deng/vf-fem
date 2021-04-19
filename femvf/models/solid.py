@@ -90,42 +90,15 @@ def form_cubic_penalty_pressure(gap, kcoll):
     positive_gap = (gap + abs(gap)) / 2
     return kcoll*positive_gap**3
 
+def dform_cubic_penalty_pressure(gap, kcoll):
+    positive_gap = (gap + abs(gap)) / 2
+    dpositive_gap = np.sign(gap)
+    return kcoll*3*positive_gap**2 * dpositive_gap, positive_gap**3
+
+
 def form_quad_penalty_pressure(gap, kcoll):
     positive_gap = (gap + abs(gap)) / 2
     return kcoll*positive_gap**2
-
-
-def stiffness_1form(trial, test, emod, nu):
-    """
-    Return stiffness bilinear form
-
-    Integrates linear_elasticity(a) with the strain(b)
-    """
-    return ufl.inner(form_lin_iso_cauchy_stress(trial, emod, nu), form_inf_strain(test))*ufl.dx
-
-def inertia_1form(trial, test, rho):
-    """
-    Return the mass bilinear form
-
-    Integrates a with b
-    """
-    return rho*ufl.dot(trial, test) * ufl.dx
-
-def traction_1form(trial, test, pressure, facet_normal, traction_ds):
-    deformation_gradient = ufl.grad(trial) + ufl.Identity(2)
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-
-    fluid_force = -pressure*deformation_cofactor*facet_normal
-
-    traction = ufl.dot(fluid_force, test)*traction_ds
-    return traction
-
-def penalty_1form(p, test, traction_ds, n=dfn.Constant([0.0, 1.0])):
-    """
-    p : ufl.Expression
-        Contact pressure
-    """
-    return ufl.dot(p*n, test) * traction_ds
 
 
 def gen_residual_bilinear_forms(forms):
@@ -135,7 +108,7 @@ def gen_residual_bilinear_forms(forms):
     # Derivatives of the displacement residual form wrt variables of interest
     for full_var_name in (
         [f'coeff.state.{y}' for y in ['u0', 'v0', 'a0', 'u1']] + 
-        ['coeff.time.dt', 'coeff.fsi.p1']):
+        ['coeff.time.dt', 'coeff.fsi.p1', 'coeff._state.pcontact']):
         f = forms['form.un.f1']
         x = forms[full_var_name]
 
@@ -982,6 +955,89 @@ class Approximate3DKelvinVoigt(Solid):
         'y_collision': 0.61-0.001,
         'k_collision': 1e11}
 
+    def set_fin_state(self, state):
+        super().set_fin_state(state)
+
+        # Update nodal values of contact pressures using the penalty method 
+        XREF = dfn.Function(self.vector_fspace)
+        XREF.vector()[:] = self.scalar_fspace.tabulate_dof_coordinates()
+        k_collision = self.forms['coeff.prop.k_collision']
+        u1 = self.forms['coeff.state.u1'].vector()
+        pcon = self.forms['coeff._state.pcon'].vector()
+
+        # ncoll = np.array([0.0, 1.0])
+        # gap = dfn.dot(XREF+u1, ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
+        gap = (XREF+u1)[1::2] - self.forms['coeff.prop.y_collision'].values()[0]
+        pcon[:] = form_cubic_penalty_pressure(gap, k_collision)
+
+    # TODO These three!
+    def solve_state1(self, state1, newton_solver_prm=None):
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+        dt = self.dt
+
+        uva1 = self.get_state_vec()
+        self.set_fin_state(state1)
+        dfn.solve(self.f1 == 0, self.u1, bcs=self.bc_base, J=self.df1_du1,
+                  solver_parameters={"newton_solver": newton_solver_prm})
+
+        uva1['u'][:] = self.u1.vector()
+        uva1['v'][:] = newmark.newmark_v(uva1['u'], *self.state0.vecs, dt)
+        uva1['a'][:] = newmark.newmark_a(uva1['u'], *self.state0.vecs, dt)
+        return uva1, {}
+
+    def solve_dres_dstate1(self, b):
+        dt = self.dt
+        # Contact will change this matrix!
+        dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1'])
+        dfu2_dpcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dpcontact']))
+
+        # Compute things needed to find sensitivities of contact pressure
+        XREF = dfn.Function(self.vector_fspace)
+        XREF.vector()[:] = self.scalar_fspace.tabulate_dof_coordinates()
+        k_collision = self.forms['coeff.prop.k_collision']
+        u1 = self.forms['coeff.state.u1'].vector()
+        gap = (XREF+u1)[1::2] - self.forms['coeff.prop.y_collision'].values()[0]
+
+        dpcontact_du2 = dfn.Function(self.vector_fspace).vector()
+        dpcontact_du2[1::2] = dform_cubic_penalty_pressure(gap, k_collision)
+        dfu2_du2_contact = dfn.PETScMatrix(
+            dfu2_dpcontact.mat().diagonalScale(None, dpcontact_du2))
+        dfu2_du2 = dfu2_du2_nocontact + dfu2_du2_contact
+
+        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
+
+        # Solve A x = b
+        bu, bv, ba = b.vecs
+        x = self.get_state_vec()
+
+        self.bc_base.apply(dfu2_du2)
+        dfn.solve(dfu2_du2, x['u'], bu, 'petsc')
+
+        x['v'][:] = bv - dfv2_du2*x['u']
+        x['a'][:] = ba - dfa2_du2*x['u']
+        
+        return x
+        
+    def solve_dres_dstate1_adj(self, x):
+        # Form key matrices
+        dfu2_du2 = self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfv2_du2 = 0 - newmark.newmark_v_du1(self.dt)
+        dfa2_du2 = 0 - newmark.newmark_a_du1(self.dt)
+
+        # Solve b^T A = x^T
+        xu, xv, xa = x.vecs
+        b = self.get_state_vec()
+        b['a'][:] = xa
+        b['v'][:] = xv
+
+        rhs_u = xu - (dfv2_du2*b['v'] + dfa2_du2*b['a'])
+
+        self.bc_base.apply(dfu2_du2, rhs_u)
+        dfn.solve(dfu2_du2, b['u'], rhs_u, 'petsc')
+        return b
+
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
@@ -1038,6 +1094,7 @@ class Approximate3DKelvinVoigt(Solid):
 
         # Surface pressures
         p1 = dfn.Function(scalar_fspace)
+        pcoll = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         inf_strain = form_inf_strain(u1)
@@ -1069,12 +1126,6 @@ class Approximate3DKelvinVoigt(Solid):
         reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
 
         traction = ufl.inner(reference_traction, vector_test) * traction_ds
-
-        # Use the penalty method to account for collision
-        ncoll = dfn.Constant([0.0, 1.0])
-        gap = ufl.dot(XREF+u1, ncoll) - y_collision
-        contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
-        penalty = ufl.inner(-contact_pressure*ncoll, vector_test) * traction_ds
 
         f1_uva = inertia + stiffness + damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
@@ -1108,6 +1159,7 @@ class Approximate3DKelvinVoigt(Solid):
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
 
+            'coeff._state.pcontact': pcoll,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
