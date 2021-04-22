@@ -135,10 +135,19 @@ class ForwardConfig(unittest.TestCase):
 
 class TestIntegrate(ForwardConfig):
     
+    def test_integrate_fsi(self):
+        model, ini_state, controls, props = self.config_fsi_model()
+
+        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+
+        save_path = 'out/test_forward_fsi.h5'
+        if os.path.isfile(save_path):
+            os.remove(save_path)
+
+        self._test_integrate(model, ini_state, controls, props, times, save_path)
+
     def test_integrate_fsai(self):
         model, ini_state, controls, props = self.config_fsai_model()
-        # model, ini_state, controls, props = self.config_fsi_model()
-
         times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
         # Set the total length of the WRAnalog to match the specified time step
@@ -146,11 +155,13 @@ class TestIntegrate(ForwardConfig):
         # C, N = model.acoustic.properties['soundspeed'][0], model.acoustic.properties['area'].size
         # props['length'][:] = (0.5*dt*C) * N
 
-        save_path = 'out/test_forward.h5'
+        save_path = 'out/test_forward_fsai.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
-        ## Run the simulation
+        self._test_integrate(model, ini_state, controls, props, times, save_path)
+
+    def _test_integrate(self, model, ini_state, controls, props, times, save_path):
         # Set values to export
         cbs = {'glottal_width': callbacks.safe_glottal_width}
         print("Running forward model")
@@ -162,11 +173,6 @@ class TestIntegrate(ForwardConfig):
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
         ## Plot the resulting glottal width
-        # psubs = None
-        # with sf.StateFile(model, save_path, mode='r') as f:
-        #     for n in range
-        #     psubs = f.get_control
-
         fig, ax = plt.subplots(1, 1)
         breakpoint()
         ax.plot(times['times'], info['glottal_width'])
@@ -235,6 +241,7 @@ class TestIntegrate(ForwardConfig):
 if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
-    test.test_integrate_fsai()
-    test.test_integrate_linear()
+    test.test_integrate_fsi()
+    # test.test_integrate_fsai()
+    # test.test_integrate_linear()
     # unittest.main()

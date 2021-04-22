@@ -108,7 +108,7 @@ def gen_residual_bilinear_forms(forms):
     # Derivatives of the displacement residual form wrt variables of interest
     for full_var_name in (
         [f'coeff.state.{y}' for y in ['u0', 'v0', 'a0', 'u1']] + 
-        ['coeff.time.dt', 'coeff.fsi.p1', 'coeff._state.pcontact']):
+        ['coeff.time.dt', 'coeff.fsi.p1']):
         f = forms['form.un.f1']
         x = forms[full_var_name]
 
@@ -236,6 +236,12 @@ class Solid(base.Model):
     @dt.setter
     def dt(self, value):
         self.dt_form.vector()[:] = value
+
+    @property
+    def XREF(self):
+        xref = dfn.Function(model.vector_fspace)
+        xref.vector()[:] = model.vector_fspace.tabulate_dof_coordinates()
+        return xref
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
@@ -365,6 +371,52 @@ class Solid(base.Model):
         return res
 
     def solve_state1(self, state1, newton_solver_prm=None):
+        if newton_solver_prm is None:
+            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+
+        def linearized_subproblem(state):
+            """
+            Return a solver and residual corresponding to the linearized subproblem
+
+            Returns
+            -------
+            assem_res : callable() -> type(state)
+            solver : callable(type(state)) -> type(state)
+            """
+            self.set_fin_state(state)
+            assem_res = self.res
+            solve = self.solve_dres_dstate1
+            return assem_res, solve
+
+        n = 0
+        state_n = state1
+        assem_res_n, solve_n = linearized_subproblem(state_n)
+    
+        max_iter = newton_solver_prm['maximum_iterations']
+        
+        abs_err_0 = 1.0
+        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
+
+        while True:
+            assem_res_n, solve_n = linearized_subproblem(state_n)
+            res_n = assem_res_n()
+
+            abs_err = abs(res_n.norm())
+            if n == 0:
+                abs_err_0 = abs_err
+            rel_err = abs_err/abs_err_0
+
+            # breakpoint()
+            if abs_err <= abs_tol or rel_err <= rel_tol or n > max_iter:
+                break
+            else:
+                dstate_n = solve_n(res_n)
+                state_n = state_n - dstate_n
+                n += 1
+                
+        return state_n, {}
+
+    def _solve_state1(self, state1, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
         dt = self.dt
@@ -587,6 +639,7 @@ class Rayleigh(Solid):
         a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressure
+        pcontact = dfn.Function(scalar_fspace)
         p1 = dfn.Function(scalar_fspace)
 
         ## Symbolic calculations to get the variational form for a linear-elastic solid
@@ -647,7 +700,8 @@ class Rayleigh(Solid):
             'coeff.state.u1': u1,
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
-
+            
+            'coeff._state.pcontact': pcontact,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
@@ -727,6 +781,7 @@ class KelvinVoigt(Solid):
         a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
 
         # Surface pressures
+        pcontact = dfn.Function(scalar_fspace)
         p1 = dfn.Function(scalar_fspace)
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
@@ -786,6 +841,7 @@ class KelvinVoigt(Solid):
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
 
+            'coeff._state.pcontact': pcontact,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
@@ -959,51 +1015,43 @@ class Approximate3DKelvinVoigt(Solid):
         super().set_fin_state(state)
 
         # Update nodal values of contact pressures using the penalty method 
-        XREF = dfn.Function(self.vector_fspace)
-        XREF.vector()[:] = self.scalar_fspace.tabulate_dof_coordinates()
-        k_collision = self.forms['coeff.prop.k_collision']
+        XREF = self.XREF.vector()
+        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
         pcon = self.forms['coeff._state.pcon'].vector()
 
-        # ncoll = np.array([0.0, 1.0])
-        # gap = dfn.dot(XREF+u1, ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
-        gap = (XREF+u1)[1::2] - self.forms['coeff.prop.y_collision'].values()[0]
+        ncoll = np.array([0.0, 1.0])
+        gap = np.dot(np.array(XREF+u1).reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
+        # gap = (XREF+u1)[1::2] - self.forms['coeff.prop.y_collision'].values()[0]
         pcon[:] = form_cubic_penalty_pressure(gap, k_collision)
 
     # TODO These three!
-    def solve_state1(self, state1, newton_solver_prm=None):
-        if newton_solver_prm is None:
-            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        dt = self.dt
-
-        uva1 = self.get_state_vec()
-        self.set_fin_state(state1)
-        dfn.solve(self.f1 == 0, self.u1, bcs=self.bc_base, J=self.df1_du1,
-                  solver_parameters={"newton_solver": newton_solver_prm})
-
-        uva1['u'][:] = self.u1.vector()
-        uva1['v'][:] = newmark.newmark_v(uva1['u'], *self.state0.vecs, dt)
-        uva1['a'][:] = newmark.newmark_a(uva1['u'], *self.state0.vecs, dt)
-        return uva1, {}
-
-    def solve_dres_dstate1(self, b):
-        dt = self.dt
-        # Contact will change this matrix!
+    def _assem_dres_du(self):
         dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1'])
         dfu2_dpcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dpcontact']))
 
         # Compute things needed to find sensitivities of contact pressure
-        XREF = dfn.Function(self.vector_fspace)
-        XREF.vector()[:] = self.scalar_fspace.tabulate_dof_coordinates()
-        k_collision = self.forms['coeff.prop.k_collision']
+        XREF = self.XREF.vector()
+        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
-        gap = (XREF+u1)[1::2] - self.forms['coeff.prop.y_collision'].values()[0]
+
+        ncoll = np.array([0.0, 1.0])
+        gap = np.dot(np.array(XREF+u1).reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
+        dgap_du = ncoll[None, :]
 
         dpcontact_du2 = dfn.Function(self.vector_fspace).vector()
-        dpcontact_du2[1::2] = dform_cubic_penalty_pressure(gap, k_collision)
+        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
+        dpcontact_du2[:] = np.array((dpcontact_dgap*dgap_du).reshape(-1))
+
         dfu2_du2_contact = dfn.PETScMatrix(
             dfu2_dpcontact.mat().diagonalScale(None, dpcontact_du2))
         dfu2_du2 = dfu2_du2_nocontact + dfu2_du2_contact
+        return dfu2_du2
+
+    def solve_dres_dstate1(self, b):
+        dt = self.dt
+        # Contact will change this matrix!
+        dfu2_du2 = self._assem_dres_du()
 
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
@@ -1208,3 +1256,6 @@ class CachedBiFormAssembler:
     def assemble(self):
         out = self.tensor.copy()
         return dfn.assemble(self.form, tensor=out)
+
+def newton_solve(x0, linearized_subproblem, params):
+    pass

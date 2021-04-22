@@ -390,7 +390,7 @@ class ExplicitFSIModel(FSIModel):
 
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        uva1, _ = self.solid.solve_state1(ini_state, newton_solver_prm)
+        uva1, _ = self.solid.solve_state1(ini_state[:3], newton_solver_prm)
 
         self.set_fin_solid_state(uva1)
         qp1, fluid_info = self.fluid.solve_state1(ini_state[3:])
