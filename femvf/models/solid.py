@@ -105,10 +105,12 @@ def gen_residual_bilinear_forms(forms):
     """
     Add bilinear forms to a dictionary defining the residual and state variables
     """
-    # Derivatives of the displacement residual form wrt variables of interest
+    # Derivatives of the displacement residual form wrt all state variables
+    manual_state_var_names = [name for name in forms.keys() if 'coeff.state.manual' in name]
+
     for full_var_name in (
         [f'coeff.state.{y}' for y in ['u0', 'v0', 'a0', 'u1']] + 
-        ['coeff.time.dt', 'coeff.fsi.p1']):
+        manual_state_var_names + ['coeff.time.dt', 'coeff.fsi.p1']):
         f = forms['form.un.f1']
         x = forms[full_var_name]
 
@@ -120,7 +122,7 @@ def gen_residual_bilinear_forms(forms):
     # Derivatives of the u/v/a residual form wrt variables of interest
     for full_var_name in (
         [f'coeff.state.{y}' for y in ['u1', 'v1', 'a1']] + 
-        ['coeff.fsi.p1']):
+        manual_state_var_names + ['coeff.fsi.p1']):
         f = forms['form.un.f1uva']
         x = forms[full_var_name]
 
@@ -239,8 +241,8 @@ class Solid(base.Model):
 
     @property
     def XREF(self):
-        xref = dfn.Function(model.vector_fspace)
-        xref.vector()[:] = model.vector_fspace.tabulate_dof_coordinates()
+        xref = dfn.Function(self.vector_fspace)
+        xref.vector()[:] = self.scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
     @staticmethod
@@ -388,31 +390,8 @@ class Solid(base.Model):
             solve = self.solve_dres_dstate1
             return assem_res, solve
 
-        n = 0
-        state_n = state1
-        assem_res_n, solve_n = linearized_subproblem(state_n)
-    
-        max_iter = newton_solver_prm['maximum_iterations']
-        
-        abs_err_0 = 1.0
-        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
-
-        while True:
-            assem_res_n, solve_n = linearized_subproblem(state_n)
-            res_n = assem_res_n()
-
-            abs_err = abs(res_n.norm())
-            if n == 0:
-                abs_err_0 = abs_err
-            rel_err = abs_err/abs_err_0
-
-            # breakpoint()
-            if abs_err <= abs_tol or rel_err <= rel_tol or n > max_iter:
-                break
-            else:
-                dstate_n = solve_n(res_n)
-                state_n = state_n - dstate_n
-                n += 1
+        state_n, info = newton_solve(state1, linearized_subproblem, newton_solver_prm)
+        print(info)
                 
         return state_n, {}
 
@@ -1012,25 +991,55 @@ class Approximate3DKelvinVoigt(Solid):
         'k_collision': 1e11}
 
     def set_fin_state(self, state):
+        # This sets the 'standard' state variables u/v/a
         super().set_fin_state(state)
 
-        # Update nodal values of contact pressures using the penalty method 
+        # This updates nodal values of an additional contact pressure
         XREF = self.XREF.vector()
         k_collision = self.forms['coeff.prop.k_collision'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
-        pcon = self.forms['coeff._state.pcon'].vector()
+        tcon = self.forms['coeff.state.manual.tcontact'].vector()
 
         ncoll = np.array([0.0, 1.0])
-        gap = np.dot(np.array(XREF+u1).reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
-        # gap = (XREF+u1)[1::2] - self.forms['coeff.prop.y_collision'].values()[0]
-        pcon[:] = form_cubic_penalty_pressure(gap, k_collision)
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
+        tcon[:] = (-form_cubic_penalty_pressure(gap, k_collision)[:, None]*ncoll).reshape(-1).copy()
 
-    # TODO These three!
     def _assem_dres_du(self):
+        ## dres_du has two components: one due to the standard u/v/a variables  
+        ## and an additional effect due to contact pressure
         dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1'])
-        dfu2_dpcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dpcontact']))
-
+        
         # Compute things needed to find sensitivities of contact pressure
+        dfu2_dtcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dtcontact']))
+        XREF = self.XREF.vector()
+        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
+        u1 = self.forms['coeff.state.u1'].vector()
+
+        ncoll = np.array([0.0, 1.0])
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
+        dgap_du = ncoll
+
+        # FIXME: This code below only works if n is aligned with the x/y axes.
+        # for a general collision plane normal, the operation 'df_dtc*dtc_du' will 
+        # have to be represented by a block diagonal dtc_du (need to loop). It reduces to a diagonal 
+        # if n is aligned with a coordinate axis.
+        dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
+        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
+        dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
+
+        # breakpoint()
+        dfu2_dtcontact.mat().diagonalScale(None, dtcontact_du2.vec())
+        dfu2_du2_contact = dfu2_dtcontact
+        dfu2_du2 = dfu2_du2_nocontact + dfu2_du2_contact
+        return dfu2_du2
+
+    def _assem_dres_du_adj(self):
+        ## dres_du has two components: one due to the standard u/v/a variables  
+        ## and an additional effect due to contact pressure
+        dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1_adj'])
+        
+        # Compute things needed to find sensitivities of contact pressure
+        dfu2_dpcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dpcontact_adj']))
         XREF = self.XREF.vector()
         k_collision = self.forms['coeff.prop.k_collision'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
@@ -1044,7 +1053,7 @@ class Approximate3DKelvinVoigt(Solid):
         dpcontact_du2[:] = np.array((dpcontact_dgap*dgap_du).reshape(-1))
 
         dfu2_du2_contact = dfn.PETScMatrix(
-            dfu2_dpcontact.mat().diagonalScale(None, dpcontact_du2))
+            dfu2_dpcontact.mat().diagonalScale(dpcontact_du2, None))
         dfu2_du2 = dfu2_du2_nocontact + dfu2_du2_contact
         return dfu2_du2
 
@@ -1142,7 +1151,8 @@ class Approximate3DKelvinVoigt(Solid):
 
         # Surface pressures
         p1 = dfn.Function(scalar_fspace)
-        pcoll = dfn.Function(scalar_fspace)
+        tcontact = dfn.Function(vector_fspace) # contact traction, not pressure
+        ncontact = dfn.Constant([0, 1.0])
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         inf_strain = form_inf_strain(u1)
@@ -1175,6 +1185,9 @@ class Approximate3DKelvinVoigt(Solid):
 
         traction = ufl.inner(reference_traction, vector_test) * traction_ds
 
+        # Compute contact pressure contribution
+        penalty = ufl.inner(tcontact, vector_test) * traction_ds
+
         f1_uva = inertia + stiffness + damping - traction - penalty
         f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
 
@@ -1206,8 +1219,8 @@ class Approximate3DKelvinVoigt(Solid):
             'coeff.state.u1': u1,
             'coeff.state.v1': v1,
             'coeff.state.a1': a1,
+            'coeff.state.manual.tcontact': tcontact,
 
-            'coeff._state.pcontact': pcoll,
             'coeff.fsi.p1': p1,
 
             'coeff.prop.rho': rho,
@@ -1219,7 +1232,7 @@ class Approximate3DKelvinVoigt(Solid):
             'coeff.prop.length': length,
             'coeff.prop.muscle_stress': muscle_stress,
 
-            'expr.contact_pressure': contact_pressure,
+            # 'expr.contact_pressure': contact_pressure,
             'expr.stress_elastic': stress_elastic,
             'expr.stress_visco': stress_visco,
 
@@ -1258,4 +1271,47 @@ class CachedBiFormAssembler:
         return dfn.assemble(self.form, tensor=out)
 
 def newton_solve(x0, linearized_subproblem, params):
-    pass
+    """
+    Solve a non-linear problem with Newton-Raphson
+
+    Parameters
+    ----------
+    x0 : A
+        Initial guess
+    linearized_subproblem : fn(A) -> (fn() -> A, fn(A) -> A)
+        Callable returning a residual and linear solver about a state (x).
+    params : dict
+        Dictionary of parameters
+
+    Returns
+    -------
+    xn
+    """
+    n = 0
+    state_n = x0
+    assem_res_n, solve_n = linearized_subproblem(state_n)
+
+    max_iter = params['maximum_iterations']
+    
+    abs_err_0 = 1.0
+    abs_tol, rel_tol = params['absolute_tolerance'], params['relative_tolerance']
+    while True:
+        assem_res_n, solve_n = linearized_subproblem(state_n)
+        res_n = assem_res_n()
+
+        res_n['u'].norm('l2')
+        res_n['v'].norm('l2')
+        res_n['a'].norm('l2')
+        abs_err = abs(res_n.norm())
+        if n == 0:
+            abs_err_0 = max(abs_err, 1.0)
+        rel_err = abs_err/abs_err_0
+
+        # breakpoint()
+        if abs_err <= abs_tol or rel_err <= rel_tol or n > max_iter:
+            break
+        else:
+            dstate_n = solve_n(res_n)
+            state_n = state_n - dstate_n
+            n += 1
+    return state_n, {'numiter': n, 'abserr': abs_err, 'relerr': rel_err}

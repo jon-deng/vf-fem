@@ -16,7 +16,7 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.models import load_fsi_model, load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
+from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd
 from femvf import callbacks
 from femvf import linalg
 
@@ -35,7 +35,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_model(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling='explicit')
+        model = load_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500
@@ -84,7 +84,7 @@ class ForwardConfig(unittest.TestCase):
     def config_fsai_model(self):
         ## Configure the model and its parameters
         acoustic = WRAnalog(44)
-        model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
+        model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
                                 coupling='explicit')
 
         # Set the control vector
@@ -133,7 +133,66 @@ class ForwardConfig(unittest.TestCase):
         
         return model, ini_state, controls, props
 
+    def config_approx3D_model(self):
+        ## Configure the model and its parameters
+        model = load_fsi_model(self.mesh_path, None, SolidType=smd.Approximate3DKelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+
+        # Set the control vector
+        p_sub = 500
+
+        control = model.get_control_vec()
+        control['psub'][:] = p_sub * PASCAL_TO_CGS
+        control['psup'][:] = 0.0 * PASCAL_TO_CGS
+        controls = [control]
+
+        # Set the properties
+        y_gap = 0.01
+
+        fl_props = model.fluid.get_properties_vec(set_default=True)
+        fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+
+        sl_props = model.solid.get_properties_vec(set_default=True)
+        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
+        x = xy[:, 0]
+        y = xy[:, 1]
+        x_min, x_max = x.min(), x.max()
+        y_min, y_max = y.min(), y.max()
+        sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        sl_props['eta'][:] = 5.0
+        sl_props['k_collision'][()] = 1e11
+        sl_props['y_collision'][()] = fl_props['y_midline'] - y_gap*1/2
+        sl_props['length'][:] = 1.2
+        props = linalg.concatenate(sl_props, fl_props)
+
+        # Set the initial state
+        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
+        x = xy[:, 0]
+        y = xy[:, 1]
+        u0 = dfn.Function(model.solid.vector_fspace).vector()
+
+        # model.fluid.set_properties(fluid_props)
+        # qp0, *_ = model.fluid.solve_qp0()
+
+        ini_state = model.get_state_vec()
+        ini_state.set(0.0)
+        ini_state['u'][:] = u0
+        # ini_state['q'][()] = qp0['q']
+        # ini_state['p'][:] = qp0['p']
+        
+        return model, ini_state, controls, props
+
 class TestIntegrate(ForwardConfig):
+
+    def test_integrate_approx3D(self):
+        model, ini_state, controls, props = self.config_approx3D_model()
+
+        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+
+        save_path = 'out/test_forward_fsi.h5'
+        if os.path.isfile(save_path):
+            os.remove(save_path)
+
+        self._test_integrate(model, ini_state, controls, props, times, save_path)
     
     def test_integrate_fsi(self):
         model, ini_state, controls, props = self.config_fsi_model()
@@ -241,7 +300,8 @@ class TestIntegrate(ForwardConfig):
 if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
-    test.test_integrate_fsi()
+    # test.test_integrate_fsi()
+    test.test_integrate_approx3D()
     # test.test_integrate_fsai()
     # test.test_integrate_linear()
     # unittest.main()
