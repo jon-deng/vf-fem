@@ -212,7 +212,7 @@ class Solid(base.Model):
         self.state1 = BlockVec((self.u1.vector(), self.v1.vector(), self.a1.vector()), ('u', 'v', 'a'))
         self.control = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
         self.properties = self.get_properties_vec(set_default=True)
-        self.set_properties(self.get_properties_vec(set_default=True))
+        self.set_properties(self.properties)
 
         # TODO: You should move this to the solid since it's not the responsibility of this class to do solid specific stuff
         self.cached_form_assemblers = {
@@ -282,6 +282,7 @@ class Solid(base.Model):
             # a workaround
             if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
                 vec = np.ones(coefficient.values().size)
+                vec[:] = coefficient.values()
             else:
                 vec = coefficient.vector().copy()
             
@@ -548,9 +549,10 @@ class NodalContactSolid(Solid):
         u1 = self.forms['coeff.state.u1'].vector()
         tcon = self.forms['coeff.state.manual.tcontact'].vector()
 
-        ncoll = np.array([0.0, 1.0])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
-        tcon[:] = (-form_cubic_penalty_pressure(gap, k_collision)[:, None]*ncoll).reshape(-1).copy()
+        ncontact = self.forms['coeff.prop.ncontact'].values()
+        ncontact = np.array([0, 1])
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
+        tcon[:] = (-form_cubic_penalty_pressure(gap, k_collision)[:, None]*ncontact).reshape(-1).copy()
 
     def _assem_dres_du(self):
         ## dres_du has two components: one due to the standard u/v/a variables  
@@ -563,9 +565,10 @@ class NodalContactSolid(Solid):
         k_collision = self.forms['coeff.prop.k_collision'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
 
-        ncoll = np.array([0.0, 1.0])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
-        dgap_du = ncoll
+        ncontact = self.forms['coeff.prop.ncontact'].values()
+        ncontact = np.array([0, 1])
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
+        dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
         # for a general collision plane normal, the operation 'df_dtc*dtc_du' will 
@@ -575,7 +578,6 @@ class NodalContactSolid(Solid):
         dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
-        # breakpoint()
         dfu2_dtcontact.mat().diagonalScale(None, dtcontact_du2.vec())
         dfu2_du2_contact = dfu2_dtcontact
         dfu2_du2 = dfu2_du2_nocontact + dfu2_du2_contact
@@ -592,9 +594,10 @@ class NodalContactSolid(Solid):
         k_collision = self.forms['coeff.prop.k_collision'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
 
-        ncoll = np.array([0.0, 1.0])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncoll) - self.forms['coeff.prop.y_collision'].values()[0]
-        dgap_du = ncoll
+        ncontact = self.forms['coeff.prop.ncontact'].values()
+        ncontact = np.array([0, 1])
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
+        dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
         # for a general collision plane normal, the operation 'df_dtc*dtc_du' will 
@@ -604,7 +607,6 @@ class NodalContactSolid(Solid):
         dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
-        # breakpoint()
         dfu2_dtcontact.mat().diagonalScale(dtcontact_du2.vec(), None)
         dfu2_du2_contact = dfu2_dtcontact
         dfu2_du2 = dfu2_du2_nocontact + dfu2_du2_contact
@@ -1148,7 +1150,7 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         # Surface pressures
         p1 = dfn.Function(scalar_fspace)
         tcontact = dfn.Function(vector_fspace) # contact traction, not pressure
-        ncontact = dfn.Constant([0, 1.0])
+        ncontact = dfn.Constant([0.0, 1.0])
 
         # Symbolic calculations to get the variational form for a linear-elastic solid
         inf_strain = form_inf_strain(u1)
@@ -1308,7 +1310,6 @@ def newton_solve(x0, linearized_subproblem, params):
             abs_err_0 = max(abs_err, 1.0)
         rel_err = abs_err/abs_err_0
 
-        # breakpoint()
         if abs_err <= abs_tol or rel_err <= rel_tol or n > max_iter:
             break
         else:
