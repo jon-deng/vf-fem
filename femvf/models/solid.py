@@ -281,12 +281,12 @@ class Solid(base.Model):
             # Time step is a special case since it is size 1 but is made to be a field as 
             # a workaround
             if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
-                vec = np.ones(1)
+                vec = np.ones(coefficient.values().size)
             else:
                 vec = coefficient.vector().copy()
             
-            if set_default:
-                vec[:] = self.PROPERTY_DEFAULTS.get(label, 0.0)
+            if set_default and label in self.PROPERTY_DEFAULTS:
+                vec[:] = self.PROPERTY_DEFAULTS[label]
 
             vecs.append(vec)
 
@@ -343,7 +343,7 @@ class Solid(base.Model):
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
             if isinstance(coefficient, dfn.function.constant.Constant):
-                coefficient.assign(props[key][()])
+                coefficient.assign(dfn.Constant(np.squeeze(props[key])))
             else:
                 coefficient.vector()[:] = props[key]
 

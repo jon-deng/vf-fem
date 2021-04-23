@@ -300,8 +300,8 @@ class TestIntegrate(ForwardConfig):
 if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
-    # test.test_integrate_fsi()
-    test.test_integrate_approx3D()
+    test.test_integrate_fsi()
+    # test.test_integrate_approx3D()
     # test.test_integrate_fsai()
     # test.test_integrate_linear()
     # unittest.main()
