@@ -34,11 +34,11 @@ if __name__ == '__main__':
     solid = models.load.load_solid_model(mesh_path, models.solid.Approximate3DKelvinVoigt)
 
     props = solid.get_properties_vec()
-    props['y_collision'][:] = solid.mesh.coordinates()[:, 1].max() + 60.0#- 0.1
+    props['ycontact'][:] = solid.mesh.coordinates()[:, 1].max() + 60.0#- 0.1
     props['emod'][:] = 10e3 * 10 # factor converts [Pa] to the [cgs] equivalent
     props['nu'][:] = 0.45
     props['eta'][:] = 5.0 
-    props['k_collision'][()] = 1e13
+    props['kcontact'][()] = 1e13
     props['length'][:] = 1.5
     # props['muscle_stress'][:] = 0.0
     solid.set_properties(props)

@@ -33,7 +33,7 @@ class ForwardConfig(unittest.TestCase):
         mesh_base_filename = 'M5-3layers'
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
-    def config_fsi_model(self):
+    def config_fsi_rayleigh_model(self):
         ## Configure the model and its parameters
         model = load_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
 
@@ -60,8 +60,8 @@ class ForwardConfig(unittest.TestCase):
         sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         sl_props['rayleigh_m'][()] = 0
         sl_props['rayleigh_k'][()] = 4e-3
-        sl_props['k_collision'][()] = 1e11
-        sl_props['y_collision'][()] = fl_props['y_midline'] - y_gap*1/2
+        sl_props['kcontact'][()] = 1e11
+        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
         props = linalg.concatenate(sl_props, fl_props)
 
         # Set the initial state
@@ -109,8 +109,8 @@ class ForwardConfig(unittest.TestCase):
         sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         sl_props['rayleigh_m'][()] = 0
         sl_props['rayleigh_k'][()] = 4e-3
-        sl_props['k_collision'][()] = 1e11
-        sl_props['y_collision'][()] = fl_props['y_midline'] - y_gap*1/2
+        sl_props['kcontact'][()] = 1e11
+        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
 
         ac_props = model.acoustic.get_properties_vec(set_default=True)
         ac_props['area'][:] = 4.0
@@ -159,8 +159,8 @@ class ForwardConfig(unittest.TestCase):
         y_min, y_max = y.min(), y.max()
         sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         sl_props['eta'][:] = 5.0
-        sl_props['k_collision'][()] = 1e11
-        sl_props['y_collision'][()] = fl_props['y_midline'] - y_gap*1/2
+        sl_props['kcontact'][()] = 1e11
+        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
         sl_props['length'][:] = 1.2
         props = linalg.concatenate(sl_props, fl_props)
 
@@ -194,8 +194,8 @@ class TestIntegrate(ForwardConfig):
 
         self._test_integrate(model, ini_state, controls, props, times, save_path)
     
-    def test_integrate_fsi(self):
-        model, ini_state, controls, props = self.config_fsi_model()
+    def test_integrate_fsi_rayleigh(self):
+        model, ini_state, controls, props = self.config_fsi_rayleigh_model()
 
         times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
@@ -300,7 +300,7 @@ class TestIntegrate(ForwardConfig):
 if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
-    test.test_integrate_fsi()
+    test.test_integrate_fsi_rayleigh()
     # test.test_integrate_approx3D()
     # test.test_integrate_fsai()
     # test.test_integrate_linear()

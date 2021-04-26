@@ -283,8 +283,8 @@ def add_manual_contact_traction_form(forms):
     forms['form.un.f1uva'] -= traction_contact
     forms['coeff.state.manual.tcontact'] = tcontact
     forms['coeff.prop.ncontact'] = ncontact
-    forms['coeff.prop.k_collision'] = kcontact
-    forms['coeff.prop.y_collision'] = ycontact
+    forms['coeff.prop.kcontact'] = kcontact
+    forms['coeff.prop.ycontact'] = ycontact
     return forms
 
 def add_newmark_time_disc_form(forms):
@@ -706,14 +706,14 @@ class NodalContactSolid(Solid):
 
         # This updates nodal values of an additional contact pressure
         XREF = self.XREF.vector()
-        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
+        kcontact = self.forms['coeff.prop.kcontact'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
         tcon = self.forms['coeff.state.manual.tcontact'].vector()
 
         ncontact = self.forms['coeff.prop.ncontact'].values()
         ncontact = np.array([0, 1])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
-        tcon[:] = (-form_cubic_penalty_pressure(gap, k_collision)[:, None]*ncontact).reshape(-1).copy()
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.ycontact'].values()[0]
+        tcon[:] = (-form_cubic_penalty_pressure(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
 
     def _assem_dres_du(self):
         ## dres_du has two components: one due to the standard u/v/a variables  
@@ -723,12 +723,12 @@ class NodalContactSolid(Solid):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dtcontact']))
         XREF = self.XREF.vector()
-        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
+        kcontact = self.forms['coeff.prop.kcontact'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
 
         ncontact = self.forms['coeff.prop.ncontact'].values()
         ncontact = np.array([0, 1])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.ycontact'].values()[0]
         dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
@@ -736,7 +736,7 @@ class NodalContactSolid(Solid):
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It 
         # reduces to a diagonal if n is aligned with a coordinate axis.
         dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
-        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
+        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
         dfu2_dtcontact.mat().diagonalScale(None, dtcontact_du2.vec())
@@ -752,12 +752,12 @@ class NodalContactSolid(Solid):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dtcontact_adj']))
         XREF = self.XREF.vector()
-        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
+        kcontact = self.forms['coeff.prop.kcontact'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
 
         ncontact = self.forms['coeff.prop.ncontact'].values()
         ncontact = np.array([0, 1])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.ycontact'].values()[0]
         dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
@@ -765,7 +765,7 @@ class NodalContactSolid(Solid):
         # have to be represented by a block diagonal dtc_du (need to loop). It reduces to a diagonal 
         # if n is aligned with a coordinate axis.
         dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
-        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
+        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
         dfu2_dtcontact.mat().diagonalScale(dtcontact_du2.vec(), None)
@@ -782,12 +782,12 @@ class NodalContactSolid(Solid):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1uva_dtcontact']))
         XREF = self.XREF.vector()
-        k_collision = self.forms['coeff.prop.k_collision'].values()[0]
+        kcontact = self.forms['coeff.prop.kcontact'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
 
         ncontact = self.forms['coeff.prop.ncontact'].values()
         ncontact = np.array([0, 1])
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.y_collision'].values()[0]
+        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - self.forms['coeff.prop.ycontact'].values()[0]
         dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
@@ -795,7 +795,7 @@ class NodalContactSolid(Solid):
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It 
         # reduces to a diagonal if n is aligned with a coordinate axis.
         dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
-        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, k_collision)
+        dpcontact_dgap, _ = dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
         dfu2_dtcontact.mat().diagonalScale(None, dtcontact_du2.vec())
@@ -873,8 +873,8 @@ class Rayleigh(NodalContactSolid):
         'rho': 1000 * SI_DENSITY_TO_CGS,
         'rayleigh_m': 10,
         'rayleigh_k': 1e-3,
-        'y_collision': 0.61-0.001,
-        'k_collision': 1e11}
+        'ycontact': 0.61-0.001,
+        'kcontact': 1e11}
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
@@ -913,8 +913,8 @@ class KelvinVoigt(NodalContactSolid):
         'nu': 0.49,
         'rho': 1000 * SI_DENSITY_TO_CGS,
         'eta': 3.0,
-        'y_collision': 0.61-0.001,
-        'k_collision': 1e11}
+        'ycontact': 0.61-0.001,
+        'kcontact': 1e11}
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
@@ -962,8 +962,8 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
         'k_swelling': 1000.0 * 10e3 * PASCAL_TO_CGS,
         'rho': 1000 * SI_DENSITY_TO_CGS,
         'eta': 3.0,
-        'y_collision': 0.61-0.001,
-        'k_collision': 1e11}
+        'ycontact': 0.61-0.001,
+        'kcontact': 1e11}
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
@@ -1011,8 +1011,8 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         'nu': 0.49,
         'rho': 1000 * SI_DENSITY_TO_CGS,
         'eta': 3.0,
-        'y_collision': 0.61-0.001,
-        'k_collision': 1e11}
+        'ycontact': 0.61-0.001,
+        'kcontact': 1e11}
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,

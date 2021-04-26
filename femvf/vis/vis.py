@@ -98,7 +98,7 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     axs[0, 0].set_ylim(0.0, 1.0, auto=False)
 
     axs[0, 0].axhline(y=fluid_props['y_midline'], ls='-.', lw=0.5)
-    axs[0, 0].axhline(y=model.y_collision.values()[0], ls='-.', lw=0.5)
+    axs[0, 0].axhline(y=model.ycontact.values()[0], ls='-.', lw=0.5)
 
     pressure_profile = axs[1, 0].lines[0]
     pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)

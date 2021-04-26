@@ -58,8 +58,8 @@ class TestFSAIModel(unittest.TestCase):
         sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         sl_props['rayleigh_m'][()] = 0
         sl_props['rayleigh_k'][()] = 4e-3
-        sl_props['k_collision'][()] = 1e11
-        sl_props['y_collision'][()] = fl_props['y_midline'] - y_gap*1/2
+        sl_props['kcontact'][()] = 1e11
+        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
 
         ac_props = model.acoustic.get_properties_vec(set_default=True)
         ac_props['area'][:] = 4.0
