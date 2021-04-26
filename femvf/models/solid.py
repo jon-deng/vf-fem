@@ -217,6 +217,9 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
         'coeff.state.u1': u1,
         'coeff.state.v1': v1,
         'coeff.state.a1': a1,
+
+        'expr.kin.inf_strain': form_inf_strain(u1),
+        'expr.kin.inf_strain_rate': form_inf_strain(v1),
         
         'form.un.f1uva': 0.0
         # Add kinematic expressions?
@@ -242,50 +245,15 @@ def add_isotropic_elastic_form(forms):
     vector_test = forms['test.vector']
     strain_test = form_inf_strain(vector_test)
 
+    inf_strain = forms['expr.kin.inf_strain']
     emod = dfn.Function(forms['fspace.scalar'])
     nu = dfn.Function(forms['fspace.scalar'])
-    u = forms['coeff.state.u1']
-    inf_strain = form_inf_strain(u)
     stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
 
     forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
     forms['coeff.prop.emod'] = emod
     forms['coeff.prop.nu'] = nu
     forms['expr.stress_elastic'] = stress_elastic
-    return forms
-
-def add_rayleigh_viscous_form(forms):
-    dx = forms['measure.dx']
-    vector_test = forms['test.vector']
-    strain_test = form_inf_strain(vector_test)
-    u = forms['coeff.state.u1']
-    v = forms['coeff.state.v1']
-    a = forms['coeff.state.a1']
-
-    rayleigh_m = dfn.Constant(1.0)
-    rayleigh_k = dfn.Constant(1.0)
-    stress_visco = rayleigh_k*ufl.replace(forms['expr.stress_elastic'], {u: v})
-    force_visco = rayleigh_m*ufl.replace(forms['expr.force_inertial'], {a: v})
-
-    damping = (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
-
-    forms['form.un.f1uva'] += damping
-    forms['coeff.prop.rayleigh_m'] = rayleigh_m
-    forms['coeff.prop.rayleigh_k'] = rayleigh_k
-    return forms
-
-def add_kv_viscous_form(forms):
-    dx = forms['measure.dx']
-    vector_test = forms['test.vector']
-    strain_test = form_inf_strain(vector_test)
-    v = forms['coeff.state.u1']
-
-    eta = dfn.Function(forms['fspace.scalar'])
-    inf_strain_rate = form_inf_strain(v)
-    stress_visco = eta*inf_strain_rate
-
-    forms['form.un.f1uva'] += ufl.inner(stress_visco, strain_test) * dx
-    forms['coeff.prop.eta'] = eta
     return forms
 
 def add_surface_pressure_form(forms):
@@ -725,6 +693,7 @@ class Solid(base.Model):
         ddt = (dfu_ddt*bu).sum() + dfv_ddt.inner(bv) + dfa_ddt.inner(ba)
         return ddt
 
+
 class NodalContactSolid(Solid):
     """
     This class modifies the default behaviour of the solid to implement contact pressures
@@ -873,6 +842,27 @@ class NodalContactSolid(Solid):
         dfn.solve(dfu2_du2, b['u'], rhs_u, 'petsc')
         return b
 
+
+def add_rayleigh_viscous_form(forms):
+    dx = forms['measure.dx']
+    vector_test = forms['test.vector']
+    strain_test = forms['test.strain']
+    u = forms['coeff.state.u1']
+    v = forms['coeff.state.v1']
+    a = forms['coeff.state.a1']
+
+    rayleigh_m = dfn.Constant(1.0)
+    rayleigh_k = dfn.Constant(1.0)
+    stress_visco = rayleigh_k*ufl.replace(forms['expr.stress_elastic'], {u: v})
+    force_visco = rayleigh_m*ufl.replace(forms['expr.force_inertial'], {a: v})
+
+    damping = (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
+
+    forms['form.un.f1uva'] += damping
+    forms['coeff.prop.rayleigh_m'] = rayleigh_m
+    forms['coeff.prop.rayleigh_k'] = rayleigh_k
+    return forms
+
 class Rayleigh(NodalContactSolid):
     """
     Represents the governing equations of Rayleigh damped solid
@@ -900,141 +890,19 @@ class Rayleigh(NodalContactSolid):
                 mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                 fsi_facet_labels, fixed_facet_labels)))))))
 
-    @staticmethod
-    def _form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
-                         fsi_facet_labels, fixed_facet_labels):
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
 
-        scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
-        vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
+def add_kv_viscous_form(forms):
+    dx = forms['measure.dx']
+    strain_test = forms['test.strain']
+    v = forms['coeff.state.v1']
 
-        vector_trial = dfn.TrialFunction(vector_fspace)
-        vector_test = dfn.TestFunction(vector_fspace)
-        strain_test = form_inf_strain(vector_test)
+    eta = dfn.Function(forms['fspace.scalar'])
+    inf_strain_rate = form_inf_strain(v)
+    stress_visco = eta*inf_strain_rate
 
-        scalar_trial = dfn.TrialFunction(scalar_fspace)
-        scalar_test = dfn.TestFunction(scalar_fspace)
-
-        XREF = dfn.Function(vector_fspace)
-        XREF.vector()[:] = scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
-
-        # Newmark update parameters
-        gamma = dfn.Constant(1/2)
-        beta = dfn.Constant(1/4)
-
-        # Solid material properties
-        y_collision = dfn.Constant(1.0)
-        k_collision = dfn.Constant(1.0)
-        rho = dfn.Constant(1.0)
-        nu = dfn.Constant(1.0)
-        rayleigh_m = dfn.Constant(1.0)
-        rayleigh_k = dfn.Constant(1.0)
-        emod = dfn.Function(scalar_fspace)
-
-        emod.vector()[:] = 1.0
-
-        # NOTE: Fenics doesn't support form derivatives w.r.t Constant. By making time step
-        # vary in space, you can take the derivative. As a result you have to set the time step 
-        # the same at every DOF
-        dt = dfn.Function(scalar_fspace)
-        dt.vector()[:] = 1e-4
-
-        # Initial and final states
-        # u: displacement, v: velocity, a: acceleration
-        u0 = dfn.Function(vector_fspace)
-        v0 = dfn.Function(vector_fspace)
-        a0 = dfn.Function(vector_fspace)
-
-        u1 = dfn.Function(vector_fspace)
-        v1 = dfn.Function(vector_fspace)
-        a1 = dfn.Function(vector_fspace)
-
-        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-        # Surface pressure
-        pcontact = dfn.Function(scalar_fspace)
-        p1 = dfn.Function(scalar_fspace)
-        tcontact = dfn.Function(vector_fspace)
-        ncontact = dfn.Constant([0.0, 1.0])
-
-        ## Symbolic calculations to get the variational form for a linear-elastic solid
-        inf_strain = form_inf_strain(u1)
-        force_inertial = rho*a1 
-        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-        force_visco = rayleigh_m * ufl.replace(force_inertial, {a1: v1})
-        stress_visco = rayleigh_k * ufl.replace(stress_elastic, {u1: v1})
-
-        inertia = ufl.inner(force_inertial, vector_test) * dx
-        stiffness = ufl.inner(stress_elastic, strain_test) * dx
-        damping = (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
-
-        # Compute the pressure loading Neumann boundary condition on the reference configuration
-        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        facet_normal = dfn.FacetNormal(mesh)
-        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
-        traction_ds = sum(traction_dss[1:], traction_dss[0])
-        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
-
-        traction = ufl.inner(reference_traction, vector_test) * traction_ds
-
-        # Use the penalty method to account for collision
-        # gap = ufl.dot(XREF+u1, ncontact) - y_collision
-        # contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
-        # penalty = ufl.inner(-contact_pressure*ncontact, vector_test) * traction_ds
-        penalty = ufl.inner(tcontact, vector_test) * traction_ds
-
-        f1_uva = inertia + stiffness + damping - traction - penalty
-
-        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1:a1_nmk})
-
-        ## Boundary conditions
-        # Specify DirichletBC at the VF base
-        bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_label_to_id['fixed'])
-
-        forms = {
-            'measure.dx': dx,
-            'measure.ds': ds,
-            'measure.ds_traction': traction_ds,
-            'bcs.base': bc_base,
-
-            'fspace.vector': vector_fspace,
-            'fspace.scalar': scalar_fspace,
-
-            'test.vector': vector_test,
-            'test.scalar': scalar_test,
-            'trial.vector': vector_trial,
-            'trial.scalar': scalar_trial,
-
-            'coeff.time.dt': dt,
-            'coeff.time.gamma': gamma,
-            'coeff.time.beta': beta,
-
-            'coeff.state.u0': u0,
-            'coeff.state.v0': v0,
-            'coeff.state.a0': a0,
-            'coeff.state.u1': u1,
-            'coeff.state.v1': v1,
-            'coeff.state.a1': a1,
-            
-            'coeff.state.manual.tcontact': tcontact,
-            'coeff.fsi.p1': p1,
-
-            'coeff.prop.rho': rho,
-            'coeff.prop.nu': nu,
-            'coeff.prop.emod': emod,
-            'coeff.prop.ncontact': ncontact,
-            'coeff.prop.rayleigh_m': rayleigh_m,
-            'coeff.prop.rayleigh_k': rayleigh_k,
-            'coeff.prop.y_collision': y_collision,
-            'coeff.prop.k_collision': k_collision,
-
-            'form.un.f1uva': f1_uva,
-            'form.un.f1': f1}
-
-        return forms
+    forms['form.un.f1uva'] += ufl.inner(stress_visco, strain_test) * dx
+    forms['coeff.prop.eta'] = eta
+    return forms
 
 class KelvinVoigt(NodalContactSolid):
     """
@@ -1050,129 +918,39 @@ class KelvinVoigt(NodalContactSolid):
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+                          fsi_facet_labels, fixed_facet_labels):
+        return \
+            add_newmark_time_disc_form(
+            add_manual_contact_traction_form(
+            add_surface_pressure_form(
+            add_kv_viscous_form(
+            add_inertial_form(
+            add_isotropic_elastic_form(
+            base_form_definitions(
+                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                fsi_facet_labels, fixed_facet_labels)))))))
 
-        scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
-        vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
 
-        vector_trial = dfn.TrialFunction(vector_fspace)
-        vector_test = dfn.TestFunction(vector_fspace)
+def add_incompressible_isotropic_elastic_form(forms):
+    dx = forms['measure.dx']
+    strain_test = forms['test.strain']
 
-        scalar_trial = dfn.TrialFunction(scalar_fspace)
-        scalar_test = dfn.TestFunction(scalar_fspace)
-        strain_test = form_inf_strain(vector_test)
+    emod = dfn.Function(forms['fspace.scalar'])
+    nu = 0.5
+    u = forms['coeff.state.u1']
+    inf_strain = form_inf_strain(u)
+    v_swelling = dfn.Function(forms['fspace.scalar'])
+    k_swelling = dfn.Constant(1.0)
+    v_swelling.vector()[:] = 1.0
+    lame_mu = emod/2/(1+nu)
+    stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(u.geometric_dimension())
 
-        XREF = dfn.Function(vector_fspace)
-        XREF.vector()[:] = scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
-
-        # Newmark update parameters
-        gamma = dfn.Constant(1/2)
-        beta = dfn.Constant(1/4)
-
-        # Solid material properties
-        y_collision = dfn.Constant(1.0)
-        k_collision = dfn.Constant(1.0)
-        rho = dfn.Constant(1.0)
-        nu = dfn.Constant(1.0)
-        emod = dfn.Function(scalar_fspace)
-        kv_eta = dfn.Function(scalar_fspace)
-
-        emod.vector()[:] = 1.0
-
-        # Initial and final states
-        dt = dfn.Function(scalar_fspace)
-        dt.vector()[:] = 1e-4
-
-        u0 = dfn.Function(vector_fspace)
-        v0 = dfn.Function(vector_fspace)
-        a0 = dfn.Function(vector_fspace)
-
-        u1 = dfn.Function(vector_fspace)
-        v1 = dfn.Function(vector_fspace)
-        a1 = dfn.Function(vector_fspace)
-
-        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-        # Surface pressures
-        p1 = dfn.Function(scalar_fspace)
-        ncontact = dfn.Constant([0, 1.0])
-        tcontact = dfn.Function(vector_fspace)
-
-        # Symbolic calculations to get the variational form for a linear-elastic solid
-        inf_strain = form_inf_strain(u1)
-        force_inertial = rho*a1 
-        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-        stress_visco = kv_eta*form_inf_strain(v1)
-
-        inertia = ufl.inner(force_inertial, vector_test) * dx
-        stiffness = ufl.inner(stress_elastic, strain_test) * dx
-        damping = ufl.inner(stress_visco, strain_test) * dx
-
-        # Compute the pressure loading using Neumann boundary conditions on the reference configuration
-        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        facet_normal = dfn.FacetNormal(mesh)
-        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
-        traction_ds = sum(traction_dss[1:], traction_dss[0])
-        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
-
-        traction = ufl.inner(reference_traction, vector_test) * traction_ds
-
-        # Use the penalty method to account for collision
-        # gap = ufl.dot(XREF+u1, ncontact) - y_collision
-        # contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
-        # penalty = ufl.inner(-contact_pressure*ncontact, vector_test) * traction_ds
-        penalty = ufl.inner(tcontact, vector_test) * traction_ds
-
-        f1_uva = inertia + stiffness + damping - traction - penalty
-        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
-
-        ## Boundary conditions
-        # Specify DirichletBC at the VF base
-        bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_label_to_id['fixed'])
-
-        forms = {
-            'measure.dx': dx,
-            'measure.ds': ds,
-            'measure.ds_traction': traction_ds,
-            'bcs.base': bc_base,
-
-            'fspace.vector': vector_fspace,
-            'fspace.scalar': scalar_fspace,
-
-            'test.vector': vector_test,
-            'test.scalar': scalar_test,
-            'trial.vector': vector_trial,
-            'trial.scalar': scalar_trial,
-
-            'coeff.time.dt': dt,
-            'coeff.time.gamma': gamma,
-            'coeff.time.beta': beta,
-
-            'coeff.state.u0': u0,
-            'coeff.state.v0': v0,
-            'coeff.state.a0': a0,
-            'coeff.state.u1': u1,
-            'coeff.state.v1': v1,
-            'coeff.state.a1': a1,
-
-            'coeff.state.manual.tcontact': tcontact,
-            'coeff.fsi.p1': p1,
-
-            'coeff.prop.rho': rho,
-            'coeff.prop.eta': kv_eta,
-            'coeff.prop.emod': emod,
-            'coeff.prop.nu': nu,
-            'coeff.prop.ncontact': ncontact,
-            'coeff.prop.y_collision': y_collision,
-            'coeff.prop.k_collision': k_collision,
-
-            'form.un.f1uva': f1_uva,
-            'form.un.f1': f1}
-        return forms
+    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
+    forms['coeff.prop.emod'] = emod
+    forms['coeff.prop.v_swelling'] = v_swelling
+    forms['coeff.prop.k_swelling'] = k_swelling
+    forms['expr.stress_elastic'] = stress_elastic
+    return forms
 
 class IncompSwellingKelvinVoigt(NodalContactSolid):
     """
@@ -1189,136 +967,43 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
 
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+                          fsi_facet_labels, fixed_facet_labels):
+        return \
+            add_newmark_time_disc_form(
+            add_manual_contact_traction_form(
+            add_surface_pressure_form(
+            add_kv_viscous_form(
+            add_inertial_form(
+            add_incompressible_isotropic_elastic_form(
+            base_form_definitions(
+                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                fsi_facet_labels, fixed_facet_labels)))))))
 
-        scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
-        vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
 
-        vector_trial = dfn.TrialFunction(vector_fspace)
-        vector_test = dfn.TestFunction(vector_fspace)
+def add_ap_force_form(forms):
+    dx = forms['measure.dx']
+    vector_test = forms['test.vector']
 
-        scalar_trial = dfn.TrialFunction(scalar_fspace)
-        scalar_test = dfn.TestFunction(scalar_fspace)
-        strain_test = form_inf_strain(vector_test)
+    u1, v1 = forms['coeff.state.u1'], forms['coeff.state.v1']
+    kv_eta = forms['coeff.prop.eta']
+    emod = forms['coeff.prop.emod']
+    nu = forms['coeff.prop.nu']
+    lame_mu = emod/2/(1+nu)
+    u_ant = dfn.Function(forms['fspace.vector']) # zero values by default
+    u_pos = dfn.Function(forms['fspace.vector'])  
+    length = dfn.Function(forms['fspace.scalar'])
+    muscle_stress = dfn.Function(forms['fspace.scalar'])
+    d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
+    d2v_dz2 = (u_ant - 2*v1 + u_pos) / length**2
+    force_elast_ap = (lame_mu+muscle_stress)*d2u_dz2
+    force_visco_ap = 0.5*kv_eta*d2v_dz2
+    stiffness = ufl.inner(force_elast_ap, vector_test) * dx
+    viscous = ufl.inner(force_visco_ap, vector_test) * dx
 
-        XREF = dfn.Function(vector_fspace)
-        XREF.vector()[:] = scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
-
-        # Newmark update parameters
-        gamma = dfn.Constant(1/2)
-        beta = dfn.Constant(1/4)
-
-        # Solid material properties
-        v_swelling = dfn.Function(scalar_fspace)
-        k_swelling = dfn.Constant(1.0)
-        y_collision = dfn.Constant(1.0)
-        k_collision = dfn.Constant(1.0)
-        rho = dfn.Function(scalar_fspace)
-        # nu = dfn.Constant(1.0)
-        emod = dfn.Function(scalar_fspace)
-        kv_eta = dfn.Function(scalar_fspace)
-
-        rho.vector()[:] = 1.0
-        v_swelling.vector()[:] = 1.0
-        emod.vector()[:] = 1.0
-
-        # Initial and final states
-        dt = dfn.Function(scalar_fspace)
-        dt.vector()[:] = 1e-4
-
-        u0 = dfn.Function(vector_fspace)
-        v0 = dfn.Function(vector_fspace)
-        a0 = dfn.Function(vector_fspace)
-
-        u1 = dfn.Function(vector_fspace)
-        v1 = dfn.Function(vector_fspace)
-        a1 = dfn.Function(vector_fspace)
-
-        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-        # Surface pressures
-        p1 = dfn.Function(scalar_fspace)
-        tcontact = dfn.Function(vector_fspace)
-        ncontact = dfn.Constant([0.0, 1.0])
-
-        # Symbolic calculations to get the variational form for a linear-elastic solid
-        inf_strain = form_inf_strain(u1)
-        force_inertial = rho*a1 
-
-        lame_mu = emod/2/(1+0.5) # This is a poisson's ratio of 0.5
-        stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(u1.geometric_dimension())
-        stress_visco = kv_eta*form_inf_strain(v1)
-
-        inertia = ufl.inner(force_inertial, vector_test) * dx
-        stiffness = ufl.inner(stress_elastic, strain_test) * dx
-        damping = ufl.inner(stress_visco, strain_test) * dx
-
-        # Compute the pressure loading using Neumann boundary conditions on the reference configuration
-        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        facet_normal = dfn.FacetNormal(mesh)
-        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
-        traction_ds = sum(traction_dss[1:], traction_dss[0])
-        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
-
-        traction = ufl.inner(reference_traction, vector_test) * traction_ds
-
-        # Use the penalty method to account for collision
-        # gap = ufl.dot(XREF+u1, ncontact) - y_collision
-        # contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
-        # penalty = ufl.inner(-contact_pressure*ncontact, vector_test) * traction_ds
-        penalty = ufl.inner(tcontact, vector_test) * traction_ds
-
-        f1_uva = inertia + stiffness + damping - traction - penalty
-        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
-
-        ## Boundary conditions
-        # Specify DirichletBC at the VF base
-        bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_label_to_id['fixed'])
-
-        forms = {
-            'measure.dx': dx,
-            'measure.ds': ds,
-            'measure.ds_traction': traction_ds,
-            'bcs.base': bc_base,
-
-            'fspace.vector': vector_fspace,
-            'fspace.scalar': scalar_fspace,
-
-            'test.vector': vector_test,
-            'test.scalar': scalar_test,
-            'trial.vector': vector_trial,
-            'trial.scalar': scalar_trial,
-
-            'coeff.time.dt': dt,
-            'coeff.time.gamma': gamma,
-            'coeff.time.beta': beta,
-
-            'coeff.state.u0': u0,
-            'coeff.state.v0': v0,
-            'coeff.state.a0': a0,
-            'coeff.state.u1': u1,
-            'coeff.state.v1': v1,
-            'coeff.state.a1': a1,
-
-            'coeff.fsi.p1': p1,
-
-            'coeff.prop.rho': rho,
-            'coeff.prop.v_swelling': v_swelling,
-            'coeff.prop.k_swelling': k_swelling,
-            'coeff.prop.eta': kv_eta,
-            'coeff.prop.emod': emod,
-            # 'coeff.prop.nu': nu,
-            'coeff.prop.ncontact': ncontact,
-            'coeff.prop.y_collision': y_collision,
-            'coeff.prop.k_collision': k_collision,
-
-            'form.un.f1_uva': f1_uva,
-            'form.un.f1': f1}
-        return forms
+    forms['form.un.f1uva'] += stiffness + viscous
+    forms['coeff.prop.length'] = length
+    forms['coeff.prop.muscle_stress'] = muscle_stress
+    return forms
 
 class Approximate3DKelvinVoigt(NodalContactSolid):
     PROPERTY_DEFAULTS = {
@@ -1329,155 +1014,20 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         'y_collision': 0.61-0.001,
         'k_collision': 1e11}
 
-    
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-
-        scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
-        vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
-
-        vector_trial = dfn.TrialFunction(vector_fspace)
-        vector_test = dfn.TestFunction(vector_fspace)
-
-        scalar_trial = dfn.TrialFunction(scalar_fspace)
-        scalar_test = dfn.TestFunction(scalar_fspace)
-        strain_test = form_inf_strain(vector_test)
-
-        XREF = dfn.Function(vector_fspace)
-        XREF.vector()[:] = scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
-
-        # Length parameter to approximate 3D effect
-        length = dfn.Function(scalar_fspace)
-        length.vector()[:] = 1.0
-        muscle_stress = dfn.Function(scalar_fspace)
-
-        # Newmark update parameters
-        gamma = dfn.Constant(1/2)
-        beta = dfn.Constant(1/4)
-
-        # Solid material properties
-        y_collision = dfn.Constant(1.0)
-        k_collision = dfn.Constant(1.0)
-        rho = dfn.Constant(1.0)
-        nu = dfn.Constant(1.0)
-        emod = dfn.Function(scalar_fspace)
-        kv_eta = dfn.Function(scalar_fspace)
-
-        emod.vector()[:] = 1.0
-
-        # Initial and final states
-        dt = dfn.Function(scalar_fspace)
-        dt.vector()[:] = 1e-4
-
-        u0 = dfn.Function(vector_fspace)
-        v0 = dfn.Function(vector_fspace)
-        a0 = dfn.Function(vector_fspace)
-
-        u1 = dfn.Function(vector_fspace)
-        v1 = dfn.Function(vector_fspace)
-        a1 = dfn.Function(vector_fspace)
-
-        v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-        a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-        # Surface pressures
-        p1 = dfn.Function(scalar_fspace)
-        tcontact = dfn.Function(vector_fspace) # contact traction, not pressure
-        ncontact = dfn.Constant([0.0, 1.0])
-
-        # Symbolic calculations to get the variational form for a linear-elastic solid
-        inf_strain = form_inf_strain(u1)
-        force_inertial = rho*a1 
-        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-        stress_visco = kv_eta*form_inf_strain(v1)
-
-        # Approximate 3D type effects using out-of-plane body forces
-        # this is a second order finite difference approximation for displacements
-        lame_mu = emod/2/(1+nu)
-        u_ant = dfn.Function(vector_fspace) # zero values by default
-        u_pos = dfn.Function(vector_fspace)  
-        d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
-        d2v_dz2 = (u_ant - 2*v1 + u_pos) / length**2
-        force_elast_ap = (lame_mu+muscle_stress)*d2u_dz2
-        force_visco_ap = 0.5*kv_eta*d2v_dz2
-
-        inertia = ufl.inner(force_inertial, vector_test) * dx
-        stiffness = (ufl.inner(stress_elastic, strain_test) + 
-                     ufl.inner(force_elast_ap, vector_test)) * dx
-        damping = (ufl.inner(stress_visco, strain_test) + 
-                   ufl.inner(force_visco_ap, vector_test)) * dx
-        
-        # Compute the pressure loading using Neumann boundary conditions on the reference configuration
-        # using Nanson's formula. This is because the 'total lagrangian' formulation is used.
-        facet_normal = dfn.FacetNormal(mesh)
-        traction_dss = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
-        traction_ds = sum(traction_dss[1:], traction_dss[0])
-        reference_traction = form_pressure_as_reference_traction(p1, u1, facet_normal)
-
-        traction = ufl.inner(reference_traction, vector_test) * traction_ds
-
-        # Compute contact pressure contribution
-        # gap = ufl.dot(XREF+u1, ncontact) - y_collision
-        # contact_pressure = form_cubic_penalty_pressure(gap, k_collision)
-        # penalty = ufl.inner(-contact_pressure*ncontact, vector_test) * traction_ds
-        penalty = ufl.inner(tcontact, vector_test) * traction_ds
-
-        f1_uva = inertia + stiffness + damping - traction - penalty
-        f1 = ufl.replace(f1_uva, {v1: v1_nmk, a1: a1_nmk})
-
-        ## Boundary conditions
-        # Specify DirichletBC at the VF base
-        bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                                  facet_func, facet_label_to_id['fixed'])
-
-        forms = {
-            'measure.dx': dx,
-            'measure.ds': ds,
-            'measure.ds_traction': traction_ds,
-            'bcs.base': bc_base,
-
-            'fspace.vector': vector_fspace,
-            'fspace.scalar': scalar_fspace,
-
-            'test.vector': vector_test,
-            'test.scalar': scalar_test,
-            'trial.vector': vector_trial,
-            'trial.scalar': scalar_trial,
-
-            'coeff.time.dt': dt,
-            'coeff.time.gamma': gamma,
-            'coeff.time.beta': beta,
-
-            'coeff.state.u0': u0,
-            'coeff.state.v0': v0,
-            'coeff.state.a0': a0,
-            'coeff.state.u1': u1,
-            'coeff.state.v1': v1,
-            'coeff.state.a1': a1,
-            'coeff.state.manual.tcontact': tcontact,
-
-            'coeff.fsi.p1': p1,
-
-            'coeff.prop.rho': rho,
-            'coeff.prop.eta': kv_eta,
-            'coeff.prop.emod': emod,
-            'coeff.prop.nu': nu,
-            'coeff.prop.y_collision': y_collision,
-            'coeff.prop.k_collision': k_collision,
-            'coeff.prop.length': length,
-            'coeff.prop.muscle_stress': muscle_stress,
-            'coeff.prop.ncontact': ncontact,
-
-            'expr.contact_traction': tcontact,
-            'expr.stress_elastic': stress_elastic,
-            'expr.stress_visco': stress_visco,
-
-            'form.un.f1uva': f1_uva,
-            'form.un.f1': f1}
-        return forms
+        return \
+            add_newmark_time_disc_form(
+            add_manual_contact_traction_form(
+            add_surface_pressure_form(
+            add_ap_force_form(
+            add_kv_viscous_form(
+            add_inertial_form(
+            add_isotropic_elastic_form(
+            base_form_definitions(
+                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                fsi_facet_labels, fixed_facet_labels))))))))
 
 
 class CachedBiFormAssembler:
