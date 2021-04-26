@@ -83,7 +83,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsai_model(self):
         ## Configure the model and its parameters
-        acoustic = WRAnalog(44)
+        acoustic = WRAAnalog(44)
         model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
                                 coupling='explicit')
 
