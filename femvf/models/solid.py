@@ -1060,9 +1060,6 @@ def newton_solve(x0, linearized_subproblem, params=None):
         assem_res_n, solve_n = linearized_subproblem(state_n)
         res_n = assem_res_n()
 
-        res_n['u'].norm('l2')
-        res_n['v'].norm('l2')
-        res_n['a'].norm('l2')
         abs_err = abs(res_n.norm())
         if n == 0:
             abs_err_0 = max(abs_err, 1.0)
