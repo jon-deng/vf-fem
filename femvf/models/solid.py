@@ -1070,4 +1070,4 @@ def newton_solve(x0, linearized_subproblem, params=None):
             dstate_n = solve_n(res_n)
             state_n = state_n - dstate_n
             n += 1
-    return state_n, {'numiter': n, 'abserr': abs_err, 'relerr': rel_err}
+    return state_n, {'num_iter': n, 'abs_err': abs_err, 'rel_err': rel_err}
