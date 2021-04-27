@@ -413,7 +413,7 @@ class StateFile:
 
     def get_solver_info(self, n):
         solver_info_group = self.root_group['solver_info']
-        solver_info = {key: solver_info_group[key] for key in solver_info_group.keys()}
+        solver_info = {key: solver_info_group[key][n] for key in solver_info_group.keys()}
         return solver_info
 
     ## Functions for writing/modifying specific indices
