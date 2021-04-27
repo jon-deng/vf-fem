@@ -1050,7 +1050,6 @@ def newton_solve(x0, linearized_subproblem, params=None):
         params = DEFAULT_NEWTON_SOLVER_PRM
     n = 0
     state_n = x0
-    assem_res_n, solve_n = linearized_subproblem(state_n)
 
     max_iter = params['maximum_iterations']
     
