@@ -970,7 +970,7 @@ def add_ap_force_form(forms):
     stiffness = ufl.inner(force_elast_ap, vector_test) * dx
     viscous = ufl.inner(force_visco_ap, vector_test) * dx
 
-    forms['form.un.f1uva'] += stiffness + viscous
+    forms['form.un.f1uva'] += -stiffness - viscous
     forms['coeff.prop.length'] = length
     forms['coeff.prop.muscle_stress'] = muscle_stress
     return forms
