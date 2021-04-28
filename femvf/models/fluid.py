@@ -314,7 +314,10 @@ class Bernoulli(QuasiSteady1DFluid):
         ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
         
         # 1D Bernoulli approximation of the flow
-        qsqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
+        assert asep > 0.0
+        qsqr = 0.0
+        with np.errstate(divide='raise'):
+            qsqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
         assert qsqr >= 0.0
 
         pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
