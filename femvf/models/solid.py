@@ -307,6 +307,36 @@ def add_newmark_time_disc_form(forms):
     forms['coeff.time.beta'] = beta
     return forms
 
+def add_incompressible_epithelium_membrane(forms):
+    # Define the 8th order projector to get the planar strain component
+    ds_traction = form['measure.ds_traction']
+    n = forms['geom.facet_normal']
+    n2 = ufl.outer(n, n)
+    ident2 = ufl.Identity(n.value_dimension())
+    project_pp = ufl.outer(ident2-n2, ident2-n2)
+
+    i, j, k, l = indices(4)
+
+    vector_test = forms['test.vector']
+    strain_test = form_inf_strain(vector_test)
+    strain_pp_test = project_pp[i, j, k, l] * strain_test[j, k]
+
+    emod_membrane = dfn.Function(forms['fspace.scalar'])
+    th_membrane = dfn.Function(forms['fspace.scalar'])
+    nu = 0.5
+    lame_mu = emod_membrane/2/(1+nu)
+    inf_strain = forms['expr.kin.inf_strain']
+    inf_strain_pp = project_pp[i, j, k, l] * inf_strain[j, k]
+
+    stress_pp = 2*lame_mu*inf_strain_pp + 2*lame_mu*ufl.Tr(inf_strain_pp)*(ident2-n2)
+
+    res = ufl.inner(stress_pp, strain_pp_test) * ds_traction*th_membrane
+
+    forms['form.un.f1'] += res
+    forms['coeff.prop.emod_membrane'] = emod_membrane
+    forms['coeff.prop.th_membrane'] = th_membrane
+    return forms
+
 
 class Solid(base.Model):
     """
@@ -900,6 +930,15 @@ class KelvinVoigt(NodalContactSolid):
                 mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                 fsi_facet_labels, fixed_facet_labels)))))))
 
+class KelvinVoigtWEpithelium(KelvinVoigt):
+    @staticmethod
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                         fsi_facet_labels, fixed_facet_labels):
+        return  \
+            add_incompressible_epithelium_membrane(
+            super().form_definitions(
+                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, fsi_facet_labels, 
+                fixed_facet_labels))
 
 def add_incompressible_isotropic_elastic_form(forms):
     dx = forms['measure.dx']
@@ -1038,9 +1077,10 @@ def newton_solve(x0, linearized_subproblem, params=None):
     x0 : A
         Initial guess
     linearized_subproblem : fn(A) -> (fn() -> A, fn(A) -> A)
-        Callable returning a residual and linear solver about a state (x).
+        Callable returning a residual and linear solver about a linearizing state.
     params : dict
-        Dictionary of parameters
+        Dictionary of parameters for newton solver
+        {'absolute_tolerance', 'relative_tolerance', 'maximum_iterations'}
 
     Returns
     -------
