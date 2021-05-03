@@ -390,12 +390,13 @@ class ExplicitFSIModel(FSIModel):
 
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        uva1, _ = self.solid.solve_state1(ini_state, newton_solver_prm)
+        uva1, solid_info = self.solid.solve_state1(ini_state[:3], newton_solver_prm)
 
         self.set_fin_solid_state(uva1)
         qp1, fluid_info = self.fluid.solve_state1(ini_state[3:])
 
-        step_info = {'fluid_info': fluid_info}
+        step_info = solid_info
+        step_info.update({'fluid_info': fluid_info})
 
         return linalg.concatenate(uva1, qp1), step_info
 
@@ -540,7 +541,6 @@ class ImplicitFSIModel(FSIModel):
         uva1 = ini_state[:3].copy()
         qp1 = ini_state[3:].copy()
 
-
         # Calculate the initial residual
         self.set_fin_solid_state(uva1)
         self.set_fin_fluid_state(qp1)
@@ -573,7 +573,7 @@ class ImplicitFSIModel(FSIModel):
         self.solid.bc_base.apply(res)
 
         step_info = {'fluid_info': fluid_info,
-                     'nit': nit, 'abs_err': abs_err, 'rel_err': rel_err}
+                     'num_iter': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
         return linalg.concatenate(uva1, qp1), step_info
 
@@ -902,7 +902,7 @@ class FSAIModel(FSIModel):
 
             test = ini_state_ref - self.state0
 
-        step_info = {'fluid_info': fluid_info, 'num_it': num_it, 'abserr': abserr, 'relerr': relerr}
+        step_info = {'fluid_info': fluid_info, 'num_iter': num_it, 'abs_err': abserr, 'rel_err': relerr}
 
         return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
 

@@ -76,8 +76,8 @@ class TestFunctionals(unittest.TestCase):
         solid_props['emod'][:] = emod[vert_to_sdof]
         solid_props['rayleigh_m'][()] = 0
         solid_props['rayleigh_k'][()] = 3e-4
-        solid_props['k_collision'][()] = 1e11
-        solid_props['y_collision'][()] = fluid_props['y_midline'] - y_gap*1/2
+        solid_props['kcontact'][()] = 1e11
+        solid_props['ycontact'][()] = fluid_props['y_midline'] - y_gap*1/2
 
         h5file = 'out/test_functionals.h5'
         if path.isfile(h5file) and not self.OVERWRITE_FORWARD_SIMULATIONS:

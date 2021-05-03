@@ -680,7 +680,7 @@ class KVDampingWork(SolidFunctional):
 
         if n >= N_START:
             self.model.set_fin_state(f.get_state(n))
-            dpower_dvn = dfn.assemble(self.forms['dsdamping_power_dv'])
+            dpower_dvn = dfn.assemble(self.forms['ddamping_power_dv'])
 
             if n > N_START:
                 # Add the sensitivity to `v` from the left intervals right integration point

@@ -191,6 +191,8 @@ class StateFile:
         self.init_control()
         self.init_properties()
 
+        self.init_solver_info()
+
     def init_dofmap(self):
         """
         Writes the dofmaps for scalar and vector data
@@ -250,6 +252,12 @@ class StateFile:
             except TypeError:
                 size = value.size
             properties_group.create_dataset(name, (size,), dtype=np.float64)
+
+    def init_solver_info(self):
+        solver_info_group = self.root_group.create_group('solver_info')
+        for key in ['num_iter', 'rel_err', 'abs_err']:
+            solver_info_group.create_dataset(key, (0,), dtype=np.float64, maxshape=(None,), 
+                                             chunks=(self.NCHUNK,))
 
     ## Functions for writing by appending
     def append_state(self, state):
@@ -316,6 +324,16 @@ class StateFile:
         dset = self.root_group['meas_indices']
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = index
+
+    def append_solver_info(self, solver_info):
+        solver_info_group = self.root_group['solver_info']
+        for key in solver_info_group.keys():
+            dset = solver_info_group[key]
+            dset.resize(dset.shape[0]+1, axis=0)
+            if key in solver_info:
+                dset[-1] = solver_info[key]
+            else:
+                dset[-1] = np.nan
 
     ## Functions for reading specific indices
     def get_time(self, n):
@@ -392,6 +410,11 @@ class StateFile:
             except IndexError as e:
                 vec[()] = dset[()]
         return properties
+
+    def get_solver_info(self, n):
+        solver_info_group = self.root_group['solver_info']
+        solver_info = {key: solver_info_group[key][n] for key in solver_info_group.keys()}
+        return solver_info
 
     ## Functions for writing/modifying specific indices
     def set_state(self, n, state):

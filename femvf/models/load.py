@@ -70,7 +70,7 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=f
         else:
             raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
     solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels, 
-                  fsi_facet_labels, fixed_facet_labels)
+                      fsi_facet_labels, fixed_facet_labels)
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets

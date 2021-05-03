@@ -88,6 +88,7 @@ def integrate(
         f.append_control(control0)
         f.append_properties(props)
         f.append_time(times[0])
+        f.append_solver_info({'num_iter': 0, 'abs_err': 0, 'rel_err': 0})
         if 0 in idx_meas:
             f.append_meas_index(0)
 
@@ -104,7 +105,7 @@ def integrate(
         model.set_ini_state(state0)
         model.set_control(control1)
         
-        state1, _step_info = model.solve_state1(state0)
+        state1, step_info = model.solve_state1(state0)
         for key, func in export_callbacks.items():
             info[key].append(func(model, state1, control1, props, times[n]))
 
@@ -112,6 +113,7 @@ def integrate(
         if write:
             f.append_state(state1)
             f.append_time(times[n])
+            f.append_solver_info(step_info)
             if n in idx_meas:
                 f.append_meas_index(n)
 
