@@ -309,30 +309,30 @@ def add_newmark_time_disc_form(forms):
 
 def add_incompressible_epithelium_membrane(forms):
     # Define the 8th order projector to get the planar strain component
-    ds_traction = form['measure.ds_traction']
+    ds_traction = forms['measure.ds_traction']
     n = forms['geom.facet_normal']
-    n2 = ufl.outer(n, n)
-    ident2 = ufl.Identity(n.value_dimension())
-    project_pp = ufl.outer(ident2-n2, ident2-n2)
+    nn = ufl.outer(n, n)
+    ident = ufl.Identity(n.geometric_dimension())
+    project_pp = ufl.outer(ident-nn, ident-nn)
 
-    i, j, k, l = indices(4)
+    i, j, k, l = ufl.indices(4)
 
     vector_test = forms['test.vector']
     strain_test = form_inf_strain(vector_test)
-    strain_pp_test = project_pp[i, j, k, l] * strain_test[j, k]
+    strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
     emod_membrane = dfn.Function(forms['fspace.scalar'])
     th_membrane = dfn.Function(forms['fspace.scalar'])
     nu = 0.5
     lame_mu = emod_membrane/2/(1+nu)
     inf_strain = forms['expr.kin.inf_strain']
-    inf_strain_pp = project_pp[i, j, k, l] * inf_strain[j, k]
+    inf_strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * inf_strain[j, k], (i, l))
 
-    stress_pp = 2*lame_mu*inf_strain_pp + 2*lame_mu*ufl.Tr(inf_strain_pp)*(ident2-n2)
+    stress_pp = 2*lame_mu*inf_strain_pp + 2*lame_mu*ufl.tr(inf_strain_pp)*(ident-nn)
 
-    res = ufl.inner(stress_pp, strain_pp_test) * ds_traction*th_membrane
+    res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
 
-    forms['form.un.f1'] += res
+    forms['form.un.f1uva'] += res
     forms['coeff.prop.emod_membrane'] = emod_membrane
     forms['coeff.prop.th_membrane'] = th_membrane
     return forms
@@ -752,9 +752,9 @@ class NodalContactSolid(Solid):
         ## and an additional effect due to contact pressure
         dfu2_du2_nocontact = None
         if adjoint:
-            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1_adj'])
+            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1_adj'], tensor=dfn.PETScMatrix())
         else:
-            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1'])
+            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1'], tensor=dfn.PETScMatrix())
 
         dfu2_du2 = dfu2_du2_nocontact + self._assem_dres_du_contact(adjoint)
         return dfu2_du2
@@ -763,9 +763,9 @@ class NodalContactSolid(Solid):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = None
         if adjoint:
-            dfu2_dtcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dtcontact_adj']))
+            dfu2_dtcontact = dfn.assemble(self.forms['form.bi.df1uva_dtcontact_adj'], tensor=dfn.PETScMatrix())
         else:
-            dfu2_dtcontact = dfn.as_backend_type(dfn.assemble(self.forms['form.bi.df1_dtcontact']))
+            dfu2_dtcontact = dfn.assemble(self.forms['form.bi.df1uva_dtcontact'], tensor=dfn.PETScMatrix())
 
         XREF = self.XREF.vector()
         kcontact = self.forms['coeff.prop.kcontact'].values()[0]
@@ -935,10 +935,16 @@ class KelvinVoigtWEpithelium(KelvinVoigt):
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
         return  \
+            add_newmark_time_disc_form(
             add_incompressible_epithelium_membrane(
-            super().form_definitions(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, fsi_facet_labels, 
-                fixed_facet_labels))
+            add_manual_contact_traction_form(
+            add_surface_pressure_form(
+            add_kv_viscous_form(
+            add_inertial_form(
+            add_isotropic_elastic_form(
+            base_form_definitions(
+                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                fsi_facet_labels, fixed_facet_labels))))))))
 
 def add_incompressible_isotropic_elastic_form(forms):
     dx = forms['measure.dx']
