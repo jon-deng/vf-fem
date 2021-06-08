@@ -3,6 +3,8 @@ models that can be coupled together to simulated VF flow induced self-oscillatio
 
 Todo
 --------
+- [] Implement a general interface to compute some summary quantity from a state. This would be very useful for post-processing as I always compute some quantities as a function of time.
+
 - [] Refactor logging. I'm pretty sure the way logging is currently used is not proper and will lead
      to weird behaviour.
      
@@ -17,6 +19,7 @@ Todo
   commonly used, for example, in forming penalty functional when one functional is the objective
   and another functional acts as a penalty.
 
+
 - [] Create a generic parameterization that includes all variable parameters. Other parameterizations
      can then be derived from this generic one by removing known parameters, or specifying constant
      values.
@@ -24,7 +27,7 @@ Todo
 - [] Add post-processing functionality to quickly evaluate optimization results
 - [] Formalize/refactor how optimization progress is saved
 - [x] Refactor hard coded callback functions out of objective function object
-- [] Fix bug where exceptions are 'hidden' somehow in the optimization loop; this occurs when an
+- [x] Fix bug where exceptions are 'hidden' somehow in the optimization loop; this occurs when an
      exception such as accessing missing keys just gets ignored and doesn't cause the optimization
      code to throw an error and stop. This one is very confusing.
      - The source of the bug is the fact that cyipopt does ignores exceptions. If cyipopt calls the

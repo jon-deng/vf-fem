@@ -101,7 +101,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
             ## Set the mesh topology
             topo = SubElement(grid, 'Topology', {'TopologyType': 'Triangle',
-                                                'NumberOfElements': f'{N_CELL}'})
+                                                 'NumberOfElements': f'{N_CELL}'})
 
             conn = SubElement(topo, 'DataItem', {
                 'Name': 'Connectivity',

@@ -226,7 +226,7 @@ class TestIntegrate(ForwardConfig):
         print("Running forward model")
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, mode='w') as f:
-            fin_state, info = integrate(model, f, ini_state, controls, props, times, export_callbacks=cbs)
+            fin_state, info = integrate(model, f, ini_state, controls, props, times, name_to_callback=cbs)
 
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")

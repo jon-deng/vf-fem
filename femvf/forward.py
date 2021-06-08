@@ -13,13 +13,12 @@ from petsc4py import PETSc
 from . import statefile as sf
 from . import linalg
 
-# TODO: change args to require statefile context where outputs will be written to, 
-# instead of having function open a file
 # TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile
 def integrate(
     model, f, ini_state, controls, props, times, idx_meas=None, 
-    newton_solver_prm=None, export_callbacks=None, write=True
+    newton_solver_prm=None, name_to_callback=None, solver_callback=None, 
+    write=True
     ):
     """
     Integrate the model over each time in `times` for the specified parameters
@@ -49,10 +48,13 @@ def integrate(
     info : dict
         Any exported quantites are contained in here
     """
-    # Initialize storage for exported quantites
-    if export_callbacks is None:
-        export_callbacks = {}
-    info = {key: [] for key in export_callbacks}
+    if solver_callback is None:
+        solver_callback = lambda n, abs_err, rel_err : True
+
+    # Initialize storage for callback export quantities
+    if name_to_callback is None:
+        name_to_callback = {}
+    info = {key: [] for key in name_to_callback}
 
     if idx_meas is None:
         idx_meas = np.array([])
@@ -78,7 +80,7 @@ def integrate(
     state0 = ini_state.copy()
     control0 = controls[0]
 
-    for key, func in export_callbacks.items():
+    for key, func in name_to_callback.items():
         info[key].append(func(model, state0, control0, props, times[0]))
 
     ## Initialize datasets and save initial states to the h5 file
@@ -106,7 +108,8 @@ def integrate(
         model.set_control(control1)
         
         state1, step_info = model.solve_state1(state0)
-        for key, func in export_callbacks.items():
+        # print(step_info['num_iter'], step_info['abs_err'])
+        for key, func in name_to_callback.items():
             info[key].append(func(model, state1, control1, props, times[n]))
 
         # Write the solution outputs to the h5 file

@@ -14,6 +14,9 @@
 		}
 	],
 	"settings": {
-		"python.pythonPath": "/home/j8deng/anaconda3/envs/fenics/bin/python"
+		"python.pythonPath": "/home/j8deng/anaconda3/envs/fenics/bin/python",
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": true,
+		"python.languageServer": "Jedi"
 	}
 }
