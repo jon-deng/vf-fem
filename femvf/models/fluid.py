@@ -542,16 +542,19 @@ def smoothlb(f, f_lb, alpha=1.0):
         The level of smoothness of the bounded function. This quantity has units of [cm^-1] if `f`
         has units of [cm]. Larger values of alpha increase the sharpness of the bound.
     """
-    # Manually return 1 if the exponent is large enough to cause overflow
-    exponent = (f-f_lb)/alpha
-    idx_underflow = exponent <= -50.0
-    idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
-    idx_overflow = exponent > 50.0
+    out = np.zeros(f.shape)
+    if alpha == 0.0:
+        out[f < f_lb] = f_lb
+    else:
+        # Manually return 1 if the exponent is large enough to cause overflow
+        exponent = (f-f_lb)/alpha
+        idx_underflow = exponent <= -50.0
+        idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
+        idx_overflow = exponent > 50.0
 
-    out = np.zeros(exponent.shape)
-    out[idx_underflow] = f_lb
-    out[idx_normal] = alpha*np.log(1 + np.exp(exponent[idx_normal])) + f_lb
-    out[idx_overflow] = f[idx_overflow]
+        out[idx_underflow] = f_lb
+        out[idx_normal] = alpha*np.log(1 + np.exp(exponent[idx_normal])) + f_lb
+        out[idx_overflow] = f[idx_overflow]
     return out
 
 def dsmoothlb_df(f, f_lb, alpha=1.0):
@@ -567,32 +570,43 @@ def dsmoothlb_df(f, f_lb, alpha=1.0):
         The level of smoothness of the bounded function. This quantity has units of [cm^-1] if `f`
         has units of [cm]. Larger values of alpha increase the sharpness of the bound.
     """
-    # Manually return limiting values if the exponents are large enough to cause overflow
-    exponent = (f-f_lb)/alpha
-    # idx_underflow = exponent <= -50.0
-    idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
-    idx_overflow = exponent > 50.0
+    out = np.zeros(f.shape)
+    if alpha == 0.0:
+        out[f >= f_lb] = 1.0
+    else:
+        # Manually return limiting values if the exponents are large enough to cause overflow
+        exponent = (f-f_lb)/alpha
+        # idx_underflow = exponent <= -50.0
+        idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
+        idx_overflow = exponent > 50.0
 
-    out = np.zeros(exponent.shape)
-    # out[idx_underflow] = 0
-    out[idx_normal] = np.exp(exponent[idx_normal]) / (1+np.exp(exponent[idx_normal]))
-    out[idx_overflow] = 1.0
+        # out[idx_underflow] = 0
+        out[idx_normal] = np.exp(exponent[idx_normal]) / (1+np.exp(exponent[idx_normal]))
+        out[idx_overflow] = 1.0
     return out
 
 ## Exponential weighting function
 def expweight(f, alpha=1.0):
     """
-    Return exponential weights as exp(-1*alpha*f) 
+    Return exponential weights as exp(-1*f/alpha) 
     """
-    # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
-    # being too large (overflow). This constant factors when you weights in an average
-    K_STABILITY = np.max(-f/alpha)
-    w = np.exp(-f/alpha - K_STABILITY)
+    w = np.zeros(f.shape)
+    if alpha == 0:
+        w[np.argmin(f)] = 1.0
+    else:
+        # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
+        # being too large (overflow). This constant factors when you weights in an average
+        K_STABILITY = np.max(-f/alpha)
+        w[:] = np.exp(-f/alpha - K_STABILITY)
     return w
 
 def dexpweight_df(f, alpha=1.0):
     K_STABILITY = np.max(-f/alpha)
-    dw_df = -1/alpha*np.exp(-f/alpha - K_STABILITY)
+    dw_df = np.zeros(f.shape)
+    if alpha == 0:
+        dw_df[np.argmin(f)] = 1.0
+    else:
+        dw_df[:] = -1/alpha*np.exp(-f/alpha - K_STABILITY)
     return dw_df
 
 ## Weighted average function
@@ -666,8 +680,11 @@ def dsigmoid_dx(x):
 
     This returns a scalar representing the diagonal of the sensitivity matrix
     """
-    sig = sigmoid(x)
-    return sig * (1-sig)
+    if alpha == 0:
+        return np.zeros(x.shape)
+    else:
+        sig = sigmoid(x)
+        return sig * (1-sig)
 
 def smoothstep(x, x0, alpha=1.0):
     """
@@ -678,46 +695,75 @@ def smoothstep(x, x0, alpha=1.0):
     The 'region' of smoothness is roughly characterized by dx. If x = x0 + dx, the cutoff function
     will drop to just 5% if dx/alpha = 3.
     """
-    arg = -(x-x0)/alpha
+    arg = np.zeros(x.shape)
+    if alpha == 0.0:
+        arg[x == x0] = 0.0
+        arg[x > x0] = -np.inf
+        arg[x < x0] = np.inf
+    else:
+        arg = -(x-x0)/alpha
     return sigmoid(arg)
 
 def dsmoothstep_dx(x, x0, alpha=1.0):
     """
     Return the logistic function evaluated at x-xref
     """
-    arg = -(x-x0)/alpha
-    darg_dx = -1/alpha
-    return dsigmoid_dx(arg) * darg_dx
+    if alpha == 0:
+        return np.zeros(x.shape)
+    else:
+        arg = -(x-x0)/alpha
+        darg_dx = -1/alpha
+        return dsigmoid_dx(arg) * darg_dx
 
 def dsmoothstep_dx0(x, x0, alpha=1.0):
     """
     Return the logistic function evaluated at x-xref
     """
-    arg = -(x-x0)/alpha
-    darg_dx0 = 1/alpha
-    return dsigmoid_dx(arg) * darg_dx0
+    if alpha == 0:
+        return np.zeros(x.shape)
+    else:
+        arg = -(x-x0)/alpha
+        darg_dx0 = 1/alpha
+        return dsigmoid_dx(arg) * darg_dx0
 
 ## Smoothed gaussian selection function
 def log_gaussian(x, x0, alpha=1.0):
     """
     Return the log of the gaussian with mean `x0` and variance `alpha`
     """
-    return -((x-x0)/alpha)**2
+    out = np.zeros(x.shape)
+    if alpha == 0.0:
+        out[:] = -np.inf
+        out[np.argmin(np.abs(x-x0))] = 0.0
+    else:
+        out[:] = -((x-x0)/alpha)**2
+    return out
 
 def gaussian(x, x0, alpha=1.0):
     """
     Return the 'gaussian' with mean `x0` and variance `alpha`
     """
-    return np.exp(-((x-x0)/alpha)**2)
+    out = np.zeros(x.shape)
+    if alpha == 0.0:
+        out[np.argmin(np.abs(x-x0))] = 1.0
+    else:
+        out[:] = np.exp(-((x-x0)/alpha)**2)
+    return out
 
 def dgaussian_dx(x, x0, alpha=1.0):
     """
     Return the sensitivity of `gaussian` to `x`
     """
-    return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / alpha
+    if alpha == 0:
+        return np.zeros(x.shape)
+    else:
+        return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / alpha
 
 def dgaussian_dx0(x, x0, alpha=1.0):
     """
     Return the sensitivity of `gaussian` to `x0`
     """
-    return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / -alpha
+    if alpha == 0:
+        return np.zeros(x.shape)
+    else:
+        return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / -alpha
