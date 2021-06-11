@@ -311,7 +311,7 @@ class TestSmoothApproximations(CommonSetup):
         super().setUp()
 
         self.s = np.linspace(0, 1.0, 50)
-        self.f = s**2
+        self.f = self.s**2
 
         self.beta = 100.0
         self.alpha = 75 
@@ -329,8 +329,7 @@ class TestSmoothApproximations(CommonSetup):
         f0 = fluid.smoothlb(a0, a_lb, alpha=self.fluid_properties['zeta_lb'])
         f1 = fluid.smoothlb(a0+da, a_lb, alpha=self.fluid_properties['zeta_lb'])
         df_da_fd = (f1-f0)/da
-        
-
+    
     def test_smoothmin(self):
         """
         Plots the values of the smoothing factors
@@ -419,13 +418,73 @@ class TestSmoothApproximations(CommonSetup):
 
     # def test_wavg(self):
 
+class TestSmoothApproximationsInDiscontinuousLimit(CommonSetup):
+    def setUp(self):
+        super().setUp()
+
+        self.s = np.linspace(0, 1.0, 50)
+        self.f = self.s**2
+
+        # self.zeta = 0.005
+        self.alpha = 1e-4
+        # self.zeta_lb = 0.005
+        # self.zeta_min = 0.005 
+        # self.zeta_sig =  0.005
+        # self.zeta_gau = 0.005
+
+    def test_min(self):
+        f_ = self.f - self.f.min() + 1.0
+        w1 = fluid.expweight(f_, alpha=self.alpha)
+        w2 = fluid.expweight(f_, alpha=0.0)
+
+        f1min = fluid.wavg(self.s, f_, w1)
+        f2min = fluid.wavg(self.s, f_, w2)
+
+        print(relative_error(f1min, f2min))
+
+    def test_smoothlb(self):
+        LB = 0.1
+        y1 = fluid.smoothlb(self.f, LB, alpha=self.alpha)
+        y2 = fluid.smoothlb(self.f, LB, alpha=0.0)
+
+        print(relative_error(y1, y2))
+
+    def test_gaussian(self):
+        F0 = 0.1
+        y1 = fluid.gaussian(self.f, F0, alpha=self.alpha)
+        y2 = fluid.gaussian(self.f, F0, alpha=0.0)
+
+        print(relative_error(y1, y2))
+
+    def test_smoothstep(self):
+        S0 = np.mean(self.s)
+        # S0 = self.s[5]
+        y1 = fluid.smoothstep(self.s, S0, alpha=self.alpha)
+        y2 = fluid.smoothstep(self.s, S0, alpha=0.0)
+
+        print(relative_error(y1, y2))
+
+    def test_separation(self):
+        pass
+
+
+def relative_error(f1, f2):
+    return np.linalg.norm(f2-f1)/np.linalg.norm(f1)
+
 if __name__ == '__main__':
     # unittest.main()
 
-    test = TestBernoulli()
+    test = TestSmoothApproximationsInDiscontinuousLimit()
     test.setUp()
+    test.test_min() 
+    test.test_smoothlb()
+    test.test_gaussian()
+    test.test_smoothstep()
+
+    # test = TestBernoulli()~
+    # test.setUp()
     # test.test_fluid_pressure()
-    test.test_flow_sensitivity()
+    # test.test_flow_sensitivity()
     # test.test_flow_sensitivity_psub()
     # test.test_flow_sensitivity_solid()
 

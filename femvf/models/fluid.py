@@ -206,20 +206,29 @@ class Bernoulli(QuasiSteady1DFluid):
                                            adjoint)
 
     ## internal methods
-    def separation_point(self, s, amin, smin, area, fluid_props):
-        asep = fluid_props['r_sep'] * amin
-
+    def separation_point(self, s, smin, area, asep, zeta_sep, zeta_ainv):
         # This ensures the separation area is selected at a point past the minimum area
         log_wsep = None
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-            log_wsep = np.log(1-smoothstep(s, smin, fluid_props['zeta_sep'])) +  log_gaussian(area, asep, fluid_props['zeta_ainv'])
+            hh = 1-smoothstep(s, smin, zeta_sep)
+
+            # this applies the condition where the separation point is selected only after the 
+            # minimum area
+            # this should represent area/hh, while handling the divide by zero errors
+            filtered_area = np.zeros(area.shape)
+            idx = hh == 0
+            filtered_area[idx] = np.sign(area[idx])*np.inf
+            idx = hh != 0
+            filtered_area[idx] = area[idx]/hh[idx]
+
+            log_wsep = log_gaussian(filtered_area, asep, zeta_ainv)
         wsep = np.exp(log_wsep - log_wsep.max())
         ssep = wavg(s, s, wsep)
 
-        # assert s_sep >= s_min
+        assert not np.isnan(ssep)
 
-        return ssep, asep
+        return ssep
 
     def dseparation_point(self, s, amin, smin, a, fluid_props):
         
@@ -302,19 +311,27 @@ class Bernoulli(QuasiSteady1DFluid):
 
         # Calculate minimum and separation areas/locations
         wmin = expweight(asafe, fluid_props['zeta_amin'])
-        amin = wavg(s, asafe, wmin)
-        smin = wavg(s, s, wmin)
-        asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
-        # Bound all areas to the 'smooth' minimum area above
-        # due to the weighting scheme, the smooth min area is always slightly larger than
-        # the actual min area. This can lead to problems in the calculated pressures at very small areas
-        # since the ratio between the 'smooth' min area and actual nodal areas results in very large 
-        # negative pressures
+        # special case due to floating point errors when wmin has only 1 weighted point
+        amin, smin = np.nan, np.nan
+        if np.sum(wmin == 0) == wmin.size-1:
+            idx_min = np.argmin(asafe)
+            amin = asafe[idx_min]
+            smin = s[idx_min]
+        else:
+            amin = wavg(s, asafe, wmin)
+            smin = wavg(s, s, wmin)
 
-        ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
+        # Bound all areas to the 'smooth' minimum area above
+        # This is done because of the weighting scheme; the smooth min is always slightly larger
+        # the an the actual min, which leads to problems in the calculated pressures at very small
+        # areas where small areas can have huge area ratios leading to weird Bernoulli behaviour
+        asafe = smoothlb(asafe, amin, fluid_props[' '])
+
+        asep = fluid_props['r_sep'] * amin
+        zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
+        ssep = self.separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv)
         
         # 1D Bernoulli approximation of the flow
-        assert asep > 0.0
         qsqr = 0.0
         with np.errstate(divide='raise'):
             qsqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
@@ -327,7 +344,7 @@ class Bernoulli(QuasiSteady1DFluid):
         p = sep_multiplier * pbern
         q = qsqr**0.5
 
-        # Find the first point where s passes s_min/s_sep, then we can linearly interpolate
+        # These are not really used anywhere, mainly output for debugging purposes
         idx_min = np.argmax(s>smin)
         idx_sep = np.argmax(s>ssep)
         xy_min = usurf.reshape(-1, 2)[idx_min]
@@ -522,6 +539,35 @@ class Bernoulli(QuasiSteady1DFluid):
         b.set(0.0)
         return b
 
+## Weighted average function
+def wavg(s, f, w):
+    """
+    Return the weighted average of 'f(s)' with weight 'w(s)'
+    """
+    return trapz(f*w, s) / trapz(w, s)
+
+def dwavg_df(s, f, w):
+    # trapz(f*w, s) / trapz(w, s)
+
+    # num = trapz(f*w, s)
+    den = trapz(w, s)
+
+    dnum_df = dtrapz_df(f*w, s)*w
+    # dden_df = 0.0
+
+    return dnum_df/den
+
+def dwavg_dw(s, f, w):
+    # trapz(f*w, s) / trapz(w, s)
+
+    num = trapz(f*w, s)
+    den = trapz(w, s)
+
+    dnum_dw = dtrapz_df(f*w, s)*f
+    dden_dw = dtrapz_df(w, s)
+
+    return (dnum_dw*den - num*dden_dw)/den**2
+
 ## Smoothed lower bound function
 def smoothlb(f, f_lb, alpha=1.0):
     """
@@ -545,6 +591,7 @@ def smoothlb(f, f_lb, alpha=1.0):
     out = np.zeros(f.shape)
     if alpha == 0.0:
         out[f < f_lb] = f_lb
+        out[f >= f_lb] = f[f >= f_lb]
     else:
         # Manually return 1 if the exponent is large enough to cause overflow
         exponent = (f-f_lb)/alpha
@@ -585,14 +632,14 @@ def dsmoothlb_df(f, f_lb, alpha=1.0):
         out[idx_overflow] = 1.0
     return out
 
-## Exponential weighting function
+## Exponential weighting function (for smooth min)
 def expweight(f, alpha=1.0):
     """
     Return exponential weights as exp(-1*f/alpha) 
     """
     w = np.zeros(f.shape)
     if alpha == 0:
-        w[np.argmin(f)] = 1.0
+        w[f == np.min(f)] = 1.0
     else:
         # For numerical stability subtract a judicious constant from `alpha*x` to prevent exponents
         # being too large (overflow). This constant factors when you weights in an average
@@ -608,35 +655,6 @@ def dexpweight_df(f, alpha=1.0):
     else:
         dw_df[:] = -1/alpha*np.exp(-f/alpha - K_STABILITY)
     return dw_df
-
-## Weighted average function
-def wavg(s, f, w):
-    """
-    Return the weighted average of 'f(s)' with weight 'w(s)'
-    """
-    return trapz(f*w, s) / trapz(w, s)
-
-def dwavg_df(s, f, w):
-    # trapz(f*w, s) / trapz(w, s)
-
-    # num = trapz(f*w, s)
-    den = trapz(w, s)
-
-    dnum_df = dtrapz_df(f*w, s)*w
-    # dden_df = 0.0
-
-    return dnum_df/den
-
-def dwavg_dw(s, f, w):
-    # trapz(f*w, s) / trapz(w, s)
-
-    num = trapz(f*w, s)
-    den = trapz(w, s)
-
-    dnum_dw = dtrapz_df(f*w, s)*f
-    dden_dw = dtrapz_df(w, s)
-
-    return (dnum_dw*den - num*dden_dw)/den**2
 
 ## Trapezoidal integration rule
 def trapz(f, s):
@@ -664,8 +682,8 @@ def sigmoid(x):
     """
     exponent = -x
     idx_underflow = exponent <= -50.0
-    idx_normal = np.logical_and(exponent > -50.0, exponent <= 50.0)
-    idx_overflow = exponent > 50.0
+    idx_normal = np.logical_and(exponent > -50.0, exponent < 50.0)
+    idx_overflow = exponent >= 50.0
 
     out = np.zeros(x.shape)
     out[idx_underflow] = 1.0
@@ -701,7 +719,7 @@ def smoothstep(x, x0, alpha=1.0):
         arg[x > x0] = -np.inf
         arg[x < x0] = np.inf
     else:
-        arg = -(x-x0)/alpha
+        arg[:] = -(x-x0)/alpha
     return sigmoid(arg)
 
 def dsmoothstep_dx(x, x0, alpha=1.0):
@@ -734,7 +752,8 @@ def log_gaussian(x, x0, alpha=1.0):
     out = np.zeros(x.shape)
     if alpha == 0.0:
         out[:] = -np.inf
-        out[np.argmin(np.abs(x-x0))] = 0.0
+        arg = np.abs(x-x0)
+        out[arg == np.min(arg)] = 0.0
     else:
         out[:] = -((x-x0)/alpha)**2
     return out
@@ -742,12 +761,20 @@ def log_gaussian(x, x0, alpha=1.0):
 def gaussian(x, x0, alpha=1.0):
     """
     Return the 'gaussian' with mean `x0` and variance `alpha`
+
+    The gaussian is scaled by an arbitrary factor, C, so that the output has a maximum value of 1.0.
+    This is needed for numerical stability, otherwise for small `alpha` the gaussian will simply be 
+    zero everywhere. If the `gaussian` weights are used in an averaging scheme then any constant
+    factor will not matter since they cancel out in the ratio.
     """
     out = np.zeros(x.shape)
     if alpha == 0.0:
-        out[np.argmin(np.abs(x-x0))] = 1.0
+        arg = np.abs(x-x0)
+        out[arg == np.min(arg)] = 1.0
     else:
-        out[:] = np.exp(-((x-x0)/alpha)**2)
+        arg = ((x-x0)/alpha)**2
+        K_STABILITY = np.min(arg)
+        out[:] = np.exp(-arg+K_STABILITY)
     return out
 
 def dgaussian_dx(x, x0, alpha=1.0):
