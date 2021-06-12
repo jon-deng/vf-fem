@@ -16,7 +16,7 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd
+from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd, acoustic as fac
 from femvf import callbacks
 from femvf import linalg
 
@@ -83,7 +83,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsai_model(self):
         ## Configure the model and its parameters
-        acoustic = WRAAnalog(44)
+        acoustic = fac.WRAnalog(44)
         model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
                                 coupling='explicit')
 
@@ -188,7 +188,7 @@ class TestIntegrate(ForwardConfig):
 
         times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
-        save_path = 'out/test_forward_fsi.h5'
+        save_path = 'out/test_forward_fsi_2.5D.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
@@ -199,7 +199,7 @@ class TestIntegrate(ForwardConfig):
 
         times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
-        save_path = 'out/test_forward_fsi.h5'
+        save_path = 'out/test_forward_fsi_rayleigh.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
@@ -233,13 +233,10 @@ class TestIntegrate(ForwardConfig):
 
         ## Plot the resulting glottal width
         fig, ax = plt.subplots(1, 1)
-        breakpoint()
         ax.plot(times['times'], info['glottal_width'])
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
-
-        plt.show()
-        fig.savefig('out/test_forward.png')
+        fig.savefig(os.path.splitext(save_path)[0] + '.png')
 
     def test_integrate_linear(self):
         """
@@ -301,7 +298,7 @@ if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
     test.test_integrate_fsi_rayleigh()
-    # test.test_integrate_approx3D()
-    # test.test_integrate_fsai()
+    test.test_integrate_approx3D()
+    test.test_integrate_fsai()
     # test.test_integrate_linear()
     # unittest.main()
