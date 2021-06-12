@@ -325,7 +325,7 @@ class Bernoulli(QuasiSteady1DFluid):
         # This is done because of the weighting scheme; the smooth min is always slightly larger
         # the an the actual min, which leads to problems in the calculated pressures at very small
         # areas where small areas can have huge area ratios leading to weird Bernoulli behaviour
-        asafe = smoothlb(asafe, amin, fluid_props[' '])
+        asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
 
         asep = fluid_props['r_sep'] * amin
         zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
