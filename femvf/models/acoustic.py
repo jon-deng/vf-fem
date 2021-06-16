@@ -6,6 +6,7 @@ from . import base
 import numpy as np
 import jax
 from jax import numpy as jnp
+import numpy as jnp
 
 from femvf import linalg
 
@@ -109,12 +110,16 @@ class WRAnalog(Acoustic1D):
         L = 16/dt*PISTON_RAD/(3*np.pi*cspeed)
 
         NUM_TUBE = area.size
+        
+        # 1, 2 represent the areas to the left and right of even junctions
+        # note that the number of junctions is 1+number of tubes so some of
+        # these are ficitious areas a1 @ junction 0 doesn't really exist
+        # the same for a2 @ final junction
+        a1 = np.concatenate([[1.0], area[1::2]])
+        a2 = np.concatenate([area[:-1:2], [1.0]])
 
-        a1 = np.concatenate([[1.0], area[:-1:2]])
-        a2 = np.concatenate([area[1::2], [1.0]])
-
-        gamma1 = np.concatenate([[1.0], gamma[:-1:2]])
-        gamma2 = np.concatenate([gamma[1::2], [1.0]])
+        gamma1 = np.concatenate([[1.0], gamma[1::2]])
+        gamma2 = np.concatenate([gamma[:-1:2], [1.0]])
 
         self.reflect, self.reflect00, self.inputq = wra(dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=R, L=L)
 
@@ -321,7 +326,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         db1_db2 = (1.0-r)*gamma2
         return (db1_df1, db1_db2), (df2_df1, df2_db2)
     
-    @jax.jit
+    # @jax.jit
     def reflect(pinc, pref, q):
         f1, b2 = pinc[:-1:2], pinc[1::2]
         b1, f2 = pref[:-1:2], pref[1::2]
@@ -385,3 +390,20 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         pass
 
     return reflect, reflect00, inputq
+
+## Common Area Function Definitions
+# The 44-section neutral area function proposed by Story (2005)
+NEUTRAL_FS = 44.1e3
+NEUTRAL_AREA = (np.pi/4)*np.array(
+    [0.636, 0.561, 0.561, 0.550,
+     0.598, 0.895, 1.187, 1.417, 
+     1.380, 1.273, 1.340, 1.399, 
+     1.433, 1.506, 1.493, 1.473,
+     1.499, 1.529, 1.567, 1.601,
+     1.591, 1.547, 1.570, 1.546,
+     1.532, 1.496, 1.429, 1.425, 
+     1.496, 1.608, 1.668, 1.757,
+     1.842, 1.983, 2.073, 2.123, 
+     2.194, 2.175, 2.009, 1.785, 
+     1.675, 1.539, 1.405, 1.312]
+)**2
