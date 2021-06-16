@@ -741,7 +741,7 @@ class FSAIModel(FSIModel):
 
     @property
     def dt(self):
-        return self._dt
+        return self.solid.dt
 
     @dt.setter
     def dt(self, value):
@@ -857,52 +857,46 @@ class FSAIModel(FSIModel):
         res_ac = self.acoustic.res()
         return linalg.concatenate(res_sl, res_fl, res_ac)
 
+    # TODO: This iterative procedure is not organized well at all
+    # You should define a generic fixed-point algorithm to replace this
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        ini_state_ref = self.state0.copy()
 
-        # Update form coefficients and initial guess
+        ## Solve solid displacements at n
         self.set_fin_state(ini_state)
         ini_slstate = ini_state[:3]
         sl_state1, _ = self.solid.solve_state1(ini_slstate, newton_solver_prm)
-
         self.set_fin_solid_state(sl_state1)
 
-        fluid_info, num_it = None, 0 
+        ## Solve the glottal flow/acoustics using a FP iteration
         fl_state1, ac_state1 = None, None
-        abserr_max, relerr_max = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
-        abserr_prev, abserr, relerr = 0.0, 1.0, 1.0
+        nit = 0 
+        nit_max = newton_solver_prm['maximum_iterations']
+        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
+        abs_errs, rel_errs = [], []
+        abs_err, rel_err =  1.0, 1.0
 
         ## Solve the coupled fluid/acoustic system with a fixed point iteration:
         # solve fluids -> solve acoustics with updated fluids -> compute error in fluid and repeat if necessary
         fl_state1, fluid_info = self.fluid.solve_state1(fl_state1)
-        while abserr > abserr_max and relerr > relerr_max and num_it < 15:
-        # while num_it < 15:
+        while abs_err > abs_tol and rel_err > rel_tol and nit < nit_max:
             self.set_fin_fluid_state(fl_state1)
-
             ac_state1, _ = self.acoustic.solve_state1()
             self.set_fin_acoustic_state(ac_state1)
-            # print(f"q: {self.acoustic.control['qin']}", fl_state1['q'])
-            # print(linalg.dot(ac_state1, ac_state1))
-
             # compute the error/residual. The acoustic equations were solved previously so the residual is 
             # due only to the fluid
             fl_state1_new = self.fluid.solve_state1(fl_state1)[0]
             fl_res = fl_state1 - fl_state1_new
+
+            abs_err = linalg.dot(fl_res, fl_res)
+            abs_errs.append(abs_err)
+            rel_err = abs_errs[-1]/(abs_errs[0] if abs_errs[0] > 0 else 1.0)
+            rel_errs.append(rel_err)
+
+            nit += 1
             fl_state1 = fl_state1_new
-
-            abserr = linalg.dot(fl_res, fl_res)
-            if abserr > 0:
-                relerr = abs(abserr - abserr_prev) / abserr
-            else:
-                relerr = 1.0
-            abserr_prev = abserr
-            num_it += 1
-
-            test = ini_state_ref - self.state0
-
-        step_info = {'fluid_info': fluid_info, 'num_iter': num_it, 'abs_err': abserr, 'rel_err': relerr}
+        step_info = {'fluid_info': fluid_info, 'num_iter': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
         return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
 
