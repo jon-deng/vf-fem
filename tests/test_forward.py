@@ -16,7 +16,7 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd, acoustic as fac
+from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd, acoustic as amd
 from femvf import callbacks
 from femvf import linalg
 
@@ -83,7 +83,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsai_model(self):
         ## Configure the model and its parameters
-        acoustic = fac.WRAnalog(44)
+        acoustic = amd.WRAnalog(44)
         model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
                                 coupling='explicit')
 
@@ -113,7 +113,8 @@ class ForwardConfig(unittest.TestCase):
         sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
 
         ac_props = model.acoustic.get_properties_vec(set_default=True)
-        ac_props['area'][:] = 4.0
+        ac_props['area'][:] = amd.NEUTRAL_AREA
+        ac_props['area'][:] = 3.0
         ac_props['length'][:] = 12.0
         ac_props['soundspeed'][:] = 340*100
 
@@ -297,8 +298,8 @@ class TestIntegrate(ForwardConfig):
 if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
-    test.test_integrate_fsi_rayleigh()
-    test.test_integrate_approx3D()
+    # test.test_integrate_fsi_rayleigh()
+    # test.test_integrate_approx3D()
     test.test_integrate_fsai()
     # test.test_integrate_linear()
     # unittest.main()
