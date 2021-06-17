@@ -170,6 +170,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'y_midline': ('const', ()),
         'a_sub': ('const', ()),
         'a_sup': ('const', ()),
+        'vf_length': ('const', ()),
         'rho_air': ('const', ()),
         'r_sep': ('const', ()),
         'zeta_amin': ('const', ()),
@@ -182,6 +183,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'y_midline': 1e6,
         'a_sub': 100000,
         'a_sup': 0.6,
+        'vf_length': 1.0,
         'r_sep': 1.0,
         'rho_air': 1.225 * SI_DENSITY_TO_CGS,
         'zeta_amin': 0.002/3,
@@ -206,12 +208,15 @@ class Bernoulli(QuasiSteady1DFluid):
                                            adjoint)
 
     ## internal methods
-    def separation_point(self, s, smin, area, asep, zeta_sep, zeta_ainv):
+    def separation_point(self, s, smin, area, asep, zeta_sep, zeta_ainv, flow_sign):
+        """
+        flow_dir : float (1 or -1)
+        """
         # This ensures the separation area is selected at a point past the minimum area
         log_wsep = None
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-            hh = 1-smoothstep(s, smin, zeta_sep)
+            hh = (1+flow_sign)/2-flow_sign*smoothstep(s, smin, zeta_sep)
 
             # this applies the condition where the separation point is selected only after the 
             # minimum area
@@ -297,17 +302,17 @@ class Bernoulli(QuasiSteady1DFluid):
         xy_min, xy_sep: (2,) np.ndarray
             The coordinates of the vertices at minimum and separation areas
         """
-        # print(psub, psup)
-        assert psub > psup
+        flow_sign = np.sign(psub-psup)
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
+        asup = fluid_props['a_sup']
         s = self.s_vertices
 
         # x = surface_state[0][:-1:2]
         y = usurf[1::2]
 
-        a = 2 * (fluid_props['y_midline'] - y)
-        asafe = smoothlb(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
+        a = 2 * (fluid_props['y_midline'] - y) * fluid_props['vf_length']
+        asafe = smoothlb(a, 2*fluid_props['ygap_lb']*fluid_props['vf_length'], fluid_props['zeta_lb'])
 
         # Calculate minimum and separation areas/locations
         wmin = expweight(asafe, fluid_props['zeta_amin'])
@@ -323,26 +328,27 @@ class Bernoulli(QuasiSteady1DFluid):
 
         # Bound all areas to the 'smooth' minimum area above
         # This is done because of the weighting scheme; the smooth min is always slightly larger
-        # the an the actual min, which leads to problems in the calculated pressures at very small
+        # then the actual min, which leads to problems in the calculated pressures at very small
         # areas where small areas can have huge area ratios leading to weird Bernoulli behaviour
         asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
 
         asep = fluid_props['r_sep'] * amin
         zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
-        ssep = self.separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv)
+        ssep = self.separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
         
-        # 1D Bernoulli approximation of the flow
+        # Compute the flow rate based on pressure drop from "reference" to 
+        # separation location
+        pref, aref = (psub, asub) if flow_sign >= 0 else (psup, asup)
+        psep = psup if flow_sign >= 0 else psub
         qsqr = 0.0
         with np.errstate(divide='raise'):
-            qsqr = 2/rho*(psup - psub)/(asub**-2 - asep**-2)
+            qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
         assert qsqr >= 0.0
 
-        pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
-
-        sep_multiplier = smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
-
-        p = sep_multiplier * pbern
-        q = qsqr**0.5
+        pbern = pref + 1/2*rho*qsqr*(aref**-2 - asafe**-2)
+        sep_multiplier = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
+        p = sep_multiplier * pbern + (1-sep_multiplier)*psep
+        q = flow_sign*qsqr**0.5
 
         # These are not really used anywhere, mainly output for debugging purposes
         idx_min = np.argmax(s>smin)
