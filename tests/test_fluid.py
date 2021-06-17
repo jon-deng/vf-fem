@@ -40,13 +40,20 @@ class CommonSetup(unittest.TestCase):
         self.fluid = fluid.Bernoulli(x, y)
         self.surface_coordinates = np.stack([x, y], axis=-1).reshape(-1)
         
-        p_sub = 800.0*PASCAL_TO_CGS
-        p_sup = 0*PASCAL_TO_CGS
+        self.p_sub = 800.0*PASCAL_TO_CGS
+        self.p_sup = 100*PASCAL_TO_CGS
+        # self.p_sub = 100.0*PASCAL_TO_CGS
+        # self.p_sup = 800.0*PASCAL_TO_CGS
+
         self.fluid_properties = self.fluid.get_properties_vec()
         self.fluid_properties['y_midline'][()] = y.max()+1e-3
-        self.fluid_properties['ygap_lb'][()] = 1e-3
-        self.fluid_properties['zeta_lb'][()] = 1/100
+        self.fluid_properties['ygap_lb'][()] = 0.0
         self.fluid_properties['r_sep'][()] = 1.0
+
+        # self.fluid_properties['zeta_amin'][()] = 0
+        self.fluid_properties['zeta_lb'][()] = 0
+        # self.fluid_properties['zeta_sep'][()] = 0
+        # self.fluid_properties['zeta_ainv'][()] = 0
 
         self.area = 2*(self.fluid_properties['y_midline'] - y)
 
@@ -63,25 +70,34 @@ class TestBernoulli(CommonSetup):
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
 
-        surf_state = (xy_surf, np.zeros(xy_surf.shape))
-        qp_test, info = fluid.fluid_pressure(surf_state, fluid_props)
+        surf_state = (xy_surf.reshape(-1), np.zeros(xy_surf.shape).reshape(-1))
+        breakpoint()
+        qp_test, info = fluid.fluid_pressure(*surf_state, self.p_sub, self.p_sup, fluid_props)
         q_test, p_test = qp_test['q'], qp_test['p']
 
         area = 2*(fluid_props['y_midline'] - xy_surf[1::2])
-        p_verify = fluid_props['p_sub'] + 1/2*fluid_props['rho']*q_test**2*(1/fluid_props['a_sub']**2 - 1/area**2)
+        p_verify = None
+        if self.p_sub >= self.p_sup:
+            p_verify = self.p_sub + 1/2*fluid_props['rho_air']*q_test**2*(1/fluid_props['a_sub']**2 - 1/area**2)
+        else:
+            p_verify = self.p_sup + 1/2*fluid_props['rho_air']*q_test**2*(1/fluid_props['a_sup']**2 - 1/area**2)
 
         # Plot the pressures computed from Bernoulli
-        fig, ax = plt.subplots(1, 1)
-        ax.plot(xy_surf[:-1:2], p_test/10)
-        ax.plot(xy_surf[:-1:2], p_verify/10)
+        fig, axs = plt.subplots(2, 1, sharex=True)
+        ax = axs[0]
+        ax.plot(xy_surf[:-1:2], p_test/10, label="Bernoulli Model")
+        ax.plot(xy_surf[:-1:2], p_verify/10, label="Manual Bernoulli")
         ax.set_xlabel("x [cm]")
         ax.set_ylabel("Pressure [Pa]")
-        ax.set_ylim(-fluid_props['p_sub']/10/5, fluid_props['p_sub']/10*1.1)
+        # ax.set_ylim(-self.p_sub/10/5, self.p_sub/10*1.1)
+        ax.set_ylim(0)
 
-        ax_surf = ax.twinx()
-        ax_surf.plot(xy_surf[:-1:2], xy_surf[1::2], ls='-.', c='k')
-        ax_surf.set_ylabel("y [cm]")
-
+        ax = axs[1]
+        ax.plot(xy_surf[:-1:2], xy_surf[1::2], ls='-.', c='k')
+        ax.set_ylabel("y [cm]")
+        
+        axs[0].legend()
+        fig.savefig('test_fluid_Bernoulli.png')
         plt.show()
         
     def test_flow_sensitivity(self):
@@ -155,7 +171,7 @@ class TestBernoulli(CommonSetup):
         np.random.seed(0)
         fluid = self.fluid
         props = self.fluid_properties.copy()
-        p_sub0 = props['p_sub'][()]
+        p_sub0 = self.p_sub
 
         surface_coordinates = self.surface_coordinates
         x0 = (surface_coordinates, np.zeros(self.surface_coordinates.shape))
@@ -474,16 +490,16 @@ def relative_error(f1, f2):
 if __name__ == '__main__':
     # unittest.main()
 
-    test = TestSmoothApproximationsInDiscontinuousLimit()
-    test.setUp()
-    test.test_min() 
-    test.test_smoothlb()
-    test.test_gaussian()
-    test.test_smoothstep()
-
-    # test = TestBernoulli()~
+    # test = TestSmoothApproximationsInDiscontinuousLimit()
     # test.setUp()
-    # test.test_fluid_pressure()
+    # test.test_min() 
+    # test.test_smoothlb()
+    # test.test_gaussian()
+    # test.test_smoothstep()
+
+    test = TestBernoulli()
+    test.setUp()
+    test.test_fluid_pressure()
     # test.test_flow_sensitivity()
     # test.test_flow_sensitivity_psub()
     # test.test_flow_sensitivity_solid()
