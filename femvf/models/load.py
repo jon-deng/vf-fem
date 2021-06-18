@@ -5,7 +5,8 @@ from os import path
 import numpy as np
 
 from .. import meshutils
-from .coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel, solid, fluid)
+from . import solid as smd, fluid as fmd
+from .coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
 
 def load_solid_model(solid_mesh, SolidType, 
     pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',)):
@@ -26,7 +27,7 @@ def load_solid_model(solid_mesh, SolidType,
                       pressure_facet_labels, fixed_facet_labels)
     return solid
 
-def load_fsi_model(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli, 
+def load_fsi_model(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, 
                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     """
     Factory function that loads a model based on input solid/fluid meshes.
@@ -47,14 +48,14 @@ def load_fsi_model(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidTyp
 
     return model
 
-def load_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli, 
+def load_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, 
                     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh, 
         SolidType=SolidType, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
 
     return FSAIModel(solid, fluid, acoustic, fsi_verts)
 
-def process_fsi(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli, 
+def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, 
                 fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     ## Load the solid
     mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
@@ -87,10 +88,10 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=solid.KelvinVoigt, FluidType=f
 
     # Load the fluid
     fluid_model = None
-    if fluid_mesh is None and issubclass(FluidType, fluid.QuasiSteady1DFluid):
+    if fluid_mesh is None and issubclass(FluidType, fmd.QuasiSteady1DFluid):
         xfluid, yfluid = meshutils.streamwise1dmesh_from_edges(mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
         fluid_model = FluidType(xfluid, yfluid)
-    elif fluid_mesh is None and not issubclass(FluidType, fluid.QuasiSteady1DFluid):
+    elif fluid_mesh is None and not issubclass(FluidType, fmd.QuasiSteady1DFluid):
         raise ValueError(f"`fluid_mesh` cannot be `None` if the fluid is not 1D")
     else:
         raise ValueError(f"This function does not yet support input fluid meshes.")
