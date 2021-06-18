@@ -6,7 +6,7 @@ from . import base
 import numpy as np
 import jax
 from jax import numpy as jnp
-import numpy as jnp
+# import numpy as jnp
 
 from femvf import linalg
 
@@ -83,6 +83,9 @@ class Acoustic1D(base.Model):
         return ret
 
 class WRAnalog(Acoustic1D):
+    @property
+    def z(self):
+        return self.properties['rhoac']*self.properties['soundspeed']/self.properties['area']
 
     def set_properties(self, props):
         super().set_properties(props)
