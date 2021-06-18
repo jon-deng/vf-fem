@@ -272,19 +272,23 @@ class Bernoulli(QuasiSteady1DFluid):
         # caculate the separation coordinate (should be similar calculations to `separation_point`)
         log_wsep = None
         farea, dfarea_dsmin, dfarea_darea = None, None, None
-        with np.errstate(divide='ignore'):
+        with np.errstate(divide='ignore', invalid='raise'):
             hh = (1+flow_sign)/2-flow_sign*smoothstep(s, smin, zeta_sep)
             dhh_dsmin = -flow_sign*dsmoothstep_dx0(s, smin, zeta_sep)
 
             farea = area/hh
-            dfarea_dsmin = -area/hh**2 * dhh_dsmin
+            dfarea_dsmin = np.zeros(area.size)
+            idx = (hh != 0) # this is needed because the below product is indeterminate sometimes
+            dfarea_dsmin[idx] = -area[idx]/hh[idx]**2 * dhh_dsmin[idx]
             dfarea_darea = 1/hh
 
             log_wsep = log_gaussian(farea, asep, zeta_ainv)
         wsep = np.exp(log_wsep - log_wsep.max())
         dwsep_dfarea = dgaussian_dx(farea, asep, zeta_ainv)
         dwsep_dasep = dgaussian_dx0(farea, asep, zeta_ainv)
-        dwsep_darea = dwsep_dfarea*dfarea_darea
+        dwsep_darea = np.zeros(wsep.shape)
+        idx_valid = dwsep_dfarea != 0
+        dwsep_darea[idx_valid] = dwsep_dfarea[idx_valid]*dfarea_darea[idx_valid]
         dwsep_dsmin = dwsep_dfarea*dfarea_dsmin
         # ssep = wavg(s, s, wsep)
 
@@ -827,13 +831,15 @@ def dgaussian_dx(x, x0, alpha=1.0):
     if alpha == 0:
         return np.zeros(x.shape)
     else:
-        return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / alpha
+        # indexes are used here because the expression is indeterminate
+        g = gaussian(x, x0, alpha)
+        dg_dx = np.zeros(g.shape)
+        idx = g != 0.0
+        dg_dx[idx] = g[idx] * -2*((x[idx]-x0)/alpha) / alpha
+        return dg_dx
 
 def dgaussian_dx0(x, x0, alpha=1.0):
     """
     Return the sensitivity of `gaussian` to `x0`
     """
-    if alpha == 0:
-        return np.zeros(x.shape)
-    else:
-        return gaussian(x, x0, alpha) * -2*((x-x0)/alpha) / -alpha
+    return -dgaussian_dx(x, x0, alpha)
