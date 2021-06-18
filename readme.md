@@ -1,8 +1,13 @@
 This project implements a collection of vocal fold (VF) finite element (FE) models and 1D fluid
 models that can be coupled together to simulated VF flow induced self-oscillation.
 
-Todo
+TODO
 --------
+- [] Refactor Bernoulli model!
+     The Bernoulli model is written in a super hard to understand way, for example, using the 
+     surface displacements instead of areas. You should figure out the core inputs of the model
+     and refactor it around those inputs. One change will be to modify the displacement inputs
+     to cross-sectional areas.
 - [] Implement a general interface to compute some summary quantity from a state. This would be very useful for post-processing as I always compute some quantities as a function of time.
 
 - [] Refactor logging. I'm pretty sure the way logging is currently used is not proper and will lead
