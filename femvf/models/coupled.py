@@ -14,7 +14,7 @@ from petsc4py import PETSc
 # import ufl
 
 from . import newmark
-from . import base, solid, fluid
+from . import base, solid as smd, fluid as fmd, acoustic as amd
 from .. import meshutils
 from .. import linalg
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -869,35 +869,39 @@ class FSAIModel(FSIModel):
         sl_state1, _ = self.solid.solve_state1(ini_slstate, newton_solver_prm)
         self.set_fin_solid_state(sl_state1)
 
-        ## Solve the glottal flow/acoustics using a FP iteration
-        fl_state1, ac_state1 = None, None
-        nit = 0 
-        nit_max = newton_solver_prm['maximum_iterations']
-        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
-        abs_errs, rel_errs = [], []
-        abs_err, rel_err =  1.0, 1.0
-
-        ## Solve the coupled fluid/acoustic system with a fixed point iteration:
-        # solve fluids -> solve acoustics with updated fluids -> compute error in fluid and repeat if necessary
-        fl_state1, fluid_info = self.fluid.solve_state1(fl_state1)
-        while abs_err > abs_tol and rel_err > rel_tol and nit < nit_max:
-            self.set_fin_fluid_state(fl_state1)
+        def make_linearized_flow_residual(qac):
+            """
+            Represents the coupled linearized subproblem @ qac
+            res(qac) = qac - qbern(psup(qac))
+            solve_jac(res) = res/(1 - jac(qbern(psup(qac))))
+            """
+            # Linearize the fluid/acoustic models about `qac`
+            ac_control = self.acoustic.get_control_vec()
+            ac_control['qin'][:] = qac['qin']
+            self.acoustic.set_control(ac_control)
             ac_state1, _ = self.acoustic.solve_state1()
             self.set_fin_acoustic_state(ac_state1)
-            # compute the error/residual. The acoustic equations were solved previously so the residual is 
-            # due only to the fluid
-            fl_state1_new = self.fluid.solve_state1(fl_state1)[0]
-            fl_res = fl_state1 - fl_state1_new
+            fl_state1, _ = self.fluid.solve_state1(self.fluid.state0)
 
-            abs_err = linalg.dot(fl_res, fl_res)
-            abs_errs.append(abs_err)
-            rel_err = abs_errs[-1]/(abs_errs[0] if abs_errs[0] > 0 else 1.0)
-            rel_errs.append(rel_err)
+            dqbern_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)[4]
+            dpsup_dqac = self.acoustic.z[0]
+            def res():
+                qbern = fl_state1[0]
+                return qac - linalg.BlockVec((qbern,), ('qin',))
 
-            nit += 1
-            fl_state1 = fl_state1_new
-        step_info = {'fluid_info': fluid_info, 'num_iter': nit, 'abs_err': abs_err, 'rel_err': rel_err}
+            def solve_jac(res):
+                dres_dq = 1-dqbern_dpsup*dpsup_dqac
+                return res/dres_dq
 
+            return res, solve_jac
+
+        q, info = smd.newton_solve(linalg.BlockVec((ini_state['q'],), ('qin',)), make_linearized_flow_residual)
+
+        self.acoustic.set_control(q)
+        ac_state1, _ = self.acoustic.solve_state1()
+        fl_state1, fluid_info = self.fluid.solve_state1(self.fluid.state0)
+
+        step_info = {'fluid_info': fluid_info, **info}
         return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
 
     def _form_dflac_dflac(self):
