@@ -38,11 +38,14 @@ class ForwardConfig(unittest.TestCase):
         model = load_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
-        p_sub = 500
+        p_sub = 500.0
 
         control = model.get_control_vec()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
+
+        control['psub'][:] = 0.0 * PASCAL_TO_CGS
+        control['psup'][:] = p_sub * PASCAL_TO_CGS
         controls = [control]
 
         # Set the properties
@@ -114,9 +117,10 @@ class ForwardConfig(unittest.TestCase):
 
         ac_props = model.acoustic.get_properties_vec(set_default=True)
         ac_props['area'][:] = amd.NEUTRAL_AREA
-        ac_props['area'][:] = 3.0
+        # ac_props['area'][:] = 3.0
         ac_props['length'][:] = 12.0
         ac_props['soundspeed'][:] = 340*100
+        fl_props['a_sup'][:] = ac_props['area'][0]
 
         props = linalg.concatenate(sl_props, fl_props, ac_props)
 
@@ -296,6 +300,7 @@ class TestIntegrate(ForwardConfig):
         self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
 
 if __name__ == '__main__':
+    np.seterr(invalid='raise')
     test = TestIntegrate()
     test.setUp()
     # test.test_integrate_fsi_rayleigh()
