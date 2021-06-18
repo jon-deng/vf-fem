@@ -441,7 +441,7 @@ class Bernoulli(QuasiSteady1DFluid):
             psep = psub
 
         qsqr = self.flow_rate_sqr(pref, aref, psep, asep, rho)
-        dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep = self.dflow_rate_sqr(psub, psup, asep, rho, asub, asup)
+        dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep = self.dflow_rate_sqr(pref, aref, psep, asep, rho)
         dqsqr_da = dqsqr_dasep*dasep_da
 
         # Find Bernoulli pressure
@@ -744,11 +744,8 @@ def dsigmoid_dx(x):
 
     This returns a scalar representing the diagonal of the sensitivity matrix
     """
-    if alpha == 0:
-        return np.zeros(x.shape)
-    else:
-        sig = sigmoid(x)
-        return sig * (1-sig)
+    sig = sigmoid(x)
+    return sig * (1-sig)
 
 def smoothstep(x, x0, alpha=1.0):
     """
