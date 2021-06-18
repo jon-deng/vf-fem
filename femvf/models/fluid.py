@@ -208,26 +208,59 @@ class Bernoulli(QuasiSteady1DFluid):
                                            adjoint)
 
     ## internal methods
+    def pbernoulli(self, qsqr, pref, aref, area, rho):
+        return pref + 1/2*rho*qsqr*(aref**-2 - area**-2)
+
+    def dpbernoulli(self, qsqr, pref, aref, area, rho):
+        dpbern_dsqsr = 1/2*rho*(aref**-2 - area**-2)
+        dpbern_dpref = 1.0
+        dpbern_daref = 1/2*rho*qsqr*-2*aref**-3
+        dpbern_darea = 1/2*rho*qsqr*2*area**-3
+        return dpbern_dsqsr, dpbern_dpref, dpbern_daref, dpbern_darea
+
+    def flow_rate_sqr(self, pref, aref, psep, asep, rho):
+        qsqr = 0.0
+        with np.errstate(divide='raise'):
+            qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
+        return qsqr
+
+    def dflow_rate_sqr(self, pref, aref, psep, asep, rho):
+        with np.errstate(divide='raise'):
+            qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
+            dqsqr_dpref = -2/rho/(aref**-2 - asep**-2)
+            dqsqr_dpsep = 2/rho/(aref**-2 - asep**-2)
+            dqsqr_dasep = -2/rho*(psep - pref)/(aref**-2 - asep**-2)**2 * (2/asep**3)
+            return dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep
+
+    def smooth_min_area(self, s, area, zeta_amin):
+        wmin = expweight(area, zeta_amin)
+        amin = wavg(s, area, wmin)
+        smin = wavg(s, s, wmin)
+        return smin, amin
+
+    def dsmooth_min_area(self, s, area, zeta_amin):
+        wmin = expweight(area, zeta_amin)
+        dwmin_darea = dexpweight_df(area, zeta_amin)
+        
+        # amin = wavg(s, area, wmin)
+        # smin = wavg(s, s, wmin)
+        damin_darea = dwavg_dw(s, area, wmin)*dwmin_darea + dwavg_df(s, area, wmin)
+        dsmin_darea = dwavg_dw(s, s, wmin) * dwmin_darea
+        return dsmin_darea, damin_darea
+
     def separation_point(self, s, smin, area, asep, zeta_sep, zeta_ainv, flow_sign):
         """
         flow_dir : float (1 or -1)
         """
         # This ensures the separation area is selected at a point past the minimum area
         log_wsep = None
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-            hh = (1+flow_sign)/2-flow_sign*smoothstep(s, smin, zeta_sep)
-
+        with np.errstate(divide='ignore'):
             # this applies the condition where the separation point is selected only after the 
             # minimum area
             # this should represent area/hh, while handling the divide by zero errors
-            filtered_area = np.zeros(area.shape)
-            idx = hh == 0
-            filtered_area[idx] = np.sign(area[idx])*np.inf
-            idx = hh != 0
-            filtered_area[idx] = area[idx]/hh[idx]
-
-            log_wsep = log_gaussian(filtered_area, asep, zeta_ainv)
+            hh = (1+flow_sign)/2-flow_sign*smoothstep(s, smin, zeta_sep)
+            farea = area/hh
+            log_wsep = log_gaussian(farea, asep, zeta_ainv)
         wsep = np.exp(log_wsep - log_wsep.max())
         ssep = wavg(s, s, wsep)
 
@@ -235,42 +268,32 @@ class Bernoulli(QuasiSteady1DFluid):
 
         return ssep
 
-    def dseparation_point(self, s, amin, smin, a, fluid_props):
-        
-        asep = fluid_props['r_sep'] * amin
-        dasep_damin = fluid_props['r_sep']
-        dasep_dsmin = 0.0 
-        dasep_da = 0.0
-
-        # This ensures the separation area is selected at a point past the minimum area
-        wpostsep = 1-smoothstep(s, smin, fluid_props['zeta_sep'])
-        dwpostsep_dsmin = -dsmoothstep_dx0(s, smin, fluid_props['zeta_sep'])
-
-        wgaussian = gaussian(a, asep, fluid_props['zeta_ainv'])
-        dwgaussian_da = dgaussian_dx(a, asep, fluid_props['zeta_ainv'])
-        dwgaussian_damin = dgaussian_dx0(a, asep, fluid_props['zeta_ainv']) * dasep_damin
-
-        # wsep = wpostsep * wgaussian
+    def dseparation_point(self, s, smin, area, asep, zeta_sep, zeta_ainv, flow_sign):
+        # caculate the separation coordinate (should be similar calculations to `separation_point`)
         log_wsep = None
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', 'divide by zero encountered in log')
-            log_wsep = np.log(wpostsep) +  log_gaussian(a, asep, fluid_props['zeta_ainv'])
+        farea, dfarea_dsmin, dfarea_darea = None, None, None
+        with np.errstate(divide='ignore'):
+            hh = (1+flow_sign)/2-flow_sign*smoothstep(s, smin, zeta_sep)
+            dhh_dsmin = -flow_sign*dsmoothstep_dx0(s, smin, zeta_sep)
+
+            farea = area/hh
+            dfarea_dsmin = -area/hh**2 * dhh_dsmin
+            dfarea_darea = 1/hh
+
+            log_wsep = log_gaussian(farea, asep, zeta_ainv)
         wsep = np.exp(log_wsep - log_wsep.max())
-
-        dwsep_dsmin = dwpostsep_dsmin * wgaussian
-        dwsep_damin = wpostsep * dwgaussian_damin 
-        dwsep_da = wpostsep * dwgaussian_da
-
+        dwsep_dfarea = dgaussian_dx(farea, asep, zeta_ainv)
+        dwsep_dasep = dgaussian_dx0(farea, asep, zeta_ainv)
+        dwsep_darea = dwsep_dfarea*dfarea_darea
+        dwsep_dsmin = dwsep_dfarea*dfarea_dsmin
         # ssep = wavg(s, s, wsep)
-        # the factor below is because a scaled wsep was used for numerical stability
-        # TODO: Make weighted averages accept log weights to automatically account for numerical stability
-        # issues?
+
         dssep_dwsep = dwavg_dw(s, s, wsep)*np.exp(-log_wsep.max())
-        dssep_da = dssep_dwsep*dwsep_da
-        dssep_damin = np.dot(dssep_dwsep, dwsep_damin)
+        dssep_darea = dssep_dwsep*dwsep_darea
+        dssep_dasep = np.dot(dssep_dwsep, dwsep_dasep)
         dssep_dsmin = np.dot(dssep_dwsep, dwsep_dsmin)
 
-        return dssep_damin, dssep_dsmin, dssep_da, dasep_damin, dasep_dsmin, dasep_da
+        return dssep_dsmin, dssep_darea, dssep_dasep
 
     def min_area(self, s, a, fluid_props):
         wmin = expweight(a, fluid_props['zeta_amin'])
@@ -315,16 +338,7 @@ class Bernoulli(QuasiSteady1DFluid):
         asafe = smoothlb(a, 2*fluid_props['ygap_lb']*fluid_props['vf_length'], fluid_props['zeta_lb'])
 
         # Calculate minimum and separation areas/locations
-        wmin = expweight(asafe, fluid_props['zeta_amin'])
-        # special case due to floating point errors when wmin has only 1 weighted point
-        amin, smin = np.nan, np.nan
-        if np.sum(wmin == 0) == wmin.size-1:
-            idx_min = np.argmin(asafe)
-            amin = asafe[idx_min]
-            smin = s[idx_min]
-        else:
-            amin = wavg(s, asafe, wmin)
-            smin = wavg(s, s, wmin)
+        smin, amin = self.smooth_min_area(s, asafe, fluid_props['zeta_amin'])
 
         # Bound all areas to the 'smooth' minimum area above
         # This is done because of the weighting scheme; the smooth min is always slightly larger
@@ -338,16 +352,21 @@ class Bernoulli(QuasiSteady1DFluid):
         
         # Compute the flow rate based on pressure drop from "reference" to 
         # separation location
-        pref, aref = (psub, asub) if flow_sign >= 0 else (psup, asup)
-        psep = psup if flow_sign >= 0 else psub
-        qsqr = 0.0
-        with np.errstate(divide='raise'):
-            qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
-        assert qsqr >= 0.0
+        pref, psep, aref = None, None, None
+        if flow_sign >= 0:
+            pref = psub
+            psep = psup
+            aref = asub
+        else:
+            pref = psup
+            psep = psub
+            aref = asup
 
-        pbern = pref + 1/2*rho*qsqr*(aref**-2 - asafe**-2)
-        sep_multiplier = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
-        p = sep_multiplier * pbern + (1-sep_multiplier)*psep
+        qsqr = self.flow_rate_sqr(pref, aref, psep, asep, rho)
+        pbern = self.pbernoulli(qsqr, pref, aref, asafe, rho)
+
+        sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
+        p = sepmult * pbern + (1-sepmult)*psep
         q = flow_sign*qsqr**0.5
 
         # These are not really used anywhere, mainly output for debugging purposes
@@ -380,10 +399,10 @@ class Bernoulli(QuasiSteady1DFluid):
         fluid_props : BlockVec
             A dictionary of fluid property keyword arguments.
         """
-        assert psub > psup
-        assert usurf.size%2 == 0
+        flow_sign = np.sign(psub-psup)
         rho = fluid_props['rho_air']
         asub = fluid_props['a_sub']
+        asup = fluid_props['a_sup']
         s = self.s_vertices
 
         # x = surface_state[0][:-1:2]
@@ -395,59 +414,71 @@ class Bernoulli(QuasiSteady1DFluid):
         asafe = smoothlb(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
         dasafe_da = dsmoothlb_df(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
 
-        wmin = expweight(asafe, fluid_props['zeta_amin'])
-        dwmin_da = dexpweight_df(asafe, fluid_props['zeta_amin']) * dasafe_da
+        smin, amin = self.smooth_min_area(s, asafe, fluid_props['zeta_amin'])
+        dsmin_dasafe, damin_dasafe = self.dsmooth_min_area(s, asafe, fluid_props['zeta_amin'])
+        dsmin_da = dsmin_dasafe*dasafe_da
+        damin_da = damin_dasafe*dasafe_da
 
-        amin = wavg(s, asafe, wmin)
-        damin_da = dwavg_df(s, asafe, wmin)*dasafe_da + \
-                   dwavg_dw(s, asafe, wmin)*dwmin_da
-        smin = wavg(s, s, wmin)
-        dsmin_da = dwavg_dw(s, s, wmin)*dwmin_da
+        asep = fluid_props['r_sep'] * amin
+        dasep_damin = fluid_props['r_sep']
+        dasep_da = dasep_damin * damin_da
 
-        ssep, asep = self.separation_point(s, amin, smin, asafe, fluid_props)
-        dssep_damin, dssep_dsmin, dssep_dasafe, dasep_damin, dasep_dsmin, dasep_dasafe = \
-            self.dseparation_point(s, amin, smin, asafe, fluid_props)
-        dssep_dy = (dssep_damin*damin_da + dssep_dsmin*dsmin_da + dssep_dasafe*dasafe_da) * da_dy
-        dasep_dy = (dasep_damin*damin_da + dasep_dsmin*dsmin_da + dasep_dasafe*dasafe_da) * da_dy
+        zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
+        ssep = self.separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
+        dssep_dsmin, dssep_dasafe, dssep_dasep = \
+            self.dseparation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
+        dssep_da = (dssep_dsmin*dsmin_da + dssep_dasafe*dasafe_da
+                    + dssep_dasep*dasep_da) #* da_dy
 
-        # Calculate the flow rate using Bernoulli
-        coeff = 2/rho*(psup - psub)
-        dcoeff_dpsub = -2/rho
-        dcoeff_dpsup = 2/rho
+        # Compute the flow rate based on pressure drop from "reference" to 
+        # separation location
+        pref, psep, aref = None, None, None
+        if flow_sign >= 0:
+            pref, aref = psub, asub
+            psep = psup
+        else:
+            pref, aref = psup, asup
+            psep = psub
 
-        qsqr = coeff/(asub**-2 - asep**-2)
-        dqsqr_dasep = -coeff/(asub**-2 - asep**-2)**2 * (2/asep**3)
-        dqsqr_dpsub = dcoeff_dpsub/(asub**-2 - asep**-2)
-        dqsqr_dpsup = dcoeff_dpsup/(asub**-2 - asep**-2)
+        qsqr = self.flow_rate_sqr(pref, aref, psep, asep, rho)
+        dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep = self.dflow_rate_sqr(psub, psup, asep, rho, asub, asup)
+        dqsqr_da = dqsqr_dasep*dasep_da
 
         # Find Bernoulli pressure
-        pbern = psub + 1/2*rho*qsqr*(asub**-2 - asafe**-2)
-        dpbern_da = 1/2*rho*qsqr*(2/asafe**3) * dasafe_da
-        dpbern_dasep = 1/2*rho*(asub**-2 - asafe**-2) * dqsqr_dasep
-        dpbern_dy = np.diag(dpbern_da*da_dy) + dpbern_dasep[:, None]*dasep_dy
-        dpbern_dpsub = 1.0 + 1/2*rho*dqsqr_dpsub*(asub**-2 - asafe**-2)
-        dpbern_dpsup = 1/2*rho*dqsqr_dpsup*(asub**-2 - asafe**-2)
+        pbern = self.pbernoulli(qsqr, pref, aref, asafe, rho)
+        dpbern_dqsqr, dpbern_dpref, dpbern_daref, dpbern_dasafe = self.dpbernoulli(qsqr, pref, aref, asafe, rho)
+        dpbern_da = dpbern_dasafe*dasafe_da + dpbern_dqsqr*dqsqr_da
+        dpbern_dpref = dpbern_dpref + dpbern_dqsqr*dqsqr_dpref
+        dpbern_dpsep = dpbern_dqsqr*dqsqr_dpsep
 
         # Correct Bernoulli pressure by applying a smooth mask after separation
-        sepweight = smoothstep(self.s_vertices, ssep, fluid_props['zeta_sep'])
-        dsepweight_dy = dsmoothstep_dx0(self.s_vertices, ssep, fluid_props['zeta_sep'])[:, None] * dssep_dy
+        zeta_sep = fluid_props['zeta_sep']
+        sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, zeta_sep)
+        dsepmult_da = flow_sign*dsmoothstep_dx0(self.s_vertices, ssep, zeta_sep)[:, None] * dssep_da
 
-        # p = sepweight * pbern
-        dp_dy = sepweight[:, None]*dpbern_dy + dsepweight_dy*pbern[:, None]
+        # p = sepmult * pbern + (1-sep_multiplier)*psep
+        dp_da = sepmult[:, None]*dpbern_da + dsepmult_da*pbern[:, None]
+        dp_dpref = sepmult*dpbern_dpref
+        dp_dpsep = sepmult*dpbern_dpsep + (1-sepmult)
 
-        dp_dpsub = sepweight*dpbern_dpsub
-        dp_dpsup = sepweight*dpbern_dpsup
-
-        dq_dpsub = 0.5*qsqr**-0.5 * dqsqr_dpsub
-        dq_dpsup = 0.5*qsqr**-0.5 * dqsqr_dpsup
+        dq_dpref = 0.5*qsqr**-0.5 * dqsqr_dpref
+        dq_dpsep = 0.5*qsqr**-0.5 * dqsqr_dpsep
 
         dp_du = np.zeros((usurf.size//2, usurf.size))
         dp_du[:, :-1:2] = 0
-        dp_du[:, 1::2] = dp_dy
+        dp_du[:, 1::2] = dp_da*da_dy
 
         ## Calculate the flow rate sensitivity
         dq_du = np.zeros(usurf.size)
-        dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_dy
+        dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_da*da_dy
+
+        dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = None, None, None, None
+        if flow_sign >= 0:
+            dq_dpsub, dp_dpsub = dq_dpref, dp_dpref
+            dq_dpsup, dp_dpsup = dq_dpsep, dp_dpsep
+        else:
+            dq_dpsub, dp_dpsub = dq_dpsep, dp_dpsep
+            dq_dpsup, dp_dpsup = dq_dpref, dp_dpref
 
         return dq_du, dp_du, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup
 
@@ -550,7 +581,16 @@ def wavg(s, f, w):
     """
     Return the weighted average of 'f(s)' with weight 'w(s)'
     """
-    return trapz(f*w, s) / trapz(w, s)
+    # This handles the special case where the w is non-zero at one index and zero
+    # everywhere else. If this isn't done, floating point errors will make it
+    # so that wavg(s, f, w) doesn't equal the non-zero weight location of f
+    favg = None
+    if np.sum(w != 0) == 1: 
+        idx_nonzero = np.argmax(w != 0)
+        favg = f[idx_nonzero]
+    else:
+        favg = trapz(f*w, s) / trapz(w, s)
+    return favg
 
 def dwavg_df(s, f, w):
     # trapz(f*w, s) / trapz(w, s)
