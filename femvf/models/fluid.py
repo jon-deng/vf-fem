@@ -358,13 +358,11 @@ class Bernoulli(QuasiSteady1DFluid):
         # separation location
         pref, psep, aref = None, None, None
         if flow_sign >= 0:
-            pref = psub
+            pref, aref = psub, asub
             psep = psup
-            aref = asub
         else:
-            pref = psup
+            pref, aref = psup, asup
             psep = psub
-            aref = asup
 
         qsqr = self.flow_rate_sqr(pref, aref, psep, asep, rho)
         pbern = self.pbernoulli(qsqr, pref, aref, asafe, rho)
@@ -465,8 +463,9 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_dpref = sepmult*dpbern_dpref
         dp_dpsep = sepmult*dpbern_dpsep + (1-sepmult)
 
-        dq_dpref = 0.5*qsqr**-0.5 * dqsqr_dpref
-        dq_dpsep = 0.5*qsqr**-0.5 * dqsqr_dpsep
+        # q = flow_sign*qsqr**0.5
+        dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref
+        dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep
 
         dp_du = np.zeros((usurf.size//2, usurf.size))
         dp_du[:, :-1:2] = 0
