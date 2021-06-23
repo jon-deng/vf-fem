@@ -85,6 +85,44 @@ def make_viscoelastic_dissipation_rate(model, dmeas):
 
     return viscoelastic_dissipation_rate
 
+def make_stress_invariant_statistics(model, dmeas):
+    """
+    Return min/max/avg of the 3 stress invariants and the von-mises stress
+    """
+    kv_stress = model.solid.forms['expr.kv_stress']
+    el_stress = model.solid.forms['expr.stress_elastic']
+    S = el_stress + kv_stress
+
+    stress_fspace = dfn.FunctionSpace(model.solid.mesh, "DG", 0)
+    I1 = ufl.tr(S)
+    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+    I3 = ufl.det(S)
+
+    j2 = 1/3*I1**2-I2
+    SVONMISES = (3*j2)**0.5
+
+    expressions = (I1, I2, I3, SVONMISES)
+    projectors = tuple([make_project(expr, stress_fspace, dmeas) for expr in expressions])
+    expression_totals = tuple([expr*dmeas for expr in expressions])
+    meas_total = dfn.assemble(1*dmeas)
+
+    def stress_invariant_statistics(state, control, props):
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_properties(props)
+
+        stats = []
+        # For each expression, compute the min/max/average
+        for expr, project, expr_total in zip(expressions, projectors, expression_totals):
+            expr_vec = project()
+            _min = np.min(expr_vec[:])
+            _max = np.max(expr_vec[:])
+            _avg = dfn.assemble(expr_total)/meas_total
+            stats += [_min, _max, _avg]
+        return np.array(stats)
+
+    return stress_invariant_statistics
+
 
 def make_scalar_form(model, form):
     """
@@ -105,6 +143,15 @@ def make_scalar_expr_statistics(model, expr, fspace, dmeas):
 def make_project(expr, fspace, dmeas):
     """
     Project an expression onto the function space w.r.t the measure
+
+    Parameters
+    ----------
+    expr: ufl.Expression
+        An ufl expression
+    fspace: 
+        The function space that `expr` will be projected on
+    dmeas: ufl.Measure
+        The measure that the projection will be applied over
     """
     trial = dfn.Function(fspace)
     test = dfn.Function(fspace)
@@ -113,13 +160,12 @@ def make_project(expr, fspace, dmeas):
 
     x = dfn.Function(fspace)
 
-    def project(expr_vec):
+    def project():
         """
         Project an expression onto the function space over the supplied measure
         """
-        expr.vector()[:] = expr_vec
         b = dfn.assemble(expr*test*dmeas, tensor=dfn.PETScVector())
 
-        dfn.solve(A, x, b, 'lu')
-        return x.vector()
+        dfn.solve(A, x.vector(), b, 'lu')
+        return x
     return project
