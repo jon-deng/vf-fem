@@ -10,6 +10,7 @@ and what types of forms are always generated the same way, and refactor accordin
 import numpy as np
 import dolfin as dfn
 import ufl
+import warnings as wrn
 
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from ..parameters.properties import property_vecs
@@ -1106,7 +1107,7 @@ def newton_solve(x0, linearized_subproblem, params=None):
     while True:
         assem_res_n, solve_n = linearized_subproblem(state_n)
         res_n = assem_res_n()
-
+ 
         abs_err = abs(res_n.norm())
         abs_errs.append(abs_err)
         rel_err = 0.0 if abs_errs[0] == 0 else abs_err/abs_errs[0]
@@ -1118,4 +1119,8 @@ def newton_solve(x0, linearized_subproblem, params=None):
             dstate_n = solve_n(res_n)
             state_n = state_n - dstate_n
             n += 1
+
+    if n > max_iter:
+        wrn.warn("Newton solve failed to converge before maximum "
+                 "iteration count reached.", UserWarning)
     return state_n, {'num_iter': n, 'abs_err': abs_errs[-1], 'rel_err': rel_errs[-1]}
