@@ -1096,21 +1096,21 @@ def newton_solve(x0, linearized_subproblem, params=None):
     """
     if params is None:
         params = DEFAULT_NEWTON_SOLVER_PRM
+
+    abs_tol, rel_tol = params['absolute_tolerance'], params['relative_tolerance']
+    max_iter = params['maximum_iterations']
+
+    abs_errs, rel_errs = [], []
     n = 0
     state_n = x0
-
-    max_iter = params['maximum_iterations']
-    
-    abs_err_0 = 1.0
-    abs_tol, rel_tol = params['absolute_tolerance'], params['relative_tolerance']
     while True:
         assem_res_n, solve_n = linearized_subproblem(state_n)
         res_n = assem_res_n()
 
         abs_err = abs(res_n.norm())
-        if n == 0:
-            abs_err_0 = max(abs_err, 1.0)
-        rel_err = abs_err/abs_err_0
+        abs_errs.append(abs_err)
+        rel_err = 0.0 if abs_errs[0] == 0 else abs_err/abs_errs[0]
+        rel_errs.append(rel_err)
 
         if abs_err <= abs_tol or rel_err <= rel_tol or n > max_iter:
             break
@@ -1118,4 +1118,4 @@ def newton_solve(x0, linearized_subproblem, params=None):
             dstate_n = solve_n(res_n)
             state_n = state_n - dstate_n
             n += 1
-    return state_n, {'num_iter': n, 'abs_err': abs_err, 'rel_err': rel_err}
+    return state_n, {'num_iter': n, 'abs_err': abs_errs[-1], 'rel_err': rel_errs[-1]}
