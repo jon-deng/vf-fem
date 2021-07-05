@@ -308,6 +308,39 @@ def add_newmark_time_disc_form(forms):
     forms['coeff.time.beta'] = beta
     return forms
 
+def add_isotropic_membrane(forms):
+    # Define the 8th order projector to get the planar strain component
+    ds_traction = forms['measure.ds_traction']
+    n = forms['geom.facet_normal']
+    nn = ufl.outer(n, n)
+    ident = ufl.Identity(n.geometric_dimension())
+    project_pp = ufl.outer(ident-nn, ident-nn)
+
+    i, j, k, l = ufl.indices(4)
+
+    vector_test = forms['test.vector']
+    strain_test = form_inf_strain(vector_test)
+    strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
+
+    emod = dfn.Function(forms['fspace.scalar'])
+    th_membrane = dfn.Function(forms['fspace.scalar'])
+    nu = dfn.Constant(0.45)
+    mu = emod/2/(1+nu)
+    lmbda = emod*nu/(1+nu)/(1-2*nu)
+    inf_strain = forms['expr.kin.inf_strain']
+    inf_strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * inf_strain[j, k], (i, l))
+
+    _lmbda = 2*mu*lmbda/(lmbda+2*mu)
+    stress_pp = 2*mu*inf_strain_pp + _lmbda*ufl.tr(inf_strain_pp)*(ident-nn)
+
+    res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
+
+    forms['form.un.f1uva'] += res
+    forms['coeff.prop.emod_membrane'] = emod
+    forms['coeff.prop.nu_membrane'] = nu
+    forms['coeff.prop.th_membrane'] = th_membrane
+    return forms
+
 def add_incompressible_epithelium_membrane(forms):
     # Define the 8th order projector to get the planar strain component
     ds_traction = forms['measure.ds_traction']
@@ -939,7 +972,7 @@ class KelvinVoigtWEpithelium(KelvinVoigt):
                          fsi_facet_labels, fixed_facet_labels):
         return  \
             add_newmark_time_disc_form(
-            add_incompressible_epithelium_membrane(
+            add_isotropic_membrane(
             add_manual_contact_traction_form(
             add_surface_pressure_form(
             add_kv_viscous_form(
