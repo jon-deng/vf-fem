@@ -616,7 +616,16 @@ class BlockVec:
     def items(self):
         return zip(self.keys, self.vecs)
 
-    ## Array like slicing/indexing interface
+    def print_summary(self):
+        summary_strings = [
+            f"{key}: ({np.min(vec[:])}/{np.max(vec[:])}/{np.mean(vec[:])})"
+            for key, vec in self.items()]
+
+        summary_message = ", ".join(["block: (min/max/mean)"] + summary_strings)
+        print(summary_message)
+        return summary_message
+
+    ## Array/dictionary-like slicing and indexing interface
     @property
     def monovec(self):
         """
@@ -711,7 +720,7 @@ class BlockVec:
         vec.assemblyEnd()
         return vec
 
-    ## Basic math operator overloading
+    ## common operator overloading
     def __eq__(self, other):
         eq = False
         if isinstance(other, BlockVec):
@@ -753,6 +762,7 @@ class BlockVec:
     def __rtruediv__(self, other):
         return div(other, self)
 
+    ## 
     def norm(self):
         return dot(self, self)**0.5
 
