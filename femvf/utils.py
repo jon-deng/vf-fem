@@ -74,7 +74,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
 
     return filepath
 
-def functionals_on_line_search(hs, functional, model, filepath):
+def functional_on_line_search(hs, functional, model, filepath):
     functionals = list()
     for n, h in enumerate(hs):
         with sf.StateFile(model, filepath, group=f'{n}', mode='r') as f:

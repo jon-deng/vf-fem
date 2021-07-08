@@ -18,7 +18,7 @@ from femvf.forward import integrate
 from femvf.models import load_fsi_model, KelvinVoigt, Rayleigh, Bernoulli
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.functionals import basic
+from femvf.functional import basic
 
 class TestFunctionals(unittest.TestCase):
     OVERWRITE_FORWARD_SIMULATIONS = False
@@ -101,16 +101,16 @@ class TestFunctionals(unittest.TestCase):
         # Functional = basic.FinalDisplacementNorm
         # Functional = basic.VelocityNorm
         # Functional = basic.FinalVelocityNorm
-        # Functional = functionals.AcousticEfficiency
-        # Functional = functionals.AcousticPower
-        # Functional = functionals.F0WeightedAcousticPower
+        # Functional = functional.AcousticEfficiency
+        # Functional = functional.AcousticPower
+        # Functional = functional.F0WeightedAcousticPower
         # Functional = basic.SubglottalWork
         # Functional = basic.FluidtoSolidWork
         Functional = basic.StrainWork
 
         gkwargs = {}
 
-        # Functional = functionals.T1RegAcousticEfficiency
+        # Functional = functional.T1RegAcousticEfficiency
         # gkwargs = {'tukey_alpha': 0.2, 'lambda': 0}
 
         # Functional = basic.StrainEnergy

@@ -30,7 +30,7 @@ from femvf.forward import integrate
 from femvf import adjoint
 from femvf.constants import PASCAL_TO_CGS
 from femvf.parameters import parameterization
-from femvf.functionals import solid as fsolid, fluid as ffluid, acoustic as facous
+from femvf.functional import solid as fsolid, fluid as ffluid, acoustic as facous
 from femvf import linalg
 
 from femvf.utils import line_search, line_search_p, functionals_on_line_search
@@ -38,7 +38,7 @@ from femvf.utils import line_search, line_search_p, functionals_on_line_search
 
 from modeldefs import (
     load_fsi_rayleigh_model, load_fsi_kelvinvoigt_model, load_fsai_rayleigh_model)
-# from optvf import functionals as extra_funcs
+# from optvf import functional as extra_funcs
 
 dfn.set_log_level(30)
 np.random.seed(123)

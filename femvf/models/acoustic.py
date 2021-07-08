@@ -6,7 +6,7 @@ from . import base
 import numpy as np
 import jax
 from jax import numpy as jnp
-# import numpy as jnp
+import numpy as jnp
 
 from femvf import linalg
 

@@ -18,6 +18,6 @@ from . import statefile
 from . import linalg
 
 # Make common packages available
-from . import functionals as funcs
+from . import functional as funcs
 from . import parameters as params
 from . import vis

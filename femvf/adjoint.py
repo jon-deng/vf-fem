@@ -102,7 +102,7 @@ def integrate_grad(model, f, functional):
     ----------
     model : model.ForwardModel
     f : statefile.StateFile
-    functional : functionals.Functional
+    functional : functional.Functional
     show_figures : bool
         Whether to display a figure showing the solution or not.
 
