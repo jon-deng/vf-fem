@@ -240,7 +240,6 @@ class StateFile:
             NDOF = len(vec)
             control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), 
                                          chunks=(self.NCHUNK, NDOF), dtype=np.float64)
-        pass
 
     def init_properties(self):
         properties_group = self.root_group.create_group('properties')
@@ -284,7 +283,6 @@ class StateFile:
             dset = control_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value
-        pass
 
     def append_properties(self, properties):
         """
