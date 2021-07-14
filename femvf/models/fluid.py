@@ -369,7 +369,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
         sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
         p = sepmult * pbern + (1-sepmult)*psep
-        q = flow_sign*qsqr**0.5
+        q = flow_sign*qsqr**0.5 *fluid_props['vf_length']
 
         # These are not really used anywhere, mainly output for debugging purposes
         idx_min = np.argmax(s>smin)
@@ -463,9 +463,9 @@ class Bernoulli(QuasiSteady1DFluid):
         dp_dpref = sepmult*dpbern_dpref
         dp_dpsep = sepmult*dpbern_dpsep + (1-sepmult)
 
-        # q = flow_sign*qsqr**0.5
-        dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref
-        dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep
+        # q = flow_sign*qsqr**0.5*fluid_props
+        dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref*fluid_props['vf_length']
+        dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep*fluid_props['vf_length']
 
         dp_du = np.zeros((usurf.size//2, usurf.size))
         dp_du[:, :-1:2] = 0
@@ -697,11 +697,11 @@ def expweight(f, alpha=1.0):
     return w
 
 def dexpweight_df(f, alpha=1.0):
-    K_STABILITY = np.max(-f/alpha)
     dw_df = np.zeros(f.shape)
     if alpha == 0:
         dw_df[np.argmin(f)] = 1.0
     else:
+        K_STABILITY = np.max(-f/alpha)
         dw_df[:] = -1/alpha*np.exp(-f/alpha - K_STABILITY)
     return dw_df
 
