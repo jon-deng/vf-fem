@@ -173,8 +173,8 @@ class TestBernoulli(CommonSetup):
         props = self.fluid_properties.copy()
         p_sub0 = self.p_sub
 
-        surface_coordinates = self.surface_coordinates
-        x0 = (surface_coordinates, np.zeros(self.surface_coordinates.shape))
+        xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
+        surf_state = (xy_surf.reshape(-1), np.zeros(xy_surf.shape).reshape(-1))
 
         ## Set a surface state step direction and step sizes
         hs = np.concatenate([[0], 2**np.arange(0, 5, dtype=np.float)])
@@ -185,7 +185,7 @@ class TestBernoulli(CommonSetup):
         ps, qs = [], []
         for h in hs:
             props['p_sub'][()] = p_sub0 + h*dpsub
-            qp, _ = fluid.fluid_pressure(x0, props)
+            qp, _ = fluid.fluid_pressure(*surf_state, self.p_sub, self.p_sup, fluid_props)
             ps.append(qp[1])
             qs.append(qp[0])
         ps = np.array(ps)
@@ -499,9 +499,9 @@ if __name__ == '__main__':
 
     test = TestBernoulli()
     test.setUp()
-    test.test_fluid_pressure()
+    # test.test_fluid_pressure()
     # test.test_flow_sensitivity()
-    # test.test_flow_sensitivity_psub()
+    test.test_flow_sensitivity_psub()
     # test.test_flow_sensitivity_solid()
 
     # test = TestSmoothApproximations()

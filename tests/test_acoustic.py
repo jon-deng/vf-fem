@@ -83,6 +83,7 @@ class TestWRA(unittest.TestCase):
 
         z0 = ZMOUTH
         gamma_ref = (z_rad-z0)/(z_rad+z0)
+        # To derive this formula, see the Lecture 6 of the acoustics class notes
         z_tube = z0*(1+gamma_ref)*np.exp(-1j*omega*LENGTH/CSOUND)/(1-gamma_ref*np.exp(-2j*omega*LENGTH/CSOUND)) 
         # breakpoint()
 

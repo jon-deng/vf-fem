@@ -84,19 +84,20 @@ class StateFile:
                  **kwargs):
         self.model = model
         self.file = h5py.File(fname, mode=mode, **kwargs)
-
-        # Create the root group if applicable
-        if (mode == 'w' or mode == 'a') and group not in self.file:
-            self.file.create_group(group)
-
-        self.root_group_name = group
-
         self.NCHUNK = NCHUNK
+
+        # Create the root group and initilizae the data layout
+        if (mode == 'w' or mode == 'a') and group not in self.file:
+            self.file.require_group(group)
+        self.root_group_name = group
+        self.init_layout()
 
         # TODO: This is probably buggy
         self.dset_chunk_cache = {}
-        if mode == 'r':
+        if mode == 'r' or 'a':
             ## Create caches for reading states and controls, since these vary in time
+            # h5py is supposed to do this caching but I found that each dataset read call in h5py 
+            # has a lot of overhead so I made this cache instead
             for name in model.state0.keys:
                 self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
 
@@ -133,8 +134,14 @@ class StateFile:
     def size(self):
         """
         Return the number of states in the file.
+
+        Note the 'size' of the dataset is based on the number of time indices
+        that have been written.
         """
-        return self.root_group['state/u'].shape[0]
+        if 'time' in self.root_group:
+            return self.root_group['time'].shape[0]
+        else:
+            return 0
 
     @property
     def variable_controls(self):
@@ -179,11 +186,12 @@ class StateFile:
         r"""
         Initializes the layout of the state file.
         """
-        self.root_group.create_dataset('time', (0,), maxshape=(None,), chunks=(self.NCHUNK,),
-                                       dtype=np.float64)
-        self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,),
-                                       chunks=(self.NCHUNK,), dtype=np.intp)
+        self.root_group.require_dataset('time', (self.size,), maxshape=(None,), chunks=(self.NCHUNK,),
+                                        dtype=np.float64, exact=False)
 
+        if 'meas_indices' not in self.root_group:
+            self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,),
+                                           chunks=(self.NCHUNK,), dtype=np.intp)
         self.init_mesh()
         self.init_dofmap()
 
@@ -205,44 +213,46 @@ class StateFile:
                                   for cell in dfn.cells(solid.mesh)])
         vector_dofmap = np.array([vector_dofmap_processor.cell_dofs(cell.index())
                                   for cell in dfn.cells(solid.mesh)])
-        self.root_group.create_dataset('dofmap/vector', data=vector_dofmap,
-                                       dtype=np.intp)
-        self.root_group.create_dataset('dofmap/scalar', data=scalar_dofmap,
-                                       dtype=np.intp)
+        self.root_group.require_dataset(
+            'dofmap/vector', vector_dofmap.shape, data=vector_dofmap, dtype=np.intp)
+        self.root_group.require_dataset(
+            'dofmap/scalar', scalar_dofmap.shape, data=scalar_dofmap, dtype=np.intp)
 
     def init_mesh(self):
         """
         Writes the mesh information to the h5 file
         """
         solid = self.model.solid
-        self.root_group.create_dataset('mesh/solid/coordinates', data=solid.mesh.coordinates(),
-                                       dtype=np.float64)
-        self.root_group.create_dataset('mesh/solid/connectivity', data=solid.mesh.cells(),
-                                       dtype=np.intp)
+        coords = solid.mesh.coordinates()
+        cells = solid.mesh.cells()
+        self.root_group.require_dataset(
+            'mesh/solid/coordinates', coords.shape, data=coords, dtype=np.float64)
+        self.root_group.require_dataset(
+            'mesh/solid/connectivity', cells.shape, data=cells, dtype=np.intp)
 
         # TODO: Write facet/cell labels, mapping string identifiers to the integer mesh functions
-        self.root_group.create_dataset('mesh/solid/facet_func', data=np.inf,
-                                       dtype=np.intp)
-        self.root_group.create_dataset('mesh/solid/cell_func', data=np.inf,
-                                       dtype=np.intp)
+        # self.root_group.require_dataset('mesh/solid/facet_func', data=np.inf,
+        #                                 dtype=np.intp)
+        # self.root_group.require_dataset('mesh/solid/cell_func', data=np.inf,
+        #                                 dtype=np.intp)
 
     def init_state(self):
-        state_group = self.root_group.create_group('state')
+        state_group = self.root_group.require_group('state')
         for name, vec in zip(self.model.state0.keys, self.model.state0.vecs):
             NDOF = len(vec)
-            state_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF),
-                                       chunks=(self.NCHUNK, NDOF), dtype=np.float64)
+            state_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
+                                        chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
     def init_control(self):
-        control_group = self.root_group.create_group('control')
+        control_group = self.root_group.require_group('control')
 
         for name, vec in zip(self.model.control.keys, self.model.control.vecs):
             NDOF = len(vec)
-            control_group.create_dataset(name, (0, NDOF), maxshape=(None, NDOF), 
+            control_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF), 
                                          chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
     def init_properties(self):
-        properties_group = self.root_group.create_group('properties')
+        properties_group = self.root_group.require_group('properties')
 
         for name, value in zip(self.model.properties.keys, self.model.properties.vecs):
             size = None
@@ -250,13 +260,13 @@ class StateFile:
                 size = len(value)
             except TypeError:
                 size = value.size
-            properties_group.create_dataset(name, (size,), dtype=np.float64)
+            properties_group.require_dataset(name, (size,), dtype=np.float64)
 
     def init_solver_info(self):
-        solver_info_group = self.root_group.create_group('solver_info')
+        solver_info_group = self.root_group.require_group('solver_info')
         for key in ['num_iter', 'rel_err', 'abs_err']:
-            solver_info_group.create_dataset(key, (0,), dtype=np.float64, maxshape=(None,), 
-                                             chunks=(self.NCHUNK,))
+            solver_info_group.require_dataset(key, (self.size,), dtype=np.float64, maxshape=(None,), 
+                                              chunks=(self.NCHUNK,))
 
     ## Functions for writing by appending
     def append_state(self, state):

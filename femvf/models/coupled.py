@@ -19,7 +19,6 @@ from .. import meshutils
 from .. import linalg
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
-
 class FSIModel(base.Model):
     """
     Represents a coupled system of a solid and a fluid model
@@ -857,8 +856,6 @@ class FSAIModel(FSIModel):
         res_ac = self.acoustic.res()
         return linalg.concatenate(res_sl, res_fl, res_ac)
 
-    # TODO: This iterative procedure is not organized well at all
-    # You should define a generic fixed-point algorithm to replace this
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
@@ -866,8 +863,17 @@ class FSAIModel(FSIModel):
         ## Solve solid displacements at n
         self.set_fin_state(ini_state)
         ini_slstate = ini_state[:3]
-        sl_state1, _ = self.solid.solve_state1(ini_slstate, newton_solver_prm)
+        sl_state1, solver_info = self.solid.solve_state1(ini_slstate, newton_solver_prm)
         self.set_fin_solid_state(sl_state1)
+        # print(self.solid.res().norm())
+        # if self.solid.res().norm() > 1e-4:
+        #     breakpoint()
+
+        # self.set_fin_state(fin_state)
+        # res_norm = self.res().norm()
+        # print(res_norm)
+        # if res_norm > 1:
+        #     breakpoint()
 
         def make_linearized_flow_residual(qac):
             """
@@ -902,7 +908,9 @@ class FSAIModel(FSIModel):
         fl_state1, fluid_info = self.fluid.solve_state1(self.fluid.state0)
 
         step_info = {'fluid_info': fluid_info, **info}
-        return linalg.concatenate(sl_state1, fl_state1, ac_state1), step_info
+        fin_state = linalg.concatenate(sl_state1, fl_state1, ac_state1)
+       
+        return fin_state, step_info
 
     def _form_dflac_dflac(self):
         b = self.state0

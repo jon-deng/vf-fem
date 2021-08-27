@@ -107,7 +107,7 @@ class WRAnalog(Acoustic1D):
         R = self.properties['rrad'][0]
         L = self.properties['lrad'][0]
 
-        # Formula given by Story and Flanagan
+        # Formula given by Story and Flanagan (equations 2.103 and 2.104 from Story's thesis)
         PISTON_RAD = np.sqrt(area[-1]/np.pi)
         R = 128/(9*np.pi**2)
         L = 16/dt*PISTON_RAD/(3*np.pi*cspeed)
@@ -165,6 +165,8 @@ class WRAnalog(Acoustic1D):
         return b
 
 def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
+    """
+    """
     assert gamma1.size == N//2+1
     assert gamma2.size == N//2+1
     
@@ -394,6 +396,39 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
     return reflect, reflect00, inputq
 
+def input_and_output_impedance(model, n=2**12):
+    """
+    Return the input and output impedances
+    """
+    state0 = model.get_state_vec()
+    state0.set(0.0)
+
+    qinp_impulse = 1.0
+    state0['pref'][:2] = model.inputq(qinp_impulse, state0['pinc'][:2])
+    control = model.get_control_vec()
+    control.set(0.0)
+
+    times = np.arange(0, n)*model.dt
+
+    qinp = np.zeros(n)
+    pinp, pout = np.zeros(n), np.zeros(n)
+    qinp[0] = qinp_impulse
+    pinp[0] = state0['pinc'][0] + state0['pref'][0]
+    pout[0] = state0['pinc'][-1] + state0['pref'][-1]
+    for n in range(1, times.size):
+        model.set_ini_state(state0)
+        model.set_control(control)
+        
+        state1, _ = model.solve_state1()
+        pinp[n] = state1['pinc'][0] + state1['pref'][0]
+        pout[n] = state1['pinc'][-1] + state1['pref'][-1]
+
+        state0 = state1
+    
+    zinp = np.fft.fft(pinp)/np.fft.fft(qinp)
+    zout = np.fft.fft(pout)/np.fft.fft(qinp)
+    return zinp, zout
+
 ## Common Area Function Definitions
 # The 44-section neutral area function proposed by Story (2005)
 NEUTRAL_FS = 44.1e3
@@ -409,4 +444,4 @@ NEUTRAL_AREA = (np.pi/4)*np.array(
      1.842, 1.983, 2.073, 2.123, 
      2.194, 2.175, 2.009, 1.785, 
      1.675, 1.539, 1.405, 1.312]
-)**2
+    )**2

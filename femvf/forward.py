@@ -3,7 +3,7 @@ Forward model
 
 Uses CGS (cm-g-s) units unless otherwise stated
 """
-
+from tqdm import tqdm
 from functools import partial
 
 import numpy as np
@@ -17,7 +17,7 @@ from . import linalg
 # @profile
 def integrate( 
     model, f, ini_state, controls, props, times, 
-    idx_meas=None, newton_solver_prm=None, write=True
+    idx_meas=None, newton_solver_prm=None, write=True, use_tqdm=False
     ):
     """
     Integrate the model over each time in `times` for the specified parameters
@@ -49,20 +49,19 @@ def integrate(
     """
     if idx_meas is None:
         idx_meas = np.array([])
-
+        
     # Check integration times are specified correctly
-    times_bvec = times
-    times = times_bvec[0]
-    if times[-1] <= times[0]:
+    times_vec = times[0]
+    if times_vec[-1] <= times_vec[0]:
         raise ValueError("The final time point must be greater than the initial one."
-                         f"The input intial/final times were {times[0]}/{times[-1]}")
-    if times.size <= 1:
+                         f"The input intial/final times were {times_vec[0]}/{times_vec[-1]}")
+    if times_vec.size <= 1:
         raise ValueError("There must be at least 2 time integration points.")
 
     # Initialize datasets and save the initial state to the h5 file
     if write:
         f.init_layout()
-        append_step_result(f, ini_state, controls[0], times[0], 
+        append_step_result(f, ini_state, controls[0], times_vec[0], 
                            {'num_iter': 0, 'abs_err': 0, 'rel_err': 0})
         f.append_properties(props)
         if 0 in idx_meas:
@@ -73,8 +72,9 @@ def integrate(
     # model.set_properties(props)
     _controls = controls[1:] if len(controls) > 1 else controls
     fin_state, step_info = integrate_steps(
-        model, f, ini_state, _controls, props, times, 
-        idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write)
+        model, f, ini_state, _controls, props, times_vec, 
+        idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write,
+        use_tqdm=use_tqdm)
 
     return fin_state, step_info
 
@@ -96,20 +96,26 @@ def integrate_extend(
 
 def integrate_steps(
     model, f, ini_state, controls, props, times, 
-    idx_meas=None, newton_solver_prm=None, write=True):
+    idx_meas=None, newton_solver_prm=None, write=True, use_tqdm=False):
     """
     
     """
+    if idx_meas is None:
+        idx_meas = np.array([])
+        
     # Setting the properties is mandatory because they are constant for each
     # time step (only need to set it once at the beginnning)
     state0 = ini_state
     model.set_properties(props)
-    for n in range(1, times.size):
+    
+    time_indices = tqdm(range(1, times.size)) if use_tqdm else range(1, times.size)
+    for n in time_indices:
         control1 = controls[min(n, len(controls)-1)]
         dt = times[n] - times[n-1]
         
         state1, step_info = integrate_step(model, state0, control1, props, dt)
-
+        # if n%100 == 0:
+        #     print(step_info['num_iter'])
         # Write the solution outputs to the h5 file
         if write:
             append_step_result(f, state1, control1, times[n], step_info)
