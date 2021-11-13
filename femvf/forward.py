@@ -52,11 +52,11 @@ def integrate(
         
     # Check integration times are specified correctly
     times_vec = times[0]
-    if times_vec[-1] <= times_vec[0]:
-        raise ValueError("The final time point must be greater than the initial one."
+    if times_vec[-1] < times_vec[0]:
+        raise ValueError("The final time point must be greater or equal to the initial one."
                          f"The input intial/final times were {times_vec[0]}/{times_vec[-1]}")
-    if times_vec.size <= 1:
-        raise ValueError("There must be at least 2 time integration points.")
+    if times_vec.size < 1:
+        raise ValueError("There must be at least 1 time integration points.")
 
     # Initialize datasets and save the initial state to the h5 file
     if write:
@@ -107,6 +107,7 @@ def integrate_steps(
     # time step (only need to set it once at the beginnning)
     state0 = ini_state
     model.set_properties(props)
+    step_info = {}
     
     time_indices = tqdm(range(1, times.size)) if use_tqdm else range(1, times.size)
     for n in time_indices:
@@ -125,7 +126,7 @@ def integrate_steps(
         # Update initial conditions for the next time step
         state0 = state1
 
-    return state1, step_info
+    return state0, step_info
 
 def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     """
