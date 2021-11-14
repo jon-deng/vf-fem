@@ -38,11 +38,11 @@ def load_fenics_xmlmesh(mesh_path):
     facet_function = dfn.MeshFunction('size_t', mesh, facet_function_path)
     cell_function = dfn.MeshFunction('size_t', mesh, cell_function_path)
 
-    facet_labels, cell_labels = parse_2d_msh(msh_function_path)
+    vertexlabel_to_id, facetlabel_to_id, celllabel_to_id = parse_msh2_physical_groups(msh_function_path)
 
-    return mesh, facet_function, cell_function, facet_labels, cell_labels
+    return mesh, facet_function, cell_function, (vertexlabel_to_id, facetlabel_to_id, celllabel_to_id)
 
-def parse_2d_msh(mesh_path):
+def parse_msh2_physical_groups(mesh_path):
     """
     Parameters
     ----------
@@ -51,35 +51,40 @@ def parse_2d_msh(mesh_path):
 
     Returns
     -------
-    facet_labels
-    cell_labels
+    vertex_label_to_id
+    facet_label_to_id
+    cell_label_to_id
+        Mappings from a string to numeric identifier for the physical group
     """
     with open(mesh_path, 'r') as f:
 
-        current_line = 'NONE'
+        current_line = ''
         while '$PhysicalNames' not in current_line:
             current_line = f.readline()
 
         num_physical_regions = int(f.readline().rstrip())
 
-        physical_regions = []
+        physical_group_descrs = []
         for ii in range(num_physical_regions):
             current_line = f.readline()
-            physical_regions.append(current_line.rstrip().split(' '))
+            physical_group_descrs.append(current_line.rstrip().split(' '))
 
-        cell_labels = {}
-        facet_labels = {}
-        for physical_region in physical_regions:
-            dim, val, name = physical_region
+        vertexlabel_to_id = {}
+        celllabel_to_id = {}
+        facetlabel_to_id = {}
+        for physical_group_descr in physical_group_descrs:
+            topo_dim, val, name = physical_group_descr
 
             # Convert the strings to int, int, and a string without surrounding quotes
-            dim, val, name = int(dim), int(val), name[1:-1]
+            topo_dim, val, name = int(topo_dim), int(val), name[1:-1]
 
-            if dim == 1:
-                facet_labels[name] = val
-            elif dim == 2:
-                cell_labels[name] = val
-    return facet_labels, cell_labels
+            if topo_dim == 0:
+                vertexlabel_to_id[name] = val
+            if topo_dim == 1:
+                facetlabel_to_id[name] = val
+            elif topo_dim == 2:
+                celllabel_to_id[name] = val
+    return vertexlabel_to_id, facetlabel_to_id, celllabel_to_id
 
 def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     """
