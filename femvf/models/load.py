@@ -67,7 +67,7 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd
 
         if ext.lower() == '.xml':
             # The solid mesh is an xml file
-            mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
+            mesh, facet_func, cell_func, (vertex_labels, facet_labels, cell_labels) = meshutils.load_fenics_xmlmesh(solid_mesh)
         else:
             raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
     solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels, 
