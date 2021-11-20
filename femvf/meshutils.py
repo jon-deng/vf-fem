@@ -116,7 +116,7 @@ def vertices_from_edges(edge_indices, mesh):
     vertices = np.unique(edge_to_vertex[edge_indices].reshape(-1))
     return vertices
 
-def sort_vertices_by_nearest_neighbours(vertex_coordinates):
+def sort_vertices_by_nearest_neighbours(vertex_coordinates, origin=None):
     """
     Return an index list sorting the vertices based on its nearest neighbours
 
@@ -127,11 +127,13 @@ def sort_vertices_by_nearest_neighbours(vertex_coordinates):
 
     Parameters
     ----------
-    vertex_coordinates : (..., 2) array_like
-        An array of surface coordinates, with x and y locations stored in the last dimension.
+    vertex_coordinates : (..., m) array_like
+        An array of surface coordinates, with (x, y, ...) locations stored in the last dimension.
+    origin : (m,) array_like
+        The origin point used to determine which vertex should be first
     """
     # Determine the very first coordinate
-    idx_sort = [np.argmin(vertex_coordinates[..., 0])]
+    idx_sort = [np.argmin(np.linalg.norm(vertex_coordinates-origin, axis=-1))]
 
     while len(idx_sort) < vertex_coordinates.shape[0]:
         # Calculate array of distances to every other coordinate
