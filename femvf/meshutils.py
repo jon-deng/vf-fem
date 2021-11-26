@@ -132,6 +132,7 @@ def sort_vertices_by_nearest_neighbours(vertex_coordinates, origin=None):
     origin : (m,) array_like
         The origin point used to determine which vertex should be first
     """
+    origin = np.zeros(vertex_coordinates.shape[-1]) if origin is None else origin
     # Determine the very first coordinate
     idx_sort = [np.argmin(np.linalg.norm(vertex_coordinates-origin, axis=-1))]
 
