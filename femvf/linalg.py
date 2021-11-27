@@ -714,10 +714,14 @@ class BlockVec:
 
     def to_petsc_seq(self, comm=None):
         total_size = np.sum(self.size)
-        vec = PETSc.Vec.createSeq(total_size, comm=comm)
+        vec = PETSc.Vec().createSeq(total_size, comm=comm)
         vec.setArray(self.to_ndarray)
         vec.assemblyBegin()
         vec.assemblyEnd()
+        return vec
+
+    def to_petsc_mono(self, comm=None):
+        vec = PETSc.Vec().createWithArray(self.to_ndarray(), comm=comm)
         return vec
 
     ## common operator overloading
