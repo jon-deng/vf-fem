@@ -23,6 +23,9 @@ def load_solid_model(solid_mesh, SolidType,
             mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
         else:
             raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
+    else:
+        raise ValueError("Not sure what to do with this")
+
     solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels, 
                       pressure_facet_labels, fixed_facet_labels)
     return solid
