@@ -331,11 +331,8 @@ def add_isotropic_membrane(forms):
     inf_strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * inf_strain[j, k], (i, l))
 
     # account for ambiguous 0/0 when emod=0
-    if mu == 0 and lmbda == 0:
-        _lmbda = 0
-    else:
-        _lmbda = 2*mu*lmbda/(lmbda+2*mu)
-    stress_pp = 2*mu*inf_strain_pp + _lmbda*ufl.tr(inf_strain_pp)*(ident-nn)
+    lmbda_pp = ufl.conditional(ufl.eq(emod, 0), 0, 2*mu*lmbda/(lmbda+2*mu))
+    stress_pp = 2*mu*inf_strain_pp + lmbda_pp*ufl.tr(inf_strain_pp)*(ident-nn)
 
     res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
 
