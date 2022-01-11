@@ -12,4 +12,4 @@ def separation_point(model, state, control, props):
     model.set_control(control)
 
     _, info = model.fluid.solve_state1(model.fluid.state0)
-    return info['ssep']
+    return info['s_sep']
