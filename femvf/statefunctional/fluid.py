@@ -1,0 +1,15 @@
+"""
+This module contains definitions of functionals over the fluid state.
+"""
+
+import numpy as np
+
+from .. import linalg
+# from .base import AbstractFunctional
+
+def separation_point(model, state, control, props):
+    model.set_fin_state(state)
+    model.set_control(control)
+
+    _, info = model.fluid.solve_state1()
+    return info['ssep']
