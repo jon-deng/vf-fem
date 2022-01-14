@@ -534,7 +534,7 @@ def dsmooth_min_area(s, area, zeta_amin):
 
 def separation_point(s, smin, area, asep):
     # Find the first index where the area function is larger than the separation area
-    bool_seps = np.logical_and(s>=smin, np.logical_and(area[:-1] <= asep, area[1:] > asep))
+    bool_seps = np.logical_and(s[:-1]>=smin, np.logical_and(area[:-1] <= asep, area[1:] > asep))
     idx_seps = np.arange(s.size-1)[bool_seps]
     idx_sep = np.min(idx_seps)
 
