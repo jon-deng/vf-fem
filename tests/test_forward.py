@@ -17,6 +17,7 @@ from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd, acoustic as amd
+import femvf.statefunctional.solid as solidfunc
 from femvf import callbacks
 from femvf import linalg
 
@@ -231,14 +232,16 @@ class TestIntegrate(ForwardConfig):
         print("Running forward model")
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, mode='w') as f:
-            fin_state, info = integrate(model, f, ini_state, controls, props, times, name_to_callback=cbs)
+            fin_state, info = integrate(model, f, ini_state, controls, props, times)
 
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
         ## Plot the resulting glottal width
+        with sf.StateFile(model, save_path, mode='r') as f:
+            t, gw = proc_time_and_glottal_width(model, f)
         fig, ax = plt.subplots(1, 1)
-        ax.plot(times['times'], info['glottal_width'])
+        ax.plot(t, gw)
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
         fig.savefig(os.path.splitext(save_path)[0] + '.png')
@@ -299,12 +302,20 @@ class TestIntegrate(ForwardConfig):
         breakpoint()
         self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
 
+def proc_time_and_glottal_width(model, f):
+    t = f.get_times()
+    props = f.get_properties()
+    y = [solidfunc.glottal_width_sharp(model, f.get_state(n), f.get_control(n), props) for n in range(f.size)]
+        
+    return t, np.array(y)
+
+
 if __name__ == '__main__':
     np.seterr(invalid='raise')
     test = TestIntegrate()
     test.setUp()
-    # test.test_integrate_fsi_rayleigh()
-    # test.test_integrate_approx3D()
+    test.test_integrate_fsi_rayleigh()
+    test.test_integrate_approx3D()
     test.test_integrate_fsai()
     # test.test_integrate_linear()
     # unittest.main()
