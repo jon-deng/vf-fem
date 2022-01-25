@@ -187,6 +187,9 @@ class ForwardConfig(unittest.TestCase):
         
         return model, ini_state, controls, props
 
+    def config_variable_controls(self):
+        return self.config_fsi_rayleigh_model()
+
 class TestIntegrate(ForwardConfig):
 
     def test_integrate_approx3D(self):
@@ -198,7 +201,8 @@ class TestIntegrate(ForwardConfig):
         if os.path.isfile(save_path):
             os.remove(save_path)
 
-        self._test_integrate(model, ini_state, controls, props, times, save_path)
+        self._integrate(model, ini_state, controls, props, times, save_path)
+        self._test_plot_glottal_width(model, save_path)
     
     def test_integrate_fsi_rayleigh(self):
         model, ini_state, controls, props = self.config_fsi_rayleigh_model()
@@ -209,7 +213,8 @@ class TestIntegrate(ForwardConfig):
         if os.path.isfile(save_path):
             os.remove(save_path)
 
-        self._test_integrate(model, ini_state, controls, props, times, save_path)
+        self._integrate(model, ini_state, controls, props, times, save_path)
+        self._test_plot_glottal_width(model, save_path)
 
     def test_integrate_fsai(self):
         model, ini_state, controls, props = self.config_fsai_model()
@@ -224,9 +229,30 @@ class TestIntegrate(ForwardConfig):
         if os.path.isfile(save_path):
             os.remove(save_path)
 
-        self._test_integrate(model, ini_state, controls, props, times, save_path)
+        self._integrate(model, ini_state, controls, props, times, save_path)
+        self._test_plot_glottal_width(model, save_path)
 
-    def _test_integrate(self, model, ini_state, controls, props, times, save_path):
+    def test_integrate_variable_controls(self):
+        model, ini_state, _controls, props = self.config_variable_controls()
+        _times = np.linspace(0, 0.01, 100)
+        times = linalg.BlockVec([_times], ['times'])
+
+        tau = 0.0005
+        controls = [(1-np.exp(-t/tau))*_controls[0] for t in _times[:30]]
+        # Set the total length of the WRAnalog to match the specified time step
+        # dt = times[1]-times[0]
+        # C, N = model.acoustic.properties['soundspeed'][0], model.acoustic.properties['area'].size
+        # props['length'][:] = (0.5*dt*C) * N
+
+        save_path = 'out/test_forward_variable_controls.h5'
+        if os.path.isfile(save_path):
+            os.remove(save_path)
+
+        self._integrate(model, ini_state, controls, props, times, save_path)
+        self._test_plot_glottal_width(model, save_path)
+        self._test_variable_controls(model, save_path, controls)
+
+    def _integrate(self, model, ini_state, controls, props, times, save_path):
         # Set values to export
         cbs = {'glottal_width': callbacks.safe_glottal_width}
         print("Running forward model")
@@ -237,6 +263,7 @@ class TestIntegrate(ForwardConfig):
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
+    def _test_plot_glottal_width(self, model, save_path):
         ## Plot the resulting glottal width
         with sf.StateFile(model, save_path, mode='r') as f:
             t, gw = proc_time_and_glottal_width(model, f)
@@ -245,6 +272,13 @@ class TestIntegrate(ForwardConfig):
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
         fig.savefig(os.path.splitext(save_path)[0] + '.png')
+
+    def _test_variable_controls(self, model, save_path, input_controls):
+        ## Plot the resulting glottal width
+        with sf.StateFile(model, save_path, mode='r') as f:
+            
+            for ii in range(len(input_controls)):
+                assert input_controls[ii] == f.get_control(ii)
 
     def test_integrate_linear(self):
         """
@@ -314,8 +348,9 @@ if __name__ == '__main__':
     np.seterr(invalid='raise')
     test = TestIntegrate()
     test.setUp()
-    test.test_integrate_fsi_rayleigh()
-    test.test_integrate_approx3D()
-    test.test_integrate_fsai()
+    test.test_integrate_variable_controls()
+    # test.test_integrate_fsi_rayleigh()
+    # test.test_integrate_approx3D()
+    # test.test_integrate_fsai()
     # test.test_integrate_linear()
     # unittest.main()

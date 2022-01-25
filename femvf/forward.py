@@ -70,9 +70,8 @@ def integrate(
     # Integrate the system over the specified times and record final state for each step
     # model.set_ini_state(ini_state)
     # model.set_properties(props)
-    _controls = controls[1:] if len(controls) > 1 else controls
     fin_state, step_info = integrate_steps(
-        model, f, ini_state, _controls, props, times_vec, 
+        model, f, ini_state, controls, props, times_vec, 
         idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write,
         use_tqdm=use_tqdm)
 
