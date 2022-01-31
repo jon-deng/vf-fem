@@ -12,7 +12,7 @@ import scipy.signal as sig
 # import ufl
 
 from .base import AbstractFunctional
-from .. import linalg
+from blocklinalg import linalg
 
 class FluidFunctional(AbstractFunctional):
     """

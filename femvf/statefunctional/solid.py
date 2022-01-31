@@ -9,7 +9,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from .. import linalg
+from blocklinalg import linalg
 # from .base import AbstractFunctional
 from ..models.solid import form_inf_strain
 

@@ -11,7 +11,7 @@ import dolfin as dfn
 from petsc4py import PETSc
 
 from . import statefile as sf
-from . import linalg
+from blocklinalg import linalg
 
 # TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile
