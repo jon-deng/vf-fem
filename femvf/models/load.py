@@ -20,7 +20,7 @@ def load_solid_model(solid_mesh, SolidType,
 
         if ext.lower() == '.xml':
             # The solid mesh is an xml file
-            mesh, facet_func, cell_func, facet_labels, cell_labels = meshutils.load_fenics_xmlmesh(solid_mesh)
+            mesh, facet_func, cell_func, (vertex_labels, facet_labels, cell_labels) = meshutils.load_fenics_xmlmesh(solid_mesh)
         else:
             raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
     else:
