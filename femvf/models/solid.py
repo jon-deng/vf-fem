@@ -121,7 +121,8 @@ def form_quad_penalty_pressure(gap, kcoll):
     positive_gap = (gap + abs(gap)) / 2
     return kcoll*positive_gap**2
 
-
+# These functions are mainly for generating forms that are needed for solving
+# the transient problem with a time discretization
 def gen_residual_bilinear_forms(forms):
     """
     Generates bilinear forms representing derivatives of the residual wrt state variables
@@ -179,33 +180,82 @@ def gen_residual_bilinear_property_forms(forms):
 
     return df1_dsolid
 
+# These functions are mainly for generating forms that are needed for solving
+# the hopf bifurcation problem
+def gen_hopf_forms(forms):
+    gen_unary_linearized_forms(forms)
+
+    unary_form_names = ['f1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
+    for unary_form_name in unary_form_names:
+        gen_jac_state_forms(unary_form_name, forms)
+    for unary_form_name in unary_form_names:
+        gen_jac_property_forms(unary_form_name, forms)
+
+def gen_jac_state_forms(unary_form_name, forms):
+    """
+    Return the derivatives of a unary form wrt all solid properties
+    """
+    state_labels = ['u1', 'v1', 'a1']
+    for state_name in state_labels:
+        df_dx = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.state.{state_name}'])
+        forms[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
+
+    state_labels = ['p1']
+    for state_name in state_labels:
+        df_dx = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.fsi.{state_name}'])
+        forms[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
+
+    return forms
+
+def gen_jac_property_forms(unary_form_name, forms):
+    """
+    Return the derivatives of a unary form wrt all solid properties
+    """
+    property_labels = [
+        form_name.split('.')[-1] for form_name in forms.keys() 
+        if 'coeff.prop' in form_name]
+    for prop_name in property_labels:
+        try:
+            df_dprop = dfn.derivative(forms[unary_form_name], forms[f'coeff.prop.{prop_name}'])
+        except:
+            df_dprop = None
+
+        forms[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
+
+    return forms
+
 def gen_unary_linearized_forms(forms):
     """
     Generate linearized forms representing linearization of the residual wrt different states
 
     These forms are needed for solving the Hopf bifurcation problem/conditions
     """
-    for var_name in ['u1', 'v1', 'a1', 'p1']:
+    # Specify the linearization directions
+    for var_name in ['u1', 'v1', 'a1']:
         forms[f'coeff.dstate.{var_name}'] = dfn.Function(forms[f'coeff.state.{var_name}'].function_space())
+    for var_name in ['p1']:
+        forms[f'coeff.dfsi.{var_name}'] = dfn.Function(forms[f'coeff.fsi.{var_name}'].function_space())
 
-    # f = forms['form.un.f1uva']
+    # Compute the jacobian bilinear forms
+    unary_form_name = 'f1uva'
+    for var_name in ['u1', 'v1', 'a1']:
+        forms[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.state.{var_name}'])
+    for var_name in ['p1']:
+        forms[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.fsi.{var_name}'])
 
-    # These unary forms represent
+    # Take the action of the jacobian linear forms to get linearized unary forms
     # dF/dx * delta x, dF/dp * delta p, ...
-    for var_name in ['u1', 'v1', 'a1', 'p1']:
-        forms['form.un.df1{var_name}'] = dfn.action(forms['form.bi.df1uva_d{var_name}'], forms['coeff.dstate.{var_name}'])
+    for var_name in ['u1', 'v1', 'a1']:
+        unary_form_name = f'df1uva_{var_name}'
+        df_dx = forms[f'form.bi.df1uva_d{var_name}']
+        print(len(df_dx.arguments()))
+        # print(len(forms[f'form.un.f1uva'].arguments()))
+        forms[f'form.un.{unary_form_name}'] = dfn.action(df_dx, forms[f'coeff.dstate.{var_name}'])
 
-    for var_name in ['u1', 'v1', 'a1', 'p1']:
-        unary_form_name = f'df1{var_name}'
-        f = forms['form.un.{unary_form_name}']
-
-def gen_bilinear_hvp_forms(forms):
-    """
-    Generate bilinear forms representing derivatives of linearized forms
-
-    These forms are needed for solving the Hopf bifurcation problem/conditions
-    """
-
+    for var_name in ['p1']:
+        unary_form_name = f'df1uva_{var_name}'
+        df_dx = forms[f'form.bi.df1uva_d{var_name}']
+        forms[f'form.un.{unary_form_name}'] = dfn.action(df_dx, forms[f'coeff.dfsi.{var_name}'])
 
 def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                           fsi_facet_labels, fixed_facet_labels):
