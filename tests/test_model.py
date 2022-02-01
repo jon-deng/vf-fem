@@ -6,7 +6,7 @@ import numpy as np
 
 from femvf.models import (load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
 from femvf.constants import PASCAL_TO_CGS
-from femvf import linalg
+from blocklinalg import linalg
 
 from modeldefs import (
     load_fsai_rayleigh_model, load_fsi_kelvinvoigt_model, load_fsi_rayleigh_model

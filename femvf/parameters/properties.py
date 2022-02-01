@@ -23,7 +23,7 @@ shapes = OrderedDict()
 
 import numpy as np
 
-from ..linalg import general_vec_set
+from blocklinalg.linalg import general_vec_set
 
 def property_size(field_size, prop_type):
     """

@@ -8,7 +8,7 @@ import jax
 from jax import numpy as jnp
 import numpy as jnp
 
-from femvf import linalg
+from blocklinalg import linalg
 
 class Acoustic1D(base.Model):
     def __init__(self, num_tube):

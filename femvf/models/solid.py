@@ -18,7 +18,7 @@ from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import base
 from . import newmark
-from ..linalg import BlockVec, general_vec_set
+from blocklinalg.linalg import BlockVec, general_vec_set
 
 
 def form_lin_iso_cauchy_stress(strain, emod, nu):
@@ -102,10 +102,16 @@ def form_pullback_area_normal(u, n):
     return deformation_cofactor*n
 
 def form_cubic_penalty_pressure(gap, kcoll):
+    """
+    Return the cubic penalty pressure
+    """
     positive_gap = (gap + abs(gap)) / 2
     return kcoll*positive_gap**3
 
 def dform_cubic_penalty_pressure(gap, kcoll):
+    """
+    Return derivatives of the cubic penalty pressure
+    """
     positive_gap = (gap + abs(gap)) / 2
     dpositive_gap = np.sign(gap)
     return kcoll*3*positive_gap**2 * dpositive_gap, positive_gap**3
@@ -118,14 +124,23 @@ def form_quad_penalty_pressure(gap, kcoll):
 
 def gen_residual_bilinear_forms(forms):
     """
-    Add bilinear forms to a dictionary defining the residual and state variables
+    Generates bilinear forms representing derivatives of the residual wrt state variables
+
+    If the residual is F(u, v, a; parameters, ...), this function generates 
+    bilinear forms dF/du, dF/dv, etc...
     """
     # Derivatives of the displacement residual form wrt all state variables
+    initial_state_names = [f'coeff.state.{y}' for y in ('u0', 'v0', 'a0')]
+    final_state_names = [f'coeff.state.{y}' for y in ('u1', 'v1', 'a1')]
     manual_state_var_names = [name for name in forms.keys() if 'coeff.state.manual' in name]
 
+    # This section is for derivatives of the time-discretized residual
+    # F(u0, v0, a0, u1; parameters, ...)
     for full_var_name in (
-        [f'coeff.state.{y}' for y in ['u0', 'v0', 'a0', 'u1']] + 
-        manual_state_var_names + ['coeff.time.dt', 'coeff.fsi.p1']):
+        initial_state_names 
+        + ['coeff.state.u1'] 
+        + manual_state_var_names
+        + ['coeff.time.dt', 'coeff.fsi.p1']):
         f = forms['form.un.f1']
         x = forms[full_var_name]
 
@@ -134,10 +149,12 @@ def gen_residual_bilinear_forms(forms):
         forms[form_name] = dfn.derivative(f, x)
         forms[f'{form_name}_adj'] = dfn.adjoint(forms[form_name])
 
-    # Derivatives of the u/v/a residual form wrt variables of interest
+    # This section is for derivatives of the original not time-discretized residual
+    # F(u1, v1, a1; parameters, ...)
     for full_var_name in (
-        [f'coeff.state.{y}' for y in ['u1', 'v1', 'a1']] + 
-        manual_state_var_names + ['coeff.fsi.p1']):
+        final_state_names 
+        + manual_state_var_names 
+        + ['coeff.fsi.p1']):
         f = forms['form.un.f1uva']
         x = forms[full_var_name]
 
@@ -161,6 +178,33 @@ def gen_residual_bilinear_property_forms(forms):
             df1_dsolid[prop_name] = None
 
     return df1_dsolid
+
+def gen_unary_linearized_forms(forms):
+    """
+    Generate linearized forms representing linearization of the residual wrt different states
+
+    These forms are needed for solving the Hopf bifurcation problem/conditions
+    """
+    for var_name in ['u1', 'v1', 'a1', 'p1']:
+        forms[f'coeff.dstate.{var_name}'] = dfn.Function(forms[f'coeff.state.{var_name}'].function_space())
+
+    # f = forms['form.un.f1uva']
+
+    # These unary forms represent
+    # dF/dx * delta x, dF/dp * delta p, ...
+    for var_name in ['u1', 'v1', 'a1', 'p1']:
+        forms['form.un.df1{var_name}'] = dfn.action(forms['form.bi.df1uva_d{var_name}'], forms['coeff.dstate.{var_name}'])
+
+    for var_name in ['u1', 'v1', 'a1', 'p1']:
+        unary_form_name = f'df1{var_name}'
+        f = forms['form.un.{unary_form_name}']
+
+def gen_bilinear_hvp_forms(forms):
+    """
+    Generate bilinear forms representing derivatives of linearized forms
+
+    These forms are needed for solving the Hopf bifurcation problem/conditions
+    """
 
 
 def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
