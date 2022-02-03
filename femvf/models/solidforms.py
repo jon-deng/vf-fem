@@ -235,7 +235,7 @@ def gen_unary_linearized_forms(forms):
     for var_name in ['u1', 'v1', 'a1']:
         unary_form_name = f'df1uva_{var_name}'
         df_dx = forms[f'form.bi.df1uva_d{var_name}']
-        print(len(df_dx.arguments()))
+        # print(len(df_dx.arguments()))
         # print(len(forms[f'form.un.f1uva'].arguments()))
         forms[f'form.un.{unary_form_name}'] = dfn.action(df_dx, forms[f'coeff.dstate.{var_name}'])
 
