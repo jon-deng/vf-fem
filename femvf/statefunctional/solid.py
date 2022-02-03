@@ -11,7 +11,7 @@ import ufl
 
 from blocklinalg import linalg
 # from .base import AbstractFunctional
-from ..models.solid import form_inf_strain
+from ..models.solidforms import form_inf_strain
 
 def glottal_width_smooth(model, state, control, props):
     XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
