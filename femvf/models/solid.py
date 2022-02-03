@@ -22,6 +22,33 @@ from blocklinalg.linalg import BlockVec, general_vec_set
 
 from . import solidforms
 
+def properties_bvec_from_forms(forms, defaults=None):
+    defaults = {} if defaults is None else defaults
+    labels = [form_name.split('.')[-1] for form_name in forms.keys() 
+        if 'coeff.prop' in form_name]
+    vecs = []
+    for label in labels:
+        coefficient = forms['coeff.prop.'+label]
+
+        # vec = None
+        # Generally the size of the vector comes directly from the property,
+        # for examples, constants are size 1, scalar fields have size matching number of dofs
+        # Time step is a special case since it is size 1 but is made to be a field as 
+        # a workaround
+        if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
+            vec = np.ones(coefficient.values().size)
+            vec[:] = coefficient.values()
+        else:
+            vec = coefficient.vector().copy()
+        
+        if label in defaults:
+            vec[:] = defaults[label]
+
+        vecs.append(vec)
+
+    return BlockVec(vecs, labels)
+
+
 class Solid(base.Model):
     """
     Class representing the discretized governing equations of a solid
@@ -143,29 +170,8 @@ class Solid(base.Model):
         return ret
 
     def get_properties_vec(self, set_default=True):
-        labels = [form_name.split('.')[-1] for form_name in self.forms.keys() 
-                  if 'coeff.prop' in form_name]
-        vecs = []
-        for label in labels:
-            coefficient = self.forms['coeff.prop.'+label]
-
-            vec = None
-            # Generally the size of the vector comes directly from the property,
-            # for examples, constants are size 1, scalar fields have size matching number of dofs
-            # Time step is a special case since it is size 1 but is made to be a field as 
-            # a workaround
-            if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
-                vec = np.ones(coefficient.values().size)
-                vec[:] = coefficient.values()
-            else:
-                vec = coefficient.vector().copy()
-            
-            if set_default and label in self.PROPERTY_DEFAULTS:
-                vec[:] = self.PROPERTY_DEFAULTS[label]
-
-            vecs.append(vec)
-
-        return BlockVec(vecs, labels)
+        defaults = self.PROPERTY_DEFAULTS if set_default else None
+        return properties_bvec_from_forms(self.forms, defaults)
     
     ## Parameter setting functions
     def set_ini_state(self, uva0):
