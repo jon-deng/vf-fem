@@ -9,6 +9,7 @@ import blocklinalg.linalg as bla
 
 from .base import DynamicalSystemResidual
 from ..models.solid import properties_bvec_from_forms
+from ..models import solidforms
 from ..models.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 
 class SolidDynamicalSystemResidual(DynamicalSystemResidual):
@@ -61,15 +62,15 @@ class SolidDynamicalSystemResidual(DynamicalSystemResidual):
                 coefficient.vector()[:] = props[key]
 
     def assem_res(self):
-        res_u = dfn.assemble(self.forms['form.un.f1uva']).vector()
+        res_u = dfn.assemble(self.forms['form.un.f1uva'], tensor=dfn.PETScVector())
         res_v = self.v - self.ut
         return bla.BlockVec([res_u, res_v], ['u',  'v'])
 
     def assem_dres_dstate(self):
-        dres_u_du = dfn.assemble(self.forms['form.bi.df1uva_du1'], tensor=dfn.PETScMatrix)
-        dres_u_dv = dfn.assemble(self.forms['form.bi.df1uva_dv1'], tensor=dfn.PETScMatrix)
+        dres_u_du = dfn.assemble(self.forms['form.bi.df1uva_du1'], tensor=dfn.PETScMatrix())
+        dres_u_dv = dfn.assemble(self.forms['form.bi.df1uva_dv1'], tensor=dfn.PETScMatrix())
 
-        n = self.v.size()
+        n = self.v.vector().size()
         dres_v_du = bla.zero_mat(n, n)
         dres_v_dv = bla.ident_mat(n)
 
@@ -81,7 +82,7 @@ class SolidDynamicalSystemResidual(DynamicalSystemResidual):
     def assem_dres_dstatet(self):
         n = self.u.size()
         dres_u_dut = bla.zero_mat(n, n)
-        dres_u_dvt = dfn.assemble(self.forms['form.bi.df1uva_da1'], tensor=dfn.PETScMatrix)
+        dres_u_dvt = dfn.assemble(self.forms['form.bi.df1uva_da1'], tensor=dfn.PETScMatrix())
 
         dres_v_dut = -1*bla.ident_mat(n)
         dres_v_dvt = bla.zero_mat(n, n)
@@ -95,7 +96,8 @@ class SolidDynamicalSystemResidual(DynamicalSystemResidual):
         pass
 
 class KelvinVoigt(SolidDynamicalSystemResidual):
-    @static
+    PROPERTY_DEFAULTS = {}
+    @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
         return solidforms.KelvinVoigt(

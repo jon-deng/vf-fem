@@ -20,8 +20,15 @@ mesh, facet_func, cell_func, (vertex_labels, facet_label_to_id, cell_label_to_id
     load_fenics_xmlmesh(mesh_path)
 
 def test_dynamical_kelvin_voigt():
+    # breakpoint()
     fsi_facet_labels = ['pressure']
     fixed_facet_labels = ['fixed']
-    dynsol.KelvinVoigt(
+    model = dynsol.KelvinVoigt(
         mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
         fsi_facet_labels, fixed_facet_labels)
+
+    model.assem_res()
+    model.assem_dres_dstate()
+
+if __name__ == '__main__':
+    print(test_dynamical_kelvin_voigt())
