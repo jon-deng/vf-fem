@@ -6,14 +6,14 @@ class DynamicalSystemResidual:
 
     # def __init__()
 
-    def set_state(state):
+    def set_state(self, state):
         self.state[:] = state
 
-    def set_statet(statet):
+    def set_statet(self, statet):
         self.statet[:] = statet
 
-    def set_icontrol(icontrol):
+    def set_icontrol(self, icontrol):
         self.icontrol[:] = icontrol
         
-    def set_properties(props):
+    def set_properties(self, props):
         self.properties[:] = props
