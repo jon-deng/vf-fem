@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../vf-sig"
+		},
+		{
+			"path": "../block-linear-algebra"
 		}
 	],
 	"settings": {
