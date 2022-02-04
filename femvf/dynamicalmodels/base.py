@@ -17,3 +17,13 @@ class DynamicalSystemResidual:
         
     def set_properties(self, props):
         self.properties[:] = props
+
+
+    def set_dstate(self, state):
+        self.dstate[:] = state
+
+    def set_dstatet(self, statet):
+        self.dstatet[:] = statet
+
+    def set_dicontrol(self, icontrol):
+        self.dicontrol[:] = icontrol

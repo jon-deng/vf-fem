@@ -25,10 +25,11 @@ def test_dynamical_kelvin_voigt():
     fixed_facet_labels = ['fixed']
     model = dynsol.KelvinVoigt(
         mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
-        fsi_facet_labels, fixed_facet_labels)
+        fsi_facet_labels, fixed_facet_labels, residual_form_name='f1uva')
 
     model.assem_res()
     model.assem_dres_dstate()
+    model.assem_dres_dicontrol()
 
 if __name__ == '__main__':
     print(test_dynamical_kelvin_voigt())
