@@ -16,12 +16,14 @@ import dolfin as dfn
 
 import blocklinalg.linalg as bla
 
-from .base import DynamicalSystemResidual
+from .base import DynamicalSystem
 from ..models.solid import properties_bvec_from_forms
 from ..models import solidforms
 from ..models.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 
-class BaseSolidDynamicalSystemResidual(DynamicalSystemResidual):
+# pylint: disable=abstract-method
+
+class BaseSolidDynamicalSystem(DynamicalSystem):
 
     def __init__(
         self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
@@ -64,7 +66,9 @@ class BaseSolidDynamicalSystemResidual(DynamicalSystemResidual):
     def forms(self):
         return self._forms
 
-    def form_definitions(self, *args):
+    def form_definitions(
+        self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+        fsi_facet_labels, fixed_facet_labels):
         raise NotImplementedError("Must be implemented by child class")
 
     def get_properties_vec(self, set_default=True):
@@ -84,7 +88,7 @@ class BaseSolidDynamicalSystemResidual(DynamicalSystemResidual):
                 coefficient.vector()[:] = props[key]
 
 
-class SolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
+class SolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
     Represents a dynamical system residual
 
@@ -92,6 +96,9 @@ class SolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
     F(x, xt; g, ...) = [Fu, Fv],
     where 'x=[u,v]', 'Fu' is given by Fenics and 'Fv=v-ut'
     """
+    # def form_definitions(self, *args):
+    #     return super().form_definitions(*args)
+
     def assem_res(self):
         resu = dfn.assemble(
             self.forms[f'form.un.f1uva'], 
@@ -147,7 +154,7 @@ class SolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
     def assem_dres_dprops(self):
         pass
 
-class LinearStateSolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
+class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
     Represents a linearized dynamical system residual
 
@@ -232,7 +239,7 @@ class LinearStateSolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
             [dresv_dg]]
         return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['g'])
 
-class LinearStatetSolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
+class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
     Represents a linearized dynamical system residual
 
@@ -298,7 +305,7 @@ class LinearStatetSolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual)
             [dresv_dg]]
         return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['g'])
 
-class LinearIcontrolSolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidual):
+class LinearIcontrolSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
     Represents a linearized dynamical system residual
 
@@ -355,7 +362,7 @@ class LinearIcontrolSolidDynamicalSystemResidual(BaseSolidDynamicalSystemResidua
         dresv_dg = bla.zero_mat(n, m)
 
 
-class KelvinVoigt(SolidDynamicalSystemResidual):
+class KelvinVoigt(SolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,

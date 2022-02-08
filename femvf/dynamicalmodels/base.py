@@ -2,7 +2,7 @@
 Contains a basic nonlinear dynamical system class definition
 """
 
-class DynamicalSystemResidual:
+class DynamicalSystem:
 
     # def __init__()
 
@@ -27,3 +27,4 @@ class DynamicalSystemResidual:
 
     def set_dicontrol(self, icontrol):
         self.dicontrol[:] = icontrol
+        

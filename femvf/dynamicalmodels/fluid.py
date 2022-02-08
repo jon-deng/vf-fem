@@ -1,12 +1,23 @@
 """
 Contains definitions of fluid models
+
+The nonlinear dynamical systems here are defined in jax/numpy and augmented a 
+bit manually. The basic dynamical system residual has a block form
+F(x, xt, g) = [Fq(x, xt, g), Fp(x, xt)]
+x = [q, p]
+xt = [qt, pt]
+and where q and p stand for flow and pressure for a 1D fluid model
 """
 
 import numpy as np
 from jax import numpy as jnp
 import jax
 
-from blocklinalg import lingalg as bla
+from blocklinalg import linalg as bla
+
+from .base import DynamicalSystem
+
+# pylint: disable=abstract-method
 
 def bernoulli_q(asep, psub, psup, rho):
     """
@@ -20,6 +31,7 @@ def bernoulli_p(q, area, ssep, psub, psup, rho):
     Return the pressure based on Bernoulli
     """
     p = psub - 1/2*rho*(q/area)**2
+    return p
 
 def wavg(s, f, w):
     """
@@ -54,4 +66,18 @@ def qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     q = bernoulli_q(asep, psub, psup, rho)
     p = bernoulli_p(q, area, ssep, psub, psup, rho)
     return q, p
+
+class FluidDynamicalSystem(DynamicalSystem):
+
+    def __init__(self, s):
+        self.s = s
+
+        N = self.s.size
+        self.state = bla.BlockVec([np.zeros(1), np.zeros(N)], ['q', 'p'])
+        self.statet = bla.BlockVec([np.zeros(1), np.zeros(N)], ['q', 'p'])
+        self.icontrol = bla.BlockVec([np.ones(N)], ['area'])
+
+        properties_vec = ['psub', 'psub', 'rho_air', 'zeta_min', 'zeta_sep']
+        self.properties = bla.BlockVec(
+            [np.ones(1) for i in range(len(properties_vec))], properties_vec)
 
