@@ -58,7 +58,8 @@ def sigmoid(s, zeta=1):
     """
     return 1/(1+jnp.exp(-s/zeta))
 
-def qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
+@jax.jit
+def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     wmin = smooth_min_weight(area, zeta_min)
     amin = wavg(s, area, wmin)
     smin = wavg(s, s, wmin)
@@ -69,17 +70,138 @@ def qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     p = bernoulli_p(q, area, ssep, psub, psup, rho)
     return q, p
 
-class FluidDynamicalSystem(DynamicalSystem):
+# Use this weird combination of primals/tangent parameters because later we 
+# want to compute the jacobian wrt area
+def dbernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep, tangents):
+    primals = (area, s, psub, psup, rho, zeta_min, zeta_sep)
+    return jax.jvp(bernoulli_qp, primals, tangents)
+
+ddbernoulli_qp_darea = jax.jacfwd(dbernoulli_qp, argnums=0)
+
+class BaseFluid1DDynamicalSystem(DynamicalSystem):
 
     def __init__(self, s):
         self.s = s
 
         N = self.s.size
-        self.state = bla.BlockVec([np.zeros(1), np.zeros(N)], ['q', 'p'])
-        self.statet = bla.BlockVec([np.zeros(1), np.zeros(N)], ['q', 'p'])
+        self.q = np.zeros(1)
+        self.p = np.zeros(N)
+        self.state = bla.BlockVec([self.q, self.p], ['q', 'p'])
+
+        self.qt = np.zeros(1)
+        self.pt = np.zeros(N)
+        self.statet = bla.BlockVec([self.qt, self.pt], ['q', 'p'])
+
         self.icontrol = bla.BlockVec([np.ones(N)], ['area'])
+
+        self.dq = np.zeros(1)
+        self.dp = np.zeros(N)
+        self.dstate = bla.BlockVec([self.q, self.p], ['q', 'p'])
+
+        self.dqt = np.zeros(1)
+        self.dpt = np.zeros(N)
+        self.dstatet = bla.BlockVec([self.qt, self.pt], ['q', 'p'])
+
+        self.dicontrol = bla.BlockVec([np.ones(N)], ['area'])
 
         properties_vec = ['psub', 'psub', 'rho_air', 'zeta_min', 'zeta_sep']
         self.properties = bla.BlockVec(
             [np.ones(1) for i in range(len(properties_vec))], properties_vec)
+
+class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
+    def assem_res(self):
+        # Depack variables from BlockVec for input to Bernoulli functions
+        area = self.icontrol['area']
+        rho = self.properties['rho_air'][0]
+        psub = self.properties['psub'][0]
+        psup = self.properties['psup'][0]
+        zeta_min = self.properties['zeta_min'][0]
+        zeta_sep = self.properties['zeta_sep'][0]
+
+        qp_explicit = qp(area, self.s, psub, psup, rho, zeta_min, zeta_sep)
+        resq = self.q - qp_explicit[0]
+        resp = self.p - qp_explicit[1]
+        return bla.BlockVec([resq, resp], self.state.keys)
+
+    def assem_dres_dstate(self):
+        dresq_dq = np.diag(np.ones(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.ones(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
+    def assem_res(self):
+        resq = np.ones(1)
+        resp = np.ones(self.p.size)
+        return bla.BlockVec([resq, resp], self.state.keys)
+
+class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
+    def assem_res(self):
+        resq = np.zeros(1)
+        resp = np.zeros(self.p.size)
+        return bla.BlockVec([resq, resp], self.state.keys)
+
+class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
+    def assem_res(self):
+        # Depack variables from BlockVec for input to Bernoulli functions
+        area = self.icontrol['area']
+        rho = self.properties['rho_air'][0]
+        psub = self.properties['psub'][0]
+        psup = self.properties['psup'][0]
+        zeta_min = self.properties['zeta_min'][0]
+        zeta_sep = self.properties['zeta_sep'][0]
+        
+        primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
+        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0)
+        dqp = dbernoulli_qp(*primals, tangents)
+        resq = -dqp[0]
+        resp = -dqp[1]
+        return bla.BlockVec([resq, resp], self.state.keys)
+
+    def assem_dres_dstate(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dstatet(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dicontrol(self):
+        # Depack variables from BlockVec for input to Bernoulli functions
+        area = self.icontrol['area']
+        rho = self.properties['rho_air'][0]
+        psub = self.properties['psub'][0]
+        psup = self.properties['psup'][0]
+        zeta_min = self.properties['zeta_min'][0]
+        zeta_sep = self.properties['zeta_sep'][0]
+        
+        primals = (area, rho, psub, psup, zeta_min, zeta_sep)
+        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0)
+
+        ddq_darea, ddp_darea = ddbernoulli_qp_darea(*primals, tangents)
+        dresq_darea = -ddq_darea
+        dresp_darea = -ddp_darea
+        mats = [
+            [dresq_darea],
+            [dresp_darea]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=['area'])
 
