@@ -61,8 +61,10 @@ def sigmoid(s, zeta=1):
 def qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     wmin = smooth_min_weight(area, zeta_min)
     amin = wavg(s, area, wmin)
+    smin = wavg(s, s, wmin)
 
     asep = amin
+    ssep = smin
     q = bernoulli_q(asep, psub, psup, rho)
     p = bernoulli_p(q, area, ssep, psub, psup, rho)
     return q, p
