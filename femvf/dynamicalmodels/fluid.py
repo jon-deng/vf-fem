@@ -74,8 +74,9 @@ def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
 # want to compute the jacobian wrt area
 def dbernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep, tangents):
     primals = (area, s, psub, psup, rho, zeta_min, zeta_sep)
-    return jax.jvp(bernoulli_qp, primals, tangents)
+    return jax.jvp(bernoulli_qp, primals, tangents)[1]
 
+dbernoulli_qp_darea = jax.jacfwd(bernoulli_qp, argnums=0)
 ddbernoulli_qp_darea = jax.jacfwd(dbernoulli_qp, argnums=0)
 
 class BaseFluid1DDynamicalSystem(DynamicalSystem):
@@ -118,7 +119,7 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         zeta_min = self.properties['zeta_min'][0]
         zeta_sep = self.properties['zeta_sep'][0]
 
-        qp_explicit = qp(area, self.s, psub, psup, rho, zeta_min, zeta_sep)
+        qp_explicit = bernoulli_qp(area, self.s, psub, psup, rho, zeta_min, zeta_sep)
         resq = self.q - qp_explicit[0]
         resp = self.p - qp_explicit[1]
         return bla.BlockVec([resq, resp], self.state.keys)
@@ -127,24 +128,116 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         dresq_dq = np.diag(np.ones(self.q.size))
         dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
 
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
         dresp_dp = np.diag(np.ones(self.p.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dstatet(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
         dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
         return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
 
+    def assem_dres_dicontrol(self):
+        # Depack variables from BlockVec for input to Bernoulli functions
+        area = self.icontrol['area']
+        rho = self.properties['rho_air'][0]
+        psub = self.properties['psub'][0]
+        psup = self.properties['psup'][0]
+        zeta_min = self.properties['zeta_min'][0]
+        zeta_sep = self.properties['zeta_sep'][0]
+
+        primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
+        dq_darea, dp_darea = dbernoulli_qp_darea(*primals)
+
+        mats = [
+            [-dq_darea],
+            [-dp_darea]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
+
 class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
-        resq = np.ones(1)
-        resp = np.ones(self.p.size)
+        resq = self.dq
+        resp = self.dp
         return bla.BlockVec([resq, resp], self.state.keys)
 
+    def assem_dres_dstate(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dstatet(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dicontrol(self):
+        dresq_darea = np.zeros(self.q.size, self.s.size)
+        dresp_darea = np.zeros(self.p.size, self.s.size)
+        mats = [
+            [dresq_darea],
+            [dresp_darea]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
+
 class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
+    """
+    This linearized residual works out to be zero because the Bernoulli model
+    doesn't have any transient effects
+    """
     def assem_res(self):
         resq = np.zeros(1)
         resp = np.zeros(self.p.size)
         return bla.BlockVec([resq, resp], self.state.keys)
+
+    def assem_dres_dstate(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dstatet(self):
+        dresq_dq = np.diag(np.zeros(self.q.size))
+        dresq_dp = np.diag(np.zeros(self.q.size, self.p.size))
+
+        dresp_dp = np.diag(np.zeros(self.p.size))
+        dresp_dq = np.diag(np.zeros(self.p.size, self.q.size))
+        mats = [
+            [dresq_dq, dresq_dp],
+            [dresp_dq, dresp_dp]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
+
+    def assem_dres_dicontrol(self):
+        dresq_darea = np.zeros(self.q.size, self.s.size)
+        dresp_darea = np.zeros(self.p.size, self.s.size)
+        mats = [
+            [dresq_darea],
+            [dresp_darea]]
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
 
 class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
@@ -157,7 +250,7 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         zeta_sep = self.properties['zeta_sep'][0]
         
         primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
-        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0)
+        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0, 0)
         dqp = dbernoulli_qp(*primals, tangents)
         resq = -dqp[0]
         resp = -dqp[1]
@@ -194,8 +287,8 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         zeta_min = self.properties['zeta_min'][0]
         zeta_sep = self.properties['zeta_sep'][0]
         
-        primals = (area, rho, psub, psup, zeta_min, zeta_sep)
-        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0)
+        primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
+        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0, 0)
 
         ddq_darea, ddp_darea = ddbernoulli_qp_darea(*primals, tangents)
         dresq_darea = -ddq_darea
@@ -203,5 +296,5 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_darea],
             [dresp_darea]]
-        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=['area'])
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
 
