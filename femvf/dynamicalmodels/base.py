@@ -19,12 +19,12 @@ class DynamicalSystem:
         self.properties[:] = props
 
 
-    def set_dstate(self, state):
-        self.dstate[:] = state
+    def set_dstate(self, dstate):
+        self.dstate[:] = dstate
 
-    def set_dstatet(self, statet):
-        self.dstatet[:] = statet
+    def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
 
-    def set_dicontrol(self, icontrol):
-        self.dicontrol[:] = icontrol
+    def set_dicontrol(self, dicontrol):
+        self.dicontrol[:] = dicontrol
         

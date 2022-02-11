@@ -45,7 +45,7 @@ class FSIMap:
     def map_solid_to_fluid(self, solid_vec, fluid_vec):
         fluid_vec[self.dofs_solid] = solid_vec[self.dofs_fluid]
 
-    def assem_jac_fluid_to_solid(self, comm):
+    def assem_jac_fluid_to_solid(self, comm=None):
         A = ptc.Mat().create(comm)
         A.setSizes([self.N_SOLID, self.N_FLUID])
         A.setUp()
@@ -54,7 +54,7 @@ class FSIMap:
         A.assemble()
         return A
 
-    def assem_jac_solid_to_fluid(self, comm):
+    def assem_jac_solid_to_fluid(self, comm=None):
         A = ptc.Mat().create(comm)
         A.setSizes([self.N_FLUID, self.N_SOLID])
         A.setUp()
@@ -68,7 +68,7 @@ class FSIDynamicalSystem(DynamicalSystem):
     Class representing a fluid-solid coupled dynamical system
     """
 
-    def __init__(self, solid_model, fluid_model):
+    def __init__(self, solid_model, fluid_model, solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid_model
         self.fluid = fluid_model
 
@@ -82,8 +82,13 @@ class FSIDynamicalSystem(DynamicalSystem):
         # Set extra stuff needed for the FSI
         self.ymid = self.solid.properties['y_coll']
         self.solid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
+        self.dsolid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
 
         self.solid_xref = self.solid.XREF
+
+        # solid and fluid fsi dofs should be created when the two models are created
+        self.fsimap = FSIMap(
+            self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs)
 
     def set_state(self, state):
         self.state[:] = state
@@ -93,11 +98,68 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid_area[:] = self.ymid - (self.solid_xref + self.solid.state['u'])[1::2]
 
         # map solid_area to fluid area
+        fluid_control = self.fluid.icontrol.copy()
+        self.fsimap.map_solid_to_fluid(self.solid_area, fluid_control['area'])
+        self.fluid.set_icontrol(fluid_control)
 
         # map fluid pressure to solid pressure
+        solid_control = self.solid.icontrol.copy()
+        self.fsimap.map_fluid_to_solid(self.fluid.state['p'], solid_control['p'])
+        self.solid.set_icontrol(solid_control)
 
+    def set_dstate(self, dstate):
+        self.dstate[:] = dstate
+
+        ## The below are needed to communicate FSI interactions
+        # map linearized state to linearized solid area
+        self.dsolid_area[:] = - (self.dstate['u'])[1::2]
+
+        # map linearized solid area to fluid area
+        dfluid_control = self.fluid.dicontrol.copy()
+        dfluid_control['area'] = self.fsimap.assem_jac_solid_to_fluid() * self.dsolid_area
+        self.fluid.set_dicontrol(dfluid_control)
+
+        # map linearized fluid pressure to solid pressure
+        dsolid_control = self.solid.icontrol.copy()
+        dsolid_control['p'] = self.fsimap.assem_jac_fluid_to_solid() * self.fluid.dstate['p']
+        self.solid.set_dicontrol(dsolid_control)
+
+    # Since the fluid has no time dependence there should be no need to set FSI interactions here
     def set_statet(self, statet):
         self.statet[:] = statet
+
+        # ## The below are needed to communicate FSI interactions
+        # # Set solid_area
+        # self.solid_area[:] = self.ymid - (self.solid_xref + self.solid.statet['u'])[1::2]
+
+        # # map solid_area to fluid area
+        # fluid_control = self.fluid.icontrol.copy()
+        # self.fsimap.map_solid_to_fluid(self.solid_area, fluid_control['area'])
+        # self.fluid.set_icontrol(fluid_control)
+
+        # # map fluid pressure to solid pressure
+        # solid_control = self.solid.icontrol.copy()
+        # self.fsimap.map_fluid_to_solid(self.fluid.state['p'], solid_control['p'])
+        # self.solid.set_icontrol(solid_control)
+        # pass
+
+    def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
+
+        # ## The below are needed to communicate FSI interactions
+        # # map linearized state to linearized solid area
+        # self.dsolid_area[:] = - (self.dstate['u'])[1::2]
+
+        # # map linearized solid area to fluid area
+        # dfluid_control = self.fluid.dicontrol.copy()
+        # dfluid_control['area'] = self.fsimap.assem_jac_solid_to_fluid() * self.dsolid_area
+        # self.fluid.set_dicontrol(dfluid_control)
+
+        # # map linearized fluid pressure to solid pressure
+        # dsolid_control = self.solid.icontrol.copy()
+        # dsolid_control['p'] = self.fsimap.assem_jac_fluid_to_solid() * self.fluid.dstate['p']
+        # self.solid.set_dicontrol(dsolid_control)
+        # pass
 
 
     # have to override the default set_properties method because the so
