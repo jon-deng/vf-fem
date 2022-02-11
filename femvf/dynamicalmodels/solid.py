@@ -24,7 +24,7 @@ from ..models.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 # pylint: disable=abstract-method
 
 class BaseSolidDynamicalSystem(DynamicalSystem):
-
+    PROPERTY_DEFAULTS = {}
     def __init__(
         self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
         fsi_facet_labels, fixed_facet_labels, residual_form_name='f1uva'):
@@ -86,6 +86,13 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
                 coefficient.assign(dfn.Constant(np.squeeze(props[key])))
             else:
                 coefficient.vector()[:] = props[key]
+
+    # Convenience methods
+    @property
+    def XREF(self):
+        xref = dfn.Function(self.forms['function_space.vector'])
+        xref.vector()[:] = self.forms['function_space.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
+        return xref
 
 
 class SolidDynamicalSystem(BaseSolidDynamicalSystem):
