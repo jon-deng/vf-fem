@@ -79,7 +79,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dstate = bla.concatenate([model.dstate for model in self.models])
         self.dstatet = bla.concatenate([model.dstatet for model in self.models])
 
-        # Set extra stuff needed for the FSI
+        # Set extra stuff needed for FSI
         self.ymid = self.solid.properties['y_coll']
         self.solid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
         self.dsolid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
@@ -89,6 +89,9 @@ class FSIDynamicalSystem(DynamicalSystem):
         # solid and fluid fsi dofs should be created when the two models are created
         self.fsimap = FSIMap(
             self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs)
+
+        self._dsolid_dfluid = self.fsimap.assem_jac_fluid_to_solid()
+        self._dfluid_dsolid = self.fsimap.assem_jac_solid_to_fluid()
 
     def set_state(self, state):
         self.state[:] = state
@@ -116,12 +119,12 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # map linearized solid area to fluid area
         dfluid_control = self.fluid.dicontrol.copy()
-        dfluid_control['area'] = self.fsimap.assem_jac_solid_to_fluid() * self.dsolid_area
+        dfluid_control['area'] = self._dfluid_dsolid * self.dsolid_area
         self.fluid.set_dicontrol(dfluid_control)
 
         # map linearized fluid pressure to solid pressure
         dsolid_control = self.solid.icontrol.copy()
-        dsolid_control['p'] = self.fsimap.assem_jac_fluid_to_solid() * self.fluid.dstate['p']
+        dsolid_control['p'] = self._dsolid_dfluid * self.fluid.dstate['p']
         self.solid.set_dicontrol(dsolid_control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here

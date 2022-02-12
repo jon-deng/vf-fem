@@ -18,7 +18,7 @@ should also be defined.
 
 from . import (acoustic, fluid, solid, coupled)
 
-from .load import *
+# from .load import *
 from .acoustic import *
 from .solid import *
 from .fluid import *

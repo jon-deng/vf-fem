@@ -7,7 +7,7 @@ from . import models
 from .models import fluid
 from .models import solid
 from .models import acoustic
-from .models.load import load_fsi_model, load_fsai_model
+from .load import load_fsi_model, load_fsai_model
 
 # Make common modules available
 from . import forward
