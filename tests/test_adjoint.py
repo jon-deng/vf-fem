@@ -23,8 +23,8 @@ import dolfin as dfn
 from femvf import statefile as sf, linalg
 
 from femvf.models import (
-    load_fsi_model, load_fsai_model,
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
+from femvf.load import load_fsi_model, load_fsai_model
 
 from femvf.forward import integrate
 from femvf import adjoint

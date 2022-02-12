@@ -13,8 +13,8 @@ import dolfin as dfn
 
 from femvf import linalg
 from femvf.models import (
-    load_fsi_model, load_fsai_model,
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
+from femvf.load import load_fsi_model, load_fsai_model
 from femvf.constants import PASCAL_TO_CGS
 
 def load_fsi_rayleigh_model(coupling='explicit'):

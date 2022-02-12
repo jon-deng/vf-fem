@@ -4,9 +4,12 @@ Functionality for creating model objects from meshes, etc.
 from os import path
 import numpy as np
 
-from .. import meshutils
-from . import solid as smd, fluid as fmd
-from .coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
+from . import meshutils
+from .models import solid as smd, fluid as fmd
+from .models.coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
+
+# from .dynamicalmodels import solid as smd, fluid as fmd
+# from .dynamicalmodels.coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
 
 def load_solid_model(solid_mesh, SolidType, 
     pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',)):

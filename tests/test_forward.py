@@ -16,7 +16,8 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.models import load_fsi_model, load_fsai_model, solid as smd, fluid as fmd, acoustic as amd
+from femvf.models import solid as smd, fluid as fmd, acoustic as amd
+from femvf.load import load_fsi_model, load_fsai_model
 import femvf.statefunctional.solid as solidfunc
 from femvf import callbacks
 from femvf import linalg

@@ -11,7 +11,7 @@ from os import path
 # import dolfin as dfn
 # import xml
 
-from femvf.model import load_fsi_model
+from femvf.load import load_fsi_model
 from femvf.solid import Rayleigh
 from femvf.fluid import Bernoulli
 
