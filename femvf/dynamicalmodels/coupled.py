@@ -71,8 +71,8 @@ class FSIDynamicalSystem(DynamicalSystem):
     def __init__(self, solid_model, fluid_model, solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid_model
         self.fluid = fluid_model
-
         self.models = (self.solid, self.fluid)
+
         self.state = bla.concatenate_vec([model.state for model in self.models])
         self.statet = bla.concatenate_vec([model.statet for model in self.models])
 
@@ -92,6 +92,26 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         self._dsolid_dfluid = self.fsimap.assem_jac_fluid_to_solid()
         self._dfluid_dsolid = self.fsimap.assem_jac_solid_to_fluid()
+
+        # mats = [
+        #     [0, ],
+        #     []]
+        # self.dslicontrol_dflstate = bla.BlockMat(mats)
+
+        # mats = [
+        #     [],
+        #     []]
+        # self.dflicontrol_dslstate = bla.BlockMat(mats)
+
+        # mats = [
+        #     [],
+        #     []]
+        # self.dslicontrol_dflstatet = bla.BlockMat(mats)
+
+        # mats = [
+        #     [],
+        #     []]
+        # self.dflicontrol_dslstatet = bla.BlockMat(mats)
 
     def set_state(self, state):
         self.state[:] = state
@@ -176,13 +196,40 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fluid.set_properties(props[nsolid:])
 
     def assem_res(self):
-        pass
+        return bla.concatenate_vec([model.assem_res() for model in self.models])
 
     def assem_dres_dstate(self):
+        dfsolid_dxsolid = self.models[0].assem_dres_dstate()
+        dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstate
+
+        dffluid_dxfluid = self.models[1].assem_dres_dstate()
+        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dflicontrol_dflstate
+        bmats = [
+            [dfsolid_dxsolid, dfsolid_dxfluid],
+            [dffluid_dxsolid, dffluid_dxfluid]]
+        return bla.concatenate_mat(bmats)
 
     def assem_dres_dstatet(self):
+        dfsolid_dxsolid = self.models[0].assem_dres_dstatet()
+        dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstate
+
+        dffluid_dxfluid = self.models[1].assem_dres_dstatet()
+        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dflicontrol_dflstate
+        bmats = [
+            [dfsolid_dxsolid, dfsolid_dxfluid],
+            [dffluid_dxsolid, dffluid_dxfluid]]
+        return bla.concatenate_mat(bmats)
 
     def assem_dres_dprops(self):
+        dfsolid_dxsolid = self.models[0].assem_dres_dprops()
+        dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstatet
+
+        dffluid_dxfluid = self.models[1].assem_dres_dprops()
+        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dslicontrol_dflstatet
+        bmats = [
+            [dfsolid_dxsolid, dfsolid_dxfluid],
+            [dffluid_dxsolid, dffluid_dxfluid]]
+        return bla.concatenate_mat(bmats)
 
     
 
