@@ -83,6 +83,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.ymid = self.solid.properties['y_coll']
         self.solid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
         self.dsolid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
+        # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
 
         self.solid_xref = self.solid.XREF
 
@@ -90,27 +91,22 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fsimap = FSIMap(
             self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs)
 
+        # These area jacobians of the mapping of scalars at the FSI interface from one domain to the
+        # other
         self._dsolid_dfluid = self.fsimap.assem_jac_fluid_to_solid()
         self._dfluid_dsolid = self.fsimap.assem_jac_solid_to_fluid()
 
-        # mats = [
-        #     [0, ],
-        #     []]
+        # mats = [[0, self._dsolid_dfluid]]
         # self.dslicontrol_dflstate = bla.BlockMat(mats)
 
-        # mats = [
-        #     [],
-        #     []]
+        # dslarea_dslstate # will have to compute the sensitivity of solid area to solid state; also a blockmatrix
+        # mats = [[0, self._dfluid_dsolid*dslarea_dslstate]]
         # self.dflicontrol_dslstate = bla.BlockMat(mats)
 
-        # mats = [
-        #     [],
-        #     []]
+        # mats = [[]]
         # self.dslicontrol_dflstatet = bla.BlockMat(mats)
 
-        # mats = [
-        #     [],
-        #     []]
+        # mats = [[]]
         # self.dflicontrol_dslstatet = bla.BlockMat(mats)
 
     def set_state(self, state):
