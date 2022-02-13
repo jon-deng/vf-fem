@@ -32,7 +32,7 @@ class FluidFunctional(AbstractFunctional):
 
         if hasattr(self.model, 'acoustic'):
             vecs.append(self.model.acoustic.get_state_vec())
-        return linalg.concatenate(*vecs)
+        return linalg.concatenate_vec(*vecs)
 
     def eval_dprops(self, f):
         dsolid = self.model.solid.get_properties_vec()
@@ -41,7 +41,7 @@ class FluidFunctional(AbstractFunctional):
 
         if hasattr(self.model, 'acoustic'):
             vecs.append(self.model.acoustic.get_properties_vec())
-        return linalg.concatenate(*vecs)
+        return linalg.concatenate_vec(*vecs)
 
     def eval_dfl_state(self, f, n):
         raise NotImplementedError

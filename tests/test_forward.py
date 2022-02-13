@@ -67,7 +67,7 @@ class ForwardConfig(unittest.TestCase):
         sl_props['rayleigh_k'][()] = 4e-3
         sl_props['kcontact'][()] = 1e11
         sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
-        props = linalg.concatenate(sl_props, fl_props)
+        props = linalg.concatenate_vec(sl_props, fl_props)
 
         # Set the initial state
         xy = model.solid.vector_fspace.tabulate_dof_coordinates()
@@ -124,7 +124,7 @@ class ForwardConfig(unittest.TestCase):
         ac_props['soundspeed'][:] = 340*100
         fl_props['a_sup'][:] = ac_props['area'][0]
 
-        props = linalg.concatenate(sl_props, fl_props, ac_props)
+        props = linalg.concatenate_vec(sl_props, fl_props, ac_props)
 
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
@@ -169,7 +169,7 @@ class ForwardConfig(unittest.TestCase):
         sl_props['kcontact'][()] = 1e11
         sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
         sl_props['length'][:] = 1.2
-        props = linalg.concatenate(sl_props, fl_props)
+        props = linalg.concatenate_vec(sl_props, fl_props)
 
         # Set the initial state
         xy = model.solid.vector_fspace.tabulate_dof_coordinates()
@@ -349,8 +349,8 @@ if __name__ == '__main__':
     np.seterr(invalid='raise')
     test = TestIntegrate()
     test.setUp()
-    test.test_integrate_variable_controls()
-    # test.test_integrate_fsi_rayleigh()
+    # test.test_integrate_variable_controls()
+    test.test_integrate_fsi_rayleigh()
     # test.test_integrate_approx3D()
     # test.test_integrate_fsai()
     # test.test_integrate_linear()

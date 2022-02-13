@@ -73,11 +73,11 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fluid = fluid_model
 
         self.models = (self.solid, self.fluid)
-        self.state = bla.concatenate([model.state for model in self.models])
-        self.statet = bla.concatenate([model.statet for model in self.models])
+        self.state = bla.concatenate_vec([model.state for model in self.models])
+        self.statet = bla.concatenate_vec([model.statet for model in self.models])
 
-        self.dstate = bla.concatenate([model.dstate for model in self.models])
-        self.dstatet = bla.concatenate([model.dstatet for model in self.models])
+        self.dstate = bla.concatenate_vec([model.dstate for model in self.models])
+        self.dstatet = bla.concatenate_vec([model.dstatet for model in self.models])
 
         # Set extra stuff needed for FSI
         self.ymid = self.solid.properties['y_coll']
@@ -128,6 +128,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid.set_dicontrol(dsolid_control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
+    # for the specialized 1D Bernoulli model so I've left it empty for now
     def set_statet(self, statet):
         self.statet[:] = statet
 
@@ -174,7 +175,16 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid.set_properties(props[:nsolid])
         self.fluid.set_properties(props[nsolid:])
 
-    # Extra methods needed for FSI
+    def assem_res(self):
+        pass
+
+    def assem_dres_dstate(self):
+
+    def assem_dres_dstatet(self):
+
+    def assem_dres_dprops(self):
+
+    
 
 def assign_vec_into_subvecs(vec, subvecs):
     """
@@ -186,7 +196,7 @@ def assign_vec_into_subvecs(vec, subvecs):
     subvecs : List of BlockVec
     """
     # Check that vector sizes are compatible
-    # subvecs_total_size should concatenate the sizes of all subvecs
+    # subvecs_total_size should concatenate_vec the sizes of all subvecs
     # subvecs_total_size == vec.size??
 
     # Store the current part of `vec` that has not been assigned to a subvec

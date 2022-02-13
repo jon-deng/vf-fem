@@ -47,7 +47,7 @@ class QuasiSteady1DFluid(base.Model):
         dx = self.x_vertices[1:] - self.x_vertices[:-1]
         dy = self.y_surface[1:] - self.y_surface[:-1]
         ds = (dx**2+dy**2)**0.5
-        self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
+        self.s_vertices = np.concatenate_vec(([0.0], np.cumsum(ds)))
 
         p0 = np.zeros(NVERT)
         q0 = np.zeros((1,))

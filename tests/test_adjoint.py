@@ -48,8 +48,8 @@ def taylor_order(f0, hs, fs,
                  dstate, dcontrols, dprops, dtimes):
     
     ## Project the gradient along the step direction
-    directions = linalg.concatenate(dstate, dprops, dtimes, *dcontrols)
-    gradients = linalg.concatenate(gstate, gprops, gtimes, *gcontrols)
+    directions = linalg.concatenate_vec(dstate, dprops, dtimes, *dcontrols)
+    gradients = linalg.concatenate_vec(gstate, gprops, gtimes, *gcontrols)
 
     grad_step = linalg.dot(directions, gradients)
     grad_step_fd = (fs - f0)/hs

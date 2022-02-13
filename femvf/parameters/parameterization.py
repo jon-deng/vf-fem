@@ -144,7 +144,7 @@ class FullParameterization(Parameterization):
         control = model.get_control_vec()
         props = model.get_properties_vec()
         times = linalg.BlockVec((np.zeros(ntime),), ('times',))
-        self._bvector = linalg.concatenate(ini_state, control, props, times) #join_standard_to_bvector(ini_state, control, props, times)
+        self._bvector = linalg.concatenate_vec(ini_state, control, props, times) #join_standard_to_bvector(ini_state, control, props, times)
 
     def convert(self):
         model = self.model

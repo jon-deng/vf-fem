@@ -118,11 +118,11 @@ class WRAnalog(Acoustic1D):
         # note that the number of junctions is 1+number of tubes so some of
         # these are ficitious areas a1 @ junction 0 doesn't really exist
         # the same for a2 @ final junction
-        a1 = np.concatenate([[1.0], area[1::2]])
-        a2 = np.concatenate([area[:-1:2], [1.0]])
+        a1 = np.concatenate_vec([[1.0], area[1::2]])
+        a2 = np.concatenate_vec([area[:-1:2], [1.0]])
 
-        gamma1 = np.concatenate([[1.0], gamma[1::2]])
-        gamma2 = np.concatenate([gamma[:-1:2], [1.0]])
+        gamma1 = np.concatenate_vec([[1.0], gamma[1::2]])
+        gamma2 = np.concatenate_vec([gamma[:-1:2], [1.0]])
 
         self.reflect, self.reflect00, self.inputq = wra(dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=R, L=L)
 
@@ -154,7 +154,7 @@ class WRAnalog(Acoustic1D):
         args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
-        x_ = linalg.concatenate(self.get_state_vec(), x)
+        x_ = linalg.concatenate_vec(self.get_state_vec(), x)
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
         return -linalg.BlockVec(bvecs, self.state1.keys)
@@ -256,7 +256,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         pref_rad_prev = pref_prev[-2:]
         pref_rad = radiation(pinc_rad, pinc_rad_prev, pref_rad_prev)
 
-        pref = jnp.concatenate([pref_inp, pref_int, pref_rad])
+        pref = jnp.concatenate_vec([pref_inp, pref_int, pref_rad])
         return pref
 
     def dreflect00(f1, b2, f1prev, b2prev, b1prev, f2prev, q):
@@ -346,8 +346,8 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         
         # f2_05 and b1_05 (reflected @ 0.5) -> f1, b2 (incident @ 1.0)
         f1inp, b2rad = np.zeros(1), np.zeros(1)
-        f1_1 = jnp.concatenate([f1inp, f2_05])
-        b2_1 = jnp.concatenate([b1_05, b2rad])
+        f1_1 = jnp.concatenate_vec([f1inp, f2_05])
+        b2_1 = jnp.concatenate_vec([b1_05, b2rad])
         pinc_1 = jnp.stack([f1_1, b2_1], axis=-1).reshape(-1)
         
         pref_1 = reflect00(pinc_1, pinc, pref, q)
@@ -385,8 +385,8 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         db1_05, df2_05 = dreflect05(f1_05, b2_05, gamma1_05, gamma2_05, z1_05, z2_05)
 
-        # f1_1 = np.concatenate([f1inp, f2_05])
-        # b2_1 = np.concatenate([b1_05, b2rad])
+        # f1_1 = np.concatenate_vec([f1inp, f2_05])
+        # b2_1 = np.concatenate_vec([b1_05, b2rad])
         df1_1_df2[1:] = df2_05[0]
         df1_1_db1[1:] = df2_05[1]
         
