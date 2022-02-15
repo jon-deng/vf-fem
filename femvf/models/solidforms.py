@@ -303,10 +303,13 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
         'expr.kin.inf_strain': form_inf_strain(u1),
         'expr.kin.inf_strain_rate': form_inf_strain(v1),
         
-        'form.un.f1uva': 0.0
-        # Add kinematic expressions?
-        # 'expr.kin.'
-        }
+        'form.un.f1uva': 0.0,
+        
+        'mesh.mesh': mesh,
+        'mesh.facet_label_to_id': facet_label_to_id,
+        'mesh.cell_label_to_id': cell_label_to_id,
+        'mesh.facet_function': facet_func,
+        'mesh.cell_function': cell_func}
     return forms
 
 def add_inertial_form(forms):
