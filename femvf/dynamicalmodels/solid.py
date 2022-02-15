@@ -90,8 +90,8 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
     # Convenience methods
     @property
     def XREF(self):
-        xref = dfn.Function(self.forms['function_space.vector'])
-        xref.vector()[:] = self.forms['function_space.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
+        xref = dfn.Function(self.forms['fspace.vector'])
+        xref.vector()[:] = self.forms['fspace.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
 

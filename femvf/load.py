@@ -3,6 +3,7 @@ Functionality for creating model objects from meshes, etc.
 """
 from os import path
 import numpy as np
+import dolfin as dfn
 
 from . import meshutils
 from .models import solid as smd, fluid as fmd
@@ -107,11 +108,11 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
-    fsi_facet_ids = [solid.facet_label_to_id[name] for name in solid.fsi_facet_labels]
-    fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.facet_func.array()) 
+    fsi_facet_ids = [solid.forms['mesh.facet_label_to_id'][name] for name in fsi_facet_labels]
+    fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.forms['mesh.facet_function'].array()) 
                                 if fedge in set(fsi_facet_ids)])
-    fsi_verts = meshutils.vertices_from_edges(fsi_edges, solid.mesh)
-    fsi_coordinates = solid.mesh.coordinates()[fsi_verts]
+    fsi_verts = meshutils.vertices_from_edges(fsi_edges, solid.forms['mesh.mesh'])
+    fsi_coordinates = solid.forms['mesh.mesh'].coordinates()[fsi_verts]
 
     # Sort the fsi vertices from inferior to superior
     # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
@@ -130,7 +131,7 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd
             mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
         dx = x[1:] - x[:-1]
         dy = y[1:] - y[:-1]
-        s = np.array(np.concatenate([0], np.cumsum(np.sqrt(dx**2 + dy**2))))
+        s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
         fluid = FluidType(s)
     else:
         raise ValueError(f"This function does not yet support input fluid meshes.")

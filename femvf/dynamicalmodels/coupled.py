@@ -80,9 +80,9 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dstatet = bla.concatenate_vec([model.dstatet for model in self.models])
 
         # Set extra stuff needed for FSI
-        self.ymid = self.solid.properties['y_coll']
-        self.solid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
-        self.dsolid_area = dfn.Function(self.solid.forms['function_space.scalar']).vector()
+        self.ymid = self.solid.properties['ycontact']
+        self.solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
+        self.dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
 
         self.solid_xref = self.solid.XREF
