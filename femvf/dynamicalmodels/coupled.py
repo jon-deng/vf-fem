@@ -34,7 +34,7 @@ class FSIMap:
         self.dofs_solid = solid_dofs
 
         self.fluid_to_solid_idx = {idxf: idxs for idxf, idxs in zip(fluid_dofs, solid_dofs)}
-        self.solid_to_fluid_idx = {idxf: idxs for idxf, idxs in zip(fluid_dofs, solid_dofs)}
+        self.solid_to_fluid_idx = {idxs: idxf for idxf, idxs in zip(fluid_dofs, solid_dofs)}
 
         self.jac_fluid_to_solid = self.assem_jac_fluid_to_solid(comm)
         self.jac_solid_to_fluid = self.assem_jac_solid_to_fluid(comm)
@@ -46,8 +46,7 @@ class FSIMap:
         fluid_vec[self.dofs_solid] = solid_vec[self.dofs_fluid]
 
     def assem_jac_fluid_to_solid(self, comm=None):
-        A = ptc.Mat().create(comm)
-        A.setSizes([self.N_SOLID, self.N_FLUID])
+        A = ptc.Mat().createAIJ([self.N_SOLID, self.N_FLUID], comm=comm)
         A.setUp()
         for jj, ii in self.fluid_to_solid_idx.items():
             A.setValue(ii, jj, 1)
@@ -55,8 +54,7 @@ class FSIMap:
         return A
 
     def assem_jac_solid_to_fluid(self, comm=None):
-        A = ptc.Mat().create(comm)
-        A.setSizes([self.N_FLUID, self.N_SOLID])
+        A = ptc.Mat().createAIJ([self.N_FLUID, self.N_SOLID], comm=comm)
         A.setUp()
         for jj, ii in self.solid_to_fluid_idx.items():
             A.setValue(ii, jj, 1)
@@ -79,7 +77,8 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dstate = bla.concatenate_vec([model.dstate for model in self.models])
         self.dstatet = bla.concatenate_vec([model.dstatet for model in self.models])
 
-        # Set extra stuff needed for FSI
+        ## -- FSI --
+        # Below here is all extra stuff needed to do the coupling between fluid/solid
         self.ymid = self.solid.properties['ycontact']
         self.solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         self.dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
@@ -88,6 +87,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid_xref = self.solid.XREF
 
         # solid and fluid fsi dofs should be created when the two models are created
+        breakpoint()
         self.fsimap = FSIMap(
             self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs)
 
