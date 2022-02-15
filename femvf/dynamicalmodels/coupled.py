@@ -104,7 +104,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         dfla_dv_null = bla.zero_mat(self.fluid.icontrol.vecs[0].size, self.solid.state.vecs[1].size())
         dslarea_du = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state.vecs[0].size()])
         dslarea_du.setUp() # should set preallocation manually in the future
-        for ii in dslarea_du.size[0]:
+        for ii in range(dslarea_du.size[0]):
             # Each solid area is only sensitive to the y component of u, so that's set here
             # REFINE: can only set sensitivites for relevant DOFS; only DOFS on the surface have an 
             # effect 
