@@ -87,7 +87,6 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid_xref = self.solid.XREF
 
         # solid and fluid fsi dofs should be created when the two models are created
-        breakpoint()
         self.fsimap = FSIMap(
             self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs)
 
