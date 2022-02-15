@@ -3,7 +3,7 @@ Contains class definitions for coupled dynamical systems models
 """
 
 import dolfin as dfn
-from petsc4py import PETSc as ptc
+from petsc4py import PETSc as PETSc
 
 import blocklinalg.linalg as bla
 
@@ -46,7 +46,7 @@ class FSIMap:
         fluid_vec[self.dofs_solid] = solid_vec[self.dofs_fluid]
 
     def assem_jac_fluid_to_solid(self, comm=None):
-        A = ptc.Mat().createAIJ([self.N_SOLID, self.N_FLUID], comm=comm)
+        A = PETSc.Mat().createAIJ([self.N_SOLID, self.N_FLUID], comm=comm)
         A.setUp()
         for jj, ii in self.fluid_to_solid_idx.items():
             A.setValue(ii, jj, 1)
@@ -54,7 +54,7 @@ class FSIMap:
         return A
 
     def assem_jac_solid_to_fluid(self, comm=None):
-        A = ptc.Mat().createAIJ([self.N_FLUID, self.N_SOLID], comm=comm)
+        A = PETSc.Mat().createAIJ([self.N_FLUID, self.N_SOLID], comm=comm)
         A.setUp()
         for jj, ii in self.solid_to_fluid_idx.items():
             A.setValue(ii, jj, 1)
@@ -103,7 +103,7 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # The matrix here is d(areafluid)/d(u, v)
         dfla_dv_null = bla.zero_mat(self.fluid.icontrol.vecs[0].size, self.solid.state.vecs[1].size())
-        dslarea_du = ptc.Mat().createAIJ([self.solid_area.size(), self.solid.state.vecs[0].size()])
+        dslarea_du = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state.vecs[0].size()])
         dslarea_du.setUp() # should set preallocation manually in the future
         for ii in dslarea_du.size[0]:
             # Each solid area is only sensitive to the y component of u, so that's set here
