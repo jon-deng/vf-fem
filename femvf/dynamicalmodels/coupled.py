@@ -93,21 +93,36 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # These area jacobians of the mapping of scalars at the FSI interface from one domain to the
         # other
-        self._dsolid_dfluid = self.fsimap.assem_jac_fluid_to_solid()
-        self._dfluid_dsolid = self.fsimap.assem_jac_solid_to_fluid()
+        self._dsolid_dfluid_scalar = self.fsimap.assem_jac_fluid_to_solid()
+        self._dfluid_dsolid_scalar = self.fsimap.assem_jac_solid_to_fluid()
+        
+        # The matrix here is d(psolid)/d(q, p)
+        dslp_dq_null = bla.zero_mat(self.solid.icontrol.vecs[0].size(), self.fluid.state.vecs[0].size)
+        mats = [[dslp_dq_null, self._dsolid_dfluid_scalar]]
+        self.dslicontrol_dflstate = bla.BlockMat(mats)
 
-        # mats = [[0, self._dsolid_dfluid]]
-        # self.dslicontrol_dflstate = bla.BlockMat(mats)
+        # The matrix here is d(areafluid)/d(u, v)
+        dfla_dv_null = bla.zero_mat(self.fluid.icontrol.vecs[0].size, self.solid.state.vecs[1].size())
+        dslarea_du = ptc.Mat().createAIJ([self.solid_area.size(), self.solid.state.vecs[0].size()])
+        dslarea_du.setUp() # should set preallocation manually in the future
+        for ii in dslarea_du.size[0]:
+            # Each solid area is only sensitive to the y component of u, so that's set here
+            # REFINE: can only set sensitivites for relevant DOFS; only DOFS on the surface have an 
+            # effect 
+            dslarea_du.setValues([ii], [2*ii, 2*ii+1], [0, -1])
+        dslarea_du.assemble()
+        mats = [[self._dfluid_dsolid_scalar*dslarea_du, dfla_dv_null]]
+        self.dflicontrol_dslstate = bla.BlockMat(mats)
 
-        # dslarea_dslstate # will have to compute the sensitivity of solid area to solid state; also a blockmatrix
-        # mats = [[0, self._dfluid_dsolid*dslarea_dslstate]]
-        # self.dflicontrol_dslstate = bla.BlockMat(mats)
-
-        # mats = [[]]
-        # self.dslicontrol_dflstatet = bla.BlockMat(mats)
-
-        # mats = [[]]
-        # self.dflicontrol_dslstatet = bla.BlockMat(mats)
+        # Make null BlockMats relating fluid/solid states
+        mats = [
+            [bla.zero_mat(slvec.size(), flvec.size) for flvec in self.fluid.state.vecs]
+            for slvec in self.solid.state.vecs]
+        self.null_dslstate_dflstate = bla.BlockMat(mats)
+        mats = [
+            [bla.zero_mat(flvec.size, slvec.size()) for slvec in self.solid.state.vecs]
+            for flvec in self.fluid.state.vecs]
+        self.null_dflstate_dslstate = bla.BlockMat(mats)
 
     def set_state(self, state):
         self.state[:] = state
@@ -135,12 +150,12 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # map linearized solid area to fluid area
         dfluid_control = self.fluid.dicontrol.copy()
-        dfluid_control['area'] = self._dfluid_dsolid * self.dsolid_area
+        dfluid_control['area'] = self._dfluid_dsolid_scalar * self.dsolid_area
         self.fluid.set_dicontrol(dfluid_control)
 
         # map linearized fluid pressure to solid pressure
         dsolid_control = self.solid.icontrol.copy()
-        dsolid_control['p'] = self._dsolid_dfluid * self.fluid.dstate['p']
+        dsolid_control['p'] = self._dsolid_dfluid_scalar * self.fluid.dstate['p']
         self.solid.set_dicontrol(dsolid_control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
@@ -199,33 +214,38 @@ class FSIDynamicalSystem(DynamicalSystem):
         dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstate
 
         dffluid_dxfluid = self.models[1].assem_dres_dstate()
-        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dflicontrol_dflstate
+        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dflicontrol_dslstate
         bmats = [
             [dfsolid_dxsolid, dfsolid_dxfluid],
             [dffluid_dxsolid, dffluid_dxfluid]]
         return bla.concatenate_mat(bmats)
 
     def assem_dres_dstatet(self):
+        # Because the fluid models is quasi-steady, there are no time varying FSI quantities
+        # As a result, the off-diagonal block terms here are just zero
         dfsolid_dxsolid = self.models[0].assem_dres_dstatet()
-        dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstate
+        # dfsolid_dxfluid = self.models[0].assem_dres_dicontrolt() * self.dslicontrolt_dflstatet
+        dfsolid_dxfluid = self.null_dslstate_dflstate
 
         dffluid_dxfluid = self.models[1].assem_dres_dstatet()
-        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dflicontrol_dflstate
+        # dffluid_dxsolid = self.models[1].assem_dres_dicontrolt() * self.dflicontrolt_dslstatet
+        dffluid_dxsolid = self.null_dflstate_dslstate
         bmats = [
             [dfsolid_dxsolid, dfsolid_dxfluid],
             [dffluid_dxsolid, dffluid_dxfluid]]
         return bla.concatenate_mat(bmats)
 
-    def assem_dres_dprops(self):
-        dfsolid_dxsolid = self.models[0].assem_dres_dprops()
-        dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstatet
+    # TODO: Need to implement for optimization strategies
+    # def assem_dres_dprops(self):
+    #     dfsolid_dxsolid = self.models[0].assem_dres_dprops()
+    #     dfsolid_dxfluid = 
 
-        dffluid_dxfluid = self.models[1].assem_dres_dprops()
-        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dslicontrol_dflstatet
-        bmats = [
-            [dfsolid_dxsolid, dfsolid_dxfluid],
-            [dffluid_dxsolid, dffluid_dxfluid]]
-        return bla.concatenate_mat(bmats)
+    #     dffluid_dxfluid = self.models[1].assem_dres_dprops()
+    #     dffluid_dxsolid = 
+    #     bmats = [
+    #         [dfsolid_dxsolid, dfsolid_dxfluid],
+    #         [dffluid_dxsolid, dffluid_dxfluid]]
+    #     return bla.concatenate_mat(bmats)
 
     
 
