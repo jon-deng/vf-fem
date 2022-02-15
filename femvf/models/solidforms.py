@@ -309,7 +309,9 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
         'mesh.facet_label_to_id': facet_label_to_id,
         'mesh.cell_label_to_id': cell_label_to_id,
         'mesh.facet_function': facet_func,
-        'mesh.cell_function': cell_func}
+        'mesh.cell_function': cell_func,
+        'mesh.fsi_facet_labels': fsi_facet_labels, 
+        'mesh.fixed_facet_labels': fixed_facet_labels}
     return forms
 
 def add_inertial_form(forms):
