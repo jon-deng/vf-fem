@@ -25,7 +25,13 @@ model_coupled = load.load_dynamical_fsi_model(
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
 
+props_fluid = model_fluid.properties.copy()
+props_fluid['psub'] = 800*10
+props_fluid['psup'] = 0.0
+model_fluid.set_properties(props_fluid)
+
 model = model_solid
+model = model_fluid
 
 def gen_res(x, set_x, assem_resx):
     set_x(x)
@@ -41,22 +47,11 @@ def test_assem_dres_dstate():
 
     x0 = model.state.copy()
     dx = x0.copy()
-    dx.set(1e-3)
-    dx['u'][:] = 1e-3
-    dx['v'][:] = 0.0
-    x1 = x0 + dx
-
-    dres_exact = res(x1) - res(x0)
-    dres_linear = bla.mult_mat_vec(jac(x0), dx)
-    print(dres_linear.norm(), dres_exact.norm())
-
-def test_assem_dres_dicontrol():
-    res = lambda state: gen_res(state, model.set_icontrol, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_icontrol, model.assem_dres_dicontrol)
-
-    x0 = model.icontrol.copy()
-    dx = x0.copy()
-    dx.set(1e-3)
+    if 'u' in dx:
+        dx['u'][:] = 1e-3
+        dx['v'][:] = 0
+    elif 'q' in dx:
+        dx.set(1e-3)
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
@@ -69,9 +64,11 @@ def test_assem_dres_dstatet():
 
     x0 = model.statet.copy()
     dx = x0.copy()
-    dx.set(1e-3)
-    dx['u'][:] = 1e-3
-    dx['v'][:] = 0
+    if 'u' in dx:
+        dx['u'][:] = 1e-3
+        dx['v'][:] = 0
+    elif 'q' in dx:
+        dx.set(1e-3)
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
@@ -79,17 +76,30 @@ def test_assem_dres_dstatet():
     # breakpoint()
     print(dres_linear.norm(), dres_exact.norm())
 
+def test_assem_dres_dicontrol():
+    res = lambda state: gen_res(state, model.set_icontrol, model.assem_res)
+    jac = lambda state: gen_jac(state, model.set_icontrol, model.assem_dres_dicontrol)
+
+    x0 = model.icontrol.copy()
+    dx = x0.copy()
+    dx.set(1e-4)
+    x1 = x0 + dx
+
+    dres_exact = res(x1) - res(x0)
+    dres_linear = bla.mult_mat_vec(jac(x0), dx)
+    print(dres_linear.norm(), dres_exact.norm())
+
 def test_assem_dres_dprops():
     res = lambda state: gen_res(state, model.set_properties, model.assem_res)
     jac = lambda state: gen_jac(state, model.set_properties, model.assem_dres_dprops)
 
-    state_0 = model.properties.copy()
-    dstate = state_0.copy()
-    dstate.set(1e-3)
-    state_1 = state_0 + dstate
+    x0 = model.properties.copy()
+    dx = x0.copy()
+    dx.set(1e-4)
+    x1 = x0 + dx
 
-    dres_exact = res(state_1) - res(state_0)
-    dres_linear = bla.mult_mat_vec(jac(state_0), dstate)
+    dres_exact = res(x1) - res(x0)
+    dres_linear = bla.mult_mat_vec(jac(x0), dx)
     print(dres_exact)
     print(dres_linear.norm(), dres_exact.norm())
 
