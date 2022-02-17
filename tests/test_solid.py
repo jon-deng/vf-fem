@@ -8,6 +8,7 @@ from pprint import pprint
 
 from femvf.meshutils import load_fenics_xmlmesh
 from femvf.models import solid as smd
+from femvf.models import solidforms as fsmd
 
 dfn.set_log_level(30)
 
@@ -20,7 +21,7 @@ mesh, facet_func, cell_func, (vertex_labels, facet_label_to_id, cell_label_to_id
 
 def test_base_form_definitions():
     try:
-        smd.base_form_definitions(
+        fsmd.base_form_definitions(
             mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
             ['pressure'], ['fixed'])
     except:
@@ -29,14 +30,14 @@ def test_base_form_definitions():
 def test_hopf_form_definitions():
     try:
         forms = \
-            smd.add_surface_pressure_form(
-            smd.add_inertial_form(
-            smd.add_kv_viscous_form(
-            smd.add_isotropic_elastic_form(
-            smd.base_form_definitions(
+            fsmd.add_surface_pressure_form(
+            fsmd.add_inertial_form(
+            fsmd.add_kv_viscous_form(
+            fsmd.add_isotropic_elastic_form(
+            fsmd.base_form_definitions(
             mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
             ['pressure'], ['fixed'])))))
-        smd.gen_hopf_forms(forms)
+        fsmd.gen_hopf_forms(forms)
         pprint(forms)
     except:
         raise
