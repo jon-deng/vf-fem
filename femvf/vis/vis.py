@@ -106,8 +106,8 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
 
     gw = fluid_props['y_midline'] - np.amax(xy_current[:, 1])
     line = axs[2, 0].lines[0]
-    xdata = np.concatenate_vec((line.get_xdata(), [t]), axis=0)
-    ydata = np.concatenate_vec((line.get_ydata(), [gw]), axis=0)
+    xdata = np.concatenate((line.get_xdata(), [t]), axis=0)
+    ydata = np.concatenate((line.get_ydata(), [gw]), axis=0)
     line.set_data(xdata, ydata)
 
     axs[2, 0].set_xlim(0, np.maximum(1.2*t, 0.01))

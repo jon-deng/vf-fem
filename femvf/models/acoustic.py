@@ -118,11 +118,11 @@ class WRAnalog(Acoustic1D):
         # note that the number of junctions is 1+number of tubes so some of
         # these are ficitious areas a1 @ junction 0 doesn't really exist
         # the same for a2 @ final junction
-        a1 = np.concatenate_vec([[1.0], area[1::2]])
-        a2 = np.concatenate_vec([area[:-1:2], [1.0]])
+        a1 = np.concatenate([[1.0], area[1::2]])
+        a2 = np.concatenate([area[:-1:2], [1.0]])
 
-        gamma1 = np.concatenate_vec([[1.0], gamma[1::2]])
-        gamma2 = np.concatenate_vec([gamma[:-1:2], [1.0]])
+        gamma1 = np.concatenate([[1.0], gamma[1::2]])
+        gamma2 = np.concatenate([gamma[:-1:2], [1.0]])
 
         self.reflect, self.reflect00, self.inputq = wra(dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=R, L=L)
 
@@ -385,8 +385,8 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         db1_05, df2_05 = dreflect05(f1_05, b2_05, gamma1_05, gamma2_05, z1_05, z2_05)
 
-        # f1_1 = np.concatenate_vec([f1inp, f2_05])
-        # b2_1 = np.concatenate_vec([b1_05, b2rad])
+        # f1_1 = np.concatenate([f1inp, f2_05])
+        # b2_1 = np.concatenate([b1_05, b2rad])
         df1_1_df2[1:] = df2_05[0]
         df1_1_db1[1:] = df2_05[1]
         

@@ -113,7 +113,7 @@ class TestBernoulli(CommonSetup):
         vsurf0 = np.zeros(usurf0.shape)
 
         ## Set a surface state step direction and step sizes
-        hs = np.concatenate_vec([[0], 2**np.arange(-5, 5, dtype=np.float)])
+        hs = np.concatenate([[0], 2**np.arange(-5, 5, dtype=np.float)])
         du = np.zeros(fluid.control['usurf'].size)
         du[:] = np.linspace(0, 1.0e-5, du.size)
         # du[:] = np.random.rand(du.size)*1e-5
@@ -177,7 +177,7 @@ class TestBernoulli(CommonSetup):
         surf_state = (xy_surf.reshape(-1), np.zeros(xy_surf.shape).reshape(-1))
 
         ## Set a surface state step direction and step sizes
-        hs = np.concatenate_vec([[0], 2**np.arange(0, 5, dtype=np.float)])
+        hs = np.concatenate([[0], 2**np.arange(0, 5, dtype=np.float)])
         dpsub = 1.0
 
         ## Calculate p/q sensitivity and convergence order using FD
