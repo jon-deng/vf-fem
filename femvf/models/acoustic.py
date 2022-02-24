@@ -256,7 +256,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         pref_rad_prev = pref_prev[-2:]
         pref_rad = radiation(pinc_rad, pinc_rad_prev, pref_rad_prev)
 
-        pref = jnp.concatenate_vec([pref_inp, pref_int, pref_rad])
+        pref = jnp.concatenate([pref_inp, pref_int, pref_rad])
         return pref
 
     def dreflect00(f1, b2, f1prev, b2prev, b1prev, f2prev, q):
@@ -346,8 +346,8 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         
         # f2_05 and b1_05 (reflected @ 0.5) -> f1, b2 (incident @ 1.0)
         f1inp, b2rad = np.zeros(1), np.zeros(1)
-        f1_1 = jnp.concatenate_vec([f1inp, f2_05])
-        b2_1 = jnp.concatenate_vec([b1_05, b2rad])
+        f1_1 = jnp.concatenate([f1inp, f2_05])
+        b2_1 = jnp.concatenate([b1_05, b2rad])
         pinc_1 = jnp.stack([f1_1, b2_1], axis=-1).reshape(-1)
         
         pref_1 = reflect00(pinc_1, pinc, pref, q)
