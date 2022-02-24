@@ -68,14 +68,14 @@ class SolidFunctional(AbstractFunctional):
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_state_vec())
-        return linalg.concatenate_vec(*vecs)
+        return linalg.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
         vecs = [self.eval_dsl_props(f)]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_properties_vec())
-        return linalg.concatenate_vec(*vecs)
+        return linalg.concatenate_vec(vecs)
 
 class PeriodicError(SolidFunctional):
     r"""

@@ -66,7 +66,7 @@ class TestFSAIModel(unittest.TestCase):
         ac_props['length'][:] = 12.0
         ac_props['soundspeed'][:] = 340*100
 
-        props = linalg.concatenate_vec(sl_props, fl_props, ac_props)
+        props = linalg.concatenate_vec([sl_props, fl_props, ac_props])
 
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()

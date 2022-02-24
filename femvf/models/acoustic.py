@@ -154,7 +154,7 @@ class WRAnalog(Acoustic1D):
         args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
-        x_ = linalg.concatenate_vec(self.get_state_vec(), x)
+        x_ = linalg.concatenate_vec([self.get_state_vec(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
         return -linalg.BlockVec(bvecs, self.state1.keys)

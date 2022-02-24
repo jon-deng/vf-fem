@@ -47,7 +47,7 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     solid_props['kcontact'][()] = k_coll
     solid_props['ycontact'][()] = fluid_props['y_midline'][()] - y_coll_offset
 
-    return model, linalg.concatenate_vec(solid_props, fluid_props)
+    return model, linalg.concatenate_vec([solid_props, fluid_props])
 
 def load_fsi_kelvinvoigt_model(coupling='explicit'):
     ## Set the mesh to be used and initialize the forward model
@@ -85,7 +85,7 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     # solid_props['ycontact'][()] = fluid_props['y_midline'][()] - y_coll_offset
     solid_props['ycontact'][()] = fluid_props['y_midline'] - y_coll_offset
 
-    return model, linalg.concatenate_vec(solid_props, fluid_props)
+    return model, linalg.concatenate_vec([solid_props, fluid_props])
 
 def load_fsai_rayleigh_model(coupling='explicit'):
     mesh_dir = '../meshes'
@@ -125,7 +125,7 @@ def load_fsai_rayleigh_model(coupling='explicit'):
     ac_props['length'][:] = 12.0
     ac_props['soundspeed'][:] = 340*100
 
-    props = linalg.concatenate_vec(sl_props, fl_props, ac_props)
+    props = linalg.concatenate_vec([sl_props, fl_props, ac_props])
     
     return model, props
 

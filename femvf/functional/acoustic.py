@@ -35,7 +35,7 @@ class AcousticFunctional(AbstractFunctional):
 
     def eval_dstate(self, f, n):
         vecs = [self.model.solid.get_state_vec(), self.model.fluid.get_state_vec(), self.eval_dac_state(f, n)]
-        return linalg.concatenate_vec(*vecs)
+        return linalg.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
         dsolid = self.model.solid.get_properties_vec()
@@ -46,7 +46,7 @@ class AcousticFunctional(AbstractFunctional):
 
         vecs = [dsolid, dfluid, self.eval_dac_props(f)]
 
-        return linalg.concatenate_vec(*vecs)
+        return linalg.concatenate_vec(vecs)
 
     def eval_dac_state(self, f, n):
         raise NotImplementedError
