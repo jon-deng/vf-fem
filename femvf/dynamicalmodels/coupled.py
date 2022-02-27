@@ -6,8 +6,11 @@ import dolfin as dfn
 from petsc4py import PETSc as PETSc
 
 import blocklinalg.linalg as bla
+# from blocklinalg import genericops as gops
+from blocklinalg.mat import convert_bmat_to_petsc
+from blocklinalg.vec import convert_bvec_to_petsc, split_bvec
 
-from .base import DynamicalSystem
+from .base import DynamicalSystem 
 
 
 class FSIMap:
@@ -46,6 +49,7 @@ class FSIMap:
         fluid_vec[self.dofs_solid] = solid_vec[self.dofs_fluid]
 
     def assem_jac_fluid_to_solid(self, comm=None):
+        # pylint: disable=no-member
         A = PETSc.Mat().createAIJ([self.N_SOLID, self.N_FLUID], comm=comm)
         A.setUp()
         for jj, ii in self.fluid_to_solid_idx.items():
@@ -54,6 +58,7 @@ class FSIMap:
         return A
 
     def assem_jac_solid_to_fluid(self, comm=None):
+        # pylint: disable=no-member
         A = PETSc.Mat().createAIJ([self.N_FLUID, self.N_SOLID], comm=comm)
         A.setUp()
         for jj, ii in self.solid_to_fluid_idx.items():
@@ -71,11 +76,13 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fluid = fluid_model
         self.models = (self.solid, self.fluid)
 
-        self.state = bla.concatenate_vec([model.state for model in self.models])
-        self.statet = bla.concatenate_vec([model.statet for model in self.models])
+        self.state = bla.concatenate_vec([convert_bvec_to_petsc(model.state) for model in self.models])
+        self.statet = bla.concatenate_vec([convert_bvec_to_petsc(model.statet) for model in self.models])
 
-        self.dstate = bla.concatenate_vec([model.dstate for model in self.models])
-        self.dstatet = bla.concatenate_vec([model.dstatet for model in self.models])
+        self.dstate = bla.concatenate_vec([convert_bvec_to_petsc(model.dstate) for model in self.models])
+        self.dstatet = bla.concatenate_vec([convert_bvec_to_petsc(model.dstatet) for model in self.models])
+
+        self.properties = bla.concatenate_vec([convert_bvec_to_petsc(model.properties) for model in self.models])
 
         ## -- FSI --
         # Below here is all extra stuff needed to do the coupling between fluid/solid
@@ -101,6 +108,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dslicontrol_dflstate = bla.BlockMat(mats)
 
         # The matrix here is d(areafluid)/d(u, v)
+        # pylint: disable=no-member
         dfla_dv_null = bla.zero_mat(self.fluid.icontrol.vecs[0].size, self.solid.state.vecs[1].size())
         dslarea_du = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state.vecs[0].size()])
         dslarea_du.setUp() # should set preallocation manually in the future
@@ -124,7 +132,10 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.null_dflstate_dslstate = bla.BlockMat(mats)
 
     def set_state(self, state):
-        self.state[:] = state
+        block_sizes = [model.state.bsize for model in self.models]
+        sub_states = split_bvec(state, block_sizes)
+        for model, sub_state in zip(self.models, sub_states):
+            model.set_state(sub_state)
 
         ## The below are needed to communicate FSI interactions
         # Set solid_area
@@ -141,7 +152,10 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid.set_icontrol(solid_control)
 
     def set_dstate(self, dstate):
-        self.dstate[:] = dstate
+        block_sizes = [model.dstate.bsize for model in self.models]
+        sub_states = split_bvec(dstate, block_sizes)
+        for model, sub_state in zip(self.models, sub_states):
+            model.set_dstate(sub_state)
 
         ## The below are needed to communicate FSI interactions
         # map linearized state to linearized solid area
@@ -160,60 +174,35 @@ class FSIDynamicalSystem(DynamicalSystem):
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
     # for the specialized 1D Bernoulli model so I've left it empty for now
     def set_statet(self, statet):
-        self.statet[:] = statet
-
-        # ## The below are needed to communicate FSI interactions
-        # # Set solid_area
-        # self.solid_area[:] = self.ymid - (self.solid_xref + self.solid.statet['u'])[1::2]
-
-        # # map solid_area to fluid area
-        # fluid_control = self.fluid.icontrol.copy()
-        # self.fsimap.map_solid_to_fluid(self.solid_area, fluid_control['area'])
-        # self.fluid.set_icontrol(fluid_control)
-
-        # # map fluid pressure to solid pressure
-        # solid_control = self.solid.icontrol.copy()
-        # self.fsimap.map_fluid_to_solid(self.fluid.state['p'], solid_control['p'])
-        # self.solid.set_icontrol(solid_control)
-        # pass
+        block_sizes = [model.statet.bsize for model in self.models]
+        sub_states = split_bvec(statet, block_sizes)
+        for model, sub_state in zip(self.models, sub_states):
+            model.set_dstate(sub_state)
 
     def set_dstatet(self, dstatet):
-        self.dstatet[:] = dstatet
-
-        # ## The below are needed to communicate FSI interactions
-        # # map linearized state to linearized solid area
-        # self.dsolid_area[:] = - (self.dstate['u'])[1::2]
-
-        # # map linearized solid area to fluid area
-        # dfluid_control = self.fluid.dicontrol.copy()
-        # dfluid_control['area'] = self.fsimap.assem_jac_solid_to_fluid() * self.dsolid_area
-        # self.fluid.set_dicontrol(dfluid_control)
-
-        # # map linearized fluid pressure to solid pressure
-        # dsolid_control = self.solid.icontrol.copy()
-        # dsolid_control['p'] = self.fsimap.assem_jac_fluid_to_solid() * self.fluid.dstate['p']
-        # self.solid.set_dicontrol(dsolid_control)
-        # pass
-
+        block_sizes = [model.dstatet.bsize for model in self.models]
+        sub_states = split_bvec(dstatet, block_sizes)
+        for model, sub_state in zip(self.models, sub_states):
+            model.set_dstate(sub_state)
 
     # have to override the default set_properties method because the so
     # the solid property can't be set using solid.properties[:] = ....
     # properties manually using setter methods
     def set_properties(self, props):
-        
-        nsolid = self.solid.properties.bsize
-        self.solid.set_properties(props[:nsolid])
-        self.fluid.set_properties(props[nsolid:])
+        block_sizes = [model.properties.bsize for model in self.models]
+        sub_props = split_bvec(props, block_sizes)
+        for model, sub_prop in zip(self.models, sub_props):
+            model.set_properties(sub_prop)
 
     def assem_res(self):
-        return bla.concatenate_vec([model.assem_res() for model in self.models])
+        return bla.concatenate_vec([convert_bvec_to_petsc(model.assem_res()) for model in self.models])
 
     def assem_dres_dstate(self):
-        dfsolid_dxsolid = self.models[0].assem_dres_dstate()
-        dfsolid_dxfluid = self.models[0].assem_dres_dicontrol() * self.dslicontrol_dflstate
+        dfsolid_dxsolid = convert_bmat_to_petsc(self.models[0].assem_dres_dstate())
+        dfsolid_dxfluid = convert_bmat_to_petsc(self.models[0].assem_dres_dicontrol()) * self.dslicontrol_dflstate
 
-        dffluid_dxfluid = self.models[1].assem_dres_dstate()
-        dffluid_dxsolid = self.models[1].assem_dres_dicontrol() * self.dflicontrol_dslstate
+        dffluid_dxfluid = convert_bmat_to_petsc(self.models[1].assem_dres_dstate())
+        dffluid_dxsolid = convert_bmat_to_petsc(self.models[1].assem_dres_dicontrol()) * self.dflicontrol_dslstate
         bmats = [
             [dfsolid_dxsolid, dfsolid_dxfluid],
             [dffluid_dxsolid, dffluid_dxfluid]]
@@ -222,13 +211,13 @@ class FSIDynamicalSystem(DynamicalSystem):
     def assem_dres_dstatet(self):
         # Because the fluid models is quasi-steady, there are no time varying FSI quantities
         # As a result, the off-diagonal block terms here are just zero
-        dfsolid_dxsolid = self.models[0].assem_dres_dstatet()
+        dfsolid_dxsolid = convert_bmat_to_petsc(self.models[0].assem_dres_dstatet())
         # dfsolid_dxfluid = self.models[0].assem_dres_dicontrolt() * self.dslicontrolt_dflstatet
-        dfsolid_dxfluid = self.null_dslstate_dflstate
+        dfsolid_dxfluid = convert_bmat_to_petsc(self.null_dslstate_dflstate)
 
-        dffluid_dxfluid = self.models[1].assem_dres_dstatet()
+        dffluid_dxfluid = convert_bmat_to_petsc(self.models[1].assem_dres_dstatet())
         # dffluid_dxsolid = self.models[1].assem_dres_dicontrolt() * self.dflicontrolt_dslstatet
-        dffluid_dxsolid = self.null_dflstate_dslstate
+        dffluid_dxsolid = convert_bmat_to_petsc(self.null_dflstate_dslstate)
         bmats = [
             [dfsolid_dxsolid, dfsolid_dxfluid],
             [dffluid_dxsolid, dffluid_dxfluid]]
@@ -245,26 +234,3 @@ class FSIDynamicalSystem(DynamicalSystem):
     #         [dfsolid_dxsolid, dfsolid_dxfluid],
     #         [dffluid_dxsolid, dffluid_dxfluid]]
     #     return bla.concatenate_mat(bmats)
-
-    
-
-def assign_vec_into_subvecs(vec, subvecs):
-    """
-    Assigns a BlockVector to a sequence of sub BlockVectors
-
-    Parameters
-    ----------
-    vec : BlockVec
-    subvecs : List of BlockVec
-    """
-    # Check that vector sizes are compatible
-    # subvecs_total_size should concatenate_vec the sizes of all subvecs
-    # subvecs_total_size == vec.size??
-
-    # Store the current part of `vec` that has not been assigned to a subvec
-    _vec = vec
-    for subvec in subvecs:
-        subvec_block_size = subvec.bsize
-        subvec[:] = _vec[:subvec_block_size]
-        _vec = _vec[subvec_block_size:]
-
