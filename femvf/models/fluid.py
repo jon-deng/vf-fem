@@ -17,7 +17,7 @@ from petsc4py import PETSc
 from . import base
 from ..parameters.properties import property_vecs
 from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
-from blocklinalg.linalg import BlockVec, general_vec_set
+from blocklinalg.linalg import BlockVec
 
 ## 1D Bernoulli approximation codes
 

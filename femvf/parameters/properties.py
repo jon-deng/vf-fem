@@ -23,7 +23,7 @@ shapes = OrderedDict()
 
 import numpy as np
 
-from blocklinalg.linalg import general_vec_set
+from blocklinalg.genericops import set_vec
 
 def property_size(field_size, prop_type):
     """
@@ -56,6 +56,6 @@ def property_vecs(field_size, prop_types, prop_defaults=None):
 
     if prop_defaults is not None:
         for label, vec in zip(labels, vecs):
-            general_vec_set(vec, prop_defaults[label])
+            set_vec(vec, prop_defaults[label])
 
     return vecs, labels

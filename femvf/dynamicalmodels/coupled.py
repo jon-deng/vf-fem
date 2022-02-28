@@ -185,9 +185,6 @@ class FSIDynamicalSystem(DynamicalSystem):
         for model, sub_state in zip(self.models, sub_states):
             model.set_dstate(sub_state)
 
-    # have to override the default set_properties method because the so
-    # the solid property can't be set using solid.properties[:] = ....
-    # properties manually using setter methods
     def set_properties(self, props):
         block_sizes = [model.properties.bsize for model in self.models]
         sub_props = split_bvec(props, block_sizes)
@@ -222,6 +219,12 @@ class FSIDynamicalSystem(DynamicalSystem):
             [dfsolid_dxsolid, dfsolid_dxfluid],
             [dffluid_dxsolid, dffluid_dxfluid]]
         return bla.concatenate_mat(bmats)
+
+    def assem_dres_dprops(self):
+        raise NotImplementedError("Not implemented yet")
+
+    def assem_dres_dicontrol(self):
+        raise NotImplementedError("Not implemented yet")
 
     # TODO: Need to implement for optimization strategies
     # def assem_dres_dprops(self):
