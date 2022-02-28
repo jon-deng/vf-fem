@@ -280,7 +280,7 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
         'measure.dx': dx,
         'measure.ds': ds,
         'measure.ds_traction': traction_ds,
-        'bcs.base': bc_base,
+        'bc.dirichlet': bc_base,
 
         'geom.facet_normal': dfn.FacetNormal(mesh),
 

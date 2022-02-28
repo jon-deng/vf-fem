@@ -100,7 +100,7 @@ class Solid(base.Model):
         ## Measures and boundary conditions
         self.dx = self.forms['measure.dx']
         self.ds = self.forms['measure.ds']
-        self.bc_base = self.forms['bcs.base']
+        self.bc_base = self.forms['bc.dirichlet']
 
         ## Index mappings
         self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
