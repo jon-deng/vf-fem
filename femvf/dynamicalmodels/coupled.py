@@ -46,7 +46,7 @@ class FSIMap:
         solid_vec[self.dofs_solid] = fluid_vec[self.dofs_fluid]
 
     def map_solid_to_fluid(self, solid_vec, fluid_vec):
-        fluid_vec[self.dofs_solid] = solid_vec[self.dofs_fluid]
+        fluid_vec[self.dofs_fluid] = solid_vec[self.dofs_solid]
 
     def assem_jac_fluid_to_solid(self, comm=None):
         # pylint: disable=no-member
@@ -91,7 +91,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
 
-        self.solid_xref = self.solid.XREF
+        self.solid_xref = self.solid.XREF.vector()
 
         # solid and fluid fsi dofs should be created when the two models are created
         self.fsimap = FSIMap(

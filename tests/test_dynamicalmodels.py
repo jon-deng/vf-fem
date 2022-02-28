@@ -6,6 +6,7 @@ from os import path
 from functools import partial
 
 from blocklinalg import linalg as bla
+from blocklinalg import genericops as gops
 from femvf import dynamicalmodels as dynmod
 from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
 from femvf import load
@@ -32,6 +33,7 @@ model_fluid.set_properties(props_fluid)
 
 model = model_solid
 model = model_fluid
+model = model_coupled
 
 def gen_res(x, set_x, assem_resx):
     set_x(x)
@@ -48,8 +50,8 @@ def test_assem_dres_dstate():
     x0 = model.state.copy()
     dx = x0.copy()
     if 'u' in dx:
-        dx['u'][:] = 1e-3
-        dx['v'][:] = 0
+        gops.set_vec(dx['u'], 1e-3)
+        gops.set_vec(dx['v'], 0)
     elif 'q' in dx:
         dx.set(1e-3)
     x1 = x0 + dx
@@ -106,5 +108,5 @@ def test_assem_dres_dprops():
 if __name__ == '__main__':
     test_assem_dres_dstate()
     test_assem_dres_dstatet()
-    test_assem_dres_dicontrol()
+    # test_assem_dres_dicontrol()
     # print("yoyo whatup")
