@@ -57,6 +57,7 @@ def test_assem_dres_dstate():
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
+    A = jac(x0)
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
     print(dres_linear.norm(), dres_exact.norm())
 

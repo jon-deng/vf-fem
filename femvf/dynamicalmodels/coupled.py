@@ -196,10 +196,14 @@ class FSIDynamicalSystem(DynamicalSystem):
 
     def assem_dres_dstate(self):
         dfsolid_dxsolid = convert_bmat_to_petsc(self.models[0].assem_dres_dstate())
-        dfsolid_dxfluid = convert_bmat_to_petsc(self.models[0].assem_dres_dicontrol()) * self.dslicontrol_dflstate
+        dfsolid_dxfluid = bla.mult_mat_mat(
+            convert_bmat_to_petsc(self.models[0].assem_dres_dicontrol()),
+            self.dslicontrol_dflstate)
 
         dffluid_dxfluid = convert_bmat_to_petsc(self.models[1].assem_dres_dstate())
-        dffluid_dxsolid = convert_bmat_to_petsc(self.models[1].assem_dres_dicontrol()) * self.dflicontrol_dslstate
+        dffluid_dxsolid = bla.mult_mat_mat(
+            convert_bmat_to_petsc(self.models[1].assem_dres_dicontrol()), 
+            self.dflicontrol_dslstate)
         bmats = [
             [dfsolid_dxsolid, dfsolid_dxfluid],
             [dffluid_dxsolid, dffluid_dxfluid]]
