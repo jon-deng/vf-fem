@@ -116,8 +116,8 @@ class FSIModel(base.Model):
             self.fluid.control[key][:] = value
 
     def set_properties(self, props):
-        self.solid.set_properties(props[:len(self.solid.properties.size)])
-        self.fluid.set_properties(props[len(self.solid.properties.size):])
+        self.solid.set_properties(props[:self.solid.properties.size])
+        self.fluid.set_properties(props[self.solid.properties.size:])
 
     # Additional more friendly method for setting parameters (use the above defined methods)
     def set_params_fromfile(self, f, n, update_props=True):

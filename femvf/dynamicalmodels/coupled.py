@@ -132,7 +132,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.null_dflstate_dslstate = bla.BlockMat(mats)
 
     def set_state(self, state):
-        block_sizes = [model.state.bsize for model in self.models]
+        block_sizes = [model.state.size for model in self.models]
         sub_states = split_bvec(state, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
             model.set_state(sub_state)
@@ -152,7 +152,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid.set_icontrol(solid_control)
 
     def set_dstate(self, dstate):
-        block_sizes = [model.dstate.bsize for model in self.models]
+        block_sizes = [model.dstate.size for model in self.models]
         sub_states = split_bvec(dstate, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
             model.set_dstate(sub_state)
@@ -174,19 +174,19 @@ class FSIDynamicalSystem(DynamicalSystem):
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
     # for the specialized 1D Bernoulli model so I've left it empty for now
     def set_statet(self, statet):
-        block_sizes = [model.statet.bsize for model in self.models]
+        block_sizes = [model.statet.size for model in self.models]
         sub_states = split_bvec(statet, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
             model.set_dstate(sub_state)
 
     def set_dstatet(self, dstatet):
-        block_sizes = [model.dstatet.bsize for model in self.models]
+        block_sizes = [model.dstatet.size for model in self.models]
         sub_states = split_bvec(dstatet, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
             model.set_dstate(sub_state)
 
     def set_properties(self, props):
-        block_sizes = [model.properties.bsize for model in self.models]
+        block_sizes = [model.properties.size for model in self.models]
         sub_props = split_bvec(props, block_sizes)
         for model, sub_prop in zip(self.models, sub_props):
             model.set_properties(sub_prop)

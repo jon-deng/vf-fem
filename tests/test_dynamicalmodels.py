@@ -3,11 +3,11 @@ This modules contains tests for dynamical models
 """
 
 from os import path
-from functools import partial
+# from functools import partial
 
 from blocklinalg import linalg as bla
 from blocklinalg import genericops as gops
-from femvf import dynamicalmodels as dynmod
+# from femvf import dynamicalmodels as dynmod
 from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
 from femvf import load
 

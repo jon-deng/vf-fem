@@ -148,7 +148,7 @@ class FullParameterization(Parameterization):
 
     def convert(self):
         model = self.model
-        subvec_bsizes = [bvec.bsize for bvec in (model.state0, model.control, model.properties)] + [1]
+        subvec_bsizes = [bvec.size for bvec in (model.state0, model.control, model.properties)] + [1]
         ini_state, control, props, times = split_bvector_to_standard(model, self.bvector)
 
         return ini_state, [control], props, times
@@ -279,7 +279,7 @@ class ElasticModuliAndInitialState(Parameterization):
         return out
 
 def split_bvector_to_standard(model, full_bvec):
-    subvec_bsizes = [bvec.bsize for bvec in (model.state0, model.control, model.properties)] + [1]
+    subvec_bsizes = [bvec.size for bvec in (model.state0, model.control, model.properties)] + [1]
     subvec_idxs = np.cumsum([0] + subvec_bsizes)
 
     ini_state, control, props, times = [full_bvec[ii:jj] for ii, jj in zip(subvec_idxs[:-1], subvec_idxs[1:])]
