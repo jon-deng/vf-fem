@@ -17,6 +17,8 @@ from femvf import load
 # warnings.filterwarnings('error', 'RuntimeWarning')
 np.seterr(invalid='raise')
 
+### Configuration ###
+## Loading the model to test
 mesh_name = 'M5-3layers'
 mesh_path = path.join('../meshes', mesh_name+'.xml')
 
@@ -31,7 +33,11 @@ model_coupled = load.load_dynamical_fsi_model(
 
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
+# model = model_solid
+# model = model_fluid
+model = model_coupled
 
+## Set the model properties/parameters
 props = model_coupled.properties.copy()
 props['emod'].array[:] = 1.0
 props['psub'][:] = 800*10
@@ -40,9 +46,39 @@ props['ycontact'][:] = np.max(model_solid.XREF.vector()[1::2]) + 1 # 1 cm above 
 model_coupled.ymid = props['ycontact'][0]
 model_coupled.set_properties(props)
 
-# model = model_solid
-# model = model_fluid
-model = model_coupled
+## Set the linearization point and linearization directions to test along
+# state
+state0 = model.state.copy()
+dstate = state0.copy()
+if 'u' in dstate and 'v' in dstate:
+    dxu = model_solid.state['u'].copy()
+    dxu[:] = 1e-3*np.arange(dxu[:].size)
+    # dxu[:] = 0
+    model_solid.forms['bc.dirichlet'].apply(dxu)
+    gops.set_vec(dstate['u'], dxu)
+
+    dxv = model_solid.state['v'].copy()
+    dxv[:] = 0.0
+    model_solid.forms['bc.dirichlet'].apply(dxv)
+    gops.set_vec(dstate['v'], dxv)
+if 'q' in dstate:
+    gops.set_vec(dstate['q'], 1e-3)
+    # gops.set_vec(dstate['q'], 0.0)
+if 'p' in dstate:
+    gops.set_vec(dstate['p'], 1e-3)
+    # gops.set_vec(dstate['p'], 0.0)
+
+statet0 = state0
+dstatet = dstate
+
+if hasattr(model, 'icontrol'):
+    icontrol0 = model.icontrol.copy()
+    dicontrol = icontrol0.copy()
+    dicontrol.set(1e-4)
+
+props0 = model.properties.copy()
+dprops = props0.copy()
+dprops.set(1e-4)
 
 def gen_res(x, set_x, assem_resx):
     set_x(x)
@@ -56,32 +92,12 @@ def test_assem_dres_dstate():
     res = lambda state: gen_res(state, model.set_state, model.assem_res)
     jac = lambda state: gen_jac(state, model.set_state, model.assem_dres_dstate)
 
-    x0 = model.state.copy()
-    dx = x0.copy()
-    if 'u' in dx and 'v' in dx:
-        dxu = model_solid.state['u'].copy()
-        dxu[:] = 1e-3*np.arange(dxu[:].size)
-        # dxu[:] = 0
-        model_solid.forms['bc.dirichlet'].apply(dxu)
-        gops.set_vec(dx['u'], dxu)
-
-        dxv = model_solid.state['v'].copy()
-        dxv[:] = 0.0
-        model_solid.forms['bc.dirichlet'].apply(dxv)
-        gops.set_vec(dx['v'], dxv)
-    if 'q' in dx:
-        gops.set_vec(dx['q'], 1e-3)
-        gops.set_vec(dx['q'], 0.0)
-    if 'p' in dx:
-        gops.set_vec(dx['p'], 1e-3)
-        gops.set_vec(dx['p'], 0.0)
-    dx = 1e-4*dx
+    x0 = state0
+    dx = 1e-5*dstate
     x1 = x0 + dx
-    model.set_state(x1)
+    # model.set_state(x1)
 
     dres_exact = res(x1) - res(x0)
-    # breakpoint()
-    A = jac(x0)
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
     print(dres_linear.norm(), dres_exact.norm())
 
@@ -89,27 +105,20 @@ def test_assem_dres_dstatet():
     res = lambda state: gen_res(state, model.set_statet, model.assem_res)
     jac = lambda state: gen_jac(state, model.set_statet, model.assem_dres_dstatet)
 
-    x0 = model.statet.copy()
-    dx = x0.copy()
-    if 'u' in dx:
-        gops.set_vec(dx['u'][:], 1e-3)
-        gops.set_vec(dx['v'][:], 0)
-    elif 'q' in dx:
-        dx.set(1e-3)
+    x0 = statet0
+    dx = 1e-5*dstatet
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
-    # breakpoint()
     print(dres_linear.norm(), dres_exact.norm())
 
 def test_assem_dres_dicontrol():
     res = lambda state: gen_res(state, model.set_icontrol, model.assem_res)
     jac = lambda state: gen_jac(state, model.set_icontrol, model.assem_dres_dicontrol)
 
-    x0 = model.icontrol.copy()
-    dx = x0.copy()
-    dx.set(1e-4)
+    x0 = icontrol0
+    dx = dicontrol
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
@@ -120,9 +129,8 @@ def test_assem_dres_dprops():
     res = lambda state: gen_res(state, model.set_properties, model.assem_res)
     jac = lambda state: gen_jac(state, model.set_properties, model.assem_dres_dprops)
 
-    x0 = model.properties.copy()
-    dx = x0.copy()
-    dx.set(1e-4)
+    x0 = props0
+    dx = dprops
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
@@ -133,5 +141,6 @@ def test_assem_dres_dprops():
 if __name__ == '__main__':
     test_assem_dres_dstate()
     test_assem_dres_dstatet()
-    # test_assem_dres_dicontrol()
-    # print("yoyo whatup")
+    if hasattr(model, 'icontrol'):
+        test_assem_dres_dicontrol()
+        pass

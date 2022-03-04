@@ -120,7 +120,7 @@ class FSIDynamicalSystem(DynamicalSystem):
             dslarea_dslu.setValues([ii], [2*ii, 2*ii+1], [0, -2])
         dslarea_dslu.assemble()
         dflarea_dslarea = self._dfluid_dsolid_scalar
-        dflarea_dslu = bla.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
+        dflarea_dslu = gops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
         mats = [[dflarea_dslu, dflarea_dslv]]
         self.dflicontrol_dslstate = bla.BlockMat(mats, row_keys=['area'], col_keys=['u', 'v'])
 
@@ -184,13 +184,13 @@ class FSIDynamicalSystem(DynamicalSystem):
         block_sizes = [model.statet.size for model in self.models]
         sub_states = split_bvec(statet, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
-            model.set_dstate(sub_state)
+            model.set_statet(sub_state)
 
     def set_dstatet(self, dstatet):
         block_sizes = [model.dstatet.size for model in self.models]
         sub_states = split_bvec(dstatet, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
-            model.set_dstate(sub_state)
+            model.set_dstatet(sub_state)
 
     def set_properties(self, props):
         block_sizes = [model.properties.size for model in self.models]
@@ -219,16 +219,16 @@ class FSIDynamicalSystem(DynamicalSystem):
     def assem_dres_dstatet(self):
         # Because the fluid models is quasi-steady, there are no time varying FSI quantities
         # As a result, the off-diagonal block terms here are just zero
-        dfsolid_dxsolid = convert_bmat_to_petsc(self.models[0].assem_dres_dstatet())
+        dslres_dslx = convert_bmat_to_petsc(self.models[0].assem_dres_dstatet())
         # dfsolid_dxfluid = self.models[0].assem_dres_dicontrolt() * self.dslicontrolt_dflstatet
-        dfsolid_dxfluid = convert_bmat_to_petsc(self.null_dslstate_dflstate)
+        dslres_dflx = convert_bmat_to_petsc(self.null_dslstate_dflstate)
 
-        dffluid_dxfluid = convert_bmat_to_petsc(self.models[1].assem_dres_dstatet())
+        dflres_dflx = convert_bmat_to_petsc(self.models[1].assem_dres_dstatet())
         # dffluid_dxsolid = self.models[1].assem_dres_dicontrolt() * self.dflicontrolt_dslstatet
-        dffluid_dxsolid = convert_bmat_to_petsc(self.null_dflstate_dslstate)
+        dflres_dslx = convert_bmat_to_petsc(self.null_dflstate_dslstate)
         bmats = [
-            [dfsolid_dxsolid, dfsolid_dxfluid],
-            [dffluid_dxsolid, dffluid_dxfluid]]
+            [dslres_dslx, dslres_dflx],
+            [dflres_dslx, dflres_dflx]]
         return bla.concatenate_mat(bmats)
 
     def assem_dres_dprops(self):
