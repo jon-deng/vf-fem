@@ -104,7 +104,7 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
         self.pt = np.zeros(N)
         self.statet = bla.BlockVec([self.qt, self.pt], ['q', 'p'])
 
-        self.icontrol = bla.BlockVec([np.ones(N)], ['area'])
+        self.control = bla.BlockVec([np.ones(N)], ['area'])
 
         self.dq = np.zeros(1)
         self.dp = np.zeros(N)
@@ -123,7 +123,7 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
 class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         # Depack variables from BlockVec for input to Bernoulli functions
-        area = self.icontrol['area']
+        area = self.control['area']
         rho = self.properties['rho_air'][0]
         psub = self.properties['psub'][0]
         psup = self.properties['psup'][0]
@@ -158,9 +158,9 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
             [dresp_dq, dresp_dp]]
         return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
 
-    def assem_dres_dicontrol(self):
+    def assem_dres_dcontrol(self):
         # Depack variables from BlockVec for input to Bernoulli functions
-        area = self.icontrol['area']
+        area = self.control['area']
         rho = self.properties['rho_air'][0]
         psub = self.properties['psub'][0]
         psup = self.properties['psup'][0]
@@ -173,7 +173,7 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [-dq_darea],
             [-dp_darea]]
-        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.control.keys)
 
 class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
@@ -203,13 +203,13 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
             [dresp_dq, dresp_dp]]
         return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
 
-    def assem_dres_dicontrol(self):
+    def assem_dres_dcontrol(self):
         dresq_darea = np.zeros((self.q.size, self.s.size))
         dresp_darea = np.zeros((self.p.size, self.s.size))
         mats = [
             [dresq_darea],
             [dresp_darea]]
-        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.control.keys)
 
 class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     """
@@ -243,18 +243,18 @@ class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
             [dresp_dq, dresp_dp]]
         return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
 
-    def assem_dres_dicontrol(self):
+    def assem_dres_dcontrol(self):
         dresq_darea = np.zeros((self.q.size, self.s.size))
         dresp_darea = np.zeros((self.p.size, self.s.size))
         mats = [
             [dresq_darea],
             [dresp_darea]]
-        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.control.keys)
 
 class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         # Depack variables from BlockVec for input to Bernoulli functions
-        area = self.icontrol['area']
+        area = self.control['area']
         rho = self.properties['rho_air'][0]
         psub = self.properties['psub'][0]
         psup = self.properties['psup'][0]
@@ -290,9 +290,9 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
             [dresp_dq, dresp_dp]]
         return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.state.keys)
 
-    def assem_dres_dicontrol(self):
+    def assem_dres_dcontrol(self):
         # Depack variables from BlockVec for input to Bernoulli functions
-        area = self.icontrol['area']
+        area = self.control['area']
         rho = self.properties['rho_air'][0]
         psub = self.properties['psub'][0]
         psup = self.properties['psup'][0]
@@ -308,5 +308,5 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_darea],
             [dresp_darea]]
-        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.icontrol.keys)
+        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.control.keys)
 
