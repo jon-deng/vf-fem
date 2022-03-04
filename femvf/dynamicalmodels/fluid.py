@@ -114,7 +114,7 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
         self.dpt = np.zeros(N)
         self.dstatet = bla.BlockVec([self.qt, self.pt], ['q', 'p'])
 
-        self.dicontrol = bla.BlockVec([np.ones(N)], ['area'])
+        self.dcontrol = bla.BlockVec([np.ones(N)], ['area'])
 
         properties_vec = ['psub', 'psup', 'rho_air', 'zeta_min', 'zeta_sep']
         self.properties = bla.BlockVec(
@@ -262,7 +262,7 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         zeta_sep = self.properties['zeta_sep'][0]
         
         primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
-        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0, 0)
+        tangents = (self.dcontrol['area'], 0, 0, 0, 0, 0, 0)
         dqp = dbernoulli_qp(*primals, tangents)
         resq = -dqp[0]
         resp = -dqp[1]
@@ -300,7 +300,7 @@ class LinearIcontrolBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         zeta_sep = self.properties['zeta_sep'][0]
         
         primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
-        tangents = (self.dicontrol['area'], 0, 0, 0, 0, 0, 0)
+        tangents = (self.dcontrol['area'], 0, 0, 0, 0, 0, 0)
 
         ddq_darea, ddp_darea = ddbernoulli_qp_darea(*primals, tangents)
         dresq_darea = -ddq_darea
