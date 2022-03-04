@@ -7,7 +7,7 @@ import dolfin as dfn
 from pprint import pprint
 
 from femvf.meshutils import load_fenics_xmlmesh
-from femvf.models import solid as smd
+# from femvf.models import solid as smd
 from femvf.dynamicalmodels import solid as dynsol
 
 dfn.set_log_level(30)
@@ -29,7 +29,7 @@ def test_dynamical_kelvin_voigt():
 
     model.assem_res()
     model.assem_dres_dstate()
-    model.assem_dres_dicontrol()
+    model.assem_dres_dcontrol()
 
 if __name__ == '__main__':
     print(test_dynamical_kelvin_voigt())

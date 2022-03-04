@@ -103,7 +103,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self._dfluid_dsolid_scalar = self.fsimap.dfluid_dsolid
         
         # The matrix here is d(p)_solid/d(q, p)_fluid
-        dslp_dflq = bla.zero_mat(self.solid.icontrol['p'].size(), self.fluid.state['q'].size)
+        dslp_dflq = bla.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
         dslp_dflp = self._dsolid_dfluid_scalar
         mats = [[dslp_dflq, dslp_dflp]]
         self.dslicontrol_dflstate = bla.BlockMat(mats, row_keys=['p'], col_keys=['q', 'p'])
@@ -150,7 +150,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fluid.set_icontrol(fluid_control)
 
         # map fluid pressure to solid pressure
-        solid_control = self.solid.icontrol.copy()
+        solid_control = self.solid.control.copy()
         self.fsimap.map_fluid_to_solid(self.fluid.state['p'], solid_control['p'])
         self.solid.set_icontrol(solid_control)
 
@@ -172,7 +172,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fluid.set_dicontrol(dfluid_control)
 
         # map linearized fluid pressure to solid pressure
-        dsolid_control = self.solid.icontrol.copy()
+        dsolid_control = self.solid.control.copy()
         dsolid_control['p'] = bla.mult_mat_vec(
             self._dsolid_dfluid_scalar, 
             gops.convert_vec_to_petsc(self.fluid.dstate['p']))
@@ -204,7 +204,7 @@ class FSIDynamicalSystem(DynamicalSystem):
     def assem_dres_dstate(self):
         dslres_dslx = convert_bmat_to_petsc(self.models[0].assem_dres_dstate())
         dslres_dflx = bla.mult_mat_mat(
-            convert_bmat_to_petsc(self.models[0].assem_dres_dicontrol()),
+            convert_bmat_to_petsc(self.models[0].assem_dres_dcontrol()),
             self.dslicontrol_dflstate)
 
         dflres_dflx = convert_bmat_to_petsc(self.models[1].assem_dres_dstate())
