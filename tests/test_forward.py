@@ -35,6 +35,56 @@ class ForwardConfig(unittest.TestCase):
         mesh_base_filename = 'M5-3layers'
         self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
 
+    def config_fsi_kelvinvoigt_model(self):
+        ## Configure the model and its parameters
+        model = load_fsi_model(self.mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+
+        # Set the control vector
+        p_sub = 500.0
+
+        control = model.get_control_vec()
+        control['psub'][:] = p_sub * PASCAL_TO_CGS
+        control['psup'][:] = 0.0 * PASCAL_TO_CGS
+
+        control['psub'][:] = 0.0 * PASCAL_TO_CGS
+        control['psup'][:] = p_sub * PASCAL_TO_CGS
+        controls = [control]
+
+        # Set the properties
+        y_gap = 0.01
+
+        fl_props = model.fluid.get_properties_vec(set_default=True)
+        fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+
+        sl_props = model.solid.get_properties_vec(set_default=True)
+        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
+        x = xy[:, 0]
+        y = xy[:, 1]
+        x_min, x_max = x.min(), x.max()
+        y_min, y_max = y.min(), y.max()
+        sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        sl_props['eta'][()] = 4e-3
+        sl_props['kcontact'][()] = 1e11
+        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
+        props = linalg.concatenate_vec([sl_props, fl_props])
+
+        # Set the initial state
+        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
+        x = xy[:, 0]
+        y = xy[:, 1]
+        u0 = dfn.Function(model.solid.vector_fspace).vector()
+
+        # model.fluid.set_properties(fluid_props)
+        # qp0, *_ = model.fluid.solve_qp0()
+
+        ini_state = model.get_state_vec()
+        ini_state.set(0.0)
+        ini_state['u'][:] = u0
+        # ini_state['q'][()] = qp0['q']
+        # ini_state['p'][:] = qp0['p']
+        
+        return model, ini_state, controls, props
+
     def config_fsi_rayleigh_model(self):
         ## Configure the model and its parameters
         model = load_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
@@ -85,6 +135,9 @@ class ForwardConfig(unittest.TestCase):
         # ini_state['p'][:] = qp0['p']
         
         return model, ini_state, controls, props
+    
+    def config_fsi_model(self):
+        return self.config_fsi_kelvinvoigt_model()
 
     def config_fsai_model(self):
         ## Configure the model and its parameters
@@ -211,6 +264,18 @@ class TestIntegrate(ForwardConfig):
         times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
 
         save_path = 'out/test_forward_fsi_rayleigh.h5'
+        if os.path.isfile(save_path):
+            os.remove(save_path)
+
+        self._integrate(model, ini_state, controls, props, times, save_path)
+        self._test_plot_glottal_width(model, save_path)
+
+    def test_integrate_fsi_kelvinvoigt(self):
+        model, ini_state, controls, props = self.config_fsi_kelvinvoigt_model()
+
+        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+
+        save_path = 'out/test_forward_fsi_kelvinvoigt.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
@@ -350,6 +415,7 @@ if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
     # test.test_integrate_variable_controls()
+    test.test_integrate_fsi_kelvinvoigt()
     test.test_integrate_fsi_rayleigh()
     # test.test_integrate_approx3D()
     # test.test_integrate_fsai()

@@ -378,3 +378,12 @@ class KelvinVoigt(SolidDynamicalSystem):
         return solidforms.KelvinVoigt(
                 mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                 fsi_facet_labels, fixed_facet_labels)
+
+class Rayleigh(SolidDynamicalSystem):
+    PROPERTY_DEFAULTS = {}
+    @staticmethod
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                         fsi_facet_labels, fixed_facet_labels):
+        return solidforms.Rayleigh(
+                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
+                fsi_facet_labels, fixed_facet_labels)

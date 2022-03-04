@@ -23,6 +23,7 @@ mesh_path = path.join('../meshes', mesh_name+'.xml')
 solid_mesh = mesh_path
 fluid_mesh = None
 SolidType = slmodel.KelvinVoigt
+SolidType = slmodel.Rayleigh
 FluidType = flmodel.Bernoulli1DDynamicalSystem
 model_coupled = load.load_dynamical_fsi_model(
     solid_mesh, fluid_mesh, SolidType, FluidType, 
@@ -32,15 +33,16 @@ model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
 
 props = model_coupled.properties.copy()
-props['psub'] = 800*10
-props['psup'] = 0.0
-props['ycontact'] = np.max(model_solid.XREF.vector()[1::2]) + 1 # 1 cm above the maximum y extent
+props['emod'].array[:] = 1.0
+props['psub'][:] = 800*10
+props['psup'][:] = 0.0
+props['ycontact'][:] = np.max(model_solid.XREF.vector()[1::2]) + 1 # 1 cm above the maximum y extent
 model_coupled.ymid = props['ycontact'][0]
 model_coupled.set_properties(props)
 
-model = model_solid
+# model = model_solid
 # model = model_fluid
-# model = model_coupled
+model = model_coupled
 
 def gen_res(x, set_x, assem_resx):
     set_x(x)
@@ -58,20 +60,24 @@ def test_assem_dres_dstate():
     dx = x0.copy()
     if 'u' in dx and 'v' in dx:
         dxu = model_solid.state['u'].copy()
-        dxu[:] = 1e-3
         dxu[:] = 1e-3*np.arange(dxu[:].size)
-        model.forms['bc.dirichlet'].apply(dxu)
+        # dxu[:] = 0
+        model_solid.forms['bc.dirichlet'].apply(dxu)
         gops.set_vec(dx['u'], dxu)
 
         dxv = model_solid.state['v'].copy()
         dxv[:] = 0.0
-        model.forms['bc.dirichlet'].apply(dxv)
+        model_solid.forms['bc.dirichlet'].apply(dxv)
         gops.set_vec(dx['v'], dxv)
     if 'q' in dx:
-        dx.set(1e-3)
+        gops.set_vec(dx['q'], 1e-3)
+        gops.set_vec(dx['q'], 0.0)
+    if 'p' in dx:
+        gops.set_vec(dx['p'], 1e-3)
+        gops.set_vec(dx['p'], 0.0)
+    dx = 1e-4*dx
     x1 = x0 + dx
     model.set_state(x1)
-    breakpoint()
 
     dres_exact = res(x1) - res(x0)
     # breakpoint()

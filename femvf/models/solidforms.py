@@ -332,7 +332,8 @@ def add_isotropic_elastic_form(forms):
     vector_test = forms['test.vector']
     strain_test = form_inf_strain(vector_test)
 
-    inf_strain = forms['expr.kin.inf_strain']
+    u = forms['coeff.state.u1']
+    inf_strain = form_inf_strain(u)
     emod = dfn.Function(forms['fspace.scalar'])
     nu = dfn.Constant(0.45)
     stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
