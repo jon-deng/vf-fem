@@ -12,8 +12,8 @@ class DynamicalSystem:
     def set_statet(self, statet):
         self.statet[:] = statet
 
-    def set_icontrol(self, icontrol):
-        self.icontrol[:] = icontrol
+    def set_control(self, control):
+        self.control[:] = control
         
     def set_properties(self, props):
         self.properties[:] = props
@@ -25,6 +25,6 @@ class DynamicalSystem:
     def set_dstatet(self, dstatet):
         self.dstatet[:] = dstatet
 
-    def set_dicontrol(self, dicontrol):
-        self.dicontrol[:] = dicontrol
+    def set_dcontrol(self, dcontrol):
+        self.dcontrol[:] = dcontrol
         

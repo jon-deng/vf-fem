@@ -11,6 +11,8 @@ from blocklinalg.mat import convert_bmat_to_petsc
 from blocklinalg.vec import convert_bvec_to_petsc, split_bvec
 
 from .base import DynamicalSystem 
+from .fluid import BaseFluid1DDynamicalSystem
+from .solid import BaseSolidDynamicalSystem
 
 
 class FSIMap:
@@ -71,7 +73,10 @@ class FSIDynamicalSystem(DynamicalSystem):
     Class representing a fluid-solid coupled dynamical system
     """
 
-    def __init__(self, solid_model, fluid_model, solid_fsi_dofs, fluid_fsi_dofs):
+    def __init__(self, 
+        solid_model: BaseSolidDynamicalSystem, 
+        fluid_model: BaseFluid1DDynamicalSystem, 
+        solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid_model
         self.fluid = fluid_model
         self.models = (self.solid, self.fluid)
@@ -106,11 +111,14 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslp_dflq = bla.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
         dslp_dflp = self._dsolid_dfluid_scalar
         mats = [[dslp_dflq, dslp_dflp]]
-        self.dslicontrol_dflstate = bla.BlockMat(mats, row_keys=['p'], col_keys=['q', 'p'])
+        self.dslcontrol_dflstate = bla.BlockMat(mats, row_keys=['p'], col_keys=['q', 'p'])
 
         # The matrix here is d(area)_fluid/d(u, v)_solid
         # pylint: disable=no-member
-        dflarea_dslv = bla.zero_mat(self.fluid.icontrol['area'].size, self.solid.state['v'].size())
+        mats = [
+            [bla.zero_mat(nrow, ncol) 
+            for ncol in self.solid.state.bshape]
+            for nrow in self.fluid.control.bshape]
         dslarea_dslu = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state['u'].size()])
         dslarea_dslu.setUp() # should set preallocation manually in the future
         for ii in range(dslarea_dslu.size[0]):
@@ -121,8 +129,8 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslarea_dslu.assemble()
         dflarea_dslarea = self._dfluid_dsolid_scalar
         dflarea_dslu = gops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
-        mats = [[dflarea_dslu, dflarea_dslv]]
-        self.dflicontrol_dslstate = bla.BlockMat(mats, row_keys=['area'], col_keys=['u', 'v'])
+        mats[0][0] = dflarea_dslu
+        self.dflcontrol_dslstate = bla.BlockMat(mats, row_keys=self.fluid.control.keys, col_keys=self.solid.state.keys)
 
         # Make null BlockMats relating fluid/solid states
         mats = [
@@ -145,14 +153,14 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid_area[:] = 2*(self.ymid - (self.solid_xref + self.solid.state['u'])[1::2])
 
         # map solid_area to fluid area
-        fluid_control = self.fluid.icontrol.copy()
+        fluid_control = self.fluid.control.copy()
         self.fsimap.map_solid_to_fluid(self.solid_area, fluid_control['area'])
-        self.fluid.set_icontrol(fluid_control)
+        self.fluid.set_control(fluid_control)
 
         # map fluid pressure to solid pressure
         solid_control = self.solid.control.copy()
         self.fsimap.map_fluid_to_solid(self.fluid.state['p'], solid_control['p'])
-        self.solid.set_icontrol(solid_control)
+        self.solid.set_control(solid_control)
 
     def set_dstate(self, dstate):
         block_sizes = [model.dstate.size for model in self.models]
@@ -165,18 +173,18 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dsolid_area[:] = -2*(self.dstate['u'][1::2])
 
         # map linearized solid area to fluid area
-        dfluid_control = self.fluid.dicontrol.copy()
+        dfluid_control = self.fluid.dcontrol.copy()
         dfluid_control['area'][:] = bla.mult_mat_vec(
             self._dfluid_dsolid_scalar, 
             gops.convert_vec_to_petsc(self.dsolid_area))
-        self.fluid.set_dicontrol(dfluid_control)
+        self.fluid.set_dcontrol(dfluid_control)
 
         # map linearized fluid pressure to solid pressure
         dsolid_control = self.solid.control.copy()
         dsolid_control['p'] = bla.mult_mat_vec(
             self._dsolid_dfluid_scalar, 
             gops.convert_vec_to_petsc(self.fluid.dstate['p']))
-        self.solid.set_dicontrol(dsolid_control)
+        self.solid.set_dcontrol(dsolid_control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
     # for the specialized 1D Bernoulli model so I've left it empty for now
@@ -205,12 +213,12 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslres_dslx = convert_bmat_to_petsc(self.models[0].assem_dres_dstate())
         dslres_dflx = bla.mult_mat_mat(
             convert_bmat_to_petsc(self.models[0].assem_dres_dcontrol()),
-            self.dslicontrol_dflstate)
+            self.dslcontrol_dflstate)
 
         dflres_dflx = convert_bmat_to_petsc(self.models[1].assem_dres_dstate())
         dflres_dslx = bla.mult_mat_mat(
-            convert_bmat_to_petsc(self.models[1].assem_dres_dicontrol()), 
-            self.dflicontrol_dslstate)
+            convert_bmat_to_petsc(self.models[1].assem_dres_dcontrol()), 
+            self.dflcontrol_dslstate)
         bmats = [
             [dslres_dslx, dslres_dflx],
             [dflres_dslx, dflres_dflx]]
@@ -220,11 +228,11 @@ class FSIDynamicalSystem(DynamicalSystem):
         # Because the fluid models is quasi-steady, there are no time varying FSI quantities
         # As a result, the off-diagonal block terms here are just zero
         dslres_dslx = convert_bmat_to_petsc(self.models[0].assem_dres_dstatet())
-        # dfsolid_dxfluid = self.models[0].assem_dres_dicontrolt() * self.dslicontrolt_dflstatet
+        # dfsolid_dxfluid = self.models[0].assem_dres_dcontrolt() * self.dslcontrolt_dflstatet
         dslres_dflx = convert_bmat_to_petsc(self.null_dslstate_dflstate)
 
         dflres_dflx = convert_bmat_to_petsc(self.models[1].assem_dres_dstatet())
-        # dffluid_dxsolid = self.models[1].assem_dres_dicontrolt() * self.dflicontrolt_dslstatet
+        # dffluid_dxsolid = self.models[1].assem_dres_dcontrolt() * self.dflcontrolt_dslstatet
         dflres_dslx = convert_bmat_to_petsc(self.null_dflstate_dslstate)
         bmats = [
             [dslres_dslx, dslres_dflx],
@@ -234,7 +242,7 @@ class FSIDynamicalSystem(DynamicalSystem):
     def assem_dres_dprops(self):
         raise NotImplementedError("Not implemented yet")
 
-    def assem_dres_dicontrol(self):
+    def assem_dres_dcontrol(self):
         raise NotImplementedError("Not implemented yet")
 
     # TODO: Need to implement for optimization strategies

@@ -34,8 +34,8 @@ model_coupled = load.load_dynamical_fsi_model(
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
 # model = model_solid
-# model = model_fluid
-model = model_coupled
+model = model_fluid
+# model = model_coupled
 
 ## Set the model properties/parameters
 props = model_coupled.properties.copy()
@@ -71,10 +71,12 @@ if 'p' in dstate:
 statet0 = state0
 dstatet = dstate
 
-if hasattr(model, 'icontrol'):
-    icontrol0 = model.icontrol.copy()
-    dicontrol = icontrol0.copy()
-    dicontrol.set(1e-4)
+if hasattr(model, 'control'):
+    control0 = model.control.copy()
+    control0['psub'][:] = 500
+    control0['psup'][:] = 0
+    dcontrol = control0.copy()
+    dcontrol.set(1e-4)
 
 props0 = model.properties.copy()
 dprops = props0.copy()
@@ -113,17 +115,20 @@ def test_assem_dres_dstatet():
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
     print(dres_linear.norm(), dres_exact.norm())
 
-def test_assem_dres_dicontrol():
-    res = lambda state: gen_res(state, model.set_icontrol, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_icontrol, model.assem_dres_dicontrol)
+def test_assem_dres_dcontrol():
+    # model_fluid.control['psub'][:] = 1
+    # model_fluid.control['psup'][:] = 0
+    res = lambda state: gen_res(state, model.set_control, model.assem_res)
+    jac = lambda state: gen_jac(state, model.set_control, model.assem_dres_dcontrol)
 
-    x0 = icontrol0
-    dx = dicontrol
+    x0 = control0
+    dx = dcontrol
     x1 = x0 + dx
 
     dres_exact = res(x1) - res(x0)
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
     print(dres_linear.norm(), dres_exact.norm())
+    breakpoint()
 
 def test_assem_dres_dprops():
     res = lambda state: gen_res(state, model.set_properties, model.assem_res)
@@ -141,6 +146,5 @@ def test_assem_dres_dprops():
 if __name__ == '__main__':
     test_assem_dres_dstate()
     test_assem_dres_dstatet()
-    if hasattr(model, 'icontrol'):
-        test_assem_dres_dicontrol()
-        pass
+    if hasattr(model, 'control'):
+        test_assem_dres_dcontrol()

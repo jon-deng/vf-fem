@@ -148,15 +148,15 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
-        dresu_dicontrol = dfn.assemble(
+        dresu_dcontrol = dfn.assemble(
             self.forms['form.bi.df1uva_dp1'], 
             tensor=dfn.PETScMatrix())
 
-        dresv_dicontrol = dfn.PETScMatrix(bla.zero_mat(self.state['v'].size(), self.control['p'].size()))
+        dresv_dcontrol = dfn.PETScMatrix(bla.zero_mat(self.state['v'].size(), self.control['p'].size()))
 
         mats = [
-            [dresu_dicontrol],
-            [dresv_dicontrol]]
+            [dresu_dcontrol],
+            [dresv_dcontrol]]
         return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.control.keys)
 
     def assem_dres_dprops(self):
@@ -313,7 +313,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
             [dresv_dg]]
         return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['g'])
 
-class LinearIcontrolSolidDynamicalSystem(BaseSolidDynamicalSystem):
+class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
     Represents a linearized dynamical system residual
 
