@@ -260,9 +260,9 @@ class FSIDynamicalSystem(DynamicalSystem):
         _mats = [[bla.zero_mat(m, n) for n in self.control.bsize] for m in self.solid.state.bsize]
         dslres_dg = bla.BlockMat(_mats, row_keys=self.solid.state.keys, col_keys=self.control.keys)
         
-        dflres_dflg = convert_bmat_to_petsc(self.models[1].assem_dres_dcontrol())
+        dflres_dflg = convert_bmat_to_petsc(self.fluid.assem_dres_dcontrol())
         _mats = [[row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg.mats]
-        dflres_dg =  bla.BlockMat(_mats, row_keys=self.solid.state.keys, col_keys=self.control.keys)
+        dflres_dg =  bla.BlockMat(_mats, row_keys=self.fluid.state.keys, col_keys=self.control.keys)
         return bla.concatenate_mat([[dslres_dg], [dflres_dg]])
 
     # TODO: Need to implement for optimization strategies
