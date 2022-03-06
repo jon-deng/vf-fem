@@ -34,8 +34,8 @@ model_coupled = load.load_dynamical_fsi_model(
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
 # model = model_solid
-model = model_fluid
-# model = model_coupled
+# model = model_fluid
+model = model_coupled
 
 ## Set the model properties/parameters
 props = model_coupled.properties.copy()
@@ -73,10 +73,12 @@ dstatet = dstate
 
 if hasattr(model, 'control'):
     control0 = model.control.copy()
-    control0['psub'][:] = 500
-    control0['psup'][:] = 0
     dcontrol = control0.copy()
-    dcontrol.set(1e-4)
+    if 'psub' in control0:
+        control0['psub'][:] = 500
+    if 'psup' in control0:
+        control0['psup'][:] = 0
+    dcontrol.set(1e-5)
 
 props0 = model.properties.copy()
 dprops = props0.copy()
@@ -127,8 +129,8 @@ def test_assem_dres_dcontrol():
 
     dres_exact = res(x1) - res(x0)
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
+    # breakpoint()
     print(dres_linear.norm(), dres_exact.norm())
-    breakpoint()
 
 def test_assem_dres_dprops():
     res = lambda state: gen_res(state, model.set_properties, model.assem_res)

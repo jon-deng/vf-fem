@@ -87,6 +87,9 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dstate = bla.concatenate_vec([convert_bvec_to_petsc(model.dstate) for model in self.models])
         self.dstatet = bla.concatenate_vec([convert_bvec_to_petsc(model.dstatet) for model in self.models])
 
+        # This selects only psub and psup from the fluid control
+        self.control = convert_bvec_to_petsc(self.fluid.control[1:])
+
         self.properties = bla.concatenate_vec([convert_bvec_to_petsc(model.properties) for model in self.models])
 
         ## -- FSI --
@@ -143,6 +146,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.null_dflstate_dslstate = bla.BlockMat(mats)
 
     def set_state(self, state):
+        self.state[:] = state
         block_sizes = [model.state.size for model in self.models]
         sub_states = split_bvec(state, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
@@ -163,6 +167,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.solid.set_control(solid_control)
 
     def set_dstate(self, dstate):
+        self.dstate[:] = dstate
         block_sizes = [model.dstate.size for model in self.models]
         sub_states = split_bvec(dstate, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
@@ -189,18 +194,27 @@ class FSIDynamicalSystem(DynamicalSystem):
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
     # for the specialized 1D Bernoulli model so I've left it empty for now
     def set_statet(self, statet):
+        self.statet[:] = statet
         block_sizes = [model.statet.size for model in self.models]
         sub_states = split_bvec(statet, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
             model.set_statet(sub_state)
 
     def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
         block_sizes = [model.dstatet.size for model in self.models]
         sub_states = split_bvec(dstatet, block_sizes)
         for model, sub_state in zip(self.models, sub_states):
             model.set_dstatet(sub_state)
 
+    def set_control(self, control):
+        self.control[:] = control
+        fl_control = self.fluid.control.copy()
+        fl_control[1:][:] = control # Set psub/psup of the coupled model to the fluid model control
+        self.fluid.set_control(fl_control)
+
     def set_properties(self, props):
+        self.properties[:] = props
         block_sizes = [model.properties.size for model in self.models]
         sub_props = split_bvec(props, block_sizes)
         for model, sub_prop in zip(self.models, sub_props):
@@ -243,7 +257,13 @@ class FSIDynamicalSystem(DynamicalSystem):
         raise NotImplementedError("Not implemented yet")
 
     def assem_dres_dcontrol(self):
-        raise NotImplementedError("Not implemented yet")
+        _mats = [[bla.zero_mat(m, n) for n in self.control.bsize] for m in self.solid.state.bsize]
+        dslres_dg = bla.BlockMat(_mats, row_keys=self.solid.state.keys, col_keys=self.control.keys)
+        
+        dflres_dflg = convert_bmat_to_petsc(self.models[1].assem_dres_dcontrol())
+        _mats = [[row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg.mats]
+        dflres_dg =  bla.BlockMat(_mats, row_keys=self.solid.state.keys, col_keys=self.control.keys)
+        return bla.concatenate_mat([[dslres_dg], [dflres_dg]])
 
     # TODO: Need to implement for optimization strategies
     # def assem_dres_dprops(self):
