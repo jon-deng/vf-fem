@@ -149,18 +149,19 @@ class Bernoulli(QuasiSteady1DFluid):
     Note there are a total of 4 smoothing properties that are meant to approximate the
     ad-hoc separation criteria used in the literature.
         zeta_amin :
-            Factor controlling the smoothness of the approximation of minimum area.
-            A value of 0 weights areas of all nodes evenly, while a value of -inf
-            returns the exact minimum area. Large negative values return an
-            average of the smallest areas.
+            Factor controlling the smoothness of the minimum area function.
+            As zeta_amin->0, the exact minimum area is produced (Should behave similarly as a true 
+            min function)
         zeta_ainv :
             Approximates smoothing for an inverse area function; given an area, return the surface
-            coordinate
+            coordinate. As zeta_ainv->0, the function selects the closest surface coordinate at
+            where the area matches some target area.
         zeta_sep :
-            Controls the sharpness of the cutoff that models separation. as zeta_sep approaches inf,
+            Controls the sharpness of the cutoff that models separation. As zeta_sep->0,
             the sharpness will approach an instantaneous jump from 1 to 0
         zeta_lb : 
-            Controls the smoothness of a lower bound function that prevents negative glottal areas
+            Controls the smoothness of the lower bound function that restricts glottal area to be
+            larger than a lower bound
 
     Properties
     ----------
