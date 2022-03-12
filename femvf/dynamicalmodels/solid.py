@@ -129,7 +129,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -144,7 +144,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
@@ -157,7 +157,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dcontrol],
             [dresv_dcontrol]]
-        return bla.BlockMat(mats, row_keys=self.state.keys, col_keys=self.control.keys)
+        return bla.BlockMat(mats, (self.state.keys, self.control.keys))
 
     def assem_dres_dprops(self):
         pass
@@ -207,7 +207,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -227,7 +227,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
@@ -245,7 +245,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dg],
             [dresv_dg]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['g'])
+        return bla.BlockMat(mats, (['u', 'v'], ['g']))
 
 class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
@@ -281,7 +281,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -297,7 +297,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
@@ -311,7 +311,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dg],
             [dresv_dg]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['g'])
+        return bla.BlockMat(mats, (['u', 'v'], ['g']))
 
 class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
@@ -344,7 +344,7 @@ class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -359,7 +359,7 @@ class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, row_keys=['u', 'v'], col_keys=['u', 'v'])
+        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
