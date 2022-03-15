@@ -179,14 +179,14 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # map linearized solid area to fluid area
         dfluid_control = self.fluid.dcontrol.copy()
-        dfluid_control['area'][:] = bla.mult_mat_vec(
+        dfluid_control['area'][:] = gops.mult_mat_vec(
             self._dfluid_dsolid_scalar, 
             gops.convert_vec_to_petsc(self.dsolid_area))
         self.fluid.set_dcontrol(dfluid_control)
 
         # map linearized fluid pressure to solid pressure
         dsolid_control = self.solid.control.copy()
-        dsolid_control['p'] = bla.mult_mat_vec(
+        dsolid_control['p'][:] = gops.mult_mat_vec(
             self._dsolid_dfluid_scalar, 
             gops.convert_vec_to_petsc(self.fluid.dstate['p']))
         self.solid.set_dcontrol(dsolid_control)
