@@ -231,6 +231,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
+        m = self.control['p'].size()
         dresu_dg = (
             dfn.assemble(
                 self.forms['form.bi.ddf1uva_u1_dp1'], 
@@ -240,7 +241,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScMatrix())
             )
 
-        dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, n))
+        dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, m))
 
         mats = [
             [dresu_dg],
@@ -301,12 +302,13 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
+        m = self.control['p'].size()
         dresu_dg = (
             dfn.assemble(
                 self.forms['form.bi.ddf1uva_a1_dp1'], 
                 tensor=dfn.PETScMatrix()))
 
-        dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, n))
+        dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, m))
 
         mats = [
             [dresu_dg],
