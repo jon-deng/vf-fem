@@ -211,7 +211,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
-        dresu_dut = bla.zero_mat(n, n)
+        dresu_dut = dfn.PETScMatrix(bla.zero_mat(n, n))
         dresu_dvt = (
             dfn.assemble(
                 self.forms['form.bi.ddf1uva_u1_da1'], 
