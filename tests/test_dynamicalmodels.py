@@ -24,18 +24,27 @@ mesh_path = path.join('../meshes', mesh_name+'.xml')
 
 solid_mesh = mesh_path
 fluid_mesh = None
+# Base residual
 SolidType = slmodel.KelvinVoigt
-SolidType = slmodel.Rayleigh
 FluidType = flmodel.Bernoulli1DDynamicalSystem
+# Linearized residual
+SolidType = slmodel.LinearStateKelvinVoigt
+FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
+# Linearized residual
+SolidType = slmodel.LinearStatetKelvinVoigt
+FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
+# Linearized residual
+# SolidType = slmodel.LinearControlKelvinVoigt
+# FluidType = flmodel.LinearControlBernoulli1DDynamicalSystem
 model_coupled = load.load_dynamical_fsi_model(
     solid_mesh, fluid_mesh, SolidType, FluidType, 
     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
-# model = model_solid
+model = model_solid
 # model = model_fluid
-model = model_coupled
+# model = model_coupled
 
 ## Set the model properties/parameters
 props = model_coupled.properties.copy()
@@ -68,8 +77,8 @@ if 'p' in dstate:
     gops.set_vec(dstate['p'], 1e-3)
     # gops.set_vec(dstate['p'], 0.0)
 
-statet0 = state0
-dstatet = dstate
+statet0 = state0.copy()
+dstatet = dstate.copy()
 
 if hasattr(model, 'control'):
     control0 = model.control.copy()
@@ -146,6 +155,7 @@ def test_assem_dres_dprops():
     print(dres_linear.norm(), dres_exact.norm())
 
 if __name__ == '__main__':
+    breakpoint()
     test_assem_dres_dstate()
     test_assem_dres_dstatet()
     if hasattr(model, 'control'):
