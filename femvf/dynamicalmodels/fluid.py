@@ -40,6 +40,9 @@ def bernoulli_p(q, area, ssep, psub, psup, rho):
     p = psub - 1/2*rho*(q/area)**2
     return p
 
+def coeff_sep(s, ssep, zeta_sep):
+    return (1+jnp.exp((s-ssep)/zeta_sep))**-1
+
 # @jax.jit
 def wavg(s, f, w):
     """
@@ -79,6 +82,10 @@ def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     ssep = smin
     q = bernoulli_q(asep, psub, psup, rho)
     p = bernoulli_p(q, area, ssep, psub, psup, rho)
+
+    # Separation coefficient ensure pressures tends to zero after separation
+    f_sep = coeff_sep(s, ssep, zeta_sep)
+    p = f_sep * p
     return q, p
 
 # Use this weird combination of primals/tangent parameters because later we 
