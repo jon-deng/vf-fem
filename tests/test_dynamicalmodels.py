@@ -20,37 +20,34 @@ np.seterr(invalid='raise')
 ### Configuration ###
 ## Loading the model to test
 mesh_name = 'M5-3layers'
+mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = path.join('../meshes', mesh_name+'.xml')
 
 solid_mesh = mesh_path
 fluid_mesh = None
-# Base residual
+
 SolidType = slmodel.KelvinVoigt
 FluidType = flmodel.Bernoulli1DDynamicalSystem
-# Linearized residual
-SolidType = slmodel.LinearStateKelvinVoigt
-FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
-# Linearized residual
-SolidType = slmodel.LinearStatetKelvinVoigt
-FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
-# Linearized residual
-# SolidType = slmodel.LinearControlKelvinVoigt
-# FluidType = flmodel.LinearControlBernoulli1DDynamicalSystem
+# SolidType = slmodel.LinearStateKelvinVoigt
+# FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
+# SolidType = slmodel.LinearStatetKelvinVoigt
+# FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
 model_coupled = load.load_dynamical_fsi_model(
     solid_mesh, fluid_mesh, SolidType, FluidType, 
     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
-model = model_solid
+# model = model_solid
 # model = model_fluid
-# model = model_coupled
+model = model_coupled
 
 ## Set the model properties/parameters
 props = model_coupled.properties.copy()
-props['emod'].array[:] = 1.0
-props['psub'][:] = 800*10
-props['psup'][:] = 0.0
+props['emod'].array[:] = 5e3*10
+props['rho'].array[:] = 1.0
+# props['psub'][:] = 800*10
+# props['psup'][:] = 0.0
 props['ycontact'][:] = np.max(model_solid.XREF.vector()[1::2]) + 1 # 1 cm above the maximum y extent
 model_coupled.ymid = props['ycontact'][0]
 model_coupled.set_properties(props)
@@ -62,6 +59,7 @@ dstate = state0.copy()
 if 'u' in dstate and 'v' in dstate:
     dxu = model_solid.state['u'].copy()
     dxu[:] = 1e-3*np.arange(dxu[:].size)
+    dxu[:] = 1e-7
     # dxu[:] = 0
     model_solid.forms['bc.dirichlet'].apply(dxu)
     gops.set_vec(dstate['u'], dxu)
@@ -70,12 +68,12 @@ if 'u' in dstate and 'v' in dstate:
     dxv[:] = 0.0
     model_solid.forms['bc.dirichlet'].apply(dxv)
     gops.set_vec(dstate['v'], dxv)
-if 'q' in dstate:
-    gops.set_vec(dstate['q'], 1e-3)
-    # gops.set_vec(dstate['q'], 0.0)
-if 'p' in dstate:
-    gops.set_vec(dstate['p'], 1e-3)
-    # gops.set_vec(dstate['p'], 0.0)
+# if 'q' in dstate:
+#     gops.set_vec(dstate['q'], 1e-3)
+#     # gops.set_vec(dstate['q'], 0.0)
+# if 'p' in dstate:
+#     gops.set_vec(dstate['p'], 1e-3)
+#     # gops.set_vec(dstate['p'], 0.0)
 
 statet0 = state0.copy()
 dstatet = dstate.copy()
@@ -84,10 +82,11 @@ if hasattr(model, 'control'):
     control0 = model.control.copy()
     dcontrol = control0.copy()
     if 'psub' in control0:
-        control0['psub'][:] = 500
+        control0['psub'][:] = 800*10
     if 'psup' in control0:
         control0['psup'][:] = 0
     dcontrol.set(1e-5)
+model.set_control(control0)
 
 props0 = model.properties.copy()
 dprops = props0.copy()
@@ -106,12 +105,13 @@ def test_assem_dres_dstate():
     jac = lambda state: gen_jac(state, model.set_state, model.assem_dres_dstate)
 
     x0 = state0
-    dx = 1e-5*dstate
+    dx = dstate
     x1 = x0 + dx
     # model.set_state(x1)
 
     dres_exact = res(x1) - res(x0)
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
+    print([subvec.norm() for subvec in dres_linear])
     print(dres_linear.norm(), dres_exact.norm())
 
 def test_assem_dres_dstatet():
@@ -155,7 +155,7 @@ def test_assem_dres_dprops():
     print(dres_linear.norm(), dres_exact.norm())
 
 if __name__ == '__main__':
-    breakpoint()
+    # breakpoint()
     test_assem_dres_dstate()
     test_assem_dres_dstatet()
     if hasattr(model, 'control'):
