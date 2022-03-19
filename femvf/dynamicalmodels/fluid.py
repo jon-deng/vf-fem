@@ -41,7 +41,12 @@ def bernoulli_p(q, area, ssep, psub, psup, rho):
     return p
 
 def coeff_sep(s, ssep, zeta_sep):
-    return (1+jnp.exp((s-ssep)/zeta_sep))**-1
+    # note that jnp.nn.sigmoid is used to model
+    # return (1+jnp.exp((s-ssep)/zeta_sep))**-1
+    # because of numerical stability
+    # Using the normal formula results in nan for large exponents
+    return jax.nn.sigmoid(-1*(s-ssep)/zeta_sep)
+    
 
 # @jax.jit
 def wavg(s, f, w):
