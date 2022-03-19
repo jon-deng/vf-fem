@@ -169,3 +169,27 @@ def dofs_from_cell_function(mesh, cell_func, cell_func_value, dofmap):
             dofs += dofmap.cell_dofs(cell.index()).tolist()
 
     return np.unique(dofs)
+
+def dofs_from_mesh_func(mesh, mesh_func, mesh_func_value, dofmap):
+    """
+    Return all DOFs where an integer mesh function equals a value
+    """
+    mesh_ent_indices = [
+        mesh_ent.index() 
+        for mesh_ent in dfn.cpp.mesh.entities(mesh, mesh_func.dim())
+        if mesh_func[mesh_ent.index()] == mesh_func_value]
+
+    dofs = dofmap.entity_closure_dofs(mesh, mesh_func.dim(), mesh_ent_indices)
+
+    return np.array(list(set(dofs)))
+
+def process_meshlabel_to_dofs(mesh, mesh_func, func_space, label_to_meshfunc):
+    """
+    Return a map from mesh region label(s) to DOFs associated with the region(s)
+    """
+    dofmap = func_space.dofmap()
+    label_to_dofs = {
+        region_label: dofs_from_mesh_func(mesh, mesh_func, region_value, dofmap)
+        for region_label, region_value in label_to_meshfunc.items()}
+
+    return label_to_dofs
