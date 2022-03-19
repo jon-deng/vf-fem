@@ -54,10 +54,15 @@ def wavg(s, f, w):
 def smooth_min_weight(f, zeta=1):
     """
     Return a smooth minimum from a set of values f
+
+    This evaluates according to $\exp{-\frac{f}{\zeta}}$ and is normalized so
+    that the maximum weight has a value of 1.0.
     """
     # w = jnp.exp(-f/zeta)
     log_w = -f/zeta
-    log_w = log_w - np.min(log_w) # normalize the log weight so the minimum value's weight is 1
+    # To prevent overflow for the largest weight, normalize the maximum log-weight to 0
+    # This ensures the maximum weight is 1.0 while smaller weights will underflow to 0.0
+    log_w = log_w - np.max(log_w)
     return jnp.exp(log_w)
 
 # @jax.jit
