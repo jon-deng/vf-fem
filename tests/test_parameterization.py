@@ -6,7 +6,7 @@ from femvf.models import load_fsi_model, load_fsai_model, solid, fluid
 from femvf.load import load_fsi_model, load_fsai_model
 from femvf.parameters.parameterization import SubsetParameterization
 
-from blocklinalg import linalg
+from blocktensor import linalg
 
 class TestParameterization(unittest.TestCase):
     

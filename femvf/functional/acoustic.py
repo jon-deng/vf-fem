@@ -21,7 +21,7 @@ import scipy.signal as sig
 
 from .base import AbstractFunctional
 from ..models import acoustic
-from blocklinalg import linalg
+from blocktensor import linalg
 
 class AcousticFunctional(AbstractFunctional):
     """

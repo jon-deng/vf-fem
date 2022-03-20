@@ -4,7 +4,7 @@ This module contains definitions of functionals over the fluid state.
 
 import numpy as np
 
-from blocklinalg import linalg
+from blocktensor import linalg
 # from .base import AbstractFunctional
 
 def separation_point(model, state, control, props):

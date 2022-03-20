@@ -14,7 +14,7 @@ Fv(x, xt, g) = v-ut
 import numpy as np
 import dolfin as dfn
 
-import blocklinalg.linalg as bla
+import blocktensor.linalg as bla
 
 from .base import DynamicalSystem
 from ..models.solid import properties_bvec_from_forms

@@ -15,7 +15,7 @@ from . import adjoint
 
 from . import statefile
 
-from blocklinalg import linalg
+from blocktensor import linalg
 
 # Make common packages available
 from . import functional as funcs

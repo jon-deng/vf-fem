@@ -13,7 +13,7 @@ import numpy as np
 from jax import numpy as jnp
 import jax
 
-from blocklinalg import linalg as bla
+from blocktensor import linalg as bla
 
 from .base import DynamicalSystem
 

@@ -18,7 +18,7 @@ from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import base
 from . import newmark
-from blocklinalg.linalg import BlockVec
+from blocktensor.linalg import BlockVec
 
 from . import solidforms
 

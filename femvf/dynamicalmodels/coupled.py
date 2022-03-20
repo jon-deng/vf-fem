@@ -5,10 +5,10 @@ Contains class definitions for coupled dynamical systems models
 import dolfin as dfn
 from petsc4py import PETSc as PETSc
 
-import blocklinalg.linalg as bla
-from blocklinalg import genericops as gops
-from blocklinalg.mat import convert_bmat_to_petsc
-from blocklinalg.vec import convert_bvec_to_petsc, split_bvec
+import blocktensor.linalg as bla
+from blocktensor import genericops as gops
+from blocktensor.mat import convert_bmat_to_petsc
+from blocktensor.vec import convert_bvec_to_petsc, split_bvec
 
 from .base import DynamicalSystem 
 from .fluid import BaseFluid1DDynamicalSystem

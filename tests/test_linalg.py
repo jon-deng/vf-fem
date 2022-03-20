@@ -8,7 +8,7 @@ import operator
 import numpy as np
 from petsc4py import PETSc
 
-from blocklinalg import linalg
+from blocktensor import linalg
 
 class Test_form_block_matrix(unittest.TestCase):
     def runTest(self):
