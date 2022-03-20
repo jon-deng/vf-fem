@@ -13,7 +13,7 @@
 			"path": "../vf-sig"
 		},
 		{
-			"path": "../block-linear-algebra"
+			"path": "../block-tensor"
 		},
 		{
 			"path": "../nonlineq"
