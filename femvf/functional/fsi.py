@@ -16,15 +16,12 @@ dfunctional_du(model, n, f, ....) -> float, dict
 compute the sensitivity with respect to.
 """
 
-import numpy as np
-# import matplotlib.pyplot as plt
 import scipy.signal as sig
 
 import dolfin as dfn
 import ufl
 
 from .solid import SolidFunctional
-from ..models.solid import form_inf_strain
 
 class FSIFunctional(SolidFunctional):
     def __init__(self, model):

@@ -7,15 +7,11 @@ Module to work with state values from a forward pass stored in an hdf5 file.
 # so you may have to fix bugs that are associated with this if you want to use time-varying
 # fluid/solid parameters
 
-from os.path import join
 from collections import OrderedDict
 
 import h5py
 import dolfin as dfn
 import numpy as np
-
-from .models.solid import Solid
-from . import constants
 
 def get_from_cache(cache_name):
     """

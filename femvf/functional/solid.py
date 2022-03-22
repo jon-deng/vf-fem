@@ -17,8 +17,6 @@ compute the sensitivity with respect to.
 """
 
 import numpy as np
-# import matplotlib.pyplot as plt
-# import scipy.signal as sig
 
 import dolfin as dfn
 import ufl

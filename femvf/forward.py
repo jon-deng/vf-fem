@@ -4,14 +4,8 @@ Forward model
 Uses CGS (cm-g-s) units unless otherwise stated
 """
 from tqdm import tqdm
-from functools import partial
 
 import numpy as np
-import dolfin as dfn
-from petsc4py import PETSc
-
-from . import statefile as sf
-from blocktensor import linalg
 
 # TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile

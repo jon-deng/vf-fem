@@ -16,11 +16,7 @@ dfunctional_du(model, n, f, ....) -> float, dict
 compute the sensitivity with respect to.
 """
 
-import numpy as np
-import scipy.signal as sig
-
 from .base import AbstractFunctional
-from ..models import acoustic
 from blocktensor import linalg
 
 class AcousticFunctional(AbstractFunctional):

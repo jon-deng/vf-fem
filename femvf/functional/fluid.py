@@ -5,11 +5,7 @@ These act only on fluid states
 """
 
 import numpy as np
-# import matplotlib.pyplot as plt
 import scipy.signal as sig
-
-# import dolfin as dfn
-# import ufl
 
 from .base import AbstractFunctional
 from blocktensor import linalg
