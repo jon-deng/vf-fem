@@ -12,7 +12,7 @@ import ufl
 from blocktensor import linalg
 # from .base import AbstractFunctional
 from ..models.solidforms import form_inf_strain
-from .decorator import transform_to_proc_signals
+from .decorator import transform_to_make_signals
 
 def make_glottal_width_smooth(model):
     def glottal_width_smooth(model, state, control, props):
@@ -23,7 +23,7 @@ def make_glottal_width_smooth(model):
         gw = np.min(widths)
         return gw
     return glottal_width_smooth
-proc_glottal_width_smooth = transform_to_proc_signals(make_glottal_width_smooth)
+make_glottal_width_smooth_sig = transform_to_make_signals(make_glottal_width_smooth)
 
 def make_glottal_width_sharp(model):
     def glottal_width_sharp(model, state, control, props):
@@ -34,7 +34,7 @@ def make_glottal_width_sharp(model):
         gw = np.min(widths)
         return gw
     return glottal_width_sharp
-proc_glottal_width_sharp = transform_to_proc_signals(make_glottal_width_sharp)
+make_glottal_width_sharp_sig = transform_to_make_signals(make_glottal_width_sharp)
 
 def make_peak_contact_pressure(model):
     def peak_contact_pressure(model, state, control, props):
@@ -44,7 +44,7 @@ def make_peak_contact_pressure(model):
         pcontact = -1*model.solid.forms['coeff.state.manual.tcontact'].vector()[1::2]
         return pcontact[fsidofs].max()
     return peak_contact_pressure
-proc_peak_contact_pressure = transform_to_proc_signals(make_peak_contact_pressure)
+make_peak_contact_pressure_sig = transform_to_make_signals(make_peak_contact_pressure)
 
 def make_piecewise_elastic_stress(model):
     V = dfn.TensorFunctionSpace(model.solid.mesh, 'DG', 0)
@@ -55,7 +55,7 @@ def make_piecewise_elastic_stress(model):
         elementwise_stress = dfn.project(stress, V, solver_type='lu')
         return elementwise_stress.vector()
     return piecewise_elastic_stress
-proc_piecewise_elastic_stress = transform_to_proc_signals(make_piecewise_elastic_stress)
+make_piecewise_elastic_stress_sig = transform_to_make_signals(make_piecewise_elastic_stress)
 
 def make_contact_statistics(model):
     # FSI_DOFS = model.solid.vert_to_sdof[model.fsi_verts]
@@ -84,7 +84,7 @@ def make_contact_statistics(model):
         avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
         return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
     return contact_statistics
-proc_contact_statistics = transform_to_proc_signals(make_contact_statistics)
+make_contact_statistics_sig = transform_to_make_signals(make_contact_statistics)
 
 def make_viscoelastic_dissipation_rate(model, dmeas):
     kv_stress = model.solid.forms['expr.kv_stress']
@@ -96,7 +96,7 @@ def make_viscoelastic_dissipation_rate(model, dmeas):
         return assem_scalar_form(state, control, props)
 
     return viscoelastic_dissipation_rate
-proc_viscoelastic_dissipation_rate = transform_to_proc_signals(make_viscoelastic_dissipation_rate)
+make_viscoelastic_dissipation_rate_sig = transform_to_make_signals(make_viscoelastic_dissipation_rate)
 
 def make_stress_invariant_statistics(model, fspace, dmeas):
     """
@@ -134,7 +134,7 @@ def make_stress_invariant_statistics(model, fspace, dmeas):
         return np.array(stats)
 
     return stress_invariant_statistics
-proc_stress_invariant_statistics = transform_to_proc_signals(make_stress_invariant_statistics)
+make_stress_invariant_statistics_sig = transform_to_make_signals(make_stress_invariant_statistics)
 
 def make_scalar_form(model, form):
     """
