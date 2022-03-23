@@ -71,35 +71,35 @@ def static_configuration_coupled_picard(model: comodel.FSIModel):
         dfn.solve(solid.forms['form.un.f1uva'] == 0.0, solid.forms['coeff.state.u1'], 
                   bcs=[solid.bc_base], J=solid.forms['form.bi.df1uva_du1'], solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM})
         u = BlockVec([solid.state1['u'].copy()], ['u']) # the vector corresponding to solid.forms['coeff.state.u1']
-
+        
+        # update the fluid load for the new solid deformation
+        x_n['u'][:] = u[0]
+        set_coupled_model_substate(model, x_n)
         qp, _ = fluid.solve_state1(x_n[['q', 'p']])
-        return concatenate_vec([u, qp])
+        return concatenate_vec([u, qp.copy()])
 
     # Set the initial state
-    x_n = model.get_state_vec()
+    x_n = model.get_state_vec()[['u', 'q', 'p']]
     x_n.set(0)
     # set_coupled_model_substate(model, x_n)
     # x_n[['q', 'p']] = fluid.solve_state1(x_n[['q', 'p']])[0]
-
-    # Compute the initial residual
-    set_coupled_model_substate(model, x_n)
-    res_n = dfn.assemble(solid.forms['form.un.f1uva'])
-    solid.bc_base.apply(res_n)
 
     abs_errs = []
     rel_errs = []
 
     n = 0
-    ABS_TOL = 1e-14
-    REL_TOL = 1e-14
+    ABS_TOL = 1e-8
+    REL_TOL = 1e-8
     NMAX = 15
     while True:
         # Compute the picard iteration
+        # print("Before picard ||x_n||=", x_n['u'].norm('l2'))
         x_n = picard(x_n)
-        print(x_n.norm())
+        # print("After picard ||x_n||=", x_n['u'].norm('l2'))
 
         # Compute the error in the iteration
         set_coupled_model_substate(model, x_n)
+
         res = dfn.assemble(solid.forms['form.un.f1uva'])
         solid.bc_base.apply(res)
 
