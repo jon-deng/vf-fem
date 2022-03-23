@@ -16,4 +16,4 @@ def make_separation_point(model):
         _, info = model.fluid.solve_state1(model.fluid.state0)
         return info['s_sep']
     return separation_point
-make_separation_point_sig = transform_to_make_signals(make_separation_point)
+make_sig_separation_point = transform_to_make_signals(make_separation_point)

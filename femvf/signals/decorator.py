@@ -9,7 +9,7 @@ def transform_to_make_signals(make_signal):
         def proc_signals(f):
             proc_signal = make_signal(model)
             
-            props = model.get_properties()
+            props = f.get_properties()
             signals = [
                 proc_signal(model, f.get_state(ii), f.get_control(ii), props)
                 for ii in range(f.size)]
