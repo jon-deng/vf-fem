@@ -155,7 +155,7 @@ def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     return dfin_state_n
 
 
-def integrate_step(model, ini_state, control, props, dt, set_props=False):
+def integrate_step(model, ini_state, control, props, dt, set_props=False, newton_solver_prm=None):
     """
     Integrate a model over a single time step
     """
@@ -165,7 +165,7 @@ def integrate_step(model, ini_state, control, props, dt, set_props=False):
     if set_props:
         model.set_properties(props)
     
-    fin_state, step_info = model.solve_state1(ini_state)
+    fin_state, step_info = model.solve_state1(ini_state, newton_solver_prm=newton_solver_prm)
     return fin_state, step_info
 
 def append_step_result(f, state, control, time, step_info):
