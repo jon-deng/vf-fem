@@ -18,7 +18,7 @@ from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models import solid as smd, fluid as fmd, acoustic as amd
 from femvf.load import load_fsi_model, load_fsai_model
-import femvf.statefunctional.solid as solidfunc
+import femvf.signals.solid as solidfunc
 from femvf import callbacks
 from femvf import linalg
 
@@ -405,7 +405,9 @@ class TestIntegrate(ForwardConfig):
 def proc_time_and_glottal_width(model, f):
     t = f.get_times()
     props = f.get_properties()
-    y = [solidfunc.glottal_width_sharp(model, f.get_state(n), f.get_control(n), props) for n in range(f.size)]
+
+    glottal_width_sharp = solidfunc.make_sig_glottal_width_sharp(model)
+    y = glottal_width_sharp(f)
         
     return t, np.array(y)
 

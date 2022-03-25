@@ -19,7 +19,7 @@ model = load_fsi_model(
 
 ### Specify control
 control = model.get_control_vec()
-control['psub'][:] = 100.0 * 10
+control['psub'][:] = 2000.0 * 10
 control['psup'][:] = 0.0 * 10
 
 ### Specify properties
