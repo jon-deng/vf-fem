@@ -9,7 +9,7 @@ import numpy as np
 import dolfin as dfn
 
 from blocktensor import linalg as bla
-from blocktensor import genericops as gops
+from blocktensor import subops as gops
 # from femvf import dynamicalmodels as dynmod
 from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
 from femvf import load

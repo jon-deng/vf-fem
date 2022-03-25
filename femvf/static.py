@@ -9,7 +9,7 @@ import numpy as np
 from .models import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
-from blocktensor import linalg, genericops as gops
+from blocktensor import linalg, subops as gops
 from blocktensor.vec import BlockVec, concatenate_vec, convert_bvec_to_petsc
 from blocktensor.mat import BlockMat, zero_mat, ident_mat
 

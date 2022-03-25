@@ -23,7 +23,7 @@ shapes = OrderedDict()
 
 import numpy as np
 
-from blocktensor.genericops import set_vec
+from blocktensor.subops import set_vec
 
 def property_size(field_size, prop_type):
     """
