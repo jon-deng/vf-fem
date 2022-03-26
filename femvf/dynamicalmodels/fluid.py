@@ -204,7 +204,7 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         resq = self.dq
         resp = self.dp
-        return bla.BlockVec([resq, resp], labels=self.state.keys)
+        return bla.BlockVec([resq, resp], labels=[self.state.keys])
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -250,7 +250,7 @@ class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         resq = np.zeros(1)
         resp = np.zeros(self.p.size)
-        return bla.BlockVec([resq, resp], labels=self.state.keys)
+        return bla.BlockVec([resq, resp], labels=[self.state.keys])
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -303,7 +303,7 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         dqp = dbernoulli_qp(*primals, tangents)
         resq = -dqp[0]
         resp = -dqp[1]
-        return bla.BlockVec([resq, resp], labels=self.state.keys)
+        return bla.BlockVec([resq, resp], labels=[self.state.keys])
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
