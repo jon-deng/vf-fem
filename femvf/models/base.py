@@ -5,7 +5,7 @@ Generic model definition
 import numpy as np
 
 from blocktensor.vec import BlockVec
-
+   
 class Model:
     """
     This object represents the equations defining a system over one time step.

@@ -198,8 +198,10 @@ class Bernoulli(QuasiSteady1DFluid):
         return b
 
     def apply_dres_dcontrol(self, x):
-
+        raise NotImplementedError()
+        
     def apply_dres_dcontrol_adj(self, x):
+        raise NotImplementedError()
 
 
 ## Bernoulli fluid pressure
