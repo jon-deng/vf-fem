@@ -353,7 +353,7 @@ class ExplicitFSIModel(FSIModel):
         # Note that setting the initial fluid state sets the final driving pressure
         # for explicit coupling
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = linalg.BlockVec((p0_solid,), self.solid.control.keys)
+        control = linalg.BlockVec((p0_solid,), labels=[self.solid.control.keys])
         self.solid.set_control(control)
 
     def set_fin_fluid_state(self, qp1):
@@ -497,13 +497,13 @@ class ImplicitFSIModel(FSIModel):
         self.fluid.set_ini_state(qp0)
 
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = linalg.BlockVec((p0_solid,), self.solid.control.keys)
+        control = linalg.BlockVec((p0_solid,), labels=[self.solid.control.keys])
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
         p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        control = linalg.BlockVec((p1_solid,), self.solid.control.keys)
+        control = linalg.BlockVec((p1_solid,), labels=[self.solid.control.keys])
         self.solid.set_control(control)
 
     ## Forward solver methods
@@ -728,7 +728,7 @@ class FSAIModel(FSIModel):
         self.state0 = state
         self.state1 = state.copy()
 
-        control = linalg.BlockVec((np.array([1.0]),), ('psub',))
+        control = linalg.BlockVec((np.array([1.0]),), labels=[('psub',)])
         self.control = control.copy()
 
         self.properties = linalg.concatenate_vec(
@@ -893,7 +893,7 @@ class FSAIModel(FSIModel):
             dpsup_dqac = self.acoustic.z[0]
             def res():
                 qbern = fl_state1[0]
-                return qac - linalg.BlockVec((qbern,), ('qin',))
+                return qac - linalg.BlockVec((qbern,), labels=[('qin',)])
 
             def solve_jac(res):
                 dres_dq = 1-dqbern_dpsup*dpsup_dqac
@@ -901,7 +901,7 @@ class FSAIModel(FSIModel):
 
             return res, solve_jac
 
-        q, info = smd.newton_solve(linalg.BlockVec((ini_state['q'],), ('qin',)), make_linearized_flow_residual)
+        q, info = smd.newton_solve(linalg.BlockVec((ini_state['q'],), labels=[('qin',)]), make_linearized_flow_residual)
 
         self.acoustic.set_control(q)
         ac_state1, _ = self.acoustic.solve_state1()

@@ -114,7 +114,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslp_dflq = bla.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
         dslp_dflp = self._dsolid_dfluid_scalar
         mats = [[dslp_dflq, dslp_dflp]]
-        self.dslcontrol_dflstate = bla.BlockMat(mats, (('p',), ('q', 'p')))
+        self.dslcontrol_dflstate = bla.BlockMat(mats, labels=(('p',), ('q', 'p')))
 
         # The matrix here is d(area)_fluid/d(u, v)_solid
         # pylint: disable=no-member
@@ -133,7 +133,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         dflarea_dslarea = self._dfluid_dsolid_scalar
         dflarea_dslu = gops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
         mats[0][0] = dflarea_dslu
-        self.dflcontrol_dslstate = bla.BlockMat(mats, (self.fluid.control.keys, self.solid.state.keys))
+        self.dflcontrol_dslstate = bla.BlockMat(mats, labels=(self.fluid.control.keys, self.solid.state.keys))
 
         # Make null BlockMats relating fluid/solid states
         mats = [
@@ -258,11 +258,11 @@ class FSIDynamicalSystem(DynamicalSystem):
 
     def assem_dres_dcontrol(self):
         _mats = [[bla.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
-        dslres_dg = bla.BlockMat(_mats, (self.solid.state.keys, self.control.keys))
+        dslres_dg = bla.BlockMat(_mats, labels=(self.solid.state.keys, self.control.keys))
         
         dflres_dflg = convert_bmat_to_petsc(self.fluid.assem_dres_dcontrol())
         _mats = [[row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg]
-        dflres_dg =  bla.BlockMat(_mats, (self.fluid.state.keys, self.control.keys))
+        dflres_dg =  bla.BlockMat(_mats, labels=(self.fluid.state.keys, self.control.keys))
         return bla.concatenate_mat([[dslres_dg], [dflres_dg]])
 
     # TODO: Need to implement for optimization strategies

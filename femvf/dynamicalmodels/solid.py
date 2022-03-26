@@ -40,24 +40,24 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
 
         self.u = self.forms['coeff.state.u1']
         self.v = self.forms['coeff.state.v1']
-        self.state = bla.BlockVec((self.u.vector(), self.v.vector()), ('u', 'v'))
+        self.state = bla.BlockVec((self.u.vector(), self.v.vector()), labels=[('u', 'v')])
 
         self.ut = dfn.Function(self.forms['coeff.state.u1'].function_space())
         self.vt = self.forms['coeff.state.a1']
-        self.statet = bla.BlockVec((self.ut.vector(), self.vt.vector()), ('u', 'v'))
+        self.statet = bla.BlockVec((self.ut.vector(), self.vt.vector()), labels=[('u', 'v')])
 
-        self.control = bla.BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
+        self.control = bla.BlockVec((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
 
         self.du = self.forms['coeff.dstate.u1']
         self.dv = self.forms['coeff.dstate.v1']
-        self.dstate = bla.BlockVec((self.du.vector(), self.dv.vector()), ('u', 'v'))
+        self.dstate = bla.BlockVec((self.du.vector(), self.dv.vector()), labels=[('u', 'v')])
 
         self.dut = dfn.Function(self.forms['coeff.dstate.u1'].function_space())
         self.dvt = self.forms['coeff.dstate.a1']
-        self.dstatet = bla.BlockVec((self.dut.vector(), self.dvt.vector()), ('u', 'v'))
+        self.dstatet = bla.BlockVec((self.dut.vector(), self.dvt.vector()), labels=[('u', 'v')])
 
         # self.p = self.forms['coeff.dfsi.p1']
-        self.dcontrol = bla.BlockVec((self.forms['coeff.dfsi.p1'].vector(),), ('p',))
+        self.dcontrol = bla.BlockVec((self.forms['coeff.dfsi.p1'].vector(),), labels=[('p',)])
 
 
         self.properties = self.get_properties_vec(set_default=True)
@@ -112,7 +112,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
             self.forms['form.un.f1uva'], 
             tensor=dfn.PETScVector())
         resv = self.v.vector() - self.ut.vector()
-        return bla.BlockVec([resu, resv], ['u',  'v'])
+        return bla.BlockVec([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
         dresu_du = dfn.assemble(
@@ -129,7 +129,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -144,7 +144,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
@@ -157,7 +157,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dcontrol],
             [dresv_dcontrol]]
-        return bla.BlockMat(mats, (self.state.keys, self.control.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.control.keys))
 
     def assem_dres_dprops(self):
         pass
@@ -180,7 +180,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScVector())
             )
         resv = self.dv.vector()
-        return bla.BlockVec([resu, resv], ['u',  'v'])
+        return bla.BlockVec([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
         dresu_du = (
@@ -207,7 +207,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -227,7 +227,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
@@ -246,7 +246,7 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dg],
             [dresv_dg]]
-        return bla.BlockMat(mats, (['u', 'v'], ['g']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['g']))
 
 class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
@@ -263,7 +263,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScVector())
             )
         resv = -self.dut.vector()
-        return bla.BlockVec([resu, resv], ['u',  'v'])
+        return bla.BlockVec([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
         dresu_du = (
@@ -282,7 +282,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -298,7 +298,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
@@ -313,7 +313,7 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dg],
             [dresv_dg]]
-        return bla.BlockMat(mats, (['u', 'v'], ['g']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['g']))
 
 class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
@@ -329,7 +329,7 @@ class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
             tensor=dfn.PETScVector())
         resv = -self.v.vector().copy()
         resv.zero()
-        return bla.BlockVec([resu, resv], ['u',  'v'])
+        return bla.BlockVec([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
         dresu_du = dfn.assemble(
@@ -346,7 +346,7 @@ class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
@@ -361,7 +361,7 @@ class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, (['u', 'v'], ['u', 'v']))
+        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()

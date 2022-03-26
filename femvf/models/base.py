@@ -27,7 +27,7 @@ class Model:
         Return empty flow speed and pressure state vectors
         """
         q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
-        return BlockVec((q, p), ('q', 'p'))
+        return BlockVec((q, p), labels=[('q', 'p')])
 
     def get_properties_vec(self, set_default=True):
         """
@@ -39,7 +39,7 @@ class Model:
             prop_defaults = self.PROPERTY_DEFAULTS
         vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
 
-        return BlockVec(vecs, labels)
+        return BlockVec(vecs, labels=labels)
 
     def get_control_vec(self):
         ret = self.control.copy()

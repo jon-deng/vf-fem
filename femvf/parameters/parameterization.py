@@ -143,7 +143,7 @@ class FullParameterization(Parameterization):
         ini_state = model.get_state_vec()
         control = model.get_control_vec()
         props = model.get_properties_vec()
-        times = linalg.BlockVec((np.zeros(ntime),), ('times',))
+        times = linalg.BlockVec((np.zeros(ntime),), labels=[('times',)])
         self._bvector = linalg.concatenate_vec([ini_state, control, props, times]) #join_standard_to_bvector(ini_state, control, props, times)
 
     def convert(self):
@@ -168,7 +168,7 @@ class SubsetParameterization(Parameterization):
         ini_state = model.get_state_vec()
         control = model.get_control_vec()
         props = model.get_properties_vec()
-        times = linalg.BlockVec((np.zeros(ntime),), ('times',))
+        times = linalg.BlockVec((np.zeros(ntime),), labels=[('times',)])
         self._bvector = join_standard_to_bvector(ini_state, control, props, times)
         self.subset_keys = subset_keys
     
@@ -189,7 +189,7 @@ class SubsetParameterization(Parameterization):
     def bvector(self):
         keys = self.subset_keys
         vecs = [self.full_bvector[key] for key in keys]
-        return linalg.BlockVec(vecs, keys)
+        return linalg.BlockVec(vecs, labels=[keys])
 
     def convert(self):
         model = self.model
@@ -202,7 +202,7 @@ class SubsetParameterization(Parameterization):
         full_grad = join_standard_to_bvector(grad_state, grad_controls[0], grad_props, grad_times)
         keys = self.subset_keys
         vecs = [full_grad[key] for key in keys]
-        return linalg.BlockVec(vecs, keys)
+        return linalg.BlockVec(vecs, labels=[keys])
 
 class NodalElasticModuli(Parameterization):
     """
@@ -216,7 +216,7 @@ class NodalElasticModuli(Parameterization):
     def init_vector(self):
         vecs = [self.model.properties['emod'].copy()]
         labels = ['emod']
-        return linalg.BlockVec(vecs, labels)
+        return linalg.BlockVec(vecs, labels=[labels])
 
     def convert(self):
         ini_state = self.model.get_state_vec()
@@ -250,7 +250,7 @@ class ElasticModuliAndInitialState(Parameterization):
     def init_vector(self):
         vecs = [self.model.state0.copy(), self.model.properties['emod'].copy()]
         labels = [*self.model.state0.keys, 'emod']
-        return linalg.BlockVec(vecs, labels)
+        return linalg.BlockVec(vecs, labels=[labels])
 
     def convert(self):
         ini_state = self.model.get_state_vec()
@@ -293,7 +293,7 @@ def join_standard_to_bvector(state, control, props, times):
     vecs = [*state.vecs, *control.vecs, *props.vecs, *times.vecs]
 
     # breakpoint()
-    return linalg.BlockVec(vecs, labels)
+    return linalg.BlockVec(vecs, labels=[labels])
 
 ## These need to be fixed since they use an old version of the code
 class KelvinVoigtNodalConstants(Parameterization):

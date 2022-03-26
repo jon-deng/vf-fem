@@ -46,7 +46,7 @@ def properties_bvec_from_forms(forms, defaults=None):
 
         vecs.append(vec)
 
-    return BlockVec(vecs, labels)
+    return BlockVec(vecs, labels=[labels])
 
 
 class Solid(base.Model):
@@ -109,9 +109,9 @@ class Solid(base.Model):
         self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
 
         ## Define the state/controls/properties
-        self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), ('u', 'v', 'a'))
-        self.state1 = BlockVec((self.u1.vector(), self.v1.vector(), self.a1.vector()), ('u', 'v', 'a'))
-        self.control = BlockVec((self.forms['coeff.fsi.p1'].vector(),), ('p',))
+        self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), labels=[('u', 'v', 'a')])
+        self.state1 = BlockVec((self.u1.vector(), self.v1.vector(), self.a1.vector()), labels=[('u', 'v', 'a')])
+        self.control = BlockVec((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
         self.properties = self.get_properties_vec(set_default=True)
         self.set_properties(self.properties)
 
@@ -162,7 +162,7 @@ class Solid(base.Model):
         u = dfn.Function(self.vector_fspace).vector()
         v = dfn.Function(self.vector_fspace).vector()
         a = dfn.Function(self.vector_fspace).vector()
-        return BlockVec((u, v, a), ('u', 'v', 'a')) 
+        return BlockVec((u, v, a), labels=[('u', 'v', 'a')]) 
 
     def get_control_vec(self):
         ret = self.control.copy()

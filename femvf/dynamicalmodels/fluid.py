@@ -121,27 +121,27 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
         N = self.s.size
         self.q = np.zeros(1)
         self.p = np.zeros(N)
-        self.state = bla.BlockVec([self.q, self.p], ['q', 'p'])
+        self.state = bla.BlockVec([self.q, self.p], labels=[['q', 'p']])
 
         self.qt = np.zeros(1)
         self.pt = np.zeros(N)
-        self.statet = bla.BlockVec([self.qt, self.pt], ['q', 'p'])
+        self.statet = bla.BlockVec([self.qt, self.pt], labels=[['q', 'p']])
 
-        self.control = bla.BlockVec([np.ones(N), np.zeros(1), np.zeros(1)], ['area', 'psub', 'psup'])
+        self.control = bla.BlockVec([np.ones(N), np.zeros(1), np.zeros(1)], labels=[['area', 'psub', 'psup']])
 
         self.dq = np.zeros(1)
         self.dp = np.zeros(N)
-        self.dstate = bla.BlockVec([self.q, self.p], ['q', 'p'])
+        self.dstate = bla.BlockVec([self.q, self.p], labels=[['q', 'p']])
 
         self.dqt = np.zeros(1)
         self.dpt = np.zeros(N)
-        self.dstatet = bla.BlockVec([self.qt, self.pt], ['q', 'p'])
+        self.dstatet = bla.BlockVec([self.qt, self.pt], labels=[['q', 'p']])
 
         self.dcontrol = self.control.copy()
 
         properties_vec = ['psub', 'psup', 'rho_air', 'zeta_min', 'zeta_sep']
         self.properties = bla.BlockVec(
-            [np.ones(1) for i in range(len(properties_vec))], properties_vec)
+            [np.ones(1) for i in range(len(properties_vec))], labels=[properties_vec])
 
 class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
@@ -157,7 +157,7 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         qp_explicit = bernoulli_qp(*primals)
         resq = self.q - qp_explicit[0]
         resp = self.p - qp_explicit[1]
-        return bla.BlockVec([resq, resp], self.state.keys)
+        return bla.BlockVec([resq, resp], labels=self.state.labels)
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.ones(self.q.size))
@@ -168,7 +168,7 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dstatet(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -179,7 +179,7 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dcontrol(self):
         # Depack variables from BlockVec for input to Bernoulli functions
@@ -198,13 +198,13 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [-dq_darea, -dq_dpsub, -dq_dpsup],
             [-dp_darea, -dp_dpsub, -dp_dpsup]]
-        return bla.BlockMat(mats, (self.state.keys, self.control.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.control.keys))
 
 class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         resq = self.dq
         resp = self.dp
-        return bla.BlockVec([resq, resp], self.state.keys)
+        return bla.BlockVec([resq, resp], labels=self.state.keys)
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -215,7 +215,7 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dstatet(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -226,7 +226,7 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dcontrol(self):
         dresq_darea = np.zeros((self.q.size, self.s.size))
@@ -240,7 +240,7 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_darea, dresq_dpsub, dresq_dpsup],
             [dresp_darea, dresp_dpsub, dresp_dpsup]]
-        return bla.BlockMat(mats, (self.state.keys, self.control.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.control.keys))
 
 class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     """
@@ -250,7 +250,7 @@ class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         resq = np.zeros(1)
         resp = np.zeros(self.p.size)
-        return bla.BlockVec([resq, resp], self.state.keys)
+        return bla.BlockVec([resq, resp], labels=self.state.keys)
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -261,7 +261,7 @@ class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dstatet(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -272,7 +272,7 @@ class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dcontrol(self):
         dresq_darea = np.zeros((self.q.size, self.s.size))
@@ -286,7 +286,7 @@ class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_darea, dresq_dpsub, dresq_dpsup],
             [dresp_darea, dresp_dpsub, dresp_dpsup]]
-        return bla.BlockMat(mats, (self.state.keys, self.control.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.control.keys))
 
 class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
@@ -303,7 +303,7 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         dqp = dbernoulli_qp(*primals, tangents)
         resq = -dqp[0]
         resp = -dqp[1]
-        return bla.BlockVec([resq, resp], self.state.keys)
+        return bla.BlockVec([resq, resp], labels=self.state.keys)
 
     def assem_dres_dstate(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -314,7 +314,7 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dstatet(self):
         dresq_dq = np.diag(np.zeros(self.q.size))
@@ -325,7 +325,7 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_dq, dresq_dp],
             [dresp_dq, dresp_dp]]
-        return bla.BlockMat(mats, (self.state.keys, self.state.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dcontrol(self):
         # Depack variables from BlockVec for input to Bernoulli functions
@@ -353,5 +353,5 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         mats = [
             [dresq_darea, dresq_dpsub, dresq_dpsup],
             [dresp_darea, dresp_dpsub, dresp_dpsup]]
-        return bla.BlockMat(mats, (self.state.keys, self.control.keys))
+        return bla.BlockMat(mats, labels=(self.state.keys, self.control.keys))
 

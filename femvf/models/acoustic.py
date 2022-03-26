@@ -20,13 +20,13 @@ class Acoustic1D(base.Model):
         # pref (interlaced b1, f2 partial pressures) are reflected pressures
         pinc = np.zeros((num_tube//2 + 1)*2)
         pref = np.zeros((num_tube//2 + 1)*2)
-        self.state0 = linalg.BlockVec((pinc, pref), ('pinc', 'pref'))
+        self.state0 = linalg.BlockVec((pinc, pref), labels=[('pinc', 'pref')])
 
         self.state1 = self.state0.copy()
 
         # The control is the input flow rate
         qin = np.zeros((1,))
-        self.control = linalg.BlockVec((qin,), ('qin',))
+        self.control = linalg.BlockVec((qin,), labels=[('qin',)])
 
         length = np.ones(1)
         area = np.ones(num_tube)
@@ -37,7 +37,7 @@ class Acoustic1D(base.Model):
         lrad = np.ones(1)
         self.properties = linalg.BlockVec(
             (length, area, gamma, rho, c, rrad, lrad), 
-            ('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad'))
+            labels=[('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad')])
 
     ## Setting parameters of the acoustic model
     @property
@@ -132,7 +132,7 @@ class WRAnalog(Acoustic1D):
         pinc, pref = self.state0.vecs
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
-        state1 = linalg.BlockVec((pinc_1, pref_1), self.state1.keys)
+        state1 = linalg.BlockVec((pinc_1, pref_1), labels=[self.state1.keys])
         info = {}
         return state1, info
 
@@ -148,7 +148,7 @@ class WRAnalog(Acoustic1D):
         
         b_pinc, b_pref, b_qin = ATr(x.vecs)
         bvecs = (np.asarray(b_pinc), np.asarray(b_pref))
-        return -linalg.BlockVec(bvecs, self.state0.keys)
+        return -linalg.BlockVec(bvecs, labels=[self.state0.keys])
 
     def apply_dres_dcontrol(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
@@ -157,7 +157,7 @@ class WRAnalog(Acoustic1D):
         x_ = linalg.concatenate_vec([self.get_state_vec(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
-        return -linalg.BlockVec(bvecs, self.state1.keys)
+        return -linalg.BlockVec(bvecs, labels=[self.state1.keys])
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()

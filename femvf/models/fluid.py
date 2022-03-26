@@ -51,18 +51,18 @@ class QuasiSteady1DFluid(base.Model):
 
         p0 = np.zeros(NVERT)
         q0 = np.zeros((1,))
-        self.state0 = BlockVec((q0, p0), ('q', 'p'))
+        self.state0 = BlockVec((q0, p0), labels=[('q', 'p')])
 
         p1 = np.zeros(NVERT)
         q1 = np.zeros(1)
-        self.state1 = BlockVec((q1, p1), ('q', 'p'))
+        self.state1 = BlockVec((q1, p1), labels=[('q', 'p')])
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
         usurf = np.zeros(2*NVERT)
         vsurf = np.zeros(2*NVERT)
         psub, psup = np.zeros(1), np.zeros(1)
-        self.control = BlockVec((usurf, vsurf, psub, psup), ('usurf', 'vsurf', 'psub', 'psup'))
+        self.control = BlockVec((usurf, vsurf, psub, psup), labels=[('usurf', 'vsurf', 'psub', 'psup')])
 
         self.properties = self.get_properties_vec(set_default=True)
 
@@ -111,7 +111,7 @@ class QuasiSteady1DFluid(base.Model):
         Return empty flow speed and pressure state vectors
         """
         q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
-        return BlockVec((q, p), ('q', 'p'))
+        return BlockVec((q, p), labels=[('q', 'p')])
 
     def get_properties_vec(self, set_default=True):
         """
@@ -123,7 +123,7 @@ class QuasiSteady1DFluid(base.Model):
             prop_defaults = self.PROPERTY_DEFAULTS
         vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
 
-        return BlockVec(vecs, labels)
+        return BlockVec(vecs, labels=[labels])
 
     def get_control_vec(self):
         ret = self.control.copy()
@@ -317,7 +317,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'a_sep': asep,
                 'area': asafe,
                 'pressure': p}
-        return BlockVec((np.array(q), p), ('q', 'p')), info
+        return BlockVec((np.array(q), p), labels=[('q', 'p')]), info
 
     def flow_sensitivity(self, usurf, vsurf, psub, psup, fluid_props):
         """

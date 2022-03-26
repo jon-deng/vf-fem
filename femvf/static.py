@@ -70,7 +70,7 @@ def static_configuration_coupled_picard(model: comodel.FSIModel):
         # solve for the solid deformation under the guessed fluid load
         dfn.solve(solid.forms['form.un.f1uva'] == 0.0, solid.forms['coeff.state.u1'], 
                   bcs=[solid.bc_base], J=solid.forms['form.bi.df1uva_du1'], solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM})
-        u = BlockVec([solid.state1['u'].copy()], ['u']) # the vector corresponding to solid.forms['coeff.state.u1']
+        u = BlockVec([solid.state1['u'].copy()], labels=[['u']]) # the vector corresponding to solid.forms['coeff.state.u1']
         
         # update the fluid load for the new solid deformation
         x_n['u'][:] = u[0]
@@ -145,7 +145,7 @@ def static_configuration_coupled_newton(model: comodel.FSIModel):
         def assem_res():
             fu = dfn.assemble(solid.forms['form.un.f1uva'], tensor=dfn.PETScVector())
             solid.bc_base.apply(fu)
-            fu = BlockVec([fu], labels=('u',))
+            fu = BlockVec([fu], labels=[['u']])
             fqp = fluid.res()
 
             return concatenate_vec([fu, fqp])
