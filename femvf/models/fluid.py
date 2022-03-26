@@ -23,31 +23,19 @@ from blocktensor.linalg import BlockVec
 
 class QuasiSteady1DFluid(base.Model):
     """
-    This class represents a 1D fluid
+    This class represents a 1D fluid model
+
+    Parameters
+    ----------
+    s: np.ndarray
+        streamwise channel centreline coordinates
+    area: np.ndarray
+        channel cross-sectional areas
     """
-    def __init__(self, x_vertices, y_surface):
-        """
-
-        Parameters
-        ----------
-        x_vertices: np.ndarray
-            Array of x vertex locations numbered in steamwise increasing order.
-        y_surface: np.ndarray
-            Array of y surface locations numbered in steamwise increasing order.
-        """
-
-        NVERT = x_vertices.size
+    def __init__(self, s, area):
+        NVERT = s.size
         # the 'mesh' (also the x coordinates in the reference configuration)
-        self.x_vertices = x_vertices
-
-        # the surface y coordinates of the solid
-        self.y_surface = y_surface
-
-        # Calculate surface coordinates which are needed to compute surface integrals
-        dx = self.x_vertices[1:] - self.x_vertices[:-1]
-        dy = self.y_surface[1:] - self.y_surface[:-1]
-        ds = (dx**2+dy**2)**0.5
-        self.s_vertices = np.concatenate(([0.0], np.cumsum(ds)))
+        self.s_vertices = s
 
         p0 = np.zeros(NVERT)
         q0 = np.zeros((1,))
@@ -59,10 +47,9 @@ class QuasiSteady1DFluid(base.Model):
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
-        usurf = np.zeros(2*NVERT)
-        vsurf = np.zeros(2*NVERT)
+        area = np.zeros(NVERT)
         psub, psup = np.zeros(1), np.zeros(1)
-        self.control = BlockVec((usurf, vsurf, psub, psup), ('usurf', 'vsurf', 'psub', 'psup'))
+        self.control = BlockVec((area, psub, psup), ('area', 'psub', 'psup'))
 
         self.properties = self.get_properties_vec(set_default=True)
 
@@ -168,324 +155,26 @@ class Bernoulli(QuasiSteady1DFluid):
     
     """
     PROPERTY_TYPES = {
-        'y_midline': ('const', ()),
         'a_sub': ('const', ()),
         'a_sup': ('const', ()),
-        'vf_length': ('const', ()),
         'rho_air': ('const', ()),
         'r_sep': ('const', ()),
         'zeta_amin': ('const', ()),
         'zeta_sep': ('const', ()),
         'zeta_ainv': ('const', ()),
         'zeta_lb': ('const', ()),
-        'ygap_lb': ('const', ())}
+        'area_lb': ('const', ())}
 
     PROPERTY_DEFAULTS = {
-        'y_midline': 1e6,
         'a_sub': 100000,
         'a_sup': 0.6,
-        'vf_length': 1.0,
         'r_sep': 1.0,
         'rho_air': 1.225 * SI_DENSITY_TO_CGS,
         'zeta_amin': 0.002/3,
         'zeta_sep': 0.002/3,
         'zeta_ainv': 2.5*0.002,
         'zeta_lb': 0.002/3,
-        'ygap_lb': 0.001}
-
-    # TODO: Refactor as solve_dres_dcontrol
-    def solve_dqp1_du1(self, adjoint=False):
-        """
-        Return the final flow state
-        """
-        return self.flow_sensitivity(*self.control.vecs, self.properties)
-
-    # TODO: Remove this. Coupling to the solid should be done in a coupling model
-    def solve_dqp1_du1_solid(self, model, adjoint=False):
-        """
-        Return the final flow state
-        """
-        return self.flow_sensitivity_solid(model, *self.control.vecs, self.properties,
-                                           adjoint)
-
-    ## internal methods
-    def pbernoulli(self, qsqr, pref, aref, area, rho):
-        return pref + 1/2*rho*qsqr*(aref**-2 - area**-2)
-
-    def dpbernoulli(self, qsqr, pref, aref, area, rho):
-        dpbern_dsqsr = 1/2*rho*(aref**-2 - area**-2)
-        dpbern_dpref = 1.0
-        dpbern_daref = 1/2*rho*qsqr*-2*aref**-3
-        dpbern_darea = 1/2*rho*qsqr*2*area**-3
-        return dpbern_dsqsr, dpbern_dpref, dpbern_daref, dpbern_darea
-
-    def flow_rate_sqr(self, pref, aref, psep, asep, rho):
-        qsqr = 0.0
-        with np.errstate(divide='raise'):
-            qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
-        return qsqr
-
-    def dflow_rate_sqr(self, pref, aref, psep, asep, rho):
-        with np.errstate(divide='raise'):
-            qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
-            dqsqr_dpref = -2/rho/(aref**-2 - asep**-2)
-            dqsqr_dpsep = 2/rho/(aref**-2 - asep**-2)
-            dqsqr_dasep = -2/rho*(psep - pref)/(aref**-2 - asep**-2)**2 * (2/asep**3)
-            return dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep
-
-    def fluid_pressure(self, usurf, vsurf, psub, psup, fluid_props):
-        """
-        Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
-
-        TODO: I think it would make more sense to treat this as a generic Bernoulli pressure
-        calculator. It could be refactored to not use an self variable, instead it would pass a
-        reference surface mesh, and current surface mesh (x, y coordinates of vertices in increasing
-        streamwise direction).
-
-        Parameters
-        ----------
-        surface_state : tuple of (u, v) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-            States of the surface vertices, ordered following the flow (increasing x coordinate).
-        fluid_props : BlockVec
-            A dictionary of fluid properties.
-
-        Returns
-        -------
-        q : float
-            The flow rate
-        p : np.ndarray
-            An array of pressure vectors for each each vertex
-        xy_min, xy_sep: (2,) np.ndarray
-            The coordinates of the vertices at minimum and separation areas
-        """
-        flow_sign = np.sign(psub-psup)
-        rho = fluid_props['rho_air']
-        asub = fluid_props['a_sub']
-        asup = fluid_props['a_sup']
-        s = self.s_vertices
-
-        # x = surface_state[0][:-1:2]
-        y = usurf[1::2]
-
-        a = 2 * (fluid_props['y_midline'] - y) * fluid_props['vf_length']
-        asafe = smoothlb(a, 2*fluid_props['ygap_lb']*fluid_props['vf_length'], fluid_props['zeta_lb'])
-
-        # Calculate minimum and separation areas/locations
-        smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_amin'])
-
-        # Bound all areas to the 'smooth' minimum area above
-        # This is done because of the weighting scheme; the smooth min is always slightly larger
-        # then the actual min, which leads to problems in the calculated pressures at very small
-        # areas where small areas can have huge area ratios leading to weird Bernoulli behaviour
-        asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
-
-        asep = fluid_props['r_sep'] * amin
-        zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
-        ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
-        
-        # Compute the flow rate based on pressure drop from "reference" to 
-        # separation location
-        pref, psep, aref = None, None, None
-        if flow_sign >= 0:
-            pref, aref = psub, asub
-            psep = psup
-        else:
-            pref, aref = psup, asup
-            psep = psub
-
-        qsqr = self.flow_rate_sqr(pref, aref, psep, asep, rho)
-        pbern = self.pbernoulli(qsqr, pref, aref, asafe, rho)
-
-        sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, alpha=fluid_props['zeta_sep'])
-        p = sepmult * pbern + (1-sepmult)*psep
-        q = flow_sign*qsqr**0.5 *fluid_props['vf_length']
-
-        # These are not really used anywhere, mainly output for debugging purposes
-        idx_min = np.argmax(s>smin)
-        idx_sep = np.argmax(s>ssep)
-        xy_min = usurf.reshape(-1, 2)[idx_min]
-        xy_sep = usurf.reshape(-1, 2)[idx_sep]
-        
-        info = {'flow_rate': q,
-                'idx_sep': idx_sep,
-                'idx_min': idx_min,
-                's_sep': ssep,
-                's_min': smin,
-                'xy_min': xy_min,
-                'xy_sep': xy_sep,
-                'a_min': amin,
-                'a_sep': asep,
-                'area': asafe,
-                'pressure': p}
-        return BlockVec((np.array(q), p), ('q', 'p')), info
-
-    def flow_sensitivity(self, usurf, vsurf, psub, psup, fluid_props):
-        """
-        Return the sensitivities of pressure and flow rate to the surface state.
-
-        Parameters
-        ----------
-        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-            States of the surface vertices, ordered following the flow (increasing x coordinate).
-        fluid_props : BlockVec
-            A dictionary of fluid property keyword arguments.
-        """
-        flow_sign = np.sign(psub-psup)
-        rho = fluid_props['rho_air']
-        asub = fluid_props['a_sub']
-        asup = fluid_props['a_sup']
-        s = self.s_vertices
-
-        # x = surface_state[0][:-1:2]
-        y = usurf[1::2]
-
-        a = 2 * (fluid_props['y_midline'] - y)
-        da_dy = -2
-
-        asafe = smoothlb(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
-        dasafe_da = dsmoothlb_df(a, 2*fluid_props['ygap_lb'], fluid_props['zeta_lb'])
-
-        smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_amin'])
-        dsmin_dasafe, damin_dasafe = dsmooth_min_area(s, asafe, fluid_props['zeta_amin'])
-        dsmin_da = dsmin_dasafe*dasafe_da
-        damin_da = damin_dasafe*dasafe_da
-
-        asep = fluid_props['r_sep'] * amin
-        dasep_damin = fluid_props['r_sep']
-        dasep_da = dasep_damin * damin_da
-
-        zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
-        ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
-        dssep_dsmin, dssep_dasafe, dssep_dasep = \
-            dsmooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
-        dssep_da = (dssep_dsmin*dsmin_da + dssep_dasafe*dasafe_da
-                    + dssep_dasep*dasep_da) #* da_dy
-
-        # Compute the flow rate based on pressure drop from "reference" to 
-        # separation location
-        pref, psep, aref = None, None, None
-        if flow_sign >= 0:
-            pref, aref = psub, asub
-            psep = psup
-        else:
-            pref, aref = psup, asup
-            psep = psub
-
-        qsqr = self.flow_rate_sqr(pref, aref, psep, asep, rho)
-        dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep = self.dflow_rate_sqr(pref, aref, psep, asep, rho)
-        dqsqr_da = dqsqr_dasep*dasep_da
-
-        # Find Bernoulli pressure
-        pbern = self.pbernoulli(qsqr, pref, aref, asafe, rho)
-        dpbern_dqsqr, dpbern_dpref, dpbern_daref, dpbern_dasafe = self.dpbernoulli(qsqr, pref, aref, asafe, rho)
-        dpbern_da = dpbern_dasafe*dasafe_da + dpbern_dqsqr*dqsqr_da
-        dpbern_dpref = dpbern_dpref + dpbern_dqsqr*dqsqr_dpref
-        dpbern_dpsep = dpbern_dqsqr*dqsqr_dpsep
-
-        # Correct Bernoulli pressure by applying a smooth mask after separation
-        zeta_sep = fluid_props['zeta_sep']
-        sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(self.s_vertices, ssep, zeta_sep)
-        dsepmult_da = flow_sign*dsmoothstep_dx0(self.s_vertices, ssep, zeta_sep)[:, None] * dssep_da
-
-        # p = sepmult * pbern + (1-sep_multiplier)*psep
-        dp_da = sepmult[:, None]*dpbern_da + dsepmult_da*pbern[:, None]
-        dp_dpref = sepmult*dpbern_dpref
-        dp_dpsep = sepmult*dpbern_dpsep + (1-sepmult)
-
-        # q = flow_sign*qsqr**0.5*fluid_props
-        dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref*fluid_props['vf_length']
-        dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep*fluid_props['vf_length']
-
-        dp_du = np.zeros((usurf.size//2, usurf.size))
-        dp_du[:, :-1:2] = 0
-        dp_du[:, 1::2] = dp_da*da_dy
-
-        ## Calculate the flow rate sensitivity
-        dq_du = np.zeros(usurf.size)
-        dq_du[1::2] = dqsqr_dasep/(2*qsqr**(1/2)) * dasep_da*da_dy
-
-        dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = None, None, None, None
-        if flow_sign >= 0:
-            dq_dpsub, dp_dpsub = dq_dpref, dp_dpref
-            dq_dpsup, dp_dpsup = dq_dpsep, dp_dpsep
-        else:
-            dq_dpsub, dp_dpsub = dq_dpsep, dp_dpsep
-            dq_dpsup, dp_dpsup = dq_dpref, dp_dpref
-
-        return dq_du, dp_du, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup
-
-    def dres_dcontrol(self):
-        pass
-
-    def flow_sensitivity_solid(self, model, usurf, vsurf, psub, psup, fluid_props, adjoint=False):
-        """
-        Returns sparse mats/vecs for the sensitivity of pressure and flow rate to displacement.
-
-        TODO: This function is a bit weird as a dense block in a sparse matrix is set
-
-        Parameters
-        ----------
-        model
-        surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
-            States of the surface vertices, ordered following the flow (increasing x coordinate).
-
-        Returns
-        -------
-        dp_du : PETSc.Mat
-            Sensitivity of pressure with respect to displacement
-        dq_du : PETSc.Vec
-            Sensitivity of flow rate with respect to displacement
-        """
-        _dq_du, _dp_du, *_ = self.flow_sensitivity(usurf, vsurf, psub, psup, fluid_props)
-
-        dp_du = PETSc.Mat().create(PETSc.COMM_SELF)
-        dp_du.setType('aij')
-
-        shape = None
-        if not adjoint:
-            shape = (self.state1['p'].size, model.solid.vert_to_vdof.size)
-        else:
-            shape = (model.solid.vert_to_vdof.size, self.state1['p'].size)
-        dp_du.setSizes(shape)
-        dp_du.setUp()
-
-        pressure_vertices = model.fsi_verts
-        solid_dofs, fluid_dofs = model.get_fsi_vector_dofs()
-        # ()
-        rows, cols = None, None
-        if not adjoint:
-            rows = np.arange(self.state1['p'].size, dtype=np.int32)
-            cols = solid_dofs
-        else:
-            rows = solid_dofs
-            cols = np.arange(self.state1['p'].size, dtype=np.int32)
-
-        nnz = np.zeros(dp_du.size[0], dtype=np.int32)
-        nnz[rows] = cols.size
-
-        dp_du.setPreallocationNNZ(nnz)
-
-        vals = None
-        if not adjoint:
-            vals = _dp_du
-        else:
-            vals = _dp_du.T
-
-        # I think the rows have to be in increasing order for setValues when you set multiple rows
-        # at once. This is not true for assembling the adjoint version so I set one row at a time in
-        # a loop. Otherwise you could do it this way
-        # dp_du.setValues(rows, cols, vals)
-        for ii, row in enumerate(rows):
-            # Pressure dofs are ordered from 0 to #dofs so that's why the index is `i` on `vals`
-            dp_du.setValues(row, cols, vals[ii, :])
-
-        dp_du.assemblyBegin()
-        dp_du.assemblyEnd()
-
-        dq_du = dfn.Function(model.solid.vector_fspace).vector()
-        dq_du[model.solid.vert_to_vdof.reshape(-1, 2)[pressure_vertices].flat] = _dq_du
-
-        return dq_du, dp_du
+        'area_lb': 0.001}
 
     ## Model res sensitivity interface
     def res(self):
@@ -495,7 +184,7 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return self.fluid_pressure(*self.control.vecs, self.properties)
+        return self.fluid_pressure(self.s_vertices, *self.control.vecs, self.properties)
 
     def solve_dres_dstate1(self, b):
         return b
@@ -508,7 +197,199 @@ class Bernoulli(QuasiSteady1DFluid):
         b.set(0.0)
         return b
 
-## Bernoulli fluid functions
+    def apply_dres_dcontrol(self, x):
+
+    def apply_dres_dcontrol_adj(self, x):
+
+
+## Bernoulli fluid pressure
+def pbernoulli(qsqr, pref, aref, area, rho):
+    return pref + 1/2*rho*qsqr*(aref**-2 - area**-2)
+
+def dpbernoulli(qsqr, pref, aref, area, rho):
+    dpbern_dsqsr = 1/2*rho*(aref**-2 - area**-2)
+    dpbern_dpref = 1.0
+    dpbern_daref = 1/2*rho*qsqr*-2*aref**-3
+    dpbern_darea = 1/2*rho*qsqr*2*area**-3
+    return dpbern_dsqsr, dpbern_dpref, dpbern_daref, dpbern_darea
+
+def flow_rate_sqr(pref, aref, psep, asep, rho):
+    qsqr = 0.0
+    with np.errstate(divide='raise'):
+        qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
+    return qsqr
+
+def dflow_rate_sqr(pref, aref, psep, asep, rho):
+    with np.errstate(divide='raise'):
+        qsqr = 2/rho*(psep - pref)/(aref**-2 - asep**-2)
+        dqsqr_dpref = -2/rho/(aref**-2 - asep**-2)
+        dqsqr_dpsep = 2/rho/(aref**-2 - asep**-2)
+        dqsqr_dasep = -2/rho*(psep - pref)/(aref**-2 - asep**-2)**2 * (2/asep**3)
+        return dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep
+
+def fluid_pressure(s, area, psub, psup, fluid_props):
+    """
+    Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
+
+    TODO: I think it would make more sense to treat this as a generic Bernoulli pressure
+    calculator. It could be refactored to not use an self variable, instead it would pass a
+    reference surface mesh, and current surface mesh (x, y coordinates of vertices in increasing
+    streamwise direction).
+
+    Parameters
+    ----------
+    surface_state : tuple of (u, v) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : BlockVec
+        A dictionary of fluid properties.
+
+    Returns
+    -------
+    q : float
+        The flow rate
+    p : np.ndarray
+        An array of pressure vectors for each each vertex
+    xy_min, xy_sep: (2,) np.ndarray
+        The coordinates of the vertices at minimum and separation areas
+    """
+    flow_sign = np.sign(psub-psup)
+    rho = fluid_props['rho_air']
+    asub = fluid_props['a_sub']
+    asup = fluid_props['a_sup']
+
+    a = area
+    asafe = smoothlb(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
+
+    # Calculate minimum and separation areas/locations
+    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_amin'])
+
+    # Bound all areas to the 'smooth' minimum area above
+    # This is done because of the weighting scheme; the smooth min is always slightly larger
+    # then the actual min, which leads to problems in the calculated pressures at very small
+    # areas where small areas can have huge area ratios leading to weird Bernoulli behaviour
+    asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
+
+    asep = fluid_props['r_sep'] * amin
+    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
+    ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
+    
+    # Compute the flow rate based on pressure drop from "reference" to 
+    # separation location
+    pref, psep, aref = None, None, None
+    if flow_sign >= 0:
+        pref, aref = psub, asub
+        psep = psup
+    else:
+        pref, aref = psup, asup
+        psep = psub
+
+    qsqr = flow_rate_sqr(pref, aref, psep, asep, rho)
+    pbern = pbernoulli(qsqr, pref, aref, asafe, rho)
+
+    sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(s, ssep, alpha=fluid_props['zeta_sep'])
+    p = sepmult * pbern + (1-sepmult)*psep
+    q = flow_sign*qsqr**0.5 *fluid_props['vf_length']
+
+    # These are not really used anywhere, mainly output for debugging purposes
+    idx_min = np.argmax(s>smin)
+    idx_sep = np.argmax(s>ssep)
+    
+    info = {'flow_rate': q,
+            'idx_sep': idx_sep,
+            'idx_min': idx_min,
+            's_sep': ssep,
+            's_min': smin,
+            'a_min': amin,
+            'a_sep': asep,
+            'area': asafe,
+            'pressure': p}
+    return BlockVec((np.array(q), p), ('q', 'p')), info
+
+def flow_sensitivity(s, area, psub, psup, fluid_props):
+    """
+    Return the sensitivities of pressure and flow rate to the surface state.
+
+    Parameters
+    ----------
+    surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
+        States of the surface vertices, ordered following the flow (increasing x coordinate).
+    fluid_props : BlockVec
+        A dictionary of fluid property keyword arguments.
+    """
+    flow_sign = np.sign(psub-psup)
+    rho = fluid_props['rho_air']
+    asub = fluid_props['a_sub']
+    asup = fluid_props['a_sup']
+
+    a = area
+    # da_dy = -2
+
+    asafe = smoothlb(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
+    dasafe_da = dsmoothlb_df(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
+
+    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_amin'])
+    dsmin_dasafe, damin_dasafe = dsmooth_min_area(s, asafe, fluid_props['zeta_amin'])
+    dsmin_da = dsmin_dasafe*dasafe_da
+    damin_da = damin_dasafe*dasafe_da
+
+    asep = fluid_props['r_sep'] * amin
+    dasep_damin = fluid_props['r_sep']
+    dasep_da = dasep_damin * damin_da
+
+    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
+    ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
+    dssep_dsmin, dssep_dasafe, dssep_dasep = \
+        dsmooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
+    dssep_da = (dssep_dsmin*dsmin_da + dssep_dasafe*dasafe_da
+                + dssep_dasep*dasep_da) #* da_dy
+
+    # Compute the flow rate based on pressure drop from "reference" to 
+    # separation location
+    pref, psep, aref = None, None, None
+    if flow_sign >= 0:
+        pref, aref = psub, asub
+        psep = psup
+    else:
+        pref, aref = psup, asup
+        psep = psub
+
+    qsqr = flow_rate_sqr(pref, aref, psep, asep, rho)
+    dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep = dflow_rate_sqr(pref, aref, psep, asep, rho)
+    dqsqr_da = dqsqr_dasep*dasep_da
+
+    # Find Bernoulli pressure
+    pbern = pbernoulli(qsqr, pref, aref, asafe, rho)
+    dpbern_dqsqr, dpbern_dpref, dpbern_daref, dpbern_dasafe = dpbernoulli(qsqr, pref, aref, asafe, rho)
+    dpbern_da = dpbern_dasafe*dasafe_da + dpbern_dqsqr*dqsqr_da
+    dpbern_dpref = dpbern_dpref + dpbern_dqsqr*dqsqr_dpref
+    dpbern_dpsep = dpbern_dqsqr*dqsqr_dpsep
+
+    # Correct Bernoulli pressure by applying a smooth mask after separation
+    zeta_sep = fluid_props['zeta_sep']
+    sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(s, ssep, zeta_sep)
+    dsepmult_da = flow_sign*dsmoothstep_dx0(s, ssep, zeta_sep)[:, None] * dssep_da
+
+    # p = sepmult * pbern + (1-sep_multiplier)*psep
+    dp_da = sepmult[:, None]*dpbern_da + dsepmult_da*pbern[:, None]
+    dp_dpref = sepmult*dpbern_dpref
+    dp_dpsep = sepmult*dpbern_dpsep + (1-sepmult)
+
+    # q = flow_sign*qsqr**0.5
+    dq_da = 0.5*flow_sign*qsqr**-0.5 * dqsqr_da
+    dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref*fluid_props['vf_length']
+    dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep*fluid_props['vf_length']
+
+    dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = None, None, None, None
+    if flow_sign >= 0:
+        dq_dpsub, dp_dpsub = dq_dpref, dp_dpref
+        dq_dpsup, dp_dpsup = dq_dpsep, dp_dpsep
+    else:
+        dq_dpsub, dp_dpsub = dq_dpsep, dp_dpsep
+        dq_dpsup, dp_dpsup = dq_dpref, dp_dpref
+
+    return dq_da, dp_da, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup
+
+## Bernoulli minimum/separation area functions
 def min_area(s, area):
     # find the smallest, minimum area index (if there's multiple)
     idx_min = np.min(np.argmin(area))

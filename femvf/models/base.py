@@ -26,20 +26,13 @@ class Model:
         """
         Return empty flow speed and pressure state vectors
         """
-        q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
-        return BlockVec((q, p), ('q', 'p'))
+        raise NotImplementedError("")
 
     def get_properties_vec(self, set_default=True):
         """
         Return a BlockVec representing the properties of the fluid
         """
-        field_size = 1
-        prop_defaults = None
-        if set_default:
-            prop_defaults = self.PROPERTY_DEFAULTS
-        vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
-
-        return BlockVec(vecs, labels)
+        raise NotImplementedError("")
 
     def get_control_vec(self):
         ret = self.control.copy()
