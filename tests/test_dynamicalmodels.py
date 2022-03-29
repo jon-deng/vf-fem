@@ -4,13 +4,10 @@ This module contains tests for dynamical models
 
 from os import path
 # from functools import partial
-import warnings
 import numpy as np
-import dolfin as dfn
 
 from blocktensor import linalg as bla
 from blocktensor import subops as gops
-# from femvf import dynamicalmodels as dynmod
 from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
 from femvf import load
 
@@ -18,7 +15,7 @@ from femvf import load
 # np.seterr(invalid='raise')
 
 ### Configuration ###
-## Loading the model to test
+## Load the model to test
 mesh_name = 'M5-3layers'
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = path.join('../meshes', mesh_name+'.xml')
@@ -38,9 +35,9 @@ model_coupled = load.load_dynamical_fsi_model(
 
 model_solid = model_coupled.solid
 model_fluid = model_coupled.fluid
-model = model_solid
+# model = model_solid
 # model = model_fluid
-# model = model_coupled
+model = model_coupled
 
 ## Set the model properties/parameters
 props = model_coupled.properties.copy()
@@ -51,13 +48,13 @@ ymax = np.max(model_solid.XREF.vector()[1::2])
 ygap = 0.01 # gap between VF and symmetry plane
 ymid = ymax + ygap
 ycontact = ymid - 0.1*ygap
-props['ycontact'][:] = ycontact # 1 cm above the maximum y extent
+props['ycontact'][:] = ycontact
 model_coupled.ymid = ymid
-model_coupled.set_properties(props)
 
-props['zeta_sep'][0] = 1e-3
-props['zeta_min'][0] = 1e-3
-props['rho_air'][0] = 1.0e-3
+props['zeta_sep'][0] = 1e-4
+props['zeta_min'][0] = 1e-4
+props['rho_air'][0] = 1.2e-3
+model_coupled.set_properties(props)
 
 ## Set the linearization point and linearization directions to test along
 state0 = model.state.copy()
@@ -97,6 +94,10 @@ model.set_control(control0)
 props0 = model.properties.copy()
 dprops = props0.copy()
 dprops.set(1e-4)
+
+#
+model.set_dstate(dstate)
+model.set_dstatet(dstatet)
 
 def gen_res(x, set_x, assem_resx):
     set_x(x)
