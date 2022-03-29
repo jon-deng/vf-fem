@@ -48,13 +48,13 @@ def setup_models():
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    model = model_coupled.fluid
-    model_linear_state = model_coupled_linear_state.fluid
-    model_linear_statet = model_coupled_linear_statet.fluid
+    # model = model_coupled.fluid
+    # model_linear_state = model_coupled_linear_state.fluid
+    # model_linear_statet = model_coupled_linear_statet.fluid
 
-    model = model_coupled.solid
-    model_linear_state = model_coupled_linear_state.solid
-    model_linear_statet = model_coupled_linear_statet.solid
+    # model = model_coupled.solid
+    # model_linear_state = model_coupled_linear_state.solid
+    # model_linear_statet = model_coupled_linear_statet.solid
 
     model = model_coupled
     model_linear_state = model_coupled_linear_state
@@ -166,10 +166,13 @@ def _test_taylor(x0, dx, res, jac):
     """
     Test that the Taylor convergence order is 2
     """
-    res0 = res(x0)
     alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
-    dres_exacts = [res(x0+alpha*dx)-res0 for alpha in alphas]
+    res_ns = [res(x0+alpha*dx) for alpha in alphas]
+    res_0 = res(x0)
+
+    dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
+
     errs = [
         (dres_exact-alpha*dres_linear).norm()
         for dres_exact, alpha in zip(dres_exacts, alphas)]
