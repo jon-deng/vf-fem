@@ -15,106 +15,140 @@ from femvf import load
 # np.seterr(invalid='raise')
 def _set_dirichlet_bvec(dirichlet_bc, bvec):
     for label in ['u', 'v']:
-        dirichlet_bc.apply(dfn.PETScVector(bvec[label]))
+        if label in bvec:
+            dirichlet_bc.apply(dfn.PETScVector(bvec[label]))
     return bvec
 
-### Configuration ###
-## Load the model to test
-mesh_name = 'M5-3layers'
-mesh_name = 'BC-dcov5.00e-02-cl1.00'
-mesh_path = path.join('../meshes', mesh_name+'.xml')
+def setup_models():
+    """
+    Setup the dynamical model objects
+    """
+    mesh_name = 'M5-3layers'
+    mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    mesh_path = path.join('../meshes', mesh_name+'.xml')
 
-solid_mesh = mesh_path
-fluid_mesh = None
+    solid_mesh = mesh_path
+    fluid_mesh = None
 
-SolidType = slmodel.KelvinVoigt
-FluidType = flmodel.Bernoulli1DDynamicalSystem
-# SolidType = slmodel.LinearStateKelvinVoigt
-# FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
-# SolidType = slmodel.LinearStatetKelvinVoigt
-# FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
-model_coupled = load.load_dynamical_fsi_model(
-    solid_mesh, fluid_mesh, SolidType, FluidType,
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+    SolidType = slmodel.KelvinVoigt
+    FluidType = flmodel.Bernoulli1DDynamicalSystem
+    model_coupled = load.load_dynamical_fsi_model(
+        solid_mesh, fluid_mesh, SolidType, FluidType,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-model_solid = model_coupled.solid
-model_fluid = model_coupled.fluid
-# model = model_solid
-# model = model_fluid
-model = model_coupled
+    SolidType = slmodel.LinearStateKelvinVoigt
+    FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
+    model_coupled_linear_state = load.load_dynamical_fsi_model(
+        solid_mesh, fluid_mesh, SolidType, FluidType,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-## Set model properties/control/linearization directions
-# (linearization directions for linearized residuals)
-props0 = model_coupled.properties.copy()
-props0['emod'].array[:] = 5e3*10
-props0['rho'].array[:] = 1.0
+    SolidType = slmodel.LinearStatetKelvinVoigt
+    FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
+    model_coupled_linear_statet = load.load_dynamical_fsi_model(
+        solid_mesh, fluid_mesh, SolidType, FluidType,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-ymax = np.max(model_solid.XREF.vector()[1::2])
-ygap = 0.01 # gap between VF and symmetry plane
-ymid = ymax + ygap
-ycontact = ymid - 0.1*ygap
-props0['ycontact'][:] = ycontact
-model_coupled.ymid = ymid
+    # model_solid = model_coupled.solid
+    # model_fluid = model_coupled.fluid
+    # model = model_solid
+    # model = model_fluid
+    model = model_coupled
+    model_linear_state = model_coupled_linear_state
+    model_linear_statet = model_coupled_linear_statet
+    return model, model_linear_state, model_linear_statet
 
-props0['zeta_sep'][0] = 1e-4
-props0['zeta_min'][0] = 1e-4
-props0['rho_air'][0] = 1.2e-3
-model_coupled.set_properties(props0)
+model, model_linear_state, model_linear_statet = setup_models()
 
-control0 = model.control.copy()
-control0.set(1.0)
-if 'psub' in control0:
-    control0['psub'][:] = 800*10
-if 'psup' in control0:
-    control0['psup'][:] = 0
+def setup_parameter_base():
+    ## Set model properties/control/linearization directions
+    model_solid = model.solid
+
+    # (linearization directions for linearized residuals)
+    props0 = model.properties.copy()
+    props0['emod'].array[:] = 5e3*10
+    props0['rho'].array[:] = 1.0
+
+    ymax = np.max(model_solid.XREF.vector()[1::2])
+    ygap = 0.01 # gap between VF and symmetry plane
+    ymid = ymax + ygap
+    ycontact = ymid - 0.1*ygap
+    props0['ycontact'][:] = ycontact
+    model.ymid = ymid
+
+    props0['zeta_sep'][0] = 1e-4
+    props0['zeta_min'][0] = 1e-4
+    props0['rho_air'][0] = 1.2e-3
+    model.set_properties(props0)
+
+    control0 = model.control.copy()
+    control0.set(1.0)
+    if 'psub' in control0:
+        control0['psub'][:] = 800*10
+    if 'psup' in control0:
+        control0['psup'][:] = 0
+    model.set_control(control0)
+
+    del_state = model.state.copy()
+    del_state.set(1.0e4)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_state)
+    model.set_dstate(del_state)
+
+    del_statet = model.state.copy()
+    del_statet.set(1.0e4)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_statet)
+    model.set_dstatet(del_statet)
+
+    state0 = model.state.copy()
+
+    statet0 = state0.copy()
+
+    return state0, statet0, control0, props0, del_state, del_statet
+
+def setup_parameter_perturbation():
+    model_solid = model.solid
+
+    dstate = model.state.copy()
+    if 'u' in dstate and 'v' in dstate:
+        dxu = model_solid.state['u'].copy()
+        dxu[:] = 1e-3*np.arange(dxu[:].size)
+        dxu[:] = 1e-8
+        # dxu[:] = 0
+        # model_solid.forms['bc.dirichlet'].apply(dxu)
+        gops.set_vec(dstate['u'], dxu)
+
+        dxv = model_solid.state['v'].copy()
+        dxv[:] = 1e-8
+        # model_solid.forms['bc.dirichlet'].apply(dxv)
+        gops.set_vec(dstate['v'], dxv)
+    if 'q' in dstate:
+        gops.set_vec(dstate['q'], 1e-3)
+        # gops.set_vec(dstate['q'], 0.0)
+    if 'p' in dstate:
+        gops.set_vec(dstate['p'], 1e-3)
+        # gops.set_vec(dstate['p'], 0.0)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
+
+    dstatet = dstate.copy()
+    dstatet.set(1e-6)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
+
+    props0 = model.properties.copy()
+    dprops = props0.copy()
+    dprops.set(1e-4)
+
+    dcontrol = model.control.copy()
+    dcontrol.set(1e0)
+    return dstate, dstatet, dcontrol, dprops
+
+state0, statet0, control0, props0, del_state, del_statet = setup_parameter_base()
+model.set_state(state0)
+model.set_statet(statet0)
 model.set_control(control0)
+model.set_properties(props0)
+model.set_dstate(del_state)
+model.set_dstatet(del_statet)
 
-_dstate = model.state.copy()
-_dstate.set(1.0)
-_set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], _dstate)
-model.set_dstate(_dstate)
-
-_dstatet = model.state.copy()
-_dstatet.set(1.0)
-_set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], _dstatet)
-model.set_dstatet(_dstatet)
-
-## Set the linearization point and linearization directions to test Jacobian along
-# (dstate, dcontrol, dproperties)
-state0 = model.state.copy()
-
-dstate = state0.copy()
-if 'u' in dstate and 'v' in dstate:
-    dxu = model_solid.state['u'].copy()
-    dxu[:] = 1e-3*np.arange(dxu[:].size)
-    dxu[:] = 1e-8
-    # dxu[:] = 0
-    # model_solid.forms['bc.dirichlet'].apply(dxu)
-    gops.set_vec(dstate['u'], dxu)
-
-    dxv = model_solid.state['v'].copy()
-    dxv[:] = 1e-8
-    # model_solid.forms['bc.dirichlet'].apply(dxv)
-    gops.set_vec(dstate['v'], dxv)
-if 'q' in dstate:
-    gops.set_vec(dstate['q'], 1e-3)
-    # gops.set_vec(dstate['q'], 0.0)
-if 'p' in dstate:
-    gops.set_vec(dstate['p'], 1e-3)
-    # gops.set_vec(dstate['p'], 0.0)
-_set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
-
-statet0 = state0.copy()
-dstatet = dstate.copy()
-dstatet.set(1e-6)
-_set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
-
-props0 = model.properties.copy()
-dprops = props0.copy()
-dprops.set(1e-4)
-
-dcontrol = control0.copy()
-dcontrol.set(1e0)
+dstate, dstatet, dcontrol, dprops  = setup_parameter_perturbation()
 
 def gen_res(x, set_x, assem_resx):
     set_x(x)
@@ -143,8 +177,8 @@ def _test_taylor(x0, dx, res, jac):
 
     print("")
     print(f"||dres_linear||, ||dres_exact|| = {dres_linear.norm()}, {dres_exacts[-1].norm()}")
-    print("Errors: ", errs)
-    print("Convergence rates: ", conv_rates)
+    print("Errors: ", np.array(errs))
+    print("Convergence rates: ", np.array(conv_rates))
 
 def test_assem_dres_dstate():
     res = lambda state: gen_res(state, model.set_state, model.assem_res)
