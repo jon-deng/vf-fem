@@ -129,13 +129,9 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
 
         self.control = bla.BlockVec([np.ones(N), np.zeros(1), np.zeros(1)], labels=[['area', 'psub', 'psup']])
 
-        self.dq = np.zeros(1)
-        self.dp = np.zeros(N)
-        self.dstate = bla.BlockVec([self.q, self.p], labels=[['q', 'p']])
+        self.dstate = self.state.copy()
 
-        self.dqt = np.zeros(1)
-        self.dpt = np.zeros(N)
-        self.dstatet = bla.BlockVec([self.qt, self.pt], labels=[['q', 'p']])
+        self.dstatet = self.statet.copy()
 
         self.dcontrol = self.control.copy()
 
@@ -202,8 +198,8 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
 
 class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
-        resq = self.dq
-        resp = self.dp
+        resq = self.dstate['q']
+        resp = self.dstate['p']
         return bla.BlockVec([resq, resp], labels=[self.state.keys])
 
     def assem_dres_dstate(self):
