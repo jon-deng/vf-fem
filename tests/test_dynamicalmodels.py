@@ -48,10 +48,14 @@ def setup_models():
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    # model_solid = model_coupled.solid
-    # model_fluid = model_coupled.fluid
-    # model = model_solid
-    # model = model_fluid
+    model = model_coupled.fluid
+    model_linear_state = model_coupled_linear_state.fluid
+    model_linear_statet = model_coupled_linear_statet.fluid
+
+    model = model_coupled.solid
+    model_linear_state = model_coupled_linear_state.solid
+    model_linear_statet = model_coupled_linear_statet.solid
+
     model = model_coupled
     model_linear_state = model_coupled_linear_state
     model_linear_statet = model_coupled_linear_statet
