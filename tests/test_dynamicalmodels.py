@@ -145,12 +145,13 @@ def setup_parameter_perturbation():
     return dstate, dstatet, dcontrol, dprops
 
 state0, statet0, control0, props0, del_state, del_statet = setup_parameter_base()
-model.set_state(state0)
-model.set_statet(statet0)
-model.set_control(control0)
-model.set_properties(props0)
-model.set_dstate(del_state)
-model.set_dstatet(del_statet)
+for _model in [model, model_linear_state, model_linear_statet]:
+    _model.set_state(state0)
+    _model.set_statet(statet0)
+    _model.set_control(control0)
+    _model.set_properties(props0)
+    _model.set_dstate(del_state)
+    _model.set_dstatet(del_statet)
 
 dstate, dstatet, dcontrol, dprops  = setup_parameter_perturbation()
 
