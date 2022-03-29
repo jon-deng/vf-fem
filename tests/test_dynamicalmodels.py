@@ -222,13 +222,38 @@ def test_assem_dres_dprops():
 
     _test_taylor(x0, dx, res, jac)
 
+def test_dres_dstate_vs_dres_state():
+    """
+    Test consistency between `model` and `model_linear_state`
+
+    `model` represents a residual F(...)
+    `model_linear_state` represents the linearized residual (dF/dstate * del_state)(...)
+    This test checks that:
+        dF/dstate(...) * del_state    (computed from `model`)
+        is equal to
+        (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
+    """
+    # compute the linearized residual from `model`
+    dres_dstate = gen_jac(state0, model.set_state, model.assem_dres_dstate)
+    dres_state_a = bla.mult_mat_vec(dres_dstate, del_state)
+
+    dres_state_b = gen_res(state0, model_linear_state.set_state, model_linear_state.assem_res)
+    err = dres_state_a - dres_state_b
+
+    for key, subvec in err.items():
+        print(key, subvec.norm())
+    breakpoint()
+
 if __name__ == '__main__':
     # breakpoint()
-    print("-- Testing dres/dstate --")
+    print("-- Test dres/dstate --")
     test_assem_dres_dstate()
 
-    print("\n-- Testing dres/dstatet --")
+    print("\n-- Test dres/dstatet --")
     test_assem_dres_dstatet()
 
-    print("\n-- Testing dres/dcontrol --")
+    print("\n-- Test dres/dcontrol --")
     test_assem_dres_dcontrol()
+
+    print("\n-- Test dres/dstate vs dres_state --")
+    test_dres_dstate_vs_dres_state()
