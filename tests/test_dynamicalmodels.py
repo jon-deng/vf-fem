@@ -11,8 +11,11 @@ from blocktensor import subops as gops
 from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
 from femvf import load
 
+# pylint: disable=redefined-outer-name
+
 # warnings.filterwarnings('error', 'RuntimeWarning')
 # np.seterr(invalid='raise')
+
 def _set_dirichlet_bvec(dirichlet_bc, bvec):
     for label in ['u', 'v']:
         if label in bvec:
@@ -36,38 +39,15 @@ def setup_models():
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    SolidType = slmodel.LinearStateKelvinVoigt
-    FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
-    model_coupled_linear_state = load.load_dynamical_fsi_model(
+    SolidType = slmodel.LinearizedKelvinVoigt
+    FluidType = flmodel.LinearizedBernoulli1DDynamicalSystem
+    model_coupled_linear = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    SolidType = slmodel.LinearStatetKelvinVoigt
-    FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
-    model_coupled_linear_statet = load.load_dynamical_fsi_model(
-        solid_mesh, fluid_mesh, SolidType, FluidType,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+    return model_coupled, model_coupled_linear
 
-    # model = model_coupled.fluid
-    # model_linear_state = model_coupled_linear_state.fluid
-    # model_linear_statet = model_coupled_linear_statet.fluid
-
-    # model = model_coupled.solid
-    # model_linear_state = model_coupled_linear_state.solid
-    # model_linear_statet = model_coupled_linear_statet.solid
-
-    model = model_coupled
-    model_linear_state = model_coupled_linear_state
-    model_linear_statet = model_coupled_linear_statet
-    return model, model_linear_state, model_linear_statet
-
-model, model_linear_state, model_linear_statet = setup_models()
-
-# TODO: Should test all models: (model, model_linear_state, ...)
-# currently only tests variables called model
-model = model_linear_state
-
-def setup_parameter_base():
+def setup_parameter_base(model):
     ## Set model properties/control/linearization directions
     model_solid = model.solid
 
@@ -82,7 +62,7 @@ def setup_parameter_base():
     ycontact = ymid - 0.1*ygap
     props0['ycontact'][:] = ycontact
 
-    for _model in [model, model_linear_state, model_linear_statet]:
+    for _model in [model, model_linear]:
         _model.ymid = ymid
 
     props0['zeta_sep'][0] = 1e-4
@@ -115,7 +95,7 @@ def setup_parameter_base():
 
     return state0, statet0, control0, props0, del_state, del_statet
 
-def setup_parameter_perturbation():
+def setup_parameter_perturbation(model):
     model_solid = model.solid
 
     dstate = model.state.copy()
@@ -151,24 +131,26 @@ def setup_parameter_perturbation():
     dcontrol.set(1e0)
     return dstate, dstatet, dcontrol, dprops
 
-state0, statet0, control0, props0, del_state, del_statet = setup_parameter_base()
-for _model in [model, model_linear_state, model_linear_statet]:
-    _model.set_state(state0)
-    _model.set_statet(statet0)
-    _model.set_control(control0)
-    _model.set_properties(props0)
-    _model.set_dstate(del_state)
-    _model.set_dstatet(del_statet)
 
-dstate, dstatet, dcontrol, dprops  = setup_parameter_perturbation()
+def _reset_parameter_base(model, state0, statet0, control0, props0, del_state, del_statet):
+    model.set_state(state0)
+    model.set_statet(statet0)
+    model.set_control(control0)
+    model.set_properties(props0)
+    model.set_dstate(del_state)
+    model.set_dstatet(del_statet)
 
-def gen_res(x, set_x, assem_resx):
+def _reset_parameter_perturbation(model):
+    model.set_state(state0)
+    model.set_statet(statet0)
+    model.set_control(control0)
+    model.set_properties(props0)
+    model.set_dstate(del_state)
+    model.set_dstatet(del_statet)
+
+def _set_and_assemble(x, set_x, assem):
     set_x(x)
-    return assem_resx()
-
-def gen_jac(x, set_x, assem_jacx):
-    set_x(x)
-    return assem_jacx()
+    return assem()
 
 def _test_taylor(x0, dx, res, jac):
     """
@@ -195,45 +177,33 @@ def _test_taylor(x0, dx, res, jac):
     print("Errors: ", np.array(errs))
     print("Convergence rates: ", np.array(conv_rates))
 
-def test_assem_dres_dstate():
-    res = lambda state: gen_res(state, model.set_state, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_state, model.assem_dres_dstate)
-
-    x0 = state0
-    dx = dstate
+def test_assem_dres_dstate(model, x0, dx):
+    res = lambda state: _set_and_assemble(state, model.set_state, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_state, model.assem_dres_dstate)
 
     _test_taylor(x0, dx, res, jac)
 
-def test_assem_dres_dstatet():
-    res = lambda state: gen_res(state, model.set_statet, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_statet, model.assem_dres_dstatet)
-
-    x0 = statet0
-    dx = 1e-5*dstatet
+def test_assem_dres_dstatet(model, x0, dx):
+    res = lambda state: _set_and_assemble(state, model.set_statet, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_statet, model.assem_dres_dstatet)
 
     _test_taylor(x0, dx, res, jac)
 
-def test_assem_dres_dcontrol():
+def test_assem_dres_dcontrol(model, x0, dx):
     # model_fluid.control['psub'][:] = 1
     # model_fluid.control['psup'][:] = 0
-    res = lambda state: gen_res(state, model.set_control, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_control, model.assem_dres_dcontrol)
-
-    x0 = control0
-    dx = dcontrol
+    res = lambda state: _set_and_assemble(state, model.set_control, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_control, model.assem_dres_dcontrol)
 
     _test_taylor(x0, dx, res, jac)
 
-def test_assem_dres_dprops():
-    res = lambda state: gen_res(state, model.set_properties, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_properties, model.assem_dres_dprops)
-
-    x0 = props0
-    dx = dprops
+def test_assem_dres_dprops(model, x0, dx):
+    res = lambda state: _set_and_assemble(state, model.set_properties, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_properties, model.assem_dres_dprops)
 
     _test_taylor(x0, dx, res, jac)
 
-def test_dres_dstate_vs_dres_state():
+def test_dres_dstate_vs_dres_state(model, model_linear, x0, del_x):
     """
     Test consistency between `model` and `model_linear_state`
 
@@ -245,10 +215,11 @@ def test_dres_dstate_vs_dres_state():
         (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
     """
     # compute the linearized residual from `model`
-    dres_dstate = gen_jac(state0, model.set_state, model.assem_dres_dstate)
-    dres_state_a = bla.mult_mat_vec(dres_dstate, del_state)
+    dres_dstate = _set_and_assemble(x0, model.set_state, model.assem_dres_dstate)
+    dres_state_a = bla.mult_mat_vec(dres_dstate, del_x)
 
-    dres_state_b = gen_res(state0, model_linear_state.set_state, model_linear_state.assem_res)
+    model_linear.set_dstate(del_x)
+    dres_state_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
     err = dres_state_a - dres_state_b
 
     for vec, name in zip([dres_state_a, dres_state_b, err], ["from model", "from linear_state_model", "error"]):
@@ -258,15 +229,28 @@ def test_dres_dstate_vs_dres_state():
     breakpoint()
 
 if __name__ == '__main__':
+    model, model_linear = setup_models()
+    for _model in [model, model_linear]:
+        state0, statet0, control0, props0, del_state, del_statet = setup_parameter_base(_model)
+        base_parameters = (state0, statet0, control0, props0, del_state, del_statet)
+        _reset_parameter_base(_model, *base_parameters)
+
+        dstate, dstatet, dcontrol, dprops = setup_parameter_perturbation(_model)
+
     # breakpoint()
-    print("-- Test dres/dstate --")
-    test_assem_dres_dstate()
+    for model_name, _model in zip(["Residual", "Linearized residual"], [model, model_linear]):
+        print(model_name)
+        print("-- Test dres/dstate --")
+        _reset_parameter_base(_model, *base_parameters)
+        test_assem_dres_dstate(_model, state0, dstate)
 
-    print("\n-- Test dres/dstatet --")
-    test_assem_dres_dstatet()
+        print("\n-- Test dres/dstatet --")
+        _reset_parameter_base(_model, *base_parameters)
+        test_assem_dres_dstatet(_model, statet0, dstatet)
 
-    print("\n-- Test dres/dcontrol --")
-    test_assem_dres_dcontrol()
+        print("\n-- Test dres/dcontrol --")
+        _reset_parameter_base(_model, *base_parameters)
+        test_assem_dres_dcontrol(_model, control0, dcontrol)
 
     print("\n-- Test dres/dstate vs dres_state --")
-    test_dres_dstate_vs_dres_state()
+    test_dres_dstate_vs_dres_state(model, model_linear, state0, del_state)
