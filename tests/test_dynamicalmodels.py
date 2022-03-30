@@ -77,7 +77,9 @@ def setup_parameter_base():
     ymid = ymax + ygap
     ycontact = ymid - 0.1*ygap
     props0['ycontact'][:] = ycontact
-    model.ymid = ymid
+
+    for _model in [model, model_linear_state, model_linear_statet]:
+        _model.ymid = ymid
 
     props0['zeta_sep'][0] = 1e-4
     props0['zeta_min'][0] = 1e-4
@@ -93,7 +95,8 @@ def setup_parameter_base():
     model.set_control(control0)
 
     del_state = model.state.copy()
-    del_state.set(1.0e4)
+    del_state.set(0.0)
+    del_state['u'] = 1.0
     _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_state)
     model.set_dstate(del_state)
 
@@ -238,26 +241,29 @@ def test_dres_dstate_vs_dres_state():
         (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
     """
     # compute the linearized residual from `model`
+    breakpoint()
     dres_dstate = gen_jac(state0, model.set_state, model.assem_dres_dstate)
     dres_state_a = bla.mult_mat_vec(dres_dstate, del_state)
 
     dres_state_b = gen_res(state0, model_linear_state.set_state, model_linear_state.assem_res)
     err = dres_state_a - dres_state_b
 
-    for key, subvec in err.items():
-        print(key, subvec.norm())
+    for vec, name in zip([dres_state_a, dres_state_b, err], ["from model", "from linear_state_model", "error"]):
+        print(f"\n{name}")
+        for key, subvec in vec.items():
+            print(key, subvec.norm())
     breakpoint()
 
 if __name__ == '__main__':
     # breakpoint()
-    print("-- Test dres/dstate --")
-    test_assem_dres_dstate()
+    # print("-- Test dres/dstate --")
+    # test_assem_dres_dstate()
 
-    print("\n-- Test dres/dstatet --")
-    test_assem_dres_dstatet()
+    # print("\n-- Test dres/dstatet --")
+    # test_assem_dres_dstatet()
 
-    print("\n-- Test dres/dcontrol --")
-    test_assem_dres_dcontrol()
+    # print("\n-- Test dres/dcontrol --")
+    # test_assem_dres_dcontrol()
 
     print("\n-- Test dres/dstate vs dres_state --")
     test_dres_dstate_vs_dres_state()
