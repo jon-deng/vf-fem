@@ -288,16 +288,7 @@ class KelvinVoigt(SolidDynamicalSystem):
                 mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                 fsi_facet_labels, fixed_facet_labels)
 
-class LinearStateKelvinVoigt(LinearizedSolidDynamicalSystem):
-    PROPERTY_DEFAULTS = {}
-    @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigt(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
-
-class LinearStatetKelvinVoigt(LinearStatetSolidDynamicalSystem):
+class LinearizedKelvinVoigt(LinearizedSolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
