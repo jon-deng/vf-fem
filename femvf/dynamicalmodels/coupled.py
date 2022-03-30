@@ -14,6 +14,7 @@ from .base import DynamicalSystem
 from .fluid import BaseFluid1DDynamicalSystem
 from .solid import BaseSolidDynamicalSystem
 
+# pylint: disable=missing-function-docstring
 
 class FSIMap:
     """
@@ -252,7 +253,8 @@ class FSIDynamicalSystem(DynamicalSystem):
         bmats = [
             [dslres_dslx, dslres_dflx],
             [dflres_dslx, dflres_dflx]]
-        return bla.concatenate_mat(bmats)
+        return bla.concatenate_mat(
+            bmats, labels=(self.state.labels[0], self.state.labels[0]))
 
     def assem_dres_dprops(self):
         raise NotImplementedError("Not implemented yet")
