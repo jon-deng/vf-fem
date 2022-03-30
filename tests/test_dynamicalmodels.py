@@ -63,6 +63,10 @@ def setup_models():
 
 model, model_linear_state, model_linear_statet = setup_models()
 
+# TODO: Should test all models: (model, model_linear_state, ...)
+# currently only tests variables called model
+model = model_linear_state
+
 def setup_parameter_base():
     ## Set model properties/control/linearization directions
     model_solid = model.solid
@@ -241,7 +245,6 @@ def test_dres_dstate_vs_dres_state():
         (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
     """
     # compute the linearized residual from `model`
-    breakpoint()
     dres_dstate = gen_jac(state0, model.set_state, model.assem_dres_dstate)
     dres_state_a = bla.mult_mat_vec(dres_dstate, del_state)
 
@@ -256,14 +259,14 @@ def test_dres_dstate_vs_dres_state():
 
 if __name__ == '__main__':
     # breakpoint()
-    # print("-- Test dres/dstate --")
-    # test_assem_dres_dstate()
+    print("-- Test dres/dstate --")
+    test_assem_dres_dstate()
 
-    # print("\n-- Test dres/dstatet --")
-    # test_assem_dres_dstatet()
+    print("\n-- Test dres/dstatet --")
+    test_assem_dres_dstatet()
 
-    # print("\n-- Test dres/dcontrol --")
-    # test_assem_dres_dcontrol()
+    print("\n-- Test dres/dcontrol --")
+    test_assem_dres_dcontrol()
 
     print("\n-- Test dres/dstate vs dres_state --")
     test_dres_dstate_vs_dres_state()

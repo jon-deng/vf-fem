@@ -193,6 +193,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_v1_du1'],
                 tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_p1_du1'],
+                tensor=dfn.PETScMatrix())
             )
         dresu_dv = (
             dfn.assemble(
@@ -200,6 +203,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScMatrix())
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_v1_dv1'],
+                tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_p1_dv1'],
                 tensor=dfn.PETScMatrix())
             )
 
@@ -222,6 +228,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_v1_da1'],
                 tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_p1_da1'],
+                tensor=dfn.PETScMatrix())
             )
 
         dresv_dut = dfn.PETScMatrix(bla.zero_mat(n, n))
@@ -241,6 +250,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScMatrix())
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_v1_dp1'],
+                tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_p1_dp1'],
                 tensor=dfn.PETScMatrix())
             )
 

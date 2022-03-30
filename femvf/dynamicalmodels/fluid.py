@@ -186,7 +186,7 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         zeta_min = self.properties['zeta_min'][0]
         zeta_sep = self.properties['zeta_sep'][0]
         primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
-        # breakpoint()
+
         dq_darea, dp_darea = dbernoulli_qp_darea(*primals)
         dq_dpsub, dp_dpsub = dbernoulli_qp_dpsub(*primals)
         dq_dpsup, dp_dpsup = dbernoulli_qp_dpsup(*primals)
@@ -211,12 +211,9 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         dpsub = self.dcontrol['psub'][0]
         dpsup = self.dcontrol['psup'][0]
         tangents = (darea, np.zeros(self.s.shape), dpsub, dpsup, 0.0, 0.0, 0.0)
-        breakpoint()
-        ## BUG: area is infinity for some reason??
 
         # The linearized residual changes due to linearizations
         resq_bernoulli, resp_bernoulli = dbernoulli_qp(*primals, tangents)
-        # resq_bernoulli, resp_bernoulli = 0, 0
 
         resq = self.dstate['q'] - resq_bernoulli
         resp = self.dstate['p'] - resp_bernoulli
@@ -246,17 +243,27 @@ class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         return bla.BlockMat(mats, labels=(self.state.keys, self.state.keys))
 
     def assem_dres_dcontrol(self):
-        dresq_darea = np.zeros((self.q.size, self.s.size))
-        dresp_darea = np.zeros((self.p.size, self.s.size))
+        # Depack variables from BlockVec for input to Bernoulli functions
+        area = self.control['area']
+        rho = self.properties['rho_air'][0]
+        psub = self.control['psub']
+        psup = self.control['psup']
+        zeta_min = self.properties['zeta_min'][0]
+        zeta_sep = self.properties['zeta_sep'][0]
 
-        dresq_dpsub = np.zeros((self.q.size, 1))
-        dresp_dpsub = np.zeros((self.p.size, 1))
+        primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
+        darea = self.dcontrol['area']
+        dpsub = self.dcontrol['psub']
+        dpsup = self.dcontrol['psup']
+        tangents = (darea, np.zeros(self.s.shape), dpsub, dpsup, 0.0, 0.0, 0.0)
 
-        dresq_dpsup = np.zeros((self.q.size, 1))
-        dresp_dpsup = np.zeros((self.p.size, 1))
+        dq_darea, dp_darea = ddbernoulli_qp_darea(*primals, tangents)
+        dq_dpsub, dp_dpsub = ddbernoulli_qp_dpsub(*primals, tangents)
+        dq_dpsup, dp_dpsup = ddbernoulli_qp_dpsup(*primals, tangents)
+
         mats = [
-            [dresq_darea, dresq_dpsub, dresq_dpsup],
-            [dresp_darea, dresp_dpsub, dresp_dpsup]]
+            [-dq_darea, -dq_dpsub, -dq_dpsup],
+            [-dp_darea, -dp_dpsub, -dp_dpsup]]
         return bla.BlockMat(mats, labels=(self.state.keys, self.control.keys))
 
 class LinearStatetBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):

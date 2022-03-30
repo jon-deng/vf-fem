@@ -114,7 +114,7 @@ def gen_residual_bilinear_forms(forms):
     """
     Generates bilinear forms representing derivatives of the residual wrt state variables
 
-    If the residual is F(u, v, a; parameters, ...), this function generates 
+    If the residual is F(u, v, a; parameters, ...), this function generates
     bilinear forms dF/du, dF/dv, etc...
     """
     # Derivatives of the displacement residual form wrt all state variables
@@ -125,8 +125,8 @@ def gen_residual_bilinear_forms(forms):
     # This section is for derivatives of the time-discretized residual
     # F(u0, v0, a0, u1; parameters, ...)
     for full_var_name in (
-        initial_state_names 
-        + ['coeff.state.u1'] 
+        initial_state_names
+        + ['coeff.state.u1']
         + manual_state_var_names
         + ['coeff.time.dt', 'coeff.fsi.p1']):
         f = forms['form.un.f1']
@@ -140,8 +140,8 @@ def gen_residual_bilinear_forms(forms):
     # This section is for derivatives of the original not time-discretized residual
     # F(u1, v1, a1; parameters, ...)
     for full_var_name in (
-        final_state_names 
-        + manual_state_var_names 
+        final_state_names
+        + manual_state_var_names
         + ['coeff.fsi.p1']):
         f = forms['form.un.f1uva']
         x = forms[full_var_name]
@@ -156,7 +156,7 @@ def gen_residual_bilinear_property_forms(forms):
     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
     """
     df1_dsolid = {}
-    property_labels = [form_name.split('.')[-1] for form_name in forms.keys() 
+    property_labels = [form_name.split('.')[-1] for form_name in forms.keys()
                        if 'coeff.prop' in form_name]
     for prop_name in property_labels:
         try:
@@ -199,7 +199,7 @@ def gen_jac_property_forms(unary_form_name, forms):
     Return the derivatives of a unary form wrt all solid properties
     """
     property_labels = [
-        form_name.split('.')[-1] for form_name in forms.keys() 
+        form_name.split('.')[-1] for form_name in forms.keys()
         if 'coeff.prop' in form_name]
     for prop_name in property_labels:
         try:
@@ -302,15 +302,15 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
 
         'expr.kin.inf_strain': form_inf_strain(u1),
         'expr.kin.inf_strain_rate': form_inf_strain(v1),
-        
+
         'form.un.f1uva': 0.0,
-        
+
         'mesh.mesh': mesh,
         'mesh.facet_label_to_id': facet_label_to_id,
         'mesh.cell_label_to_id': cell_label_to_id,
         'mesh.facet_function': facet_func,
         'mesh.cell_function': cell_func,
-        'mesh.fsi_facet_labels': fsi_facet_labels, 
+        'mesh.fsi_facet_labels': fsi_facet_labels,
         'mesh.fixed_facet_labels': fixed_facet_labels}
     return forms
 
@@ -525,7 +525,7 @@ def add_ap_force_form(forms):
     nu = forms['coeff.prop.nu']
     lame_mu = emod/2/(1+nu)
     u_ant = dfn.Function(forms['fspace.vector']) # zero values by default
-    u_pos = dfn.Function(forms['fspace.vector'])  
+    u_pos = dfn.Function(forms['fspace.vector'])
     length = dfn.Function(forms['fspace.scalar'])
     muscle_stress = dfn.Function(forms['fspace.scalar'])
     d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
