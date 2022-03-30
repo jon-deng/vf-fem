@@ -165,16 +165,22 @@ def _test_taylor(x0, dx, res, jac):
 
     errs = [
         (dres_exact-alpha*dres_linear).norm()
-        for dres_exact, alpha in zip(dres_exacts, alphas)]
+        for dres_exact, alpha in zip(dres_exacts, alphas)
+    ]
+    magnitudes = [
+        1/2*(dres_exact+alpha*dres_linear).norm()
+        for dres_exact, alpha in zip(dres_exacts, alphas)
+    ]
     with np.errstate(invalid='ignore'):
         conv_rates = [
             np.log(err_0/err_1)/np.log(alpha_0/alpha_1)
             for err_0, err_1, alpha_0, alpha_1
             in zip(errs[:-1], errs[1:], alphas[:-1], alphas[1:])]
+        rel_errs = np.array(errs)/np.array(magnitudes)*100
 
     print("")
     print(f"||dres_linear||, ||dres_exact|| = {dres_linear.norm()}, {dres_exacts[-1].norm()}")
-    print("Errors: ", np.array(errs))
+    print("Relative errors: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
 
 def test_assem_dres_dstate(model, x0, dx):
@@ -219,6 +225,9 @@ def test_dres_dstate_vs_dres_state(model, model_linear, x0, del_x):
     dres_state_a = bla.mult_mat_vec(dres_dstate, del_x)
 
     model_linear.set_dstate(del_x)
+    del_xt = model_linear.dstatet.copy()
+    del_xt.set(0)
+    model_linear.set_dstatet(del_xt)
     dres_state_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
     err = dres_state_a - dres_state_b
 
@@ -241,15 +250,15 @@ if __name__ == '__main__':
     for model_name, _model in zip(["Residual", "Linearized residual"], [model, model_linear]):
         print(model_name)
         print("-- Test dres/dstate --")
-        _reset_parameter_base(_model, *base_parameters)
+        # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dstate(_model, state0, dstate)
 
         print("\n-- Test dres/dstatet --")
-        _reset_parameter_base(_model, *base_parameters)
+        # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dstatet(_model, statet0, dstatet)
 
         print("\n-- Test dres/dcontrol --")
-        _reset_parameter_base(_model, *base_parameters)
+        # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dcontrol(_model, control0, dcontrol)
 
     print("\n-- Test dres/dstate vs dres_state --")
