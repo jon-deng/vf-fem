@@ -162,12 +162,12 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
     def assem_dres_dprops(self):
         pass
 
-class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
+class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
     Represents a linearized dynamical system residual
 
     This residual represents
-    dF/dx(x, xt; g, ...) * dx
+    dF/dx(x, xt, g; ...) * (dx, dxt, dg)
     where 'x=[u, v]', 'F=[Fu, Fv]=[Fu, v-ut]'
     """
     def assem_res(self):
@@ -181,8 +181,11 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
             + dfn.assemble(
                 self.forms['form.un.df1uva_p1'],
                 tensor=dfn.PETScVector())
+            + dfn.assemble(
+                self.forms['form.un.df1uva_a1'],
+                tensor=dfn.PETScVector())
             )
-        resv = self.dv.vector()
+        resv = self.dv.vector() - self.dut.vector()
         return bla.BlockVec([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
@@ -196,6 +199,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_p1_du1'],
                 tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_a1_du1'],
+                tensor=dfn.PETScMatrix())
             )
         dresu_dv = (
             dfn.assemble(
@@ -206,6 +212,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScMatrix())
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_p1_dv1'],
+                tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_a1_dv1'],
                 tensor=dfn.PETScMatrix())
             )
 
@@ -231,6 +240,9 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_p1_da1'],
                 tensor=dfn.PETScMatrix())
+            + dfn.assemble(
+                self.forms['form.bi.ddf1uva_a1_da1'],
+                tensor=dfn.PETScMatrix())
             )
 
         dresv_dut = dfn.PETScMatrix(bla.zero_mat(n, n))
@@ -254,74 +266,10 @@ class LinearStateSolidDynamicalSystem(BaseSolidDynamicalSystem):
             + dfn.assemble(
                 self.forms['form.bi.ddf1uva_p1_dp1'],
                 tensor=dfn.PETScMatrix())
-            )
-
-        dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, m))
-
-        mats = [
-            [dresu_dg],
-            [dresv_dg]]
-        return bla.BlockMat(mats, labels=(['u', 'v'], ['g']))
-
-class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
-    """
-    Represents a linearized dynamical system residual
-
-    This residual represents
-    dF/dxt(x, xt; g, ...) * dxt
-    where 'x=[u, v]', 'F=[Fu, Fv]'
-    """
-    def assem_res(self):
-        resu = (
-            dfn.assemble(
-                self.forms['form.un.df1uva_a1'],
-                tensor=dfn.PETScVector())
-            )
-        resv = -self.dut.vector()
-        return bla.BlockVec([resu, resv], labels=[['u',  'v']])
-
-    def assem_dres_dstate(self):
-        dresu_du = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_du1'],
-                tensor=dfn.PETScMatrix()))
-        dresu_dv = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_dv1'],
-                tensor=dfn.PETScMatrix()))
-
-        n = self.u.vector().size()
-        dresv_du = dfn.PETScMatrix(bla.zero_mat(n, n))
-        dresv_dv = dfn.PETScMatrix(bla.zero_mat(n, n))
-
-        mats = [
-            [dresu_du, dresu_dv],
-            [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
-
-    def assem_dres_dstatet(self):
-        n = self.u.vector().size()
-        dresu_dut = dfn.PETScMatrix(bla.zero_mat(n, n))
-        dresu_dvt = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_da1'],
-                tensor=dfn.PETScMatrix()))
-
-        dresv_dut = dfn.PETScMatrix(bla.zero_mat(n, n))
-        dresv_dvt = dfn.PETScMatrix(bla.zero_mat(n, n))
-
-        mats = [
-            [dresu_dut, dresu_dvt],
-            [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
-
-    def assem_dres_dcontrol(self):
-        n = self.u.vector().size()
-        m = self.control['p'].size()
-        dresu_dg = (
-            dfn.assemble(
+            + dfn.assemble(
                 self.forms['form.bi.ddf1uva_a1_dp1'],
-                tensor=dfn.PETScMatrix()))
+                tensor=dfn.PETScMatrix())
+            )
 
         dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, m))
 
@@ -329,62 +277,6 @@ class LinearStatetSolidDynamicalSystem(BaseSolidDynamicalSystem):
             [dresu_dg],
             [dresv_dg]]
         return bla.BlockMat(mats, labels=(['u', 'v'], ['g']))
-
-class LinearControlSolidDynamicalSystem(BaseSolidDynamicalSystem):
-    """
-    Represents a linearized dynamical system residual
-
-    This residual represents
-    dF/dg(x, xt; g, ...) * dg,
-    where 'x=[u, v]', 'F=[Fu, Fv]'
-    """
-    def assem_res(self):
-        resu = dfn.assemble(
-            self.forms['form.un.df1uva_p1'],
-            tensor=dfn.PETScVector())
-        resv = -self.v.vector().copy()
-        resv.zero()
-        return bla.BlockVec([resu, resv], labels=[['u',  'v']])
-
-    def assem_dres_dstate(self):
-        dresu_du = dfn.assemble(
-            self.forms['form.bi.ddf1uva_p1_du1'],
-            tensor=dfn.PETScMatrix())
-        dresu_dv = dfn.assemble(
-            self.forms['form.bi.ddf1uva_p1_dv1'],
-            tensor=dfn.PETScMatrix())
-
-        n = self.u.vector().size()
-        dresv_du = dfn.PETScMatrix(bla.zero_mat(n, n))
-        dresv_dv = dfn.PETScMatrix(bla.zero_mat(n, n))
-
-        mats = [
-            [dresu_du, dresu_dv],
-            [dresv_du, dresv_dv]]
-        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
-
-    def assem_dres_dstatet(self):
-        n = self.u.vector().size()
-        dresu_dut = bla.zero_mat(n, n)
-        dresu_dvt = dfn.assemble(
-            self.forms['form.bi.ddf1uva_p1_da1'],
-            tensor=dfn.PETScMatrix())
-
-        dresv_dut = dfn.PETScMatrix(bla.zero_mat(n, n))
-        dresv_dvt = dfn.PETScMatrix(bla.zero_mat(n, n))
-
-        mats = [
-            [dresu_dut, dresu_dvt],
-            [dresv_dut, dresv_dvt]]
-        return bla.BlockMat(mats, labels=(['u', 'v'], ['u', 'v']))
-
-    def assem_dres_dcontrol(self):
-        n = self.u.vector().size()
-        m = self.forms['coeff.fsi.p1'].vector().size()
-        dresu_dg = dfn.assemble(
-            self.forms['form.bi.ddf1uva_p1_dp1'],
-            tensor=dfn.PETScMatrix())
-        dresv_dg = dfn.PETScMatrix(bla.zero_mat(n, m))
 
 
 class KelvinVoigt(SolidDynamicalSystem):
@@ -396,7 +288,7 @@ class KelvinVoigt(SolidDynamicalSystem):
                 mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                 fsi_facet_labels, fixed_facet_labels)
 
-class LinearStateKelvinVoigt(LinearStateSolidDynamicalSystem):
+class LinearStateKelvinVoigt(LinearizedSolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
     def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
