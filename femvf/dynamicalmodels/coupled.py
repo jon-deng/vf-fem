@@ -93,6 +93,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.properties = bla.concatenate_vec([convert_bvec_to_petsc(model.properties) for model in self.models])
 
         ## -- FSI --
+        # TODO: Make ymid a property of the coupled model!
         # Below here is all extra stuff needed to do the coupling between fluid/solid
         self.ymid = self.solid.properties['ycontact']
         self.solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()

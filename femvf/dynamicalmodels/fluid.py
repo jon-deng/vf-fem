@@ -1,7 +1,7 @@
 """
 Contains definitions of fluid models
 
-The nonlinear dynamical systems here are defined in jax/numpy and augmented a 
+The nonlinear dynamical systems here are defined in jax/numpy and augmented a
 bit manually. The basic dynamical system residual has a block form
 F(x, xt, g) = [Fq(x, xt, g), Fp(x, xt)]
 x = [q, p]
@@ -28,7 +28,7 @@ def bernoulli_q(asep, psub, psup, rho):
     """
     if psub >= psup:
         q = (2*(psub-psup)/rho)**0.5 * asep
-    else: 
+    else:
         q = -(2*(psup-psub)/rho)**0.5 * asep
     return q
 
@@ -46,7 +46,7 @@ def coeff_sep(s, ssep, zeta_sep):
     # because of numerical stability
     # Using the normal formula results in nan for large exponents
     return jax.nn.sigmoid(-1*(s-ssep)/zeta_sep)
-    
+
 
 # @jax.jit
 def wavg(s, f, w):
@@ -98,7 +98,7 @@ def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     p = f_sep * p
     return q, p
 
-# Use this weird combination of primals/tangent parameters because later we 
+# Use this weird combination of primals/tangent parameters because later we
 # want to compute the jacobian wrt area
 def dbernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep, tangents):
     primals = (area, s, psub, psup, rho, zeta_min, zeta_sep)
@@ -198,8 +198,29 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
 
 class LinearStateBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
-        resq = self.dstate['q']
-        resp = self.dstate['p']
+        # Depack variables from BlockVec for input to Bernoulli functions
+        area = self.control['area']
+        rho = self.properties['rho_air'][0]
+        psub = self.control['psub'][0]
+        psup = self.control['psup'][0]
+        zeta_min = self.properties['zeta_min'][0]
+        zeta_sep = self.properties['zeta_sep'][0]
+
+        primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
+        darea = self.dcontrol['area']
+        dpsub = self.dcontrol['psub'][0]
+        dpsup = self.dcontrol['psup'][0]
+        tangents = (darea, np.zeros(self.s.shape), dpsub, dpsup, 0.0, 0.0, 0.0)
+        breakpoint()
+        ## BUG: area is infinity for some reason??
+
+        # The linearized residual changes due to linearizations
+        resq_bernoulli, resp_bernoulli = dbernoulli_qp(*primals, tangents)
+        # resq_bernoulli, resp_bernoulli = 0, 0
+
+        resq = self.dstate['q'] - resq_bernoulli
+        resp = self.dstate['p'] - resp_bernoulli
+
         return bla.BlockVec([resq, resp], labels=[self.state.keys])
 
     def assem_dres_dstate(self):
@@ -293,7 +314,7 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         psup = self.control['psup'][0]
         zeta_min = self.properties['zeta_min'][0]
         zeta_sep = self.properties['zeta_sep'][0]
-        
+
         primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
         tangents = (self.dcontrol['area'], 0, 0, 0, 0, 0, 0)
         dqp = dbernoulli_qp(*primals, tangents)
@@ -331,7 +352,7 @@ class LinearControlBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         psup = self.control['psup'][0]
         zeta_min = self.properties['zeta_min'][0]
         zeta_sep = self.properties['zeta_sep'][0]
-        
+
         primals = (area, self.s, rho, psub, psup, zeta_min, zeta_sep)
         tangents = (self.dcontrol['area'], 0, self.dcontrol['psub'][0], self.dcontrol['psup'], 0, 0, 0)
 
