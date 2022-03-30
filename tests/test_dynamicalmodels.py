@@ -184,18 +184,21 @@ def _test_taylor(x0, dx, res, jac):
     print("Convergence rates: ", np.array(conv_rates))
 
 def test_assem_dres_dstate(model, x0, dx):
+    """Test dF/dx is correct"""
     res = lambda state: _set_and_assemble(state, model.set_state, model.assem_res)
     jac = lambda state: _set_and_assemble(state, model.set_state, model.assem_dres_dstate)
 
     _test_taylor(x0, dx, res, jac)
 
 def test_assem_dres_dstatet(model, x0, dx):
+    """Test dF/dxt is correct"""
     res = lambda state: _set_and_assemble(state, model.set_statet, model.assem_res)
     jac = lambda state: _set_and_assemble(state, model.set_statet, model.assem_dres_dstatet)
 
     _test_taylor(x0, dx, res, jac)
 
 def test_assem_dres_dcontrol(model, x0, dx):
+    """Test dF/dg is correct"""
     # model_fluid.control['psub'][:] = 1
     # model_fluid.control['psup'][:] = 0
     res = lambda state: _set_and_assemble(state, model.set_control, model.assem_res)
@@ -204,6 +207,7 @@ def test_assem_dres_dcontrol(model, x0, dx):
     _test_taylor(x0, dx, res, jac)
 
 def test_assem_dres_dprops(model, x0, dx):
+    """Test dF/dprops is correct"""
     res = lambda state: _set_and_assemble(state, model.set_properties, model.assem_res)
     jac = lambda state: _set_and_assemble(state, model.set_properties, model.assem_dres_dprops)
 
@@ -225,13 +229,43 @@ def test_dres_dstate_vs_dres_state(model, model_linear, x0, del_x):
     dres_state_a = bla.mult_mat_vec(dres_dstate, del_x)
 
     model_linear.set_dstate(del_x)
-    del_xt = model_linear.dstatet.copy()
-    del_xt.set(0)
-    model_linear.set_dstatet(del_xt)
+    _zero_del_xt = model_linear.dstatet.copy()
+    _zero_del_xt.set(0)
+    model_linear.set_dstatet(_zero_del_xt)
+
     dres_state_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
     err = dres_state_a - dres_state_b
 
     for vec, name in zip([dres_state_a, dres_state_b, err], ["from model", "from linear_state_model", "error"]):
+        print(f"\n{name}")
+        for key, subvec in vec.items():
+            print(key, subvec.norm())
+    breakpoint()
+
+def test_dres_dstatet_vs_dres_statet(model, model_linear, x0, del_xt):
+    """
+    Test consistency between `model` and `model_linear_state`
+
+    `model` represents a residual F(...)
+    `model_linear_state` represents the linearized residual (dF/dstate * del_state)(...)
+    This test checks that:
+        dF/dstate(...) * del_state    (computed from `model`)
+        is equal to
+        (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
+    """
+    # compute the linearized residual from `model`
+    dres_dstatet = _set_and_assemble(x0, model.set_state, model.assem_dres_dstatet)
+    dres_statet_a = bla.mult_mat_vec(dres_dstatet, del_xt)
+
+    model_linear.set_dstatet(del_xt)
+    _zero_del_x = model_linear.dstate.copy()
+    _zero_del_x.set(0)
+    model_linear.set_dstate(_zero_del_x)
+
+    dres_statet_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
+    err = dres_statet_a - dres_statet_b
+
+    for vec, name in zip([dres_statet_a, dres_statet_b, err], ["from model", "from linear_state_model", "error"]):
         print(f"\n{name}")
         for key, subvec in vec.items():
             print(key, subvec.norm())
@@ -263,3 +297,6 @@ if __name__ == '__main__':
 
     print("\n-- Test dres/dstate vs dres_state --")
     test_dres_dstate_vs_dres_state(model, model_linear, state0, del_state)
+
+    print("\n-- Test dres/dstatet vs dres_statet --")
+    test_dres_dstatet_vs_dres_statet(model, model_linear, state0, del_statet)
