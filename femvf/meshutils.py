@@ -148,7 +148,7 @@ def sort_vertices_by_nearest_neighbours(vertex_coordinates, origin=None):
 
 def verts_from_cell_function(mesh, cell_func, id):
     verts = []
-    for n_cell, cell_verts in enumerate(mesh.cells()): 
+    for n_cell, cell_verts in enumerate(mesh.cells()):
         if cell_func[n_cell] == id:
             verts += cell_verts.tolist()
 
@@ -164,7 +164,7 @@ def verts_from_facet_function(mesh, facet_func, id):
 
 def dofs_from_cell_function(mesh, cell_func, cell_func_value, dofmap):
     dofs = []
-    for cell in dfn.cells(mesh): 
+    for cell in dfn.cells(mesh):
         if cell_func[cell.index()] == cell_func_value:
             dofs += dofmap.cell_dofs(cell.index()).tolist()
 
@@ -175,7 +175,7 @@ def dofs_from_mesh_func(mesh, mesh_func, mesh_func_value, dofmap):
     Return all DOFs where an integer mesh function equals a value
     """
     mesh_ent_indices = [
-        mesh_ent.index() 
+        mesh_ent.index()
         for mesh_ent in dfn.cpp.mesh.entities(mesh, mesh_func.dim())
         if mesh_func[mesh_ent.index()] == mesh_func_value]
 
@@ -193,3 +193,13 @@ def process_meshlabel_to_dofs(mesh, mesh_func, func_space, label_to_meshfunc):
         for region_label, region_value in label_to_meshfunc.items()}
 
     return label_to_dofs
+
+def process_celllabel_to_dofs_from_forms(forms, func_space):
+    """
+    Return a map from cell regions to associated dofs
+    """
+    mesh = forms['mesh.mesh']
+    cell_func = forms['mesh.cell_function']
+    cell_label_to_id = forms['mesh.cell_label_to_id']
+    return process_meshlabel_to_dofs(
+        mesh, cell_func, func_space, cell_label_to_id)
