@@ -3,12 +3,13 @@ Contains class definitions for coupled dynamical systems models
 """
 
 import dolfin as dfn
+import numpy as np
 from petsc4py import PETSc as PETSc
 
 import blocktensor.linalg as bla
 from blocktensor import subops as gops
 from blocktensor.mat import convert_bmat_to_petsc
-from blocktensor.vec import convert_bvec_to_petsc, split_bvec
+from blocktensor.vec import convert_bvec_to_petsc, split_bvec, BlockVec
 
 from .base import DynamicalSystem
 from .fluid import BaseFluid1DDynamicalSystem
@@ -82,21 +83,26 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.fluid = fluid_model
         self.models = (self.solid, self.fluid)
 
-        self.state = bla.concatenate_vec([convert_bvec_to_petsc(model.state) for model in self.models])
-        self.statet = bla.concatenate_vec([convert_bvec_to_petsc(model.statet) for model in self.models])
+        self.state = bla.concatenate_vec(
+            [convert_bvec_to_petsc(model.state) for model in self.models])
+        self.statet = bla.concatenate_vec(
+            [convert_bvec_to_petsc(model.statet) for model in self.models])
 
-        self.dstate = bla.concatenate_vec([convert_bvec_to_petsc(model.dstate) for model in self.models])
-        self.dstatet = bla.concatenate_vec([convert_bvec_to_petsc(model.dstatet) for model in self.models])
+        self.dstate = bla.concatenate_vec(
+            [convert_bvec_to_petsc(model.dstate) for model in self.models])
+        self.dstatet = bla.concatenate_vec(
+            [convert_bvec_to_petsc(model.dstatet) for model in self.models])
 
         # This selects only psub and psup from the fluid control
         self.control = convert_bvec_to_petsc(self.fluid.control[1:])
 
-        self.properties = bla.concatenate_vec([convert_bvec_to_petsc(model.properties) for model in self.models])
+        _ymid_props = BlockVec([np.array([1.0])], labels=[['ymid']])
+        self.properties = bla.concatenate_vec(
+            [convert_bvec_to_petsc(model.properties) for model in self.models]
+            + [_ymid_props])
 
         ## -- FSI --
-        # TODO: Make ymid a property of the coupled model!
         # Below here is all extra stuff needed to do the coupling between fluid/solid
-        self.ymid = self.solid.properties['ycontact']
         self.solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         self.dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
@@ -156,7 +162,7 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         ## The below are needed to communicate FSI interactions
         # Set solid_area
-        self.solid_area[:] = 2*(self.ymid - (self.solid_xref + self.solid.state['u'])[1::2])
+        self.solid_area[:] = 2*(self.properties['ymid'][0] - (self.solid_xref + self.solid.state['u'])[1::2])
 
         # map solid_area to fluid area
         fluid_control = self.fluid.control.copy()
@@ -217,7 +223,9 @@ class FSIDynamicalSystem(DynamicalSystem):
 
     def set_properties(self, props):
         self.properties[:] = props
-        block_sizes = [model.properties.size for model in self.models]
+        # You have to add a final size of 1 block to account for the final ymid
+        # property block
+        block_sizes = [model.properties.size for model in self.models] + [1]
         sub_props = split_bvec(props, block_sizes)
         for model, sub_prop in zip(self.models, sub_props):
             model.set_properties(sub_prop)
