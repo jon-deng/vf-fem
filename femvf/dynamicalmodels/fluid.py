@@ -26,10 +26,8 @@ def bernoulli_q(asep, psub, psup, rho):
     """
     Return the flow rate based on Bernoulli
     """
-    if psub >= psup:
-        q = (2*(psub-psup)/rho)**0.5 * asep
-    else:
-        q = -(2*(psup-psub)/rho)**0.5 * asep
+    flow_sign = jnp.sign(psub-psup)
+    q = flow_sign * (2*jnp.abs(psub-psup)/rho)**0.5 * asep
     return q
 
 # @jax.jit
