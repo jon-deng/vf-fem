@@ -47,14 +47,14 @@ def coeff_sep(s, ssep, zeta_sep):
 
 
 # @jax.jit
-def wavg(s, f, w):
+def wavg(s, f, w, axis=-1):
     """
     Return the weighted average of f(s) over s with weights w(s)
     """
-    return jnp.trapz(f*w, s)/jnp.trapz(w, s)
+    return jnp.trapz(f*w, s, axis=axis)/jnp.trapz(w, s, axis=axis)
 
 # @jax.jit
-def smooth_min_weight(f, zeta=1):
+def smooth_min_weight(f, zeta=1, axis=-1):
     """
     Return a smooth minimum from a set of values f
 
@@ -65,7 +65,7 @@ def smooth_min_weight(f, zeta=1):
     log_w = -f/zeta
     # To prevent overflow for the largest weight, normalize the maximum log-weight to 0
     # This ensures the maximum weight is 1.0 while smaller weights will underflow to 0.0
-    log_w = log_w - np.max(log_w)
+    log_w = log_w - np.max(log_w, axis=axis)
     return jnp.exp(log_w)
 
 # @jax.jit
