@@ -65,7 +65,7 @@ def smooth_min_weight(f, zeta=1, axis=-1):
     log_w = -f/zeta
     # To prevent overflow for the largest weight, normalize the maximum log-weight to 0
     # This ensures the maximum weight is 1.0 while smaller weights will underflow to 0.0
-    log_w = log_w - np.max(log_w, axis=axis)
+    log_w = log_w - np.max(log_w, axis=axis, keepdims=True)
     return jnp.exp(log_w)
 
 # @jax.jit
