@@ -2,10 +2,6 @@
 This module contains definitions of functionals over the fluid state.
 """
 
-# import numpy as np
-
-# from blocktensor import linalg
-# from .base import AbstractFunctional
 from .decorator import transform_to_make_signals
 
 def make_separation_point(model):

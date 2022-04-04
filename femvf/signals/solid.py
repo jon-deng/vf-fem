@@ -9,9 +9,6 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from blocktensor import linalg
-# from .base import AbstractFunctional
-from ..models.solidforms import form_inf_strain
 from .decorator import transform_to_make_signals
 
 def make_glottal_width_smooth(model):
@@ -39,7 +36,7 @@ make_sig_glottal_width_sharp = transform_to_make_signals(make_glottal_width_shar
 def make_peak_contact_pressure(model):
     def peak_contact_pressure(model, state, control, props):
         fsidofs = model.solid.vert_to_sdof[model.fsi_verts]
-        
+
         model.set_fin_state(state)
         pcontact = -1*model.solid.forms['coeff.state.manual.tcontact'].vector()[1::2]
         return pcontact[fsidofs].max()
@@ -59,7 +56,7 @@ make_sig_piecewise_elastic_stress = transform_to_make_signals(make_piecewise_ela
 
 def make_contact_statistics(model):
     # FSI_DOFS = model.solid.vert_to_sdof[model.fsi_verts]
-    
+
     ds = model.solid.forms['measure.ds_traction']
     tcontact = model.solid.forms['coeff.state.manual.tcontact']
     pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
@@ -67,7 +64,7 @@ def make_contact_statistics(model):
 
     contact_area_expr = contact_indicator*ds
     total_pcontact_expr = pcontact*ds
-    
+
     def contact_statistics(state, control, props):
         """
         Returns (max p contact, avg p contact, total p contact, contact area)
@@ -160,7 +157,7 @@ def make_project(expr, fspace, dmeas):
     ----------
     expr: ufl.Expression
         An ufl expression
-    fspace: 
+    fspace:
         The function space that `expr` will be projected on
     dmeas: ufl.Measure
         The measure that the projection will be applied over
