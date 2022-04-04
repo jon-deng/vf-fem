@@ -16,7 +16,7 @@ def make_glottal_width_smooth(model):
         XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
 
         xcur = XREF.reshape(-1) + state['u'][:]
-        widths = props['y_midline'] - xcur[1::2]
+        widths = 2*(props['y_midline'] - xcur[1::2])
         gw = np.min(widths)
         return gw
     return glottal_width_smooth
@@ -27,7 +27,7 @@ def make_glottal_width_sharp(model):
         XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
 
         xcur = XREF.reshape(-1) + state['u'][:]
-        widths = props['y_midline'] - xcur[1::2]
+        widths = 2*(props['y_midline'] - xcur[1::2])
         gw = np.min(widths)
         return gw
     return glottal_width_sharp
