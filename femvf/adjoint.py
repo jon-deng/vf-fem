@@ -1,11 +1,11 @@
 """
 Adjoint model.
 
-The forward model is represented by a mapping from 
+The forward model is represented by a mapping from
 ..math: (x^0, g, p) -> (x^n; n>1)
 i.e. the initial state and control/parameter vectors map to a sequence of output
 states corresponding to the state vectors at a sequence of time steps. This relationship
-comes from the recursive relation between states over a single time step, represented by the 
+comes from the recursive relation between states over a single time step, represented by the
 model residual function.
 
 I'm using CGS : cm-g-s units
@@ -19,7 +19,7 @@ def integrate(model, f, dfin_state):
     """
     Given a list of adjoint output state vectors, x^n (n>1), integrate the adjoint model
 
-    Since there can be many output states, `dfin_state` is a callable that returns the 
+    Since there can be many output states, `dfin_state` is a callable that returns the
     appropriate dx_n vector at index n without having an explicit list of the vectors for all
     n.
 
@@ -44,7 +44,7 @@ def integrate(model, f, dfin_state):
     ## Load states/parameters
     N = f.size
     times = f.get_times()
-    
+
     ## Loop through states for adjoint computation
     # Initialize the adj rhs
     adj_state1 = dfin_state(f, N-1)
@@ -78,14 +78,14 @@ def integrate(model, f, dfin_state):
     # Calculate sensitivities w.r.t integration times
     grad_dt = np.array(adj_dt)
 
-    # Convert adjoint variables in terms of time steps to variables in 
+    # Convert adjoint variables in terms of time steps to variables in
     # terms of start/end integration times. This uses the fact that
     # dt^{n} = t^{n} - t^{n-1}, therefore
     # df/d[t^{n}, t^{n-1}] = df/ddt^{n} * ddt^{n}/d[t^{n}, t^{n-1}]
     adj_times = np.zeros(N)
     adj_times[1:] += grad_dt
     adj_times[:-1] -= grad_dt
-    adj_times = linalg.BlockVec((adj_times,), labels=(('times',),))
+    adj_times = linalg.BlockVector((adj_times,), labels=(('times',),))
 
     return adj_ini_state, adj_controls, adj_props, adj_times
 
@@ -112,16 +112,16 @@ def integrate_grad(model, f, functional):
 
     def dfin_state(f, n):
         return functional.dstate(f, n)
-    
+
     # The result of integrating the adjoint are the partial sensitivity components due only to the
-    # model 
+    # model
     dini_state, dcontrols, dprops, dtimes = integrate(model, f, dfin_state)
 
     # To form the final gradient term, add partial sensitivity components due to the functional
     dprops += functional.dprops(f)
 
     ddts = [functional.ddt(f, n) for n in range(1, f.size)]
-    dtimes_functional = linalg.BlockVec([np.cumsum([0] + ddts)], labels=[['times']])
+    dtimes_functional = linalg.BlockVector([np.cumsum([0] + ddts)], labels=[['times']])
     dtimes += dtimes_functional
 
     return functional_value, dini_state, dcontrols, dprops, dtimes

@@ -18,13 +18,13 @@ from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import base
 from . import newmark
-from blocktensor.linalg import BlockVec
+from blocktensor.linalg import BlockVector
 
 from . import solidforms
 
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
-    labels = [form_name.split('.')[-1] for form_name in forms.keys() 
+    labels = [form_name.split('.')[-1] for form_name in forms.keys()
         if 'coeff.prop' in form_name]
     vecs = []
     for label in labels:
@@ -33,20 +33,20 @@ def properties_bvec_from_forms(forms, defaults=None):
         # vec = None
         # Generally the size of the vector comes directly from the property,
         # for examples, constants are size 1, scalar fields have size matching number of dofs
-        # Time step is a special case since it is size 1 but is made to be a field as 
+        # Time step is a special case since it is size 1 but is made to be a field as
         # a workaround
         if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
             vec = np.ones(coefficient.values().size)
             vec[:] = coefficient.values()
         else:
             vec = coefficient.vector().copy()
-        
+
         if label in defaults:
             vec[:] = defaults[label]
 
         vecs.append(vec)
 
-    return BlockVec(vecs, labels=[labels])
+    return BlockVector(vecs, labels=[labels])
 
 
 class Solid(base.Model):
@@ -56,7 +56,7 @@ class Solid(base.Model):
     # Subclasses have to set these values
     PROPERTY_DEFAULTS = None
 
-    def __init__(self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
+    def __init__(self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                  fsi_facet_labels, fixed_facet_labels):
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
@@ -109,9 +109,9 @@ class Solid(base.Model):
         self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
 
         ## Define the state/controls/properties
-        self.state0 = BlockVec((self.u0.vector(), self.v0.vector(), self.a0.vector()), labels=[('u', 'v', 'a')])
-        self.state1 = BlockVec((self.u1.vector(), self.v1.vector(), self.a1.vector()), labels=[('u', 'v', 'a')])
-        self.control = BlockVec((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
+        self.state0 = BlockVector((self.u0.vector(), self.v0.vector(), self.a0.vector()), labels=[('u', 'v', 'a')])
+        self.state1 = BlockVector((self.u1.vector(), self.v1.vector(), self.a1.vector()), labels=[('u', 'v', 'a')])
+        self.control = BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
         self.properties = self.get_properties_vec(set_default=True)
         self.set_properties(self.properties)
 
@@ -147,7 +147,7 @@ class Solid(base.Model):
         return xref
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
+    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                          fsi_facet_labels, fixed_facet_labels):
         """
         Return a dictionary of ufl forms representing the solid in Fenics.
@@ -162,7 +162,7 @@ class Solid(base.Model):
         u = dfn.Function(self.vector_fspace).vector()
         v = dfn.Function(self.vector_fspace).vector()
         a = dfn.Function(self.vector_fspace).vector()
-        return BlockVec((u, v, a), labels=[('u', 'v', 'a')]) 
+        return BlockVector((u, v, a), labels=[('u', 'v', 'a')])
 
     def get_control_vec(self):
         ret = self.control.copy()
@@ -172,7 +172,7 @@ class Solid(base.Model):
     def get_properties_vec(self, set_default=True):
         defaults = self.PROPERTY_DEFAULTS if set_default else None
         return properties_bvec_from_forms(self.forms, defaults)
-    
+
     ## Parameter setting functions
     def set_ini_state(self, uva0):
         """
@@ -288,9 +288,9 @@ class Solid(base.Model):
 
         x['v'][:] = bv - dfv2_du2*x['u']
         x['a'][:] = ba - dfa2_du2*x['u']
-        
+
         return x
-        
+
     def solve_dres_dstate1_adj(self, x):
         # Form key matrices
         dfu2_du2 = self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
@@ -333,7 +333,7 @@ class Solid(base.Model):
         b['v'][:] = (dfv2_du1*x['u'] + dfv2_dv1*x['v'] + dfv2_da1*x['a'])
         b['a'][:] = (dfa2_du1*x['u'] + dfa2_dv1*x['v'] + dfa2_da1*x['a'])
         return b
-    
+
     def apply_dres_dstate0_adj(self, b):
         dt = self.dt
 
@@ -362,7 +362,7 @@ class Solid(base.Model):
 
     def apply_dres_dcontrol_adj(self, x):
         raise NotImplementedError
-    
+
     def apply_dres_dp(self, x):
         raise NotImplementedError
 
@@ -377,11 +377,11 @@ class Solid(base.Model):
                 df1_dprop = dfn.assemble(self.df1_dsolid[prop_name])
             val = df1_dprop*x['u']
 
-            # Note this is a workaround because some properties are scalar values but stored as 
+            # Note this is a workaround because some properties are scalar values but stored as
             # vectors in order to take their derivatives. This is the case for time step, `dt`
             if vec.size == 1:
                 val = val.sum()
-                
+
             vec[:] = val
         return b
 
@@ -396,7 +396,7 @@ class Solid(base.Model):
         self.bc_base.zero(dfu_ddt)
 
         dres = self.get_state_vec()
-        dres['u'][:] = dfu_ddt*ddt_vec 
+        dres['u'][:] = dfu_ddt*ddt_vec
         dres['v'][:] = dfv_ddt*ddt
         dres['a'][:] = dfa_ddt*ddt
         return dres
@@ -417,7 +417,7 @@ class Solid(base.Model):
 class NodalContactSolid(Solid):
     """
     This class modifies the default behaviour of the solid to implement contact pressures
-    interpolated with the displacement function space. This involves manual modification of the 
+    interpolated with the displacement function space. This involves manual modification of the
     matrices generated by Fenics.
     """
     def contact_traction(self, u):
@@ -428,7 +428,7 @@ class NodalContactSolid(Solid):
         kcontact = self.forms['coeff.prop.kcontact'].values()[0]
 
         gap = np.dot((XREF+u)[:].reshape(-1, 2), ncontact) - ycontact
-        tcontact = (-solidforms.form_cubic_penalty_pressure(gap, kcontact)[:, None]*ncontact).reshape(-1).copy() 
+        tcontact = (-solidforms.form_cubic_penalty_pressure(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
         return tcontact
 
     def set_fin_state(self, state):
@@ -438,7 +438,7 @@ class NodalContactSolid(Solid):
         self.forms['coeff.state.manual.tcontact'].vector()[:] = self.contact_traction(state['u'])
 
     def _assem_dres_du(self, adjoint=False):
-        ## dres_du has two components: one due to the standard u/v/a variables  
+        ## dres_du has two components: one due to the standard u/v/a variables
         ## and an additional effect due to contact pressure
         dfu2_du2_nocontact = None
         if adjoint:
@@ -466,8 +466,8 @@ class NodalContactSolid(Solid):
         dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
-        # for a general collision plane normal, the operation 'df_dtc*dtc_du' will 
-        # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It 
+        # for a general collision plane normal, the operation 'df_dtc*dtc_du' will
+        # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
         dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
         dpcontact_dgap, _ = solidforms.dform_cubic_penalty_pressure(gap, kcontact)
@@ -482,7 +482,7 @@ class NodalContactSolid(Solid):
 
     # TODO: refactor this copy-paste
     def _assem_dresuva_du(self, adjoint=False):
-        ## dres_du has two components: one due to the standard u/v/a variables  
+        ## dres_du has two components: one due to the standard u/v/a variables
         ## and an additional effect due to contact pressure
         dfu2_du2_nocontact = None
         if adjoint:
@@ -491,7 +491,7 @@ class NodalContactSolid(Solid):
             dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1uva_du1'])
 
         dfu2_du2_contact = self._assem_dres_du_contact(adjoint)
-    
+
         return dfu2_du2_nocontact + dfu2_du2_contact
 
     def solve_dres_dstate1(self, b):
@@ -511,9 +511,9 @@ class NodalContactSolid(Solid):
 
         x['v'][:] = bv - dfv2_du2*x['u']
         x['a'][:] = ba - dfa2_du2*x['u']
-        
+
         return x
-        
+
     def solve_dres_dstate1_adj(self, x):
         # Form key matrices
         dfu2_du2 = self._assem_dres_du(adjoint=True)
@@ -684,7 +684,7 @@ def newton_solve(x0, linearized_subproblem, params=None):
     while True:
         assem_res_n, solve_n = linearized_subproblem(state_n)
         res_n = assem_res_n()
- 
+
         abs_err = abs(res_n.norm())
         abs_errs.append(abs_err)
         rel_err = 0.0 if abs_errs[0] == 0 else abs_err/abs_errs[0]

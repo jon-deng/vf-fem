@@ -9,7 +9,7 @@ from petsc4py import PETSc as PETSc
 import blocktensor.linalg as bla
 from blocktensor import subops as gops
 from blocktensor.mat import convert_bmat_to_petsc
-from blocktensor.vec import convert_bvec_to_petsc, split_bvec, BlockVec
+from blocktensor.vec import convert_bvec_to_petsc, split_bvec, BlockVector
 
 from .base import DynamicalSystem
 from .fluid import BaseFluid1DDynamicalSystem
@@ -96,7 +96,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         # This selects only psub and psup from the fluid control
         self.control = convert_bvec_to_petsc(self.fluid.control[1:])
 
-        _ymid_props = BlockVec([np.array([1.0])], labels=[['ymid']])
+        _ymid_props = BlockVector([np.array([1.0])], labels=[['ymid']])
         self.properties = bla.concatenate_vec(
             [convert_bvec_to_petsc(model.properties) for model in self.models]
             + [_ymid_props])
@@ -122,7 +122,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslp_dflq = bla.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
         dslp_dflp = self._dsolid_dfluid_scalar
         mats = [[dslp_dflq, dslp_dflp]]
-        self.dslcontrol_dflstate = bla.BlockMat(mats, labels=(('p',), ('q', 'p')))
+        self.dslcontrol_dflstate = bla.BlockMatrix(mats, labels=(('p',), ('q', 'p')))
 
         # The matrix here is d(area)_fluid/d(u, v)_solid
         # pylint: disable=no-member
@@ -141,17 +141,17 @@ class FSIDynamicalSystem(DynamicalSystem):
         dflarea_dslarea = self._dfluid_dsolid_scalar
         dflarea_dslu = gops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
         mats[0][0] = dflarea_dslu
-        self.dflcontrol_dslstate = bla.BlockMat(mats, labels=(self.fluid.control.keys, self.solid.state.keys))
+        self.dflcontrol_dslstate = bla.BlockMatrix(mats, labels=(self.fluid.control.keys, self.solid.state.keys))
 
         # Make null BlockMats relating fluid/solid states
         mats = [
             [bla.zero_mat(slvec.size(), flvec.size) for flvec in self.fluid.state.vecs]
             for slvec in self.solid.state.vecs]
-        self.null_dslstate_dflstate = bla.BlockMat(mats)
+        self.null_dslstate_dflstate = bla.BlockMatrix(mats)
         mats = [
             [bla.zero_mat(flvec.size, slvec.size()) for slvec in self.solid.state.vecs]
             for flvec in self.fluid.state.vecs]
-        self.null_dflstate_dslstate = bla.BlockMat(mats)
+        self.null_dflstate_dslstate = bla.BlockMatrix(mats)
 
     def set_state(self, state):
         self.state[:] = state
@@ -269,11 +269,11 @@ class FSIDynamicalSystem(DynamicalSystem):
 
     def assem_dres_dcontrol(self):
         _mats = [[bla.zero_mat(m, n) for n in self.control.rbshape[0]] for m in self.solid.state.rbshape[0]]
-        dslres_dg = bla.BlockMat(_mats, labels=(self.solid.state.keys, self.control.keys))
+        dslres_dg = bla.BlockMatrix(_mats, labels=(self.solid.state.keys, self.control.keys))
 
         dflres_dflg = convert_bmat_to_petsc(self.fluid.assem_dres_dcontrol())
         _mats = [[row[kk] for kk in range(1, dflres_dflg.rshape[1])] for row in dflres_dflg]
-        dflres_dg =  bla.BlockMat(_mats, labels=(self.fluid.state.keys, self.control.keys))
+        dflres_dg =  bla.BlockMatrix(_mats, labels=(self.fluid.state.keys, self.control.keys))
         return bla.concatenate_mat([[dslres_dg], [dflres_dg]])
 
     # TODO: Need to implement for optimization strategies

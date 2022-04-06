@@ -20,13 +20,13 @@ class Acoustic1D(base.Model):
         # pref (interlaced b1, f2 partial pressures) are reflected pressures
         pinc = np.zeros((num_tube//2 + 1)*2)
         pref = np.zeros((num_tube//2 + 1)*2)
-        self.state0 = linalg.BlockVec((pinc, pref), labels=[('pinc', 'pref')])
+        self.state0 = linalg.BlockVector((pinc, pref), labels=[('pinc', 'pref')])
 
         self.state1 = self.state0.copy()
 
         # The control is the input flow rate
         qin = np.zeros((1,))
-        self.control = linalg.BlockVec((qin,), labels=[('qin',)])
+        self.control = linalg.BlockVector((qin,), labels=[('qin',)])
 
         length = np.ones(1)
         area = np.ones(num_tube)
@@ -35,8 +35,8 @@ class Acoustic1D(base.Model):
         c = 340*100*np.ones(1)
         rrad = np.ones(1)
         lrad = np.ones(1)
-        self.properties = linalg.BlockVec(
-            (length, area, gamma, rho, c, rrad, lrad), 
+        self.properties = linalg.BlockVector(
+            (length, area, gamma, rho, c, rrad, lrad),
             labels=[('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad')])
 
     ## Setting parameters of the acoustic model
@@ -113,7 +113,7 @@ class WRAnalog(Acoustic1D):
         L = 16/dt*PISTON_RAD/(3*np.pi*cspeed)
 
         NUM_TUBE = area.size
-        
+
         # 1, 2 represent the areas to the left and right of even junctions
         # note that the number of junctions is 1+number of tubes so some of
         # these are ficitious areas a1 @ junction 0 doesn't really exist
@@ -132,7 +132,7 @@ class WRAnalog(Acoustic1D):
         pinc, pref = self.state0.vecs
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
-        state1 = linalg.BlockVec((pinc_1, pref_1), labels=[self.state1.keys])
+        state1 = linalg.BlockVector((pinc_1, pref_1), labels=[self.state1.keys])
         info = {}
         return state1, info
 
@@ -145,10 +145,10 @@ class WRAnalog(Acoustic1D):
     def apply_dres_dstate0_adj(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
         ATr = jax.linear_transpose(self.reflect, *args)
-        
+
         b_pinc, b_pref, b_qin = ATr(x.vecs)
         bvecs = (np.asarray(b_pinc), np.asarray(b_pref))
-        return -linalg.BlockVec(bvecs, labels=[self.state0.keys])
+        return -linalg.BlockVector(bvecs, labels=[self.state0.keys])
 
     def apply_dres_dcontrol(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
@@ -157,7 +157,7 @@ class WRAnalog(Acoustic1D):
         x_ = linalg.concatenate_vec([self.get_state_vec(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
-        return -linalg.BlockVec(bvecs, labels=[self.state1.keys])
+        return -linalg.BlockVector(bvecs, labels=[self.state1.keys])
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()
@@ -169,7 +169,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
     """
     assert gamma1.size == N//2+1
     assert gamma2.size == N//2+1
-    
+
     assert a1.size == N//2+1
     assert a2.size == N//2+1
 
@@ -236,10 +236,10 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         # Note that int, inp, rad refer to interior, input, and radiation junction
         # locations, respectively
         f1, b2 = pinc[:-1:2], pinc[1::2]
-        
+
         f1 = gamma1 * f1
         b2 = gamma2 * b2
-        
+
         r1 = (z2-z1)/(z2+z1)
 
         f2int = (f1 + (f1-b2)*r1)[1:-1]
@@ -300,18 +300,18 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         df2 = (df2_df1, df2_db2, df2_df1prev, df2_db1prev, df2_df2prev, df2_db2prev, df2_dq)
         db1 = (db1_df1, db1_db2, db1_df1prev, db1_db1prev, db1_df2prev, db1_db2prev, db1_dq)
-        return db1, df2 
+        return db1, df2
 
     def reflect05(pinc):
         z1_ = z2[:-1]
         z2_ = z1[1:]
-        
+
         gamma1_ = gamma2[:-1]
         gamma2_ = gamma1[1:]
 
         f1 = pinc[:-1:2]
         b2 = pinc[1::2]
-        
+
         f1 = gamma1_ * f1
         b2 = gamma2_ * b2
         r = (z2_-z1_)/(z2_+z1_)
@@ -330,7 +330,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         db1_df1 = (r)*gamma1
         db1_db2 = (1.0-r)*gamma2
         return (db1_df1, db1_db2), (df2_df1, df2_db2)
-    
+
     # @jax.jit
     def reflect(pinc, pref, q):
         f1, b2 = pinc[:-1:2], pinc[1::2]
@@ -343,13 +343,13 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         pref_05 = reflect05(pinc_05)
         b1_05, f2_05 = pref_05[:-1:2], pref_05[1::2]
-        
+
         # f2_05 and b1_05 (reflected @ 0.5) -> f1, b2 (incident @ 1.0)
         f1inp, b2rad = np.zeros(1), np.zeros(1)
         f1_1 = jnp.concatenate([f1inp, f2_05])
         b2_1 = jnp.concatenate([b1_05, b2rad])
         pinc_1 = jnp.stack([f1_1, b2_1], axis=-1).reshape(-1)
-        
+
         pref_1 = reflect00(pinc_1, pinc, pref, q)
         return pinc_1, pref_1
 
@@ -376,7 +376,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         z1_05 = z2[:-1]
         z2_05 = z1[1:]
-        
+
         gamma1_05 = gamma2[:-1]
         gamma2_05 = gamma1[1:]
 
@@ -389,7 +389,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         # b2_1 = np.concatenate([b1_05, b2rad])
         df1_1_df2[1:] = df2_05[0]
         df1_1_db1[1:] = df2_05[1]
-        
+
         db2_1_df2[:-1] = db1_05[0]
         db2_1_db1[:-1] = db1_05[1]
         pass
@@ -418,13 +418,13 @@ def input_and_output_impedance(model, n=2**12):
     for n in range(1, times.size):
         model.set_ini_state(state0)
         model.set_control(control)
-        
+
         state1, _ = model.solve_state1()
         pinp[n] = state1['pinc'][0] + state1['pref'][0]
         pout[n] = state1['pinc'][-1] + state1['pref'][-1]
 
         state0 = state1
-    
+
     zinp = np.fft.fft(pinp)/np.fft.fft(qinp)
     zout = np.fft.fft(pout)/np.fft.fft(qinp)
     return zinp, zout
@@ -434,14 +434,14 @@ def input_and_output_impedance(model, n=2**12):
 NEUTRAL_FS = 44.1e3
 NEUTRAL_AREA = (np.pi/4)*np.array(
     [0.636, 0.561, 0.561, 0.550,
-     0.598, 0.895, 1.187, 1.417, 
-     1.380, 1.273, 1.340, 1.399, 
+     0.598, 0.895, 1.187, 1.417,
+     1.380, 1.273, 1.340, 1.399,
      1.433, 1.506, 1.493, 1.473,
      1.499, 1.529, 1.567, 1.601,
      1.591, 1.547, 1.570, 1.546,
-     1.532, 1.496, 1.429, 1.425, 
+     1.532, 1.496, 1.429, 1.425,
      1.496, 1.608, 1.668, 1.757,
-     1.842, 1.983, 2.073, 2.123, 
-     2.194, 2.175, 2.009, 1.785, 
+     1.842, 1.983, 2.073, 2.123,
+     2.194, 2.175, 2.009, 1.785,
      1.675, 1.539, 1.405, 1.312]
     )**2

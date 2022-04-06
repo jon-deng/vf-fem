@@ -1,8 +1,8 @@
 """
 Functionality related to fluids
 
-TODO: Change smoothing parameters to all be expressed in units of length 
-(all the smoothing parameters have a smoothing effect that occurs over a small length. 
+TODO: Change smoothing parameters to all be expressed in units of length
+(all the smoothing parameters have a smoothing effect that occurs over a small length.
 The smaller the length, the sharper the smoothing. )
 """
 import warnings
@@ -17,7 +17,7 @@ from petsc4py import PETSc
 from . import base
 from ..parameters.properties import property_vecs
 from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
-from blocktensor.linalg import BlockVec
+from blocktensor.linalg import BlockVector
 
 ## 1D Bernoulli approximation codes
 
@@ -51,18 +51,18 @@ class QuasiSteady1DFluid(base.Model):
 
         p0 = np.zeros(NVERT)
         q0 = np.zeros((1,))
-        self.state0 = BlockVec((q0, p0), labels=[('q', 'p')])
+        self.state0 = BlockVector((q0, p0), labels=[('q', 'p')])
 
         p1 = np.zeros(NVERT)
         q1 = np.zeros(1)
-        self.state1 = BlockVec((q1, p1), labels=[('q', 'p')])
+        self.state1 = BlockVector((q1, p1), labels=[('q', 'p')])
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
         usurf = np.zeros(2*NVERT)
         vsurf = np.zeros(2*NVERT)
         psub, psup = np.zeros(1), np.zeros(1)
-        self.control = BlockVec((usurf, vsurf, psub, psup), labels=[('usurf', 'vsurf', 'psub', 'psup')])
+        self.control = BlockVector((usurf, vsurf, psub, psup), labels=[('usurf', 'vsurf', 'psub', 'psup')])
 
         self.properties = self.get_properties_vec(set_default=True)
 
@@ -71,7 +71,7 @@ class QuasiSteady1DFluid(base.Model):
     @property
     def fluid(self):
         return self
-        
+
     @property
     def dt(self):
         return self._dt
@@ -111,11 +111,11 @@ class QuasiSteady1DFluid(base.Model):
         Return empty flow speed and pressure state vectors
         """
         q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
-        return BlockVec((q, p), labels=[('q', 'p')])
+        return BlockVector((q, p), labels=[('q', 'p')])
 
     def get_properties_vec(self, set_default=True):
         """
-        Return a BlockVec representing the properties of the fluid
+        Return a BlockVector representing the properties of the fluid
         """
         field_size = 1
         prop_defaults = None
@@ -123,7 +123,7 @@ class QuasiSteady1DFluid(base.Model):
             prop_defaults = self.PROPERTY_DEFAULTS
         vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
 
-        return BlockVec(vecs, labels=[labels])
+        return BlockVector(vecs, labels=[labels])
 
     def get_control_vec(self):
         ret = self.control.copy()
@@ -150,7 +150,7 @@ class Bernoulli(QuasiSteady1DFluid):
     ad-hoc separation criteria used in the literature.
         zeta_amin :
             Factor controlling the smoothness of the minimum area function.
-            As zeta_amin->0, the exact minimum area is produced (Should behave similarly as a true 
+            As zeta_amin->0, the exact minimum area is produced (Should behave similarly as a true
             min function)
         zeta_ainv :
             Approximates smoothing for an inverse area function; given an area, return the surface
@@ -159,13 +159,13 @@ class Bernoulli(QuasiSteady1DFluid):
         zeta_sep :
             Controls the sharpness of the cutoff that models separation. As zeta_sep->0,
             the sharpness will approach an instantaneous jump from 1 to 0
-        zeta_lb : 
+        zeta_lb :
             Controls the smoothness of the lower bound function that restricts glottal area to be
             larger than a lower bound
 
     Properties
     ----------
-    
+
     """
     PROPERTY_TYPES = {
         'y_midline': ('const', ()),
@@ -246,7 +246,7 @@ class Bernoulli(QuasiSteady1DFluid):
         ----------
         surface_state : tuple of (u, v) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
             States of the surface vertices, ordered following the flow (increasing x coordinate).
-        fluid_props : BlockVec
+        fluid_props : BlockVector
             A dictionary of fluid properties.
 
         Returns
@@ -282,8 +282,8 @@ class Bernoulli(QuasiSteady1DFluid):
         asep = fluid_props['r_sep'] * amin
         zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
         ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
-        
-        # Compute the flow rate based on pressure drop from "reference" to 
+
+        # Compute the flow rate based on pressure drop from "reference" to
         # separation location
         pref, psep, aref = None, None, None
         if flow_sign >= 0:
@@ -305,7 +305,7 @@ class Bernoulli(QuasiSteady1DFluid):
         idx_sep = np.argmax(s>ssep)
         xy_min = usurf.reshape(-1, 2)[idx_min]
         xy_sep = usurf.reshape(-1, 2)[idx_sep]
-        
+
         info = {'flow_rate': q,
                 'idx_sep': idx_sep,
                 'idx_min': idx_min,
@@ -317,7 +317,7 @@ class Bernoulli(QuasiSteady1DFluid):
                 'a_sep': asep,
                 'area': asafe,
                 'pressure': p}
-        return BlockVec((np.array(q), p), labels=[('q', 'p')]), info
+        return BlockVector((np.array(q), p), labels=[('q', 'p')]), info
 
     def flow_sensitivity(self, usurf, vsurf, psub, psup, fluid_props):
         """
@@ -327,7 +327,7 @@ class Bernoulli(QuasiSteady1DFluid):
         ----------
         surface_state : tuple of (u, v, a) each of (NUM_VERTICES, GEOMETRIC_DIM) np.ndarray
             States of the surface vertices, ordered following the flow (increasing x coordinate).
-        fluid_props : BlockVec
+        fluid_props : BlockVector
             A dictionary of fluid property keyword arguments.
         """
         flow_sign = np.sign(psub-psup)
@@ -361,7 +361,7 @@ class Bernoulli(QuasiSteady1DFluid):
         dssep_da = (dssep_dsmin*dsmin_da + dssep_dasafe*dasafe_da
                     + dssep_dasep*dasep_da) #* da_dy
 
-        # Compute the flow rate based on pressure drop from "reference" to 
+        # Compute the flow rate based on pressure drop from "reference" to
         # separation location
         pref, psep, aref = None, None, None
         if flow_sign >= 0:
@@ -502,7 +502,7 @@ class Bernoulli(QuasiSteady1DFluid):
 
     def solve_dres_dstate1_adj(self, x):
         return x
-        
+
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()
         b.set(0.0)
@@ -526,7 +526,7 @@ def smooth_min_area(s, area, zeta_amin):
 def dsmooth_min_area(s, area, zeta_amin):
     wmin = expweight(area, zeta_amin)
     dwmin_darea = dexpweight_df(area, zeta_amin)
-    
+
     # amin = wavg(s, area, wmin)
     # smin = wavg(s, s, wmin)
     damin_darea = dwavg_dw(s, area, wmin)*dwmin_darea + dwavg_df(s, area, wmin)
@@ -552,7 +552,7 @@ def smooth_separation_point(s, smin, area, asep, zeta_sep, zeta_ainv, flow_sign)
         # This ensures the separation area is selected at a point past the minimum area
         log_wsep = None
         with np.errstate(divide='ignore'):
-            # this applies the condition where the separation point is selected only after the 
+            # this applies the condition where the separation point is selected only after the
             # minimum area
             # this should represent area/hh, while handling the divide by zero errors
             hh = (1+flow_sign)/2-flow_sign*smoothstep(s, smin, zeta_sep)
@@ -605,7 +605,7 @@ def wavg(s, f, w):
     # everywhere else. If this isn't done, floating point errors will make it
     # so that wavg(s, f, w) doesn't equal the non-zero weight location of f
     favg = None
-    if np.sum(w != 0) == 1: 
+    if np.sum(w != 0) == 1:
         idx_nonzero = np.argmax(w != 0)
         favg = f[idx_nonzero]
     else:
@@ -701,7 +701,7 @@ def dsmoothlb_df(f, f_lb, alpha=1.0):
 ## Exponential weighting function (for smooth min)
 def expweight(f, alpha=1.0):
     """
-    Return exponential weights as exp(-1*f/alpha) 
+    Return exponential weights as exp(-1*f/alpha)
     """
     w = np.zeros(f.shape)
     if alpha == 0:
@@ -826,7 +826,7 @@ def gaussian(x, x0, alpha=1.0):
     Return the 'gaussian' with mean `x0` and variance `alpha`
 
     The gaussian is scaled by an arbitrary factor, C, so that the output has a maximum value of 1.0.
-    This is needed for numerical stability, otherwise for small `alpha` the gaussian will simply be 
+    This is needed for numerical stability, otherwise for small `alpha` the gaussian will simply be
     zero everywhere. If the `gaussian` weights are used in an averaging scheme then any constant
     factor will not matter since they cancel out in the ratio.
     """
