@@ -140,14 +140,11 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd
     idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
     fsi_verts = fsi_verts[idx_sort]
 
-    # Load the fluid
-    # There are separate cases for loading the transient fluid model and the dynamical system fluid
-    # model because I changed the way the mesh is input between them
-    if fluid_mesh is None and issubclass(FluidType, fmd.QuasiSteady1DFluid):
-        x, y = meshutils.streamwise1dmesh_from_edges(
-            mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
-        fluid = FluidType(x, y)
-    elif fluid_mesh is None and issubclass(FluidType, dynfluidmodel.BaseFluid1DDynamicalSystem):
+    # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
+    if fluid_mesh is None and issubclass(
+        FluidType,
+        (fmd.QuasiSteady1DFluid, dynfluidmodel.BaseFluid1DDynamicalSystem)
+        ):
         x, y = meshutils.streamwise1dmesh_from_edges(
             mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
         dx = x[1:] - x[:-1]
