@@ -17,7 +17,7 @@ from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models.transient import solid as smd, fluid as fmd, acoustic as amd
-from femvf.load import load_fsi_model, load_fsai_model
+from femvf.load import load_transient_fsi_model, load_fsai_model
 import femvf.signals.solid as solidfunc
 # from femvf import callbacks
 from femvf import linalg
@@ -37,7 +37,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_kelvinvoigt_model(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(self.mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500.0
@@ -87,7 +87,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_rayleigh_model(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500.0
@@ -195,7 +195,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_approx3D_model(self):
         ## Configure the model and its parameters
-        model = load_fsi_model(self.mesh_path, None, SolidType=smd.Approximate3DKelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(self.mesh_path, None, SolidType=smd.Approximate3DKelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500

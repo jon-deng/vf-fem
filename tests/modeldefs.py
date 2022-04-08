@@ -14,7 +14,7 @@ import dolfin as dfn
 from femvf import linalg
 from femvf.models import (
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
-from femvf.load import load_fsi_model, load_fsai_model
+from femvf.load import load_transient_fsi_model, load_fsai_model
 from femvf.constants import PASCAL_TO_CGS
 
 def load_fsi_rayleigh_model(coupling='explicit'):
@@ -24,7 +24,7 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling=coupling)
+    model = load_transient_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling=coupling)
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -56,7 +56,7 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     mesh_base_filename = 'M5-3layers-medial-surface-refinement'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_fsi_model(mesh_path, None, SolidType=KelvinVoigt, FluidType=Bernoulli, coupling=coupling)
+    model = load_transient_fsi_model(mesh_path, None, SolidType=KelvinVoigt, FluidType=Bernoulli, coupling=coupling)
 
     ## Set the fluid/solid parameters
     emod = 6e3 * PASCAL_TO_CGS
@@ -126,6 +126,6 @@ def load_fsai_rayleigh_model(coupling='explicit'):
     ac_props['soundspeed'][:] = 340*100
 
     props = linalg.concatenate_vec([sl_props, fl_props, ac_props])
-    
+
     return model, props
 

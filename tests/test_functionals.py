@@ -16,7 +16,7 @@ import dolfin as dfn
 from femvf import statefile as sf
 from femvf.forward import integrate
 from femvf.models import KelvinVoigt, Rayleigh, Bernoulli
-from femvf.load import load_fsi_model, load_fsai_model
+from femvf.load import load_transient_fsi_model, load_fsai_model
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functional import basic
@@ -38,7 +38,7 @@ class TestFunctionals(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = load_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli)
+        model = load_transient_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli)
 
         ## Set time integration / fluid / solid parameters
         dt_max = 1e-4

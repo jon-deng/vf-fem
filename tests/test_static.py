@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from femvf.models import solid as smd, fluid as fmd #, acoustic as amd
-from femvf.load import load_fsi_model
+from femvf.load import load_transient_fsi_model
 from femvf.meshutils import process_meshlabel_to_dofs
 from femvf import static
 
@@ -14,7 +14,7 @@ from femvf import static
 mesh_dir = '../meshes'
 mesh_name = 'M5-3layers'
 mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
-model = load_fsi_model(
+model = load_transient_fsi_model(
     mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
 
 ### Specify control

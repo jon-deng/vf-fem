@@ -11,7 +11,7 @@ from os import path
 # import dolfin as dfn
 # import xml
 
-from femvf.load import load_fsi_model
+from femvf.load import load_transient_fsi_model
 from femvf.solid import Rayleigh
 from femvf.fluid import Bernoulli
 
@@ -23,7 +23,7 @@ mesh_base_filename = 'M5-3layers'
 mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
 ## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-model = load_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
+model = load_transient_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
 
 statefile_path = './test_forward.h5'
 visfile_path = './test_forward-vis.h5'

@@ -35,7 +35,7 @@ def load_solid_model(solid_mesh, SolidType,
                       pressure_facet_labels, fixed_facet_labels)
     return solid
 
-def load_fsi_model(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
+def load_transient_fsi_model(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
     """
     Factory function that loads a model based on input solid/fluid meshes.

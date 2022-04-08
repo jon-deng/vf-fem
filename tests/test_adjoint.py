@@ -24,7 +24,7 @@ from femvf import statefile as sf, linalg
 
 from femvf.models import (
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
-from femvf.load import load_fsi_model, load_fsai_model
+from femvf.load import load_transient_fsi_model, load_fsai_model
 
 from femvf.forward import integrate
 from femvf import adjoint

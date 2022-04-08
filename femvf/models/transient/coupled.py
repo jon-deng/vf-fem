@@ -14,6 +14,7 @@ from petsc4py import PETSc
 # import ufl
 
 from ..equations.solid import newmark
+from ..fsi import FSIMap
 from . import base, solid as smd, fluid as fmd, acoustic as amd
 from femvf import meshutils
 from blocktensor import linalg
@@ -39,7 +40,7 @@ class FSIModel(base.Model):
         increasing streamwise direction since the fluid mesh numbering is ordered like that too.
     fsi_coordinates
     """
-    def __init__(self, solid, fluid, fsi_verts):
+    def __init__(self, solid: smd.Solid, fluid: fmd.QuasiSteady1DFluid, solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid
         self.fluid = fluid
 
@@ -51,45 +52,28 @@ class FSIModel(base.Model):
         self.control = self.fluid.control[2:].copy()
         self.properties = linalg.concatenate_vec([self.solid.properties, self.fluid.properties])
 
-        self.fsi_verts = fsi_verts
-        self.fsi_coordinates = self.solid.mesh.coordinates()[fsi_verts]
+        ## FSI related stuff
+        self._solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
+        # self._dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
 
-    ## These have to be defined to exchange data between domains
+        self.fsimap = FSIMap(
+            self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs
+            )
+        # self.fsi_verts = fsi_verts
+        # self.fsi_coordinates = self.solid.mesh.coordinates()[fsi_verts]
+
+    ## These have to be defined to exchange data between fluid/solid domains
     def set_ini_solid_state(self, uva0):
-        """
-        Sets the state variables u, v, and a at the start of the step.
-
-        Parameters
-        ----------
-        u0, v0, a0 : array_like
-        """
-        self.solid.set_ini_state(uva0)
-
-        fl_control = self.fluid.get_control_vec()
-
-        fsi_ref_config = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
-        fsi_vdofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
-        fl_control = sl_state_to_fl_control(uva0, fl_control, fsi_ref_config, fsi_vdofs)
+        raise NotImplementedError("")
 
     def set_fin_solid_state(self, uva1):
-        """
-        Sets the displacement at the end of the time step.
+        raise NotImplementedError("")
 
-        This could be an initial guess in the case of non-linear governing equations, or a solved
-        state so that the non-linear form can be linearized for the given state.
+    def set_ini_fluid_state(self, qp0):
+        raise NotImplementedError("")
 
-        Parameters
-        ----------
-        uva1 : tuple of array_like
-        """
-        self.solid.set_fin_state(uva1)
-
-        fl_control = self.fluid.control.copy()
-
-        fsi_ref_config = self.solid.mesh.coordinates()[self.fsi_verts].reshape(-1)
-        fsi_vdofs = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
-        fl_control = sl_state_to_fl_control(uva1, fl_control, fsi_ref_config, fsi_vdofs)
-        self.fluid.set_control(fl_control)
+    def set_fin_fluid_state(self, qp1):
+        raise NotImplementedError("")
 
     ## Methods for settings parameters of the model
     @property
@@ -185,121 +169,121 @@ class FSIModel(base.Model):
         self.set_iter_params(state0, control0, state1, control1, dt)
 
     ## Solid / fluid interfacing functions
-    def get_fsi_scalar_dofs(self):
-        """
-        Return dofs of the FSI interface on the solid and fluid
+    # def get_fsi_scalar_dofs(self):
+    #     """
+    #     Return dofs of the FSI interface on the solid and fluid
 
-        This is needed to pass information between the two domains using conformal interfaces
-        between them. Currently this is specifically made to work for the 1D fluid, so if you want
-        to do something else, you'll have to think of how to generalized it.
-        """
-        sdof_solid = self.solid.vert_to_sdof[self.fsi_verts]
-        sdof_fluid = np.arange(self.fsi_verts.size)
+    #     This is needed to pass information between the two domains using conformal interfaces
+    #     between them. Currently this is specifically made to work for the 1D fluid, so if you want
+    #     to do something else, you'll have to think of how to generalized it.
+    #     """
+    #     sdof_solid = self.solid.vert_to_sdof[self.fsi_verts]
+    #     sdof_fluid = np.arange(self.fsi_verts.size)
 
-        return sdof_solid, sdof_fluid
+    #     return sdof_solid, sdof_fluid
 
-    def get_fsi_vector_dofs(self):
-        """
-        Return dofs of the FSI interface on the solid and fluid
+    # def get_fsi_vector_dofs(self):
+    #     """
+    #     Return dofs of the FSI interface on the solid and fluid
 
-        This is needed to pass information between the two domains using conformal interfaces
-        between them. Currently this is specifically made to work for the 1D fluid, so if you want
-        to do something else, you'll have to think of how to generalized it.
-        """
-        vdof_solid = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
-        vdof_fluid = np.arange(vdof_solid.size)
+    #     This is needed to pass information between the two domains using conformal interfaces
+    #     between them. Currently this is specifically made to work for the 1D fluid, so if you want
+    #     to do something else, you'll have to think of how to generalized it.
+    #     """
+    #     vdof_solid = self.solid.vert_to_vdof.reshape(-1, 2)[self.fsi_verts].reshape(-1).copy()
+    #     vdof_fluid = np.arange(vdof_solid.size)
 
-        return vdof_solid, vdof_fluid
+    #     return vdof_solid, vdof_fluid
 
     # @staticmethod
-    def _ignore_nonvector(map_fsi_func):
-        """Decorator so that floats are ignored in the map_ functions"""
-        def wrapped_map_fsi_func(self, x):
-            if isinstance(x, (float, int)):
-                return x
-            else:
-                return map_fsi_func(self, x)
+    # def _ignore_nonvector(map_fsi_func):
+    #     """Decorator so that floats are ignored in the map_ functions"""
+    #     def wrapped_map_fsi_func(self, x):
+    #         if isinstance(x, (float, int)):
+    #             return x
+    #         else:
+    #             return map_fsi_func(self, x)
 
-        return wrapped_map_fsi_func
+    #     return wrapped_map_fsi_func
 
-    @_ignore_nonvector
-    def map_fsi_scalar_from_solid_to_fluid(self, solid_scalar):
-        sdof_solid, sdof_fluid = self.get_fsi_scalar_dofs()
+    # @_ignore_nonvector
+    # def map_fsi_scalar_from_solid_to_fluid(self, solid_scalar):
+    #     sdof_solid, sdof_fluid = self.get_fsi_scalar_dofs()
 
-        fluid_scalar = self.fluid.get_surf_scalar()
-        fluid_scalar[sdof_fluid] = solid_scalar[sdof_solid]
-        return fluid_scalar
+    #     fluid_scalar = self.fluid.get_surf_scalar()
+    #     fluid_scalar[sdof_fluid] = solid_scalar[sdof_solid]
+    #     return fluid_scalar
 
-    @_ignore_nonvector
-    def map_fsi_vector_from_solid_to_fluid(self, solid_vector):
-        vdof_solid, vdof_fluid = self.get_fsi_vector_dofs()
+    # @_ignore_nonvector
+    # def map_fsi_vector_from_solid_to_fluid(self, solid_vector):
+    #     vdof_solid, vdof_fluid = self.get_fsi_vector_dofs()
 
-        fluid_vector = self.fluid.control['usurf'].copy()
-        fluid_vector[:] = 0.0
-        fluid_vector[vdof_fluid] = solid_vector[vdof_solid]
-        return fluid_vector
+    #     fluid_vector = self.fluid.control['usurf'].copy()
+    #     fluid_vector[:] = 0.0
+    #     fluid_vector[vdof_fluid] = solid_vector[vdof_solid]
+    #     return fluid_vector
 
-    @_ignore_nonvector
-    def map_fsi_scalar_from_fluid_to_solid(self, fluid_scalar):
-        sdof_solid, sdof_fluid = self.get_fsi_scalar_dofs()
+    # @_ignore_nonvector
+    # def map_fsi_scalar_from_fluid_to_solid(self, fluid_scalar):
+    #     sdof_solid, sdof_fluid = self.get_fsi_scalar_dofs()
 
-        solid_scalar = dfn.Function(self.solid.scalar_fspace).vector()
-        solid_scalar[sdof_solid] = fluid_scalar[sdof_fluid]
-        return solid_scalar
+    #     solid_scalar = dfn.Function(self.solid.scalar_fspace).vector()
+    #     solid_scalar[sdof_solid] = fluid_scalar[sdof_fluid]
+    #     return solid_scalar
 
-    @_ignore_nonvector
-    def map_fsi_vector_from_fluid_to_solid(self, fluid_vector):
-        vdof_solid, vdof_fluid = self.get_fsi_vector_dofs()
+    # @_ignore_nonvector
+    # def map_fsi_vector_from_fluid_to_solid(self, fluid_vector):
+    #     vdof_solid, vdof_fluid = self.get_fsi_vector_dofs()
 
-        solid_vector = dfn.Function(self.solid.vector_fspace).vector()
-        solid_vector[vdof_solid] = fluid_vector[vdof_fluid]
-        return solid_vector
+    #     solid_vector = dfn.Function(self.solid.vector_fspace).vector()
+    #     solid_vector[vdof_solid] = fluid_vector[vdof_fluid]
+    #     return solid_vector
 
     ## Mesh functions
-    def get_ref_config(self):
-        """
-        Returns the current configuration of the body.
+    # def get_ref_config(self):
+    #     """
+    #     Returns the current configuration of the body.
 
-        Coordinates are in vertex order.
+    #     Coordinates are in vertex order.
 
-        Returns
-        -------
-        array_like
-            An array of mesh coordinate point ordered with increasing vertices.
-        """
-        return self.solid.mesh.coordinates()
+    #     Returns
+    #     -------
+    #     array_like
+    #         An array of mesh coordinate point ordered with increasing vertices.
+    #     """
+    #     return self.solid.mesh.coordinates()
 
-    def get_cur_config(self):
-        """
-        Returns the current configuration of the body.
+    # def get_cur_config(self):
+    #     """
+    #     Returns the current configuration of the body.
 
-        Coordinates are in vertex order.
+    #     Coordinates are in vertex order.
 
-        Returns
-        -------
-        array_like
-            An array of mesh coordinate point ordered with increasing vertices.
-        """
-        displacement = self.solid.u0.vector()[self.solid.vert_to_vdof].reshape(-1, 2)
-        return self.solid.mesh.coordinates() + displacement
+    #     Returns
+    #     -------
+    #     array_like
+    #         An array of mesh coordinate point ordered with increasing vertices.
+    #     """
+    #     displacement = self.solid.u0.vector()[self.solid.vert_to_vdof].reshape(-1, 2)
+    #     return self.solid.mesh.coordinates() + displacement
 
     # Fluid 'residuals'
     # These are designed for quasi-steady, Bernoulli fluids where you don't need any iterative
     # methods to solve.
 
     ## Convenience functions
-    def get_triangulation(self, config='ref'):
-        from matplotlib.tri import Triangulation
-        coords = None
-        if config == 'ref':
-            coords = self.get_ref_config()
-        elif config == 'cur':
-            coords = self.get_cur_config()
-        else:
-            raise ValueError(f"`config` must be one of 'ref' or 'cur'.")
+    # def get_triangulation(self, config='ref'):
+    #     from matplotlib.tri import Triangulation
+    #     coords = None
+    #     if config == 'ref':
+    #         coords = self.get_ref_config()
+    #     elif config == 'cur':
+    #         coords = self.get_cur_config()
+    #     else:
+    #         raise ValueError(f"`config` must be one of 'ref' or 'cur' not {config}.")
 
-        cells = self.solid.mesh.cells()
-        return Triangulation(coords[:, 0], coords[:, 1], triangles=cells)
+    #     cells = self.solid.mesh.cells()
+    #     return Triangulation(coords[:, 0], coords[:, 1], triangles=cells)
 
     ## Methods for getting vectors
     def get_state_vec(self):
@@ -346,17 +330,31 @@ class FSIModel(base.Model):
         return self.solid.apply_dres_ddt_adj(x_solid)
 
 class ExplicitFSIModel(FSIModel):
-    ## These setting functions ensure explicit coupling occurs between fluid/solid domains
+    def set_ini_solid_state(self, uva0):
+        """Set the initial solid state"""
+        self.solid.set_ini_state(uva0)
+
+    def set_fin_solid_state(self, uva1):
+        """Set the final solid state and communicate FSI interactions"""
+        self.solid.set_fin_state(uva1)
+
+        # For explicit coupling, the final fluid area corresponds to the final solid deformation
+        self._solid_area[:] = 2*(self.properties['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
+        fl_control = self.fluid.get_control_vec()
+        self.fsimap.map_solid_to_fluid(self._solid_area0, fl_control['area'][:])
+        self.fluid.set_control(fl_control)
+
     def set_ini_fluid_state(self, qp0):
+        """Set the fluid state and communicate FSI interactions"""
         self.fluid.set_ini_state(qp0)
 
-        # Note that setting the initial fluid state sets the final driving pressure
-        # for explicit coupling
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = linalg.BlockVector((p0_solid,), labels=[self.solid.control.keys])
-        self.solid.set_control(control)
+        # For explicit coupling, the final solid pressure corresponds to the initial fluid pressure
+        sl_control = self.solid.control.copy()
+        self.fsimap.map_fluid_to_solid(qp0[1], sl_control['p'])
+        self.solid.set_control(sl_control)
 
     def set_fin_fluid_state(self, qp1):
+        """Set the final fluid state"""
         self.fluid.set_fin_state(qp1)
 
     ## Solver functions
@@ -1069,25 +1067,25 @@ class FSAIModel(FSIModel):
         return -b
 
 
-def sl_state_to_fl_control(sl_state, fl_control, fsi_ref_config, fsi_vdofs):
-    u1_fluid = fsi_ref_config + sl_state['u'][fsi_vdofs]
-    v1_fluid = sl_state['v'][fsi_vdofs]
+# def sl_state_to_fl_control(sl_state, fl_control, fsi_ref_config, fsi_vdofs):
+#     u1_fluid = fsi_ref_config + sl_state['u'][fsi_vdofs]
+#     v1_fluid = sl_state['v'][fsi_vdofs]
 
-    fl_control['usurf'][:] = u1_fluid
-    fl_control['vsurf'][:] = v1_fluid
-    return fl_control
+#     fl_control['usurf'][:] = u1_fluid
+#     fl_control['vsurf'][:] = v1_fluid
+#     return fl_control
 
-def fl_state_to_sl_control(fl_state, sl_control, fsi_sdofs):
-    p_ = np.zeros(sl_control['p'].size())
-    p_[fsi_sdofs] = fl_state['p']
+# def fl_state_to_sl_control(fl_state, sl_control, fsi_sdofs):
+#     p_ = np.zeros(sl_control['p'].size())
+#     p_[fsi_sdofs] = fl_state['p']
 
-    sl_control['p'][:] = p_
-    return sl_control
+#     sl_control['p'][:] = p_
+#     return sl_control
 
-def ac_state_to_fl_control(ac_state, fl_control):
-    fl_control['psup'] = ac_state['pref'][0]
-    return fl_control
+# def ac_state_to_fl_control(ac_state, fl_control):
+#     fl_control['psup'] = ac_state['pref'][0]
+#     return fl_control
 
-def fl_state_to_ac_control(fl_state, ac_control):
-    ac_control['qin'][:] = fl_state['q']
-    return ac_control
+# def fl_state_to_ac_control(fl_state, ac_control):
+#     ac_control['qin'][:] = fl_state['q']
+#     return ac_control
