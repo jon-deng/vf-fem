@@ -101,6 +101,8 @@ class FSIModel(base.Model):
             self.fluid.control[key][:] = value
 
     def set_properties(self, props):
+        self.properties[:] = props
+
         self.solid.set_properties(props[:self.solid.properties.size])
         self.fluid.set_properties(props[self.solid.properties.size:])
 
@@ -224,7 +226,7 @@ class ExplicitFSIModel(FSIModel):
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
         self._solid_area[:] = 2*(self.properties['y_midline'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
-        fl_control = self.fluid.get_control_vec()
+        fl_control = self.fluid.control.copy()
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)
 

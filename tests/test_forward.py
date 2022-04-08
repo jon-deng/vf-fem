@@ -394,7 +394,6 @@ class TestIntegrate(ForwardConfig):
                 model, f, dini_state, [dcontrol], dprops, dtimes)
 
         err = dfin_state - dfin_state_fd
-        breakpoint()
         self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
 
 def proc_time_and_glottal_width(model, f):
