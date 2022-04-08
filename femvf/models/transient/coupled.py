@@ -13,7 +13,7 @@ import dolfin as dfn
 from petsc4py import PETSc
 # import ufl
 
-from . import newmark
+from ..equations.solid import newmark
 from . import base, solid as smd, fluid as fmd, acoustic as amd
 from femvf import meshutils
 from blocktensor import linalg

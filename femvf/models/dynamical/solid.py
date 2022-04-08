@@ -18,8 +18,8 @@ import blocktensor.linalg as bla
 
 from .base import DynamicalSystem
 from ..transient.solid import properties_bvec_from_forms
-from ..transient import solidforms
-from ..transient.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
+from ..equations.solid import solidforms
+from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 
 # pylint: disable=abstract-method
 

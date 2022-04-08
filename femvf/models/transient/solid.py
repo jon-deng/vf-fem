@@ -17,10 +17,10 @@ from femvf.parameters.properties import property_vecs
 from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import base
-from . import newmark
+from ..equations.solid import newmark
 from blocktensor.linalg import BlockVector
 
-from . import solidforms
+from ..equations.solid import solidforms
 
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
