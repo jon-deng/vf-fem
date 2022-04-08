@@ -15,9 +15,9 @@ from petsc4py import PETSc
 
 from . import newmark
 from . import base, solid as smd, fluid as fmd, acoustic as amd
-from .. import meshutils
+from femvf import meshutils
 from blocktensor import linalg
-from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
+from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 class FSIModel(base.Model):
     """

@@ -8,7 +8,7 @@ import dolfin as dfn
 
 from blocktensor import linalg as bla
 from blocktensor import subops as gops
-from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
+from femvf.models.dynamical import solid as slmodel, fluid as flmodel
 from femvf import load
 
 # pylint: disable=redefined-outer-name

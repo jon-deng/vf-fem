@@ -17,9 +17,9 @@ import dolfin as dfn
 import blocktensor.linalg as bla
 
 from .base import DynamicalSystem
-from ..models.solid import properties_bvec_from_forms
-from ..models import solidforms
-from ..models.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
+from ..transient.solid import properties_bvec_from_forms
+from ..transient import solidforms
+from ..transient.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 
 # pylint: disable=abstract-method
 

@@ -15,8 +15,8 @@ import dolfin as dfn
 from petsc4py import PETSc
 
 from . import base
-from ..parameters.properties import property_vecs
-from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+from femvf.parameters.properties import property_vecs
+from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 from blocktensor.linalg import BlockVector
 
 ## 1D Bernoulli approximation codes

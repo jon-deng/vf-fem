@@ -12,9 +12,9 @@ import dolfin as dfn
 import ufl
 import warnings as wrn
 
-from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
-from ..parameters.properties import property_vecs
-from ..constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
+from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
+from femvf.parameters.properties import property_vecs
+from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import base
 from . import newmark
