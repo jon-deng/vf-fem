@@ -18,6 +18,7 @@ from ..fsi import FSIMap
 from . import base, solid as smd, fluid as fmd, acoustic as amd
 from femvf import meshutils
 from blocktensor import linalg
+from blocktensor import vec as bvec
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 class FSIModel(base.Model):
@@ -49,18 +50,18 @@ class FSIModel(base.Model):
         self.state1 = linalg.concatenate_vec([self.solid.state1, self.fluid.state1])
 
         # The control is just the subglottal and supraglottal pressures
-        self.control = self.fluid.control[2:].copy()
-        self.properties = linalg.concatenate_vec([self.solid.properties, self.fluid.properties])
+        self.control = self.fluid.control[1:].copy()
+
+        _self_properties = bvec.BlockVector((np.array([1.0]),), (1,), (('y_midline',),))
+        self.properties = linalg.concatenate_vec([self.solid.properties, self.fluid.properties, _self_properties])
 
         ## FSI related stuff
         self._solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         # self._dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
 
         self.fsimap = FSIMap(
-            self.fluid.state['p'].size, self.solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs
+            self.fluid.state1['p'].size, self._solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs
             )
-        # self.fsi_verts = fsi_verts
-        # self.fsi_coordinates = self.solid.mesh.coordinates()[fsi_verts]
 
     ## These have to be defined to exchange data between fluid/solid domains
     def set_ini_solid_state(self, uva0):
@@ -295,7 +296,7 @@ class FSIModel(base.Model):
         return ret
 
     def get_properties_vec(self):
-        return linalg.concatenate_vec([self.solid.get_properties_vec(), self.fluid.get_properties_vec()])
+        return self.properties.copy()
 
     ## Residual functions
     # The below residual function definitions are common to both explicit and implicit FSI models
@@ -339,9 +340,9 @@ class ExplicitFSIModel(FSIModel):
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.properties['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
+        self._solid_area[:] = 2*(self.properties['y_midline'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
         fl_control = self.fluid.get_control_vec()
-        self.fsimap.map_solid_to_fluid(self._solid_area0, fl_control['area'][:])
+        self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)
 
     def set_ini_fluid_state(self, qp0):

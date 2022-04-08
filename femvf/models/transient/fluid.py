@@ -39,17 +39,17 @@ class QuasiSteady1DFluid(base.Model):
 
         p0 = np.zeros(NVERT)
         q0 = np.zeros((1,))
-        self.state0 = BlockVector((q0, p0), labels=[('q', 'p')])
+        self.state0 = BlockVector((q0, p0), labels=(('q', 'p'),))
 
         p1 = np.zeros(NVERT)
         q1 = np.zeros(1)
-        self.state1 = BlockVector((q1, p1), labels=[('q', 'p')])
+        self.state1 = BlockVector((q1, p1), labels=(('q', 'p'),))
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
         area = np.ones(NVERT)
         psub, psup = np.zeros(1), np.zeros(1)
-        self.control = BlockVector((area, psub, psup), ('area', 'psub', 'psup'))
+        self.control = BlockVector((area, psub, psup), labels=(('area', 'psub', 'psup'),))
 
         self.properties = self.get_properties_vec(set_default=True)
 
@@ -97,8 +97,7 @@ class QuasiSteady1DFluid(base.Model):
         """
         Return empty flow speed and pressure state vectors
         """
-        q, p = np.zeros((1,)), np.zeros(self.x_vertices.size)
-        return BlockVector((q, p), labels=[('q', 'p')])
+        return self.state1.copy()
 
     def get_properties_vec(self, set_default=True):
         """
@@ -290,7 +289,7 @@ def fluid_pressure(s, area, psub, psup, fluid_props):
 
     sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(s, ssep, alpha=fluid_props['zeta_sep'])
     p = sepmult * pbern + (1-sepmult)*psep
-    q = flow_sign*qsqr**0.5 *fluid_props['vf_length']
+    q = flow_sign*qsqr**0.5
 
     # These are not really used anywhere, mainly output for debugging purposes
     idx_min = np.argmax(s>smin)
@@ -305,7 +304,7 @@ def fluid_pressure(s, area, psub, psup, fluid_props):
             'a_sep': asep,
             'area': asafe,
             'pressure': p}
-    return BlockVector((np.array(q), p), ('q', 'p')), info
+    return BlockVector((np.array([q]), p), labels=(('q', 'p'),)), info
 
 def flow_sensitivity(s, area, psub, psup, fluid_props):
     """
@@ -378,8 +377,8 @@ def flow_sensitivity(s, area, psub, psup, fluid_props):
 
     # q = flow_sign*qsqr**0.5
     dq_da = 0.5*flow_sign*qsqr**-0.5 * dqsqr_da
-    dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref*fluid_props['vf_length']
-    dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep*fluid_props['vf_length']
+    dq_dpref = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpref
+    dq_dpsep = 0.5*flow_sign*qsqr**-0.5 * dqsqr_dpsep
 
     dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = None, None, None, None
     if flow_sign >= 0:
