@@ -949,27 +949,3 @@ class FSAIModel(FSIModel):
 
         b['psub'][:] = np.dot(x['p'], dp_dpsub) + np.dot(x['q'][0], dq_dpsub)
         return -b
-
-
-# def sl_state_to_fl_control(sl_state, fl_control, fsi_ref_config, fsi_vdofs):
-#     u1_fluid = fsi_ref_config + sl_state['u'][fsi_vdofs]
-#     v1_fluid = sl_state['v'][fsi_vdofs]
-
-#     fl_control['usurf'][:] = u1_fluid
-#     fl_control['vsurf'][:] = v1_fluid
-#     return fl_control
-
-# def fl_state_to_sl_control(fl_state, sl_control, fsi_sdofs):
-#     p_ = np.zeros(sl_control['p'].size())
-#     p_[fsi_sdofs] = fl_state['p']
-
-#     sl_control['p'][:] = p_
-#     return sl_control
-
-# def ac_state_to_fl_control(ac_state, fl_control):
-#     fl_control['psup'] = ac_state['pref'][0]
-#     return fl_control
-
-# def fl_state_to_ac_control(fl_state, ac_control):
-#     ac_control['qin'][:] = fl_state['q']
-#     return ac_control
