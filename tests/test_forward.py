@@ -16,10 +16,10 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.models import solid as smd, fluid as fmd, acoustic as amd
+from femvf.models.transient import solid as smd, fluid as fmd, acoustic as amd
 from femvf.load import load_fsi_model, load_fsai_model
 import femvf.signals.solid as solidfunc
-from femvf import callbacks
+# from femvf import callbacks
 from femvf import linalg
 
 class ForwardConfig(unittest.TestCase):
