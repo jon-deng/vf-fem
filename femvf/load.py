@@ -14,7 +14,8 @@ from .models.dynamical import solid as dynsolidmodel, fluid as dynfluidmodel, co
 # from .dynamicalmodels.coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
 
 def load_solid_model(solid_mesh, SolidType,
-    pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',)):
+    pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
+    ):
     # Process the mesh file(s)
     mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
     if isinstance(solid_mesh, str):
@@ -35,8 +36,10 @@ def load_solid_model(solid_mesh, SolidType,
                       pressure_facet_labels, fixed_facet_labels)
     return solid
 
-def load_transient_fsi_model(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
-                   fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
+def load_transient_fsi_model(
+    solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
+    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'
+    ):
     """
     Factory function that loads a model based on input solid/fluid meshes.
 
@@ -48,13 +51,20 @@ def load_transient_fsi_model(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, 
     solid_mesh : dolfin.Mesh
     fluid_mesh : None or (future proofing for other fluid types)
     """
-    solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh,
-        SolidType=SolidType, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
+    solid, fluid, fsi_verts = process_fsi(
+        solid_mesh, fluid_mesh,
+        SolidType=SolidType, FluidType=FluidType,
+        fsi_facet_labels=fsi_facet_labels,
+        fixed_facet_labels=fixed_facet_labels
+        )
+
+    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
+    dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     if coupling == 'explicit':
-        model = ExplicitFSIModel(solid, fluid, fsi_verts)
+        model = ExplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
     elif coupling == 'implicit':
-        model = ImplicitFSIModel(solid, fluid, fsi_verts)
+        model = ImplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
     return model
 
@@ -73,20 +83,31 @@ def load_dynamical_fsi_model(
     solid_mesh : dolfin.Mesh
     fluid_mesh : None or (future proofing for other fluid types)
     """
-    solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh,
-        SolidType=SolidType, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
+    solid, fluid, fsi_verts = process_fsi(
+        solid_mesh, fluid_mesh,
+        SolidType=SolidType, FluidType=FluidType,
+        fsi_facet_labels=fsi_facet_labels,
+        fixed_facet_labels=fixed_facet_labels
+        )
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     return dynfsimodel.FSIDynamicalSystem(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
-def load_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
+def load_transient_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
                     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
-    solid, fluid, fsi_verts = process_fsi(solid_mesh, fluid_mesh,
-        SolidType=SolidType, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels, fixed_facet_labels=fixed_facet_labels)
+    solid, fluid, fsi_verts = process_fsi(
+        solid_mesh, fluid_mesh,
+        SolidType=SolidType, FluidType=FluidType,
+        fsi_facet_labels=fsi_facet_labels,
+        fixed_facet_labels=fixed_facet_labels
+        )
 
-    return FSAIModel(solid, fluid, acoustic, fsi_verts)
+    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
+    dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
+
+    return FSAIModel(solid, fluid, acoustic, dofs_fsi_solid, dofs_fsi_fluid)
 
 def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
                 fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
