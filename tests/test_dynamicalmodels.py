@@ -1,162 +1,302 @@
 """
-This modules contains tests for dynamical models 
+This module contains tests for dynamical models
 """
 
 from os import path
-# from functools import partial
-import warnings
 import numpy as np
 import dolfin as dfn
 
 from blocktensor import linalg as bla
 from blocktensor import subops as gops
-# from femvf import dynamicalmodels as dynmod
 from femvf.dynamicalmodels import solid as slmodel, fluid as flmodel
 from femvf import load
 
+# pylint: disable=redefined-outer-name
+
 # warnings.filterwarnings('error', 'RuntimeWarning')
-np.seterr(invalid='raise')
+# np.seterr(invalid='raise')
 
-### Configuration ###
-## Loading the model to test
-mesh_name = 'M5-3layers'
-mesh_name = 'BC-dcov5.00e-02-cl1.00'
-mesh_path = path.join('../meshes', mesh_name+'.xml')
+def _set_dirichlet_bvec(dirichlet_bc, bvec):
+    for label in ['u', 'v']:
+        if label in bvec:
+            dirichlet_bc.apply(dfn.PETScVector(bvec[label]))
+    return bvec
 
-solid_mesh = mesh_path
-fluid_mesh = None
+def setup_models():
+    """
+    Setup the dynamical model objects
+    """
+    mesh_name = 'M5-3layers'
+    mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    mesh_path = path.join('../meshes', mesh_name+'.xml')
 
-SolidType = slmodel.KelvinVoigt
-FluidType = flmodel.Bernoulli1DDynamicalSystem
-# SolidType = slmodel.LinearStateKelvinVoigt
-# FluidType = flmodel.LinearStateBernoulli1DDynamicalSystem
-# SolidType = slmodel.LinearStatetKelvinVoigt
-# FluidType = flmodel.LinearStatetBernoulli1DDynamicalSystem
-model_coupled = load.load_dynamical_fsi_model(
-    solid_mesh, fluid_mesh, SolidType, FluidType, 
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+    solid_mesh = mesh_path
+    fluid_mesh = None
 
-model_solid = model_coupled.solid
-model_fluid = model_coupled.fluid
-# model = model_solid
-# model = model_fluid
-model = model_coupled
+    SolidType = slmodel.KelvinVoigt
+    FluidType = flmodel.Bernoulli1DDynamicalSystem
+    model_coupled = load.load_dynamical_fsi_model(
+        solid_mesh, fluid_mesh, SolidType, FluidType,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-## Set the model properties/parameters
-props = model_coupled.properties.copy()
-props['emod'].array[:] = 5e3*10
-props['rho'].array[:] = 1.0
-# props['psub'][:] = 800*10
-# props['psup'][:] = 0.0
-props['ycontact'][:] = np.max(model_solid.XREF.vector()[1::2]) + 1 # 1 cm above the maximum y extent
-model_coupled.ymid = props['ycontact'][0]
-model_coupled.set_properties(props)
+    SolidType = slmodel.LinearizedKelvinVoigt
+    FluidType = flmodel.LinearizedBernoulli1DDynamicalSystem
+    model_coupled_linear = load.load_dynamical_fsi_model(
+        solid_mesh, fluid_mesh, SolidType, FluidType,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-## Set the linearization point and linearization directions to test along
-# state
-state0 = model.state.copy()
-dstate = state0.copy()
-if 'u' in dstate and 'v' in dstate:
-    dxu = model_solid.state['u'].copy()
-    dxu[:] = 1e-3*np.arange(dxu[:].size)
-    dxu[:] = 1e-7
-    # dxu[:] = 0
-    model_solid.forms['bc.dirichlet'].apply(dxu)
-    gops.set_vec(dstate['u'], dxu)
+    return model_coupled, model_coupled_linear
 
-    dxv = model_solid.state['v'].copy()
-    dxv[:] = 0.0
-    model_solid.forms['bc.dirichlet'].apply(dxv)
-    gops.set_vec(dstate['v'], dxv)
-# if 'q' in dstate:
-#     gops.set_vec(dstate['q'], 1e-3)
-#     # gops.set_vec(dstate['q'], 0.0)
-# if 'p' in dstate:
-#     gops.set_vec(dstate['p'], 1e-3)
-#     # gops.set_vec(dstate['p'], 0.0)
+def setup_parameter_base(model):
+    ## Set model properties/control/linearization directions
+    model_solid = model.solid
 
-statet0 = state0.copy()
-dstatet = dstate.copy()
+    # (linearization directions for linearized residuals)
+    props0 = model.properties.copy()
+    props0['emod'].array[:] = 5e3*10
+    props0['rho'].array[:] = 1.0
 
-if hasattr(model, 'control'):
+    ymax = np.max(model_solid.XREF.vector()[1::2])
+    ygap = 0.01 # gap between VF and symmetry plane
+    ymid = ymax + ygap
+    ycontact = ymid - 0.1*ygap
+    props0['ycontact'][:] = ycontact
+
+    for _model in [model, model_linear]:
+        _model.ymid = ymid
+
+    props0['zeta_sep'][0] = 1e-4
+    props0['zeta_min'][0] = 1e-4
+    props0['rho_air'][0] = 1.2e-3
+    model.set_properties(props0)
+
     control0 = model.control.copy()
-    dcontrol = control0.copy()
+    control0.set(1.0)
     if 'psub' in control0:
         control0['psub'][:] = 800*10
     if 'psup' in control0:
         control0['psup'][:] = 0
-    dcontrol.set(1e-5)
-model.set_control(control0)
+    model.set_control(control0)
 
-props0 = model.properties.copy()
-dprops = props0.copy()
-dprops.set(1e-4)
+    del_state = model.state.copy()
+    del_state.set(0.0)
+    del_state['u'] = 1.0
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_state)
+    model.set_dstate(del_state)
 
-def gen_res(x, set_x, assem_resx):
+    del_statet = model.state.copy()
+    del_statet.set(1.0e4)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_statet)
+    model.set_dstatet(del_statet)
+
+    state0 = model.state.copy()
+
+    statet0 = state0.copy()
+
+    return state0, statet0, control0, props0, del_state, del_statet
+
+def setup_parameter_perturbation(model):
+    model_solid = model.solid
+
+    dstate = model.state.copy()
+    if 'u' in dstate and 'v' in dstate:
+        dxu = model_solid.state['u'].copy()
+        dxu[:] = 1e-3*np.arange(dxu[:].size)
+        dxu[:] = 1e-8
+        # dxu[:] = 0
+        # model_solid.forms['bc.dirichlet'].apply(dxu)
+        gops.set_vec(dstate['u'], dxu)
+
+        dxv = model_solid.state['v'].copy()
+        dxv[:] = 1e-8
+        # model_solid.forms['bc.dirichlet'].apply(dxv)
+        gops.set_vec(dstate['v'], dxv)
+    if 'q' in dstate:
+        gops.set_vec(dstate['q'], 1e-3)
+        # gops.set_vec(dstate['q'], 0.0)
+    if 'p' in dstate:
+        gops.set_vec(dstate['p'], 1e-3)
+        # gops.set_vec(dstate['p'], 0.0)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
+
+    dstatet = dstate.copy()
+    dstatet.set(1e-6)
+    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
+
+    props0 = model.properties.copy()
+    dprops = props0.copy()
+    dprops.set(1e-4)
+
+    dcontrol = model.control.copy()
+    dcontrol.set(1e0)
+    return dstate, dstatet, dcontrol, dprops
+
+
+def _reset_parameter_base(model, state0, statet0, control0, props0, del_state, del_statet):
+    model.set_state(state0)
+    model.set_statet(statet0)
+    model.set_control(control0)
+    model.set_properties(props0)
+    model.set_dstate(del_state)
+    model.set_dstatet(del_statet)
+
+def _reset_parameter_perturbation(model):
+    model.set_state(state0)
+    model.set_statet(statet0)
+    model.set_control(control0)
+    model.set_properties(props0)
+    model.set_dstate(del_state)
+    model.set_dstatet(del_statet)
+
+def _set_and_assemble(x, set_x, assem):
     set_x(x)
-    return assem_resx()
+    return assem()
 
-def gen_jac(x, set_x, assem_jacx):
-    set_x(x)
-    return assem_jacx()
+def _test_taylor(x0, dx, res, jac):
+    """
+    Test that the Taylor convergence order is 2
+    """
+    alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
+    res_ns = [res(x0+alpha*dx) for alpha in alphas]
+    res_0 = res(x0)
 
-def test_assem_dres_dstate():
-    res = lambda state: gen_res(state, model.set_state, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_state, model.assem_dres_dstate)
-
-    x0 = state0
-    dx = dstate
-    x1 = x0 + dx
-    # model.set_state(x1)
-
-    dres_exact = res(x1) - res(x0)
+    dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
-    print([subvec.norm() for subvec in dres_linear])
-    print(dres_linear.norm(), dres_exact.norm())
 
-def test_assem_dres_dstatet():
-    res = lambda state: gen_res(state, model.set_statet, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_statet, model.assem_dres_dstatet)
+    errs = [
+        (dres_exact-alpha*dres_linear).norm()
+        for dres_exact, alpha in zip(dres_exacts, alphas)
+    ]
+    magnitudes = [
+        1/2*(dres_exact+alpha*dres_linear).norm()
+        for dres_exact, alpha in zip(dres_exacts, alphas)
+    ]
+    with np.errstate(invalid='ignore'):
+        conv_rates = [
+            np.log(err_0/err_1)/np.log(alpha_0/alpha_1)
+            for err_0, err_1, alpha_0, alpha_1
+            in zip(errs[:-1], errs[1:], alphas[:-1], alphas[1:])]
+        rel_errs = np.array(errs)/np.array(magnitudes)*100
 
-    x0 = statet0
-    dx = 1e-5*dstatet
-    x1 = x0 + dx
+    print("")
+    print(f"||dres_linear||, ||dres_exact|| = {dres_linear.norm()}, {dres_exacts[-1].norm()}")
+    print("Relative errors: ", rel_errs)
+    print("Convergence rates: ", np.array(conv_rates))
 
-    dres_exact = res(x1) - res(x0)
-    dres_linear = bla.mult_mat_vec(jac(x0), dx)
-    print(dres_linear.norm(), dres_exact.norm())
+def test_assem_dres_dstate(model, x0, dx):
+    """Test dF/dx is correct"""
+    res = lambda state: _set_and_assemble(state, model.set_state, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_state, model.assem_dres_dstate)
 
-def test_assem_dres_dcontrol():
+    _test_taylor(x0, dx, res, jac)
+
+def test_assem_dres_dstatet(model, x0, dx):
+    """Test dF/dxt is correct"""
+    res = lambda state: _set_and_assemble(state, model.set_statet, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_statet, model.assem_dres_dstatet)
+
+    _test_taylor(x0, dx, res, jac)
+
+def test_assem_dres_dcontrol(model, x0, dx):
+    """Test dF/dg is correct"""
     # model_fluid.control['psub'][:] = 1
     # model_fluid.control['psup'][:] = 0
-    res = lambda state: gen_res(state, model.set_control, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_control, model.assem_dres_dcontrol)
+    res = lambda state: _set_and_assemble(state, model.set_control, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_control, model.assem_dres_dcontrol)
 
-    x0 = control0
-    dx = dcontrol
-    x1 = x0 + dx
+    _test_taylor(x0, dx, res, jac)
 
-    dres_exact = res(x1) - res(x0)
-    dres_linear = bla.mult_mat_vec(jac(x0), dx)
-    # breakpoint()
-    print(dres_linear.norm(), dres_exact.norm())
+def test_assem_dres_dprops(model, x0, dx):
+    """Test dF/dprops is correct"""
+    res = lambda state: _set_and_assemble(state, model.set_properties, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_properties, model.assem_dres_dprops)
 
-def test_assem_dres_dprops():
-    res = lambda state: gen_res(state, model.set_properties, model.assem_res)
-    jac = lambda state: gen_jac(state, model.set_properties, model.assem_dres_dprops)
+    _test_taylor(x0, dx, res, jac)
 
-    x0 = props0
-    dx = dprops
-    x1 = x0 + dx
+def test_dres_dstate_vs_dres_state(model, model_linear, x0, del_x):
+    """
+    Test consistency between `model` and `model_linear_state`
 
-    dres_exact = res(x1) - res(x0)
-    dres_linear = bla.mult_mat_vec(jac(x0), dx)
-    print(dres_exact)
-    print(dres_linear.norm(), dres_exact.norm())
+    `model` represents a residual F(...)
+    `model_linear_state` represents the linearized residual (dF/dstate * del_state)(...)
+    This test checks that:
+        dF/dstate(...) * del_state    (computed from `model`)
+        is equal to
+        (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
+    """
+    # compute the linearized residual from `model`
+    dres_dstate = _set_and_assemble(x0, model.set_state, model.assem_dres_dstate)
+    dres_state_a = bla.mult_mat_vec(dres_dstate, del_x)
+
+    model_linear.set_dstate(del_x)
+    _zero_del_xt = model_linear.dstatet.copy()
+    _zero_del_xt.set(0)
+    model_linear.set_dstatet(_zero_del_xt)
+
+    dres_state_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
+    err = dres_state_a - dres_state_b
+
+    for vec, name in zip([dres_state_a, dres_state_b, err], ["from model", "from linear_state_model", "error"]):
+        print(f"\n{name}")
+        for key, subvec in vec.items():
+            print(key, subvec.norm())
+    breakpoint()
+
+def test_dres_dstatet_vs_dres_statet(model, model_linear, x0, del_xt):
+    """
+    Test consistency between `model` and `model_linear_state`
+
+    `model` represents a residual F(...)
+    `model_linear_state` represents the linearized residual (dF/dstate * del_state)(...)
+    This test checks that:
+        dF/dstate(...) * del_state    (computed from `model`)
+        is equal to
+        (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
+    """
+    # compute the linearized residual from `model`
+    dres_dstatet = _set_and_assemble(x0, model.set_state, model.assem_dres_dstatet)
+    dres_statet_a = bla.mult_mat_vec(dres_dstatet, del_xt)
+
+    model_linear.set_dstatet(del_xt)
+    _zero_del_x = model_linear.dstate.copy()
+    _zero_del_x.set(0)
+    model_linear.set_dstate(_zero_del_x)
+
+    dres_statet_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
+    err = dres_statet_a - dres_statet_b
+
+    for vec, name in zip([dres_statet_a, dres_statet_b, err], ["from model", "from linear_state_model", "error"]):
+        print(f"\n{name}")
+        for key, subvec in vec.items():
+            print(key, subvec.norm())
+    breakpoint()
 
 if __name__ == '__main__':
+    model, model_linear = setup_models()
+    for _model in [model, model_linear]:
+        state0, statet0, control0, props0, del_state, del_statet = setup_parameter_base(_model)
+        base_parameters = (state0, statet0, control0, props0, del_state, del_statet)
+        _reset_parameter_base(_model, *base_parameters)
+
+        dstate, dstatet, dcontrol, dprops = setup_parameter_perturbation(_model)
+
     # breakpoint()
-    test_assem_dres_dstate()
-    test_assem_dres_dstatet()
-    if hasattr(model, 'control'):
-        test_assem_dres_dcontrol()
+    for model_name, _model in zip(["Residual", "Linearized residual"], [model, model_linear]):
+        print(model_name)
+        print("-- Test dres/dstate --")
+        # _reset_parameter_base(_model, *base_parameters)
+        test_assem_dres_dstate(_model, state0, dstate)
+
+        print("\n-- Test dres/dstatet --")
+        # _reset_parameter_base(_model, *base_parameters)
+        test_assem_dres_dstatet(_model, statet0, dstatet)
+
+        print("\n-- Test dres/dcontrol --")
+        # _reset_parameter_base(_model, *base_parameters)
+        test_assem_dres_dcontrol(_model, control0, dcontrol)
+
+    print("\n-- Test dres/dstate vs dres_state --")
+    test_dres_dstate_vs_dres_state(model, model_linear, state0, del_state)
+
+    print("\n-- Test dres/dstatet vs dres_statet --")
+    test_dres_dstatet_vs_dres_statet(model, model_linear, state0, del_statet)

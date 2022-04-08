@@ -4,8 +4,8 @@ Generic model definition
 
 import numpy as np
 
-from blocktensor.vec import BlockVec
-   
+from blocktensor.vec import BlockVector
+
 class Model:
     """
     This object represents the equations defining a system over one time step.
@@ -30,7 +30,7 @@ class Model:
 
     def get_properties_vec(self, set_default=True):
         """
-        Return a BlockVec representing the properties of the fluid
+        Return a BlockVector representing the properties of the fluid
         """
         raise NotImplementedError("")
 
@@ -45,7 +45,7 @@ class Model:
         Return the (nonlinear) residual for the current time step
         """
         raise NotImplementedError
-    
+
     def solve_state1(self, state1):
         """
         Solve for the final state such that the residual = 0
@@ -57,7 +57,7 @@ class Model:
         Solve dF/du1 x = b
         """
         raise NotImplementedError
-        
+
     def solve_dres_dstate1_adj(self, x):
         """
         Solve dF/du1^T b = x
@@ -75,7 +75,7 @@ class Model:
 
     def apply_dres_dcontrol_adj(self, x):
         raise NotImplementedError
-    
+
     def apply_dres_dp(self, x):
         raise NotImplementedError
 
@@ -87,4 +87,3 @@ class Model:
 
     def apply_dres_ddt_adj(self, b):
         raise NotImplementedError
-    

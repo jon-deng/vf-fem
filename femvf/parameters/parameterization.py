@@ -6,7 +6,7 @@ import math
 
 from collections import OrderedDict
 
-from blocktensor.linalg import BlockVec
+from blocktensor.linalg import BlockVector
 from . import properties as props
 from .. import constants, linalg
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -23,7 +23,7 @@ class Parameterization:
     forward model.
 
     Each parameterization has `convert` and `dconvert` methods tha perform the mapping and
-    calculate it's sensitivity. `convert` transforms the parameterization to a standard 
+    calculate it's sensitivity. `convert` transforms the parameterization to a standard
     parameterization for the forward model and `dconvert` transforms
     gradients wrt. standard parameters, to gradients wrt. the parameterization.
 
@@ -110,9 +110,9 @@ class Parameterization:
         -------
         uva : tuple
             Initial state
-        solid_props : BlockVec
+        solid_props : BlockVector
             A collection of solid properties
-        fluid_props : BlockVec
+        fluid_props : BlockVector
             A collection of fluid properties
         timing_props :
         """
@@ -143,7 +143,7 @@ class FullParameterization(Parameterization):
         ini_state = model.get_state_vec()
         control = model.get_control_vec()
         props = model.get_properties_vec()
-        times = linalg.BlockVec((np.zeros(ntime),), ('times',))
+        times = linalg.BlockVector((np.zeros(ntime),), labels=[('times',)])
         self._bvector = linalg.concatenate_vec([ini_state, control, props, times]) #join_standard_to_bvector(ini_state, control, props, times)
 
     def convert(self):
@@ -168,10 +168,10 @@ class SubsetParameterization(Parameterization):
         ini_state = model.get_state_vec()
         control = model.get_control_vec()
         props = model.get_properties_vec()
-        times = linalg.BlockVec((np.zeros(ntime),), ('times',))
+        times = linalg.BlockVector((np.zeros(ntime),), labels=[('times',)])
         self._bvector = join_standard_to_bvector(ini_state, control, props, times)
         self.subset_keys = subset_keys
-    
+
     def copy(self):
         """
         Return a copy of parameterization
@@ -189,11 +189,11 @@ class SubsetParameterization(Parameterization):
     def bvector(self):
         keys = self.subset_keys
         vecs = [self.full_bvector[key] for key in keys]
-        return linalg.BlockVec(vecs, keys)
+        return linalg.BlockVector(vecs, labels=[keys])
 
     def convert(self):
         model = self.model
-        
+
         ini_state, control, props, times = split_bvector_to_standard(model, self.full_bvector)
 
         return ini_state, [control], props, times
@@ -202,7 +202,7 @@ class SubsetParameterization(Parameterization):
         full_grad = join_standard_to_bvector(grad_state, grad_controls[0], grad_props, grad_times)
         keys = self.subset_keys
         vecs = [full_grad[key] for key in keys]
-        return linalg.BlockVec(vecs, keys)
+        return linalg.BlockVector(vecs, labels=[keys])
 
 class NodalElasticModuli(Parameterization):
     """
@@ -210,13 +210,13 @@ class NodalElasticModuli(Parameterization):
     """
     def __init__(self, model, *constants):
         super().__init__(model, *constants)
-        
+
         self._bvector = self.init_vector()
 
     def init_vector(self):
         vecs = [self.model.properties['emod'].copy()]
         labels = ['emod']
-        return linalg.BlockVec(vecs, labels)
+        return linalg.BlockVector(vecs, labels=[labels])
 
     def convert(self):
         ini_state = self.model.get_state_vec()
@@ -250,11 +250,11 @@ class ElasticModuliAndInitialState(Parameterization):
     def init_vector(self):
         vecs = [self.model.state0.copy(), self.model.properties['emod'].copy()]
         labels = [*self.model.state0.keys, 'emod']
-        return linalg.BlockVec(vecs, labels)
+        return linalg.BlockVector(vecs, labels=[labels])
 
     def convert(self):
         ini_state = self.model.get_state_vec()
-        ini_state[:] = self.bvector[:-1] 
+        ini_state[:] = self.bvector[:-1]
 
         controls = [self.model.control.copy()]
         props = self.model.properties.copy()
@@ -293,7 +293,7 @@ def join_standard_to_bvector(state, control, props, times):
     vecs = [*state.vecs, *control.vecs, *props.vecs, *times.vecs]
 
     # breakpoint()
-    return linalg.BlockVec(vecs, labels)
+    return linalg.BlockVector(vecs, labels=[labels])
 
 ## These need to be fixed since they use an old version of the code
 class KelvinVoigtNodalConstants(Parameterization):

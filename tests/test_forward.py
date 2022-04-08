@@ -82,7 +82,7 @@ class ForwardConfig(unittest.TestCase):
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
-        
+
         return model, ini_state, controls, props
 
     def config_fsi_rayleigh_model(self):
@@ -133,9 +133,9 @@ class ForwardConfig(unittest.TestCase):
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
-        
+
         return model, ini_state, controls, props
-    
+
     def config_fsi_model(self):
         return self.config_fsi_kelvinvoigt_model()
 
@@ -190,7 +190,7 @@ class ForwardConfig(unittest.TestCase):
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
-        
+
         return model, ini_state, controls, props
 
     def config_approx3D_model(self):
@@ -238,7 +238,7 @@ class ForwardConfig(unittest.TestCase):
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
-        
+
         return model, ini_state, controls, props
 
     def config_variable_controls(self):
@@ -249,7 +249,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_approx3D(self):
         model, ini_state, controls, props = self.config_approx3D_model()
 
-        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         save_path = 'out/test_forward_fsi_2.5D.h5'
         if os.path.isfile(save_path):
@@ -257,11 +257,11 @@ class TestIntegrate(ForwardConfig):
 
         self._integrate(model, ini_state, controls, props, times, save_path)
         self._test_plot_glottal_width(model, save_path)
-    
+
     def test_integrate_fsi_rayleigh(self):
         model, ini_state, controls, props = self.config_fsi_rayleigh_model()
 
-        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         save_path = 'out/test_forward_fsi_rayleigh.h5'
         if os.path.isfile(save_path):
@@ -273,7 +273,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_fsi_kelvinvoigt(self):
         model, ini_state, controls, props = self.config_fsi_kelvinvoigt_model()
 
-        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         save_path = 'out/test_forward_fsi_kelvinvoigt.h5'
         if os.path.isfile(save_path):
@@ -284,7 +284,7 @@ class TestIntegrate(ForwardConfig):
 
     def test_integrate_fsai(self):
         model, ini_state, controls, props = self.config_fsai_model()
-        times = linalg.BlockVec((np.linspace(0, 0.01, 100),), ('times',))
+        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
@@ -301,7 +301,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_variable_controls(self):
         model, ini_state, _controls, props = self.config_variable_controls()
         _times = np.linspace(0, 0.01, 100)
-        times = linalg.BlockVec([_times], ['times'])
+        times = linalg.BlockVector([_times], labels=[['times']])
 
         tau = 0.0005
         controls = [(1-np.exp(-t/tau))*_controls[0] for t in _times[:30]]
@@ -342,7 +342,7 @@ class TestIntegrate(ForwardConfig):
     def _test_variable_controls(self, model, save_path, input_controls):
         ## Plot the resulting glottal width
         with sf.StateFile(model, save_path, mode='r') as f:
-            
+
             for ii in range(len(input_controls)):
                 assert input_controls[ii] == f.get_control(ii)
 
@@ -357,15 +357,15 @@ class TestIntegrate(ForwardConfig):
         NTIME = 50
         model, ini_state, controls, props = self.config_fsi_model()
         control = controls[0]
-        times = linalg.BlockVec((np.linspace(0, 0.01, NTIME),), ('times',))
+        times = linalg.BlockVector((np.linspace(0, 0.01, NTIME),), labels=[('times',)])
 
         ## Specify the test change in model parameters
         dini_state = model.get_state_vec()
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
         dprops.set(0.0)
-        # dtimes = linalg.BlockVec([np.linspace(0, 1e-6, NTIME)], ['times'])
-        dtimes = linalg.BlockVec([np.linspace(0.0, 0.0, NTIME)], ['times'])
+        # dtimes = linalg.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
+        dtimes = linalg.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
         dtimes['times'][-1] = 1e-10
         dini_state.set(0.0)
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
@@ -391,7 +391,7 @@ class TestIntegrate(ForwardConfig):
         dfin_state_fd = None
         with sf.StateFile(model, h5file1, mode='r') as f1, sf.StateFile(model, h5file2, mode='r') as f2:
             dfin_state_fd = f2.get_state(f2.size-1) - f1.get_state(f1.size-1)
-        
+
         ## Integrate the linearized model
         dfin_state = None
         with sf.StateFile(model, h5file1, mode='r') as f:
@@ -408,7 +408,7 @@ def proc_time_and_glottal_width(model, f):
 
     glottal_width_sharp = solidfunc.make_sig_glottal_width_sharp(model)
     y = glottal_width_sharp(f)
-        
+
     return t, np.array(y)
 
 

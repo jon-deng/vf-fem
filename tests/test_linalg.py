@@ -107,13 +107,13 @@ class TestBlockVec(unittest.TestCase):
 
     def test_init(self):
         try:
-            a = linalg.BlockVec(self.a_vecs, self.labels)
+            a = linalg.BlockVector(self.a_vecs, self.labels)
             print(a.size)
         except:
             assert False
 
     def test_basic(self):
-        a = linalg.BlockVec(self.a_vecs, self.labels)
+        a = linalg.BlockVector(self.a_vecs, self.labels)
         assert a.keys == self.labels
         assert np.all(a.vecs[0] == self.a_vecs[0])
         assert np.all(a.vecs[1] == self.a_vecs[1])
@@ -121,8 +121,8 @@ class TestBlockVec(unittest.TestCase):
 class TestBlockVecBinaryOps(TestBlockVec):
     def setUp(self):
         super().setUp()
-        self.a = linalg.BlockVec(self.a_vecs, self.labels)
-        self.b = linalg.BlockVec(self.b_vecs, self.labels)
+        self.a = linalg.BlockVector(self.a_vecs, self.labels)
+        self.b = linalg.BlockVector(self.b_vecs, self.labels)
 
     @staticmethod
     def _test_op(a, b, op):

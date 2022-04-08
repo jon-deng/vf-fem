@@ -43,10 +43,10 @@ from modeldefs import (
 dfn.set_log_level(30)
 np.random.seed(123)
 
-def taylor_order(f0, hs, fs, 
+def taylor_order(f0, hs, fs,
                  gstate, gcontrols, gprops, gtimes,
                  dstate, dcontrols, dprops, dtimes):
-    
+
     ## Project the gradient along the step direction
     directions = linalg.concatenate_vec([dstate, dprops, dtimes, *dcontrols])
     gradients = linalg.concatenate_vec([gstate, gprops, gtimes, *gcontrols])
@@ -82,7 +82,7 @@ class TaylorTest(unittest.TestCase):
             f0, *grads = adjoint.integrate_grad(self.model, f, self.functional)
 
         print(f"Duration {perf_counter()-t_start:.4f} s")
-        
+
         return f0, grads
 
     def get_taylor_order(self, lsearch_fname, hs,
@@ -133,7 +133,7 @@ class TaylorTest(unittest.TestCase):
 
         print('1st order Taylor', order_1)
         print('2nd order Taylor', order_2)
-        
+
         breakpoint()
         return (order_1, order_2)
 
@@ -191,7 +191,7 @@ class TestBasicGradient(TaylorTest):
         ## Set baseline parameters (point the model is linearized around)
         t_start, t_final = 0, 0.01
         times_meas = np.linspace(t_start, t_final, 32)
-        self.times = linalg.BlockVec((times_meas,), ('times',))
+        self.times = linalg.BlockVector((times_meas,), labels=[('times',)])
 
         self.state0 = self.model.get_state_vec()
         self.state0['v'][:] = 1e-3
@@ -308,7 +308,7 @@ class TestBasicGradient(TaylorTest):
         dtimes = self.times.copy()
         dtimes['times'][1:] = np.arange(1, dtimes['times'].size)*1e-9
 
-        
+
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
@@ -353,7 +353,7 @@ class TestBasicGradientSingleStep(TaylorTest):
 
         # t_start, t_final = 0, 0.002
         # times_meas = np.linspace(t_start, t_final, 3)
-        self.times = linalg.BlockVec((times_meas,), ('times',))
+        self.times = linalg.BlockVector((times_meas,), labels=[('times',)])
 
         control = self.model.get_control_vec()
         uva0 = self.model.solid.get_state_vec()
@@ -371,7 +371,7 @@ class TestBasicGradientSingleStep(TaylorTest):
 
         self.state0 = self.model.get_state_vec()
         self.state0[3:5] = qp0
-    
+
         # Step sizes and scale factor
         self.functional = self.FUNCTIONAL(self.model)
 
@@ -497,7 +497,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         dtimes = self.times.copy()
         dtimes['times'][:] = np.arange(1, dtimes['times'].size)*1e-11
 
-        
+
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
 
 if __name__ == '__main__':
