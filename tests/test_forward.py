@@ -17,7 +17,7 @@ from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models.transient import solid as smd, fluid as fmd, acoustic as amd
-from femvf.load import load_transient_fsi_model, load_fsai_model
+from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.signals.solid as solidfunc
 # from femvf import callbacks
 from femvf import linalg
@@ -142,7 +142,7 @@ class ForwardConfig(unittest.TestCase):
     def config_fsai_model(self):
         ## Configure the model and its parameters
         acoustic = amd.WRAnalog(44)
-        model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
+        model = load_transient_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
                                 coupling='explicit')
 
         # Set the control vector

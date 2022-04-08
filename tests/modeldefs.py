@@ -14,7 +14,7 @@ import dolfin as dfn
 from femvf import linalg
 from femvf.models import (
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
-from femvf.load import load_transient_fsi_model, load_fsai_model
+from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 from femvf.constants import PASCAL_TO_CGS
 
 def load_fsi_rayleigh_model(coupling='explicit'):
@@ -95,7 +95,7 @@ def load_fsai_rayleigh_model(coupling='explicit'):
 
     ## Configure the model and its parameters
     acoustic = WRAnalog(44)
-    model = load_fsai_model(mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
+    model = load_transient_fsai_model(mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
                             coupling='explicit')
 
     # Set the properties
