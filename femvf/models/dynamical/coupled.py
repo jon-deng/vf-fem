@@ -15,6 +15,8 @@ from .base import DynamicalSystem
 from .fluid import BaseFluid1DDynamicalSystem
 from .solid import BaseSolidDynamicalSystem
 
+from ..fsi import FSIMap
+
 # pylint: disable=missing-function-docstring
 
 class FSIDynamicalSystem(DynamicalSystem):
