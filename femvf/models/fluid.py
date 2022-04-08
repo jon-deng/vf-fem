@@ -32,7 +32,7 @@ class QuasiSteady1DFluid(base.Model):
     area: np.ndarray
         channel cross-sectional areas
     """
-    def __init__(self, s, area):
+    def __init__(self, s):
         NVERT = s.size
         # the 'mesh' (also the x coordinates in the reference configuration)
         self.s_vertices = s
@@ -47,7 +47,7 @@ class QuasiSteady1DFluid(base.Model):
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
-        area = np.zeros(NVERT)
+        area = np.ones(NVERT)
         psub, psup = np.zeros(1), np.zeros(1)
         self.control = BlockVec((area, psub, psup), ('area', 'psub', 'psup'))
 
@@ -184,7 +184,7 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return self.fluid_pressure(self.s_vertices, *self.control.vecs, self.properties)
+        return fluid_pressure(self.s_vertices, *self.control.vecs, self.properties)
 
     def solve_dres_dstate1(self, b):
         return b

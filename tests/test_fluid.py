@@ -4,60 +4,17 @@ Tests fluid.py module
 
 import unittest
 
-import dolfin as dfn
-
-# import pandas as pd
 import matplotlib.pyplot as plt
-# import autograd
-# import autograd.numpy as np
 import numpy as np
 
-import petsc4py
-petsc4py.init()
+from femvf.models.fluid import Bernoulli
 
-from femvf.models import load_fsi_model, fluid
-from femvf.constants import PASCAL_TO_CGS
+def setup_bernoulli():
+    s = np.linspace(0, 1, 11)
 
-class CommonSetup(unittest.TestCase):
-    """
-    Class containing fluid model setup code that is used in the other test classes
-    """
+    return Bernoulli(s)
 
-    def setUp(self):
-        """
-        This setup produces a smooth concave interface mesh
-        """
-        mesh_path = '../meshes/M5-3layers.xml'
-
-        # self.model = load_fsi_model(mesh_path, None, Fluid=fluid.Bernoulli)
-        # self.surface_coordinates = np.stack([self.model.fluid.x_vertices,
-        #                                      self.model.fluid.y_surface], axis=-1).reshape(-1)
-        # self.fluid = self.model.fluid
-
-        x = np.linspace(-0.5, 0.5, 50)
-        y = 0.5-x**2
-        # print(y)
-        self.fluid = fluid.Bernoulli(x, y)
-        self.surface_coordinates = np.stack([x, y], axis=-1).reshape(-1)
-        
-        self.p_sub = 800.0*PASCAL_TO_CGS
-        self.p_sup = 100*PASCAL_TO_CGS
-        # self.p_sub = 100.0*PASCAL_TO_CGS
-        # self.p_sup = 800.0*PASCAL_TO_CGS
-
-        self.fluid_properties = self.fluid.get_properties_vec()
-        self.fluid_properties['y_midline'][()] = y.max()+1e-3
-        self.fluid_properties['ygap_lb'][()] = 0.0
-        self.fluid_properties['r_sep'][()] = 1.0
-
-        # self.fluid_properties['zeta_amin'][()] = 0
-        self.fluid_properties['zeta_lb'][()] = 0
-        # self.fluid_properties['zeta_sep'][()] = 0
-        # self.fluid_properties['zeta_ainv'][()] = 0
-
-        self.area = 2*(self.fluid_properties['y_midline'] - y)
-
-class TestBernoulli(CommonSetup):
+class TestBernoulli:
 
     ## Tests for internal methods
     def test_fluid_pressure(self):
@@ -65,7 +22,8 @@ class TestBernoulli(CommonSetup):
         Tests if bernoulli fluid pressures are calculated correctly by qualitatively comparing
         with manually calculated Bernoulli pressures
         """
-        fluid = self.fluid
+        fluid = setup_bernoulli()
+
         fluid.set_properties(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
@@ -501,7 +459,7 @@ if __name__ == '__main__':
     test.setUp()
     # test.test_fluid_pressure()
     # test.test_flow_sensitivity()
-    test.test_flow_sensitivity_psub()
+    # test.test_flow_sensitivity_psub()
     # test.test_flow_sensitivity_solid()
 
     # test = TestSmoothApproximations()
