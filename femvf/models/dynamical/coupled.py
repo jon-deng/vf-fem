@@ -217,7 +217,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         raise NotImplementedError("Not implemented yet")
 
     def assem_dres_dcontrol(self):
-        _mats = [[bla.zero_mat(m, n) for n in self.control.rbshape[0]] for m in self.solid.state.rbshape[0]]
+        _mats = [[bla.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
         dslres_dg = bla.BlockMatrix(_mats, labels=(self.solid.state.keys, self.control.keys))
 
         dflres_dflg = convert_bmat_to_petsc(self.fluid.assem_dres_dcontrol())
