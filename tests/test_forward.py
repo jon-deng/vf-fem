@@ -37,7 +37,11 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_kelvinvoigt_model(self):
         ## Configure the model and its parameters
-        model = load_transient_fsi_model(self.mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(
+            self.mesh_path, None,
+            SolidType=smd.KelvinVoigt,
+            FluidType=fmd.BernoulliMinimumSeparation, coupling='explicit'
+            )
 
         # Set the control vector
         p_sub = 500.0

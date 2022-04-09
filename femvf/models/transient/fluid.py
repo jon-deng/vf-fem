@@ -218,7 +218,6 @@ class BernoulliMinimumSeparation(QuasiSteady1DFluid):
         'r_sep': ('const', ()),
         'zeta_min': ('const', ()),
         'zeta_sep': ('const', ()),
-        'zeta_inv': ('const', ()),
         'zeta_lb': ('const', ()),
         'area_lb': ('const', ())}
 
@@ -229,7 +228,6 @@ class BernoulliMinimumSeparation(QuasiSteady1DFluid):
         'rho_air': 1.225 * SI_DENSITY_TO_CGS,
         'zeta_min': 0.002/3,
         'zeta_sep': 0.002/3,
-        'zeta_inv': 2.5*0.002,
         'zeta_lb': 0.002/3,
         'area_lb': 0.001}
 
@@ -250,6 +248,13 @@ class BernoulliMinimumSeparation(QuasiSteady1DFluid):
         zeta_min = self.properties['zeta_sep'][0]
         zeta_sep = self.properties['zeta_min'][0]
 
-        return bernoulli_sep_at_min.bernoulli_qp(
+        qp1 = bernoulli_sep_at_min.bernoulli_qp(
             area, s, psub, psup, rho, zeta_min, zeta_sep
             )
+
+        ret_state1 = self.state1.copy()
+        ret_state1['q'][0] = qp1[0]
+        ret_state1['p'][:] = qp1[1]
+
+        info = {}
+        return ret_state1, info
