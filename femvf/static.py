@@ -6,7 +6,7 @@ import dolfin as dfn
 from petsc4py import PETSc
 import numpy as np
 
-from .models import solid as slmodel, coupled as comodel
+from .models.transient import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 from blocktensor import linalg, subops as gops
