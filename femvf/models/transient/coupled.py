@@ -52,7 +52,7 @@ class FSIModel(base.Model):
         # The control is just the subglottal and supraglottal pressures
         self.control = self.fluid.control[1:].copy()
 
-        _self_properties = bvec.BlockVector((np.array([1.0]),), (1,), (('y_midline',),))
+        _self_properties = bvec.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
         self.properties = linalg.concatenate_vec([self.solid.properties, self.fluid.properties, _self_properties])
 
         ## FSI related stuff
@@ -225,7 +225,7 @@ class ExplicitFSIModel(FSIModel):
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.properties['y_midline'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
+        self._solid_area[:] = 2*(self.properties['ymid'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
         fl_control = self.fluid.control.copy()
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)

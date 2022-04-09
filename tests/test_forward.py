@@ -60,7 +60,7 @@ class ForwardConfig(unittest.TestCase):
 
         props = model.get_properties_vec()
 
-        props['y_midline'][0] = y_midline
+        props['ymid'][0] = y_midline
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
@@ -70,7 +70,7 @@ class ForwardConfig(unittest.TestCase):
         props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         props['eta'][()] = 4e-3
         props['kcontact'][()] = 1e11
-        props['ycontact'][()] = props['y_midline'][0] - y_gap*1/2
+        props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
 
         # Set the initial state
         xy = model.solid.vector_fspace.tabulate_dof_coordinates()
@@ -109,7 +109,7 @@ class ForwardConfig(unittest.TestCase):
 
         props = model.properties.copy()
         # fl_props = model.fluid.get_properties_vec(set_default=True)
-        props['y_midline'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
@@ -120,7 +120,7 @@ class ForwardConfig(unittest.TestCase):
         props['rayleigh_m'][()] = 0
         props['rayleigh_k'][()] = 4e-3
         props['kcontact'][()] = 1e11
-        props['ycontact'][()] = props['y_midline'][0] - y_gap*1/2
+        props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
 
         # Set the initial state
         xy = model.solid.vector_fspace.tabulate_dof_coordinates()
@@ -159,7 +159,7 @@ class ForwardConfig(unittest.TestCase):
         y_gap = 0.01
 
         props = model.properties.copy()
-        props['y_midline'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
@@ -170,7 +170,7 @@ class ForwardConfig(unittest.TestCase):
         props['rayleigh_m'][()] = 0
         props['rayleigh_k'][()] = 4e-3
         props['kcontact'][()] = 1e11
-        props['ycontact'][()] = props['y_midline'][0] - y_gap*1/2
+        props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
 
         # ac_props = model.acoustic.get_properties_vec(set_default=True)
         props['area'][:] = amd.NEUTRAL_AREA
@@ -211,7 +211,7 @@ class ForwardConfig(unittest.TestCase):
         y_gap = 0.01
 
         props = model.properties.copy()
-        props['y_midline'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
         x = xy[:, 0]
@@ -221,7 +221,7 @@ class ForwardConfig(unittest.TestCase):
         props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
         props['eta'][:] = 5.0
         props['kcontact'][()] = 1e11
-        props['ycontact'][()] = props['y_midline'][0] - y_gap*1/2
+        props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
         props['length'][:] = 1.2
 
         # Set the initial state
