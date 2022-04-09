@@ -1,10 +1,6 @@
 """
-Generic model definition
+This module defines the basic interface for a transient model.
 """
-
-import numpy as np
-
-from blocktensor.vec import BlockVector
 
 class Model:
     """
@@ -35,55 +31,53 @@ class Model:
         raise NotImplementedError("")
 
     def get_control_vec(self):
-        ret = self.control.copy()
-        ret.set(0.0)
-        return ret
+        raise NotImplementedError("")
 
     ## Residual and sensitivity methods
     def res(self):
         """
         Return the (nonlinear) residual for the current time step
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def solve_state1(self, state1):
         """
         Solve for the final state such that the residual = 0
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def solve_dres_dstate1(self, b):
         """
         Solve dF/du1 x = b
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def solve_dres_dstate1_adj(self, x):
         """
         Solve dF/du1^T b = x
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_dstate0(self, x):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_dstate0_adj(self, b):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_dcontrol(self, x):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_dcontrol_adj(self, x):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_dp(self, x):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_dp_adj(self, x):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_ddt(self, x):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def apply_dres_ddt_adj(self, b):
-        raise NotImplementedError
+        raise NotImplementedError()
