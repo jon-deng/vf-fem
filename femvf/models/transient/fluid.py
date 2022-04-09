@@ -17,6 +17,8 @@ from ..equations.fluid.bernoulli_sep_at_ratio import (
     bernoulli_qp
 )
 
+from ..equations.fluid import bernoulli_sep_at_min
+
 ## 1D Bernoulli approximation codes
 
 class QuasiSteady1DFluid(base.Model):
@@ -181,7 +183,11 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return bernoulli_qp(self.s_vertices, *self.control.vecs, self.properties)
+        qp, info = bernoulli_qp(self.s_vertices, *self.control.vecs, self.properties)
+        ret_state1 = self.state1.copy()
+        ret_state1['q'][0] = qp[0]
+        ret_state1['p'][:] = qp[1]
+        return ret_state1, info
 
     def solve_dres_dstate1(self, b):
         return b
@@ -199,3 +205,51 @@ class Bernoulli(QuasiSteady1DFluid):
 
     def apply_dres_dcontrol_adj(self, x):
         raise NotImplementedError()
+
+class BernoulliMinimumSeparation(QuasiSteady1DFluid):
+    """
+    Bernoulli fluid model with separation at the minimum
+
+    """
+    PROPERTY_TYPES = {
+        'a_sub': ('const', ()),
+        'a_sup': ('const', ()),
+        'rho_air': ('const', ()),
+        'r_sep': ('const', ()),
+        'zeta_min': ('const', ()),
+        'zeta_sep': ('const', ()),
+        'zeta_inv': ('const', ()),
+        'zeta_lb': ('const', ()),
+        'area_lb': ('const', ())}
+
+    PROPERTY_DEFAULTS = {
+        'a_sub': 100000,
+        'a_sup': 0.6,
+        'r_sep': 1.0,
+        'rho_air': 1.225 * SI_DENSITY_TO_CGS,
+        'zeta_min': 0.002/3,
+        'zeta_sep': 0.002/3,
+        'zeta_inv': 2.5*0.002,
+        'zeta_lb': 0.002/3,
+        'area_lb': 0.001}
+
+    ## Model res sensitivity interface
+    def res(self):
+        return self.state1 - self.solve_state1(self.state0)[0]
+
+    def solve_state1(self, state1):
+        """
+        Return the final flow state
+        """
+        s = self.s_vertices
+        area = self.control['area']
+        psub = self.control['psub'][0]
+        psup = self.control['psup'][0]
+
+        rho = self.properties['rho_air'][0]
+        zeta_min = self.properties['zeta_sep'][0]
+        zeta_sep = self.properties['zeta_min'][0]
+
+        return bernoulli_sep_at_min.bernoulli_qp(
+            area, s, psub, psup, rho, zeta_min, zeta_sep
+            )

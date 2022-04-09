@@ -1,9 +1,8 @@
 """
 Contains the Bernoulli fluid equations with separation occuring at a ratio over minimum area
 """
-import numpy as np
 
-from blocktensor.vec import BlockVector
+import numpy as np
 
 ## Bernoulli fluid pressure
 def pbernoulli(qsqr, pref, aref, area, rho):
@@ -106,7 +105,7 @@ def bernoulli_qp(s, area, psub, psup, fluid_props):
             'a_sep': asep,
             'area': asafe,
             'pressure': p}
-    return BlockVector((np.array([q]), p), labels=(('q', 'p'),)), info
+    return (np.array([np.squeeze(q)]), p), info
 
 def flow_sensitivity(s, area, psub, psup, fluid_props):
     """
