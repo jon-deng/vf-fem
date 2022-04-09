@@ -63,7 +63,7 @@ def bernoulli_qp(s, area, psub, psup, fluid_props):
     asafe = smoothlb(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
 
     # Calculate minimum and separation areas/locations
-    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_amin'])
+    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_min'])
 
     # Bound all areas to the 'smooth' minimum area above
     # This is done because of the weighting scheme; the smooth min is always slightly larger
@@ -72,7 +72,7 @@ def bernoulli_qp(s, area, psub, psup, fluid_props):
     asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
 
     asep = fluid_props['r_sep'] * amin
-    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
+    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_inv']
     ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
 
     # Compute the flow rate based on pressure drop from "reference" to
@@ -129,8 +129,8 @@ def flow_sensitivity(s, area, psub, psup, fluid_props):
     asafe = smoothlb(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
     dasafe_da = dsmoothlb_df(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
 
-    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_amin'])
-    dsmin_dasafe, damin_dasafe = dsmooth_min_area(s, asafe, fluid_props['zeta_amin'])
+    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_min'])
+    dsmin_dasafe, damin_dasafe = dsmooth_min_area(s, asafe, fluid_props['zeta_min'])
     dsmin_da = dsmin_dasafe*dasafe_da
     damin_da = damin_dasafe*dasafe_da
 
@@ -138,7 +138,7 @@ def flow_sensitivity(s, area, psub, psup, fluid_props):
     dasep_damin = fluid_props['r_sep']
     dasep_da = dasep_damin * damin_da
 
-    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_ainv']
+    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_inv']
     ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
     dssep_dsmin, dssep_dasafe, dssep_dasep = \
         dsmooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)

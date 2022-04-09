@@ -158,9 +158,9 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sup': ('const', ()),
         'rho_air': ('const', ()),
         'r_sep': ('const', ()),
-        'zeta_amin': ('const', ()),
+        'zeta_min': ('const', ()),
         'zeta_sep': ('const', ()),
-        'zeta_ainv': ('const', ()),
+        'zeta_inv': ('const', ()),
         'zeta_lb': ('const', ()),
         'area_lb': ('const', ())}
 
@@ -169,9 +169,9 @@ class Bernoulli(QuasiSteady1DFluid):
         'a_sup': 0.6,
         'r_sep': 1.0,
         'rho_air': 1.225 * SI_DENSITY_TO_CGS,
-        'zeta_amin': 0.002/3,
+        'zeta_min': 0.002/3,
         'zeta_sep': 0.002/3,
-        'zeta_ainv': 2.5*0.002,
+        'zeta_inv': 2.5*0.002,
         'zeta_lb': 0.002/3,
         'area_lb': 0.001}
 
