@@ -14,7 +14,7 @@ from femvf.constants import SI_DENSITY_TO_CGS
 from blocktensor.linalg import BlockVector
 
 from ..equations.fluid.bernoulli_sep_at_ratio import (
-    fluid_pressure
+    bernoulli_qp
 )
 
 ## 1D Bernoulli approximation codes
@@ -181,7 +181,7 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        return fluid_pressure(self.s_vertices, *self.control.vecs, self.properties)
+        return bernoulli_qp(self.s_vertices, *self.control.vecs, self.properties)
 
     def solve_dres_dstate1(self, b):
         return b

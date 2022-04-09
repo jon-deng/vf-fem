@@ -30,7 +30,7 @@ def dflow_rate_sqr(pref, aref, psep, asep, rho):
         dqsqr_dasep = -2/rho*(psep - pref)/(aref**-2 - asep**-2)**2 * (2/asep**3)
         return dqsqr_dpref, dqsqr_dpsep, dqsqr_dasep
 
-def fluid_pressure(s, area, psub, psup, fluid_props):
+def bernoulli_qp(s, area, psub, psup, fluid_props):
     """
     Computes the pressure loading at a series of surface nodes according to Pelorson (1994)
 
