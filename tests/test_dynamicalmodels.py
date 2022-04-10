@@ -6,7 +6,7 @@ from os import path
 import numpy as np
 import dolfin as dfn
 
-from blocktensor import linalg as bla
+from blocktensor import linalg as bla, mat as bmat
 from blocktensor import subops as gops
 from femvf.models.dynamical import solid as slmodel, fluid as flmodel
 from femvf import load

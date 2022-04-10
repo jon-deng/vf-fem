@@ -13,7 +13,7 @@ I'm using CGS : cm-g-s units
 
 import numpy as np
 
-from blocktensor import linalg
+from blocktensor import vec
 
 def integrate(model, f, dfin_state):
     """
@@ -85,7 +85,7 @@ def integrate(model, f, dfin_state):
     adj_times = np.zeros(N)
     adj_times[1:] += grad_dt
     adj_times[:-1] -= grad_dt
-    adj_times = linalg.BlockVector((adj_times,), labels=(('times',),))
+    adj_times = vec.BlockVector((adj_times,), labels=(('times',),))
 
     return adj_ini_state, adj_controls, adj_props, adj_times
 
@@ -121,7 +121,7 @@ def integrate_grad(model, f, functional):
     dprops += functional.dprops(f)
 
     ddts = [functional.ddt(f, n) for n in range(1, f.size)]
-    dtimes_functional = linalg.BlockVector([np.cumsum([0] + ddts)], labels=[['times']])
+    dtimes_functional = vec.BlockVector([np.cumsum([0] + ddts)], labels=[['times']])
     dtimes += dtimes_functional
 
     return functional_value, dini_state, dcontrols, dprops, dtimes

@@ -8,7 +8,7 @@ import jax
 from jax import numpy as jnp
 import numpy as jnp
 
-from blocktensor import linalg
+from blocktensor import vec
 
 class Acoustic1D(base.Model):
     def __init__(self, num_tube):
@@ -20,13 +20,13 @@ class Acoustic1D(base.Model):
         # pref (interlaced b1, f2 partial pressures) are reflected pressures
         pinc = np.zeros((num_tube//2 + 1)*2)
         pref = np.zeros((num_tube//2 + 1)*2)
-        self.state0 = linalg.BlockVector((pinc, pref), labels=[('pinc', 'pref')])
+        self.state0 = vec.BlockVector((pinc, pref), labels=[('pinc', 'pref')])
 
         self.state1 = self.state0.copy()
 
         # The control is the input flow rate
         qin = np.zeros((1,))
-        self.control = linalg.BlockVector((qin,), labels=[('qin',)])
+        self.control = vec.BlockVector((qin,), labels=[('qin',)])
 
         length = np.ones(1)
         area = np.ones(num_tube)
@@ -35,7 +35,7 @@ class Acoustic1D(base.Model):
         c = 340*100*np.ones(1)
         rrad = np.ones(1)
         lrad = np.ones(1)
-        self.properties = linalg.BlockVector(
+        self.properties = vec.BlockVector(
             (length, area, gamma, rho, c, rrad, lrad),
             labels=[('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad')])
 
@@ -132,7 +132,7 @@ class WRAnalog(Acoustic1D):
         pinc, pref = self.state0.vecs
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
-        state1 = linalg.BlockVector((pinc_1, pref_1), labels=[self.state1.keys])
+        state1 = vec.BlockVector((pinc_1, pref_1), labels=[self.state1.keys])
         info = {}
         return state1, info
 
@@ -148,16 +148,16 @@ class WRAnalog(Acoustic1D):
 
         b_pinc, b_pref, b_qin = ATr(x.vecs)
         bvecs = (np.asarray(b_pinc), np.asarray(b_pref))
-        return -linalg.BlockVector(bvecs, labels=[self.state0.keys])
+        return -vec.BlockVector(bvecs, labels=[self.state0.keys])
 
     def apply_dres_dcontrol(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
-        x_ = linalg.concatenate_vec([self.get_state_vec(), x])
+        x_ = vec.concatenate_vec([self.get_state_vec(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
-        return -linalg.BlockVector(bvecs, labels=[self.state1.keys])
+        return -vec.BlockVector(bvecs, labels=[self.state1.keys])
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()

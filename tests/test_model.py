@@ -66,7 +66,7 @@ class TestFSAIModel(unittest.TestCase):
         ac_props['length'][:] = 12.0
         ac_props['soundspeed'][:] = 340*100
 
-        props = linalg.concatenate_vec([sl_props, fl_props, ac_props])
+        props = vec.concatenate_vec([sl_props, fl_props, ac_props])
 
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
@@ -79,7 +79,7 @@ class TestFSAIModel(unittest.TestCase):
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
-        
+
         return model, ini_state, controls, props
 
     def test_apply_dres_dstate1(self):
@@ -207,7 +207,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         Compute the action of the sensitivity
         """
         dres = (
-            self.model.apply_dres_dstate0(dstate0) 
+            self.model.apply_dres_dstate0(dstate0)
             + self.model.apply_dres_dcontrol(dcontrol)
             + self.model.apply_dres_dp(dprops)
             + self.model.apply_dres_ddt(ddt))
@@ -217,7 +217,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         Compute the action of the sensitivity
         """
-        dstate0 = self.model.apply_dres_dstate0_adj(dres) 
+        dstate0 = self.model.apply_dres_dstate0_adj(dres)
         dcontrol = self.model.apply_dres_dcontrol_adj(dres)
         dprops = self.model.apply_dres_dp_adj(dres)
         ddt = self.model.apply_dres_ddt_adj(dres)
@@ -240,9 +240,9 @@ class TestModelResidualSensitivity(unittest.TestCase):
         dstate1['p'][:] = 10.0
         for name in ('u', 'v', 'a'):
             bc_base.apply(dstate1[name])
-        
-        args = (self.state0, self.control, self.props, self.dt) 
-        dres = self.res(self.state1+dstate1, *args) - self.res(self.state1, *args) 
+
+        args = (self.state0, self.control, self.props, self.dt)
+        dres = self.res(self.state1+dstate1, *args) - self.res(self.state1, *args)
 
         self.set_linearization(self.state1, self.state0, self.control, self.props, self.dt)
         dstate1_jac = self.model.solve_dres_dstate1(dres)
@@ -256,7 +256,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
 
     def test_apply_dres_dxx(self):
         """
-        To test the sensitivity, compute the residual sensitivity, `dres` in two 
+        To test the sensitivity, compute the residual sensitivity, `dres` in two
         ways for an input `dxx`:
             1. using finite differences
             2. using the jacobian (which is being tested)
@@ -299,10 +299,10 @@ class TestModelResidualSensitivity(unittest.TestCase):
         xxs = (self.state0, self.control, self.props, self.dt)
         dxxs = (dstate0, 0.0*dcontrol, 0.0*dprops, 0*ddt)
         _test(xxs, dxxs)
-        
+
     def test_solve_dres_dxx_adj(self):
         raise NotImplementedError
-        
+
 
 if __name__ == '__main__':
     # test = TestFSAIModel()

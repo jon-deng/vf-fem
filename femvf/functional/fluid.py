@@ -8,7 +8,7 @@ import numpy as np
 import scipy.signal as sig
 
 from .base import AbstractFunctional
-from blocktensor import linalg
+from blocktensor import vec
 
 class FluidFunctional(AbstractFunctional):
     """
@@ -21,14 +21,14 @@ class FluidFunctional(AbstractFunctional):
         super().__init__(model, ())
 
     # These are written to handle the case where you have a coupled model input
-    # The provided eval_dfl_state only supplies the fluid state component so needs to be 
+    # The provided eval_dfl_state only supplies the fluid state component so needs to be
     # extended to include states of the remaining components (which are just zero)
     def eval_dstate(self, f, n):
         vecs = [self.model.solid.get_state_vec(), self.eval_dfl_state(f, n)]
 
         if hasattr(self.model, 'acoustic'):
             vecs.append(self.model.acoustic.get_state_vec())
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
         dsolid = self.model.solid.get_properties_vec()
@@ -37,7 +37,7 @@ class FluidFunctional(AbstractFunctional):
 
         if hasattr(self.model, 'acoustic'):
             vecs.append(self.model.acoustic.get_properties_vec())
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
     def eval_dfl_state(self, f, n):
         raise NotImplementedError
@@ -124,7 +124,7 @@ class AvgSubglottalPower(FluidFunctional):
             # Set form coefficients to represent the equation mapping state ii->ii+1
             state0 = f.get_state(ii-1)
             state1 = f.get_state(ii)
-            
+
             q0, psub0 = state0['q'][0], state0['p'][0]
             q1, psub1 = state1['q'][0], state1['p'][0]
             dt = times[ii] - times[ii-1]
@@ -219,7 +219,7 @@ class AvgAcousticPower(FluidFunctional):
         dft_freq = np.fft.fftfreq(qw.size, d=time[1]-time[0])
 
         ## Calculate the normalized radiation impedance, which is
-        # complex pressure/flow rate (rather than complex pressure/velocity) 
+        # complex pressure/flow rate (rather than complex pressure/velocity)
         rho = self.constants['rho']
         c = self.constants['c']
         a = self.constants['a']

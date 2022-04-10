@@ -48,8 +48,8 @@ def taylor_order(f0, hs, fs,
                  dstate, dcontrols, dprops, dtimes):
 
     ## Project the gradient along the step direction
-    directions = linalg.concatenate_vec([dstate, dprops, dtimes, *dcontrols])
-    gradients = linalg.concatenate_vec([gstate, gprops, gtimes, *gcontrols])
+    directions = vec.concatenate_vec([dstate, dprops, dtimes, *dcontrols])
+    gradients = vec.concatenate_vec([gstate, gprops, gtimes, *gcontrols])
 
     grad_step = linalg.dot(directions, gradients)
     grad_step_fd = (fs - f0)/hs
@@ -191,7 +191,7 @@ class TestBasicGradient(TaylorTest):
         ## Set baseline parameters (point the model is linearized around)
         t_start, t_final = 0, 0.01
         times_meas = np.linspace(t_start, t_final, 32)
-        self.times = linalg.BlockVector((times_meas,), labels=[('times',)])
+        self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
         self.state0 = self.model.get_state_vec()
         self.state0['v'][:] = 1e-3
@@ -353,7 +353,7 @@ class TestBasicGradientSingleStep(TaylorTest):
 
         # t_start, t_final = 0, 0.002
         # times_meas = np.linspace(t_start, t_final, 3)
-        self.times = linalg.BlockVector((times_meas,), labels=[('times',)])
+        self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
         control = self.model.get_control_vec()
         uva0 = self.model.solid.get_state_vec()

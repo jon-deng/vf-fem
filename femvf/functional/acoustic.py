@@ -17,7 +17,7 @@ compute the sensitivity with respect to.
 """
 
 from .base import AbstractFunctional
-from blocktensor import linalg
+from blocktensor import vec
 
 class AcousticFunctional(AbstractFunctional):
     """
@@ -31,7 +31,7 @@ class AcousticFunctional(AbstractFunctional):
 
     def eval_dstate(self, f, n):
         vecs = [self.model.solid.get_state_vec(), self.model.fluid.get_state_vec(), self.eval_dac_state(f, n)]
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
         dsolid = self.model.solid.get_properties_vec()
@@ -42,7 +42,7 @@ class AcousticFunctional(AbstractFunctional):
 
         vecs = [dsolid, dfluid, self.eval_dac_props(f)]
 
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
     def eval_dac_state(self, f, n):
         raise NotImplementedError
@@ -72,7 +72,7 @@ class RmsRadiatedPressure(AcousticFunctional):
         prad_ms = prad_rms**2
 
         dt = self.model.dt
-        
+
         dprad_ms = 0
         prad_n = f.get_state(n)['pref'][-1]
         if n == 0 or n == f.size-1:

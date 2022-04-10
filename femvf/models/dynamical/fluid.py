@@ -11,7 +11,7 @@ and where q and p stand for flow and pressure for a 1D fluid model
 
 import numpy as np
 
-from blocktensor import linalg as bla
+from blocktensor import vec as bla
 
 from .base import DynamicalSystem
 from ..equations.fluid.bernoulli_sep_at_min import (

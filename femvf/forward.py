@@ -127,7 +127,7 @@ def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
 
     Returns
     -------
-    dfin_state : linalg.BlockVector
+    dfin_state : vec.BlockVector
     """
     model.set_properties(f.get_properties())
 

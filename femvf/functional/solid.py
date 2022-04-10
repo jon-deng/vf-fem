@@ -21,7 +21,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from blocktensor import linalg
+from blocktensor import vec
 from .base import AbstractFunctional
 from ..models.solid import form_inf_strain, Solid
 
@@ -44,7 +44,7 @@ class SolidFunctional(AbstractFunctional):
         else:
             self.coupled_model = True
             self.solid = model.solid
-        
+
         self._forms = self.form_definitions(self.solid)
 
     @staticmethod
@@ -59,21 +59,21 @@ class SolidFunctional(AbstractFunctional):
         return self._forms
 
     # These are written to handle the case where you have a coupled model input
-    # then the provided eval_dsl_state only supplies the solid portion and needs to be 
+    # then the provided eval_dsl_state only supplies the solid portion and needs to be
     # extended
     def eval_dstate(self, f, n):
         vecs = [self.eval_dsl_state(f, n)]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_state_vec())
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
         vecs = [self.eval_dsl_props(f)]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_properties_vec())
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
 class PeriodicError(SolidFunctional):
     r"""
@@ -534,7 +534,7 @@ class KV3DDampingWork(SolidFunctional):
         d2v_dz2 = (uant - 2*v1 + upos) / solid.forms['coeff.prop.length']**2
 
         forms = {}
-        forms['damping_power'] = (ufl.inner(eta*form_inf_strain(v1), form_inf_strain(v1)) 
+        forms['damping_power'] = (ufl.inner(eta*form_inf_strain(v1), form_inf_strain(v1))
                                   + ufl.inner(-0.5*eta*d2v_dz2, v1)) * ufl.dx
         forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
         forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
@@ -657,7 +657,7 @@ class KVDampingWork(SolidFunctional):
         res = 0
         # Calculate total damped work by the trapezoidal rule
         time = f.get_times()
-        
+
         self.model.set_fin_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
         for ii in range(N_START+1, N_STATE):

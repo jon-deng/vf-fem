@@ -46,14 +46,14 @@ class FSIModel(base.Model):
         self.fluid = fluid
 
         ## Specify state, controls, and properties
-        self.state0 = linalg.concatenate_vec([self.solid.state0, self.fluid.state0])
-        self.state1 = linalg.concatenate_vec([self.solid.state1, self.fluid.state1])
+        self.state0 = bvec.concatenate_vec([self.solid.state0, self.fluid.state0])
+        self.state1 = bvec.concatenate_vec([self.solid.state1, self.fluid.state1])
 
         # The control is just the subglottal and supraglottal pressures
         self.control = self.fluid.control[1:].copy()
 
         _self_properties = bvec.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
-        self.properties = linalg.concatenate_vec([self.solid.properties, self.fluid.properties, _self_properties])
+        self.properties = bvec.concatenate_vec([self.solid.properties, self.fluid.properties, _self_properties])
 
         ## FSI related stuff
         self._solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
@@ -173,7 +173,7 @@ class FSIModel(base.Model):
 
     ## Methods for getting vectors
     def get_state_vec(self):
-        return linalg.concatenate_vec([self.solid.get_state_vec(), self.fluid.get_state_vec()])
+        return bvec.concatenate_vec([self.solid.get_state_vec(), self.fluid.get_state_vec()])
 
     def get_control_vec(self):
         ret = self.control.copy()
@@ -281,7 +281,7 @@ class ExplicitFSIModel(FSIModel):
         step_info = solid_info
         step_info.update({'fluid_info': fluid_info})
 
-        return linalg.concatenate_vec([uva1, qp1]), step_info
+        return bvec.concatenate_vec([uva1, qp1]), step_info
 
     def solve_dres_dstate1(self, b):
         """
@@ -373,7 +373,7 @@ class ExplicitFSIModel(FSIModel):
     def apply_dres_dp_adj(self, x):
         bsolid = self.solid.apply_dres_dp_adj(x[:3])
         bfluid = self.fluid.apply_dres_dp_adj(x[3:])
-        return linalg.concatenate_vec([bsolid, bfluid])
+        return bvec.concatenate_vec([bsolid, bfluid])
 
 class ImplicitFSIModel(FSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
@@ -381,13 +381,13 @@ class ImplicitFSIModel(FSIModel):
         self.fluid.set_ini_state(qp0)
 
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = linalg.BlockVector((p0_solid,), labels=[self.solid.control.keys])
+        control = bvec.BlockVector((p0_solid,), labels=[self.solid.control.keys])
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
         p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        control = linalg.BlockVector((p1_solid,), labels=[self.solid.control.keys])
+        control = bvec.BlockVector((p1_solid,), labels=[self.solid.control.keys])
         self.solid.set_control(control)
 
     ## Forward solver methods
@@ -458,7 +458,7 @@ class ImplicitFSIModel(FSIModel):
         step_info = {'fluid_info': fluid_info,
                      'num_iter': nit, 'abs_err': abs_err, 'rel_err': rel_err}
 
-        return linalg.concatenate_vec([uva1, qp1]), step_info
+        return bvec.concatenate_vec([uva1, qp1]), step_info
 
     def solve_dres_dstate1(self, b):
         """
@@ -556,7 +556,7 @@ class ImplicitFSIModel(FSIModel):
         adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
         adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
 
-        return linalg.concatenate_vec([adj_uva, adj_qp])
+        return bvec.concatenate_vec([adj_uva, adj_qp])
 
     def apply_dres_dstate0_adj(self, x):
         adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = x
@@ -594,7 +594,7 @@ class ImplicitFSIModel(FSIModel):
         # bfluid = self.fluid.get_properties_vec()
         bsolid = self.solid.apply_dres_dp_adj(x[:3])
         bfluid = self.fluid.apply_dres_dp_adj(x[3:])
-        return linalg.concatenate_vec([bsolid, bfluid])
+        return bvec.concatenate_vec([bsolid, bfluid])
 
     def apply_dres_dcontrol_adj(self, x):
         return super().apply_dres_dcontrol_adj(x)
@@ -608,14 +608,14 @@ class FSAIModel(FSIModel):
         self.fluid = fluid
         self.acoustic = acoustic
 
-        state = linalg.concatenate_vec([solid.get_state_vec(), fluid.get_state_vec(), acoustic.get_state_vec()])
+        state = bvec.concatenate_vec([solid.get_state_vec(), fluid.get_state_vec(), acoustic.get_state_vec()])
         self.state0 = state
         self.state1 = state.copy()
 
-        control = linalg.BlockVector((np.array([1.0]),), labels=[('psub',)])
+        control = bvec.BlockVector((np.array([1.0]),), labels=[('psub',)])
         self.control = control.copy()
 
-        self.properties = linalg.concatenate_vec(
+        self.properties = bvec.concatenate_vec(
             [solid.properties, fluid.properties, acoustic.properties])
 
         self._dt = 1.0
@@ -738,7 +738,7 @@ class FSAIModel(FSIModel):
         res_sl = self.solid.res()
         res_fl = self.fluid.res()
         res_ac = self.acoustic.res()
-        return linalg.concatenate_vec([res_sl, res_fl, res_ac])
+        return bvec.concatenate_vec([res_sl, res_fl, res_ac])
 
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
@@ -777,7 +777,7 @@ class FSAIModel(FSIModel):
             dpsup_dqac = self.acoustic.z[0]
             def res():
                 qbern = fl_state1[0]
-                return qac - linalg.BlockVector((qbern,), labels=[('qin',)])
+                return qac - bvec.BlockVector((qbern,), labels=[('qin',)])
 
             def solve_jac(res):
                 dres_dq = 1-dqbern_dpsup*dpsup_dqac
@@ -785,14 +785,14 @@ class FSAIModel(FSIModel):
 
             return res, solve_jac
 
-        q, info = smd.newton_solve(linalg.BlockVector((ini_state['q'],), labels=[('qin',)]), make_linearized_flow_residual)
+        q, info = smd.newton_solve(bvec.BlockVector((ini_state['q'],), labels=[('qin',)]), make_linearized_flow_residual)
 
         self.acoustic.set_control(q)
         ac_state1, _ = self.acoustic.solve_state1()
         fl_state1, fluid_info = self.fluid.solve_state1(self.fluid.state0)
 
         step_info = {'fluid_info': fluid_info, **info}
-        fin_state = linalg.concatenate_vec([sl_state1, fl_state1, ac_state1])
+        fin_state = bvec.concatenate_vec([sl_state1, fl_state1, ac_state1])
 
         return fin_state, step_info
 
@@ -942,7 +942,7 @@ class FSAIModel(FSIModel):
         bsl = self.solid.apply_dres_dp_adj(x[:3])
         bfl = self.fluid.apply_dres_dp_adj(x[3:5])
         bac = self.acoustic.apply_dres_dp_adj(x[5:])
-        return linalg.concatenate_vec([bsl, bfl, bac])
+        return bvec.concatenate_vec([bsl, bfl, bac])
 
     def apply_dres_dcontrol_adj(self, x):
         ## Implement here since both FSI models should use this rule

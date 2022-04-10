@@ -9,7 +9,7 @@ import numpy as np
 from .models.transient import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
-from blocktensor import linalg, subops as gops
+from blocktensor import vec, subops as gops
 from blocktensor.vec import BlockVector, concatenate_vec, convert_bvec_to_petsc
 from blocktensor.mat import BlockMatrix, zero_mat, ident_mat
 
@@ -163,7 +163,7 @@ def static_configuration_coupled_newton(model: comodel.FSIModel):
             dfu_dp = dfn.assemble(solid.forms['form.bi.df1uva_dp1'], tensor=dfn.PETScMatrix())
             solid.bc_base.zero(dfu_dp)
             dfu_dp = dfu_dp.mat()
-            dfu_dp = linalg.reorder_mat_cols(dfu_dp, solid_dofs, fluid_dofs, x_n['p'].size)
+            dfu_dp = mat.reorder_mat_cols(dfu_dp, solid_dofs, fluid_dofs, x_n['p'].size)
 
             dfu_dq = zero_mat(x_n['u'].size, x_n['q'].size)
 

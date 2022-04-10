@@ -29,7 +29,7 @@ class FSIFunctional(SolidFunctional):
         self.fluid = model.fluid
 
     # These are written to handle the case where you have a coupled model input
-    # then the provided eval_dsl_state only supplies the solid portion and needs to be 
+    # then the provided eval_dsl_state only supplies the solid portion and needs to be
     # extended
     def eval_dstate(self, f, n):
         raise NotImplementedError("")
@@ -40,7 +40,7 @@ class FSIFunctional(SolidFunctional):
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_properties_vec())
-        return linalg.concatenate_vec(vecs)
+        return vec.concatenate_vec(vecs)
 
 class TransferWorkbyVelocity(FSIFunctional):
     """

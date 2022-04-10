@@ -20,7 +20,9 @@ from femvf.models.transient import solid as smd, fluid as fmd, acoustic as amd
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.signals.solid as solidfunc
 # from femvf import callbacks
-from femvf import linalg
+# from femvf import linalg
+
+from blocktensor import vec
 
 class ForwardConfig(unittest.TestCase):
     def setUp(self):
@@ -179,7 +181,7 @@ class ForwardConfig(unittest.TestCase):
         props['soundspeed'][:] = 340*100
         props['a_sup'][:] = props['area'][0]
 
-        # props = linalg.concatenate_vec([sl_props, fl_props, ac_props])
+        # props = vec.concatenate_vec([sl_props, fl_props, ac_props])
 
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
@@ -249,7 +251,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_approx3D(self):
         model, ini_state, controls, props = self.config_approx3D_model()
 
-        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         save_path = 'out/test_forward_fsi_2.5D.h5'
         if os.path.isfile(save_path):
@@ -261,7 +263,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_fsi_rayleigh(self):
         model, ini_state, controls, props = self.config_fsi_rayleigh_model()
 
-        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         save_path = 'out/test_forward_fsi_rayleigh.h5'
         if os.path.isfile(save_path):
@@ -273,7 +275,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_fsi_kelvinvoigt(self):
         model, ini_state, controls, props = self.config_fsi_kelvinvoigt_model()
 
-        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         save_path = 'out/test_forward_fsi_kelvinvoigt.h5'
         if os.path.isfile(save_path):
@@ -284,7 +286,7 @@ class TestIntegrate(ForwardConfig):
 
     def test_integrate_fsai(self):
         model, ini_state, controls, props = self.config_fsai_model()
-        times = linalg.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
 
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
@@ -301,7 +303,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_variable_controls(self):
         model, ini_state, _controls, props = self.config_variable_controls()
         _times = np.linspace(0, 0.01, 100)
-        times = linalg.BlockVector([_times], labels=[['times']])
+        times = vec.BlockVector([_times], labels=[['times']])
 
         tau = 0.0005
         controls = [(1-np.exp(-t/tau))*_controls[0] for t in _times[:30]]
@@ -356,15 +358,15 @@ class TestIntegrate(ForwardConfig):
         NTIME = 50
         model, ini_state, controls, props = self.config_fsi_model()
         control = controls[0]
-        times = linalg.BlockVector((np.linspace(0, 0.01, NTIME),), labels=[('times',)])
+        times = vec.BlockVector((np.linspace(0, 0.01, NTIME),), labels=[('times',)])
 
         ## Specify the test change in model parameters
         dini_state = model.get_state_vec()
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
         dprops.set(0.0)
-        # dtimes = linalg.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
-        dtimes = linalg.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
+        # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
+        dtimes = vec.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
         dtimes['times'][-1] = 1e-10
         dini_state.set(0.0)
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
