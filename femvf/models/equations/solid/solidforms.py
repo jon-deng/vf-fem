@@ -203,7 +203,7 @@ def gen_jac_property_forms(unary_form_name, forms):
         if 'coeff.prop' in form_name]
     for prop_name in property_labels:
         try:
-            df_dprop = dfn.derivative(forms[unary_form_name], forms[f'coeff.prop.{prop_name}'])
+            df_dprop = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.prop.{prop_name}'])
         except:
             df_dprop = None
 
