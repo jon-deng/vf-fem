@@ -90,8 +90,16 @@ def setup_parameter_base(model):
     model.set_dstatet(del_statet)
 
     state0 = model.state.copy()
+    # Make the initial displacement a pure shear motion
+    xref = model.solid.forms['coeff.ref.x'].vector().copy()
+    xx = xref[:-1:2]
+    yy = xref[1::2]
+    state0['u'][:-1:2] = 0.01*(yy/yy.max())
+    state0['u'][1::2] = 0.0 * yy
+    model.set_state(state0)
 
     statet0 = state0.copy()
+    model.set_statet(statet0)
 
     return state0, statet0, control0, props0, del_state, del_statet
 
@@ -125,7 +133,9 @@ def setup_parameter_perturbation(model):
 
     props0 = model.properties.copy()
     dprops = props0.copy()
-    dprops.set(1e-4)
+    dprops.set(0)
+    dprops['emod'] = 1.0
+
 
     dcontrol = model.control.copy()
     dcontrol.set(1e0)
@@ -295,6 +305,7 @@ if __name__ == '__main__':
         # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dcontrol(_model, control0, dcontrol)
 
+        print("\n-- Test dres/dprops --")
         test_assem_dres_dprops(model, props0, dprops)
 
     print("\n-- Test dres/dstate vs dres_state --")

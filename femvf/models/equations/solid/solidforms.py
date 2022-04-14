@@ -276,6 +276,9 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
     v1 = dfn.Function(vector_fspace)
     a1 = dfn.Function(vector_fspace)
 
+    xref = dfn.Function(vector_fspace)
+    xref.vector()[:] = scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
+
     forms = {
         'measure.dx': dx,
         'measure.ds': ds,
@@ -299,6 +302,7 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
         'coeff.state.u1': u1,
         'coeff.state.v1': v1,
         'coeff.state.a1': a1,
+        'coeff.ref.x': xref,
 
         'expr.kin.inf_strain': form_inf_strain(u1),
         'expr.kin.inf_strain_rate': form_inf_strain(v1),
