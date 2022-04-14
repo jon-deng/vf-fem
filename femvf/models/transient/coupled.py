@@ -381,13 +381,13 @@ class ImplicitFSIModel(FSIModel):
         self.fluid.set_ini_state(qp0)
 
         p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = bvec.BlockVector((p0_solid,), labels=[self.solid.control.keys])
+        control = bvec.BlockVector((p0_solid,), labels=self.solid.control.labels)
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
         p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        control = bvec.BlockVector((p1_solid,), labels=[self.solid.control.keys])
+        control = bvec.BlockVector((p1_solid,), labels=self.solid.control.labels)
         self.solid.set_control(control)
 
     ## Forward solver methods

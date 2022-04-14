@@ -77,7 +77,7 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
         return properties_bvec_from_forms(self.forms, defaults)
 
     def set_properties(self, props):
-        for key in props.keys:
+        for key in props.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
@@ -157,7 +157,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         mats = [
             [dresu_dcontrol],
             [dresv_dcontrol]]
-        return bvec.BlockMatrix(mats, labels=(self.state.keys, self.control.keys))
+        return bvec.BlockMatrix(mats, labels=self.state.labels+self.control.labels)
 
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size(), self.state['v'].size()

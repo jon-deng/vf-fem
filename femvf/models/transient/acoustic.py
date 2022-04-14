@@ -132,7 +132,7 @@ class WRAnalog(Acoustic1D):
         pinc, pref = self.state0.vecs
         pinc_1, pref_1 = self.reflect(pinc, pref, qin)
 
-        state1 = vec.BlockVector((pinc_1, pref_1), labels=[self.state1.keys])
+        state1 = vec.BlockVector((pinc_1, pref_1), labels=self.state1.labels)
         info = {}
         return state1, info
 
@@ -148,7 +148,7 @@ class WRAnalog(Acoustic1D):
 
         b_pinc, b_pref, b_qin = ATr(x.vecs)
         bvecs = (np.asarray(b_pinc), np.asarray(b_pref))
-        return -vec.BlockVector(bvecs, labels=[self.state0.keys])
+        return -vec.BlockVector(bvecs, labels=self.state0.labels)
 
     def apply_dres_dcontrol(self, x):
         args = (*self.state0.vecs, *self.control.vecs)
@@ -157,7 +157,7 @@ class WRAnalog(Acoustic1D):
         x_ = vec.concatenate_vec([self.get_state_vec(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
-        return -vec.BlockVector(bvecs, labels=[self.state1.keys])
+        return -vec.BlockVector(bvecs, labels=self.state1.labels)
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec()

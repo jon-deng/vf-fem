@@ -217,7 +217,7 @@ class Solid(base.Model):
         ----------
         props : Property / dict-like
         """
-        for key in props.keys:
+        for key in props.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
@@ -368,7 +368,7 @@ class Solid(base.Model):
 
     def apply_dres_dp_adj(self, x):
         b = self.get_properties_vec(set_default=False)
-        for prop_name, vec in zip(b.keys, b.vecs):
+        for prop_name, vec in b.items():
             # assert self.df1_dsolid[key] is not None
             df1_dprop = None
             if self.df1_dsolid[prop_name] is None:

@@ -87,7 +87,8 @@ class FSIDynamicalSystem(DynamicalSystem):
         dflarea_dslarea = self._dfluid_dsolid_scalar
         dflarea_dslu = gops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
         mats[0][0] = dflarea_dslu
-        self.dflcontrol_dslstate = bvec.BlockMatrix(mats, labels=(self.fluid.control.keys, self.solid.state.keys))
+        self.dflcontrol_dslstate = bvec.BlockMatrix(
+            mats, labels=self.fluid.control.labels+self.solid.state.labels)
 
         # Make null BlockMats relating fluid/solid states
         mats = [

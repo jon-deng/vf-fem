@@ -36,7 +36,7 @@ class FSIFunctional(SolidFunctional):
 
     def eval_dprops(self, f):
         vecs = [self.eval_dsl_props]
-        keys = self.properties.keys
+        keys = self.properties.labels[0]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_properties_vec())

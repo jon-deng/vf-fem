@@ -96,7 +96,7 @@ class Parameterization:
         return self.bvector.__iter__()
 
     def keys(self):
-        return self.bvector.keys
+        return self.bvector.labels[0]
 
     ## Subclasses must implement these two methods
     def init_vector(self):
@@ -249,7 +249,7 @@ class ElasticModuliAndInitialState(Parameterization):
     """
     def init_vector(self):
         vecs = [self.model.state0.copy(), self.model.properties['emod'].copy()]
-        labels = [*self.model.state0.keys, 'emod']
+        labels = [*self.model.state0.labels[0], 'emod']
         return vec.BlockVector(vecs, labels=[labels])
 
     def convert(self):
@@ -289,7 +289,7 @@ def split_bvector_to_standard(model, full_bvec):
 def join_standard_to_bvector(state, control, props, times):
     labels = [f'{key}'
               for bvec in (state, control, props, times)
-              for key in bvec.keys]
+              for key in bvec.labels[0]]
     vecs = [*state.vecs, *control.vecs, *props.vecs, *times.vecs]
 
     # breakpoint()
