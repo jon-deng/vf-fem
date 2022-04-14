@@ -179,6 +179,7 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
     dF/dx(x, xt, g; ...) * (dx, dxt, dg)
     where 'x=[u, v]', 'F=[Fu, Fv]=[Fu, v-ut]'
     """
+
     def assem_res(self):
         resu = (
             dfn.assemble(
@@ -286,6 +287,18 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
             [dresu_dg],
             [dresv_dg]]
         return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['g']))
+
+    def assem_dres_dprops(self):
+        nu, nv = self.state['u'].size(), self.state['v'].size()
+        mats = [
+            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.properties],
+            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.properties]]
+
+        j_emod = self.properties.labels[0].index('emod')
+        mats[0][j_emod] = dfn.assemble(self.forms['form.bi.ddf1uva_demod'], dfn.PETScMatrix())
+
+        return bmat.BlockMatrix(
+            mats, labels=self.state.labels+self.properties.labels)
 
 
 class KelvinVoigt(SolidDynamicalSystem):

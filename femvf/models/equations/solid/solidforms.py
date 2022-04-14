@@ -2,6 +2,9 @@
 Contains definitions of different solid model forms
 """
 
+import operator
+from functools import reduce
+
 import numpy as np
 import dolfin as dfn
 import ufl
@@ -172,7 +175,7 @@ def gen_residual_bilinear_property_forms(forms):
 def gen_hopf_forms(forms):
     gen_unary_linearized_forms(forms)
 
-    unary_form_names = ['f1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
+    unary_form_names = ['f1uva', 'df1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
     for unary_form_name in unary_form_names:
         gen_jac_state_forms(unary_form_name, forms)
     for unary_form_name in unary_form_names:
@@ -230,7 +233,7 @@ def gen_unary_linearized_forms(forms):
     for var_name in ['p1']:
         forms[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.fsi.{var_name}'])
 
-    # Take the action of the jacobian linear forms to get linearized unary forms
+    # Take the action of the jacobian linear forms along states to get linearized unary forms
     # dF/dx * delta x, dF/dp * delta p, ...
     for var_name in ['u1', 'v1', 'a1']:
         unary_form_name = f'df1uva_{var_name}'
@@ -243,6 +246,12 @@ def gen_unary_linearized_forms(forms):
         unary_form_name = f'df1uva_{var_name}'
         df_dx = forms[f'form.bi.df1uva_d{var_name}']
         forms[f'form.un.{unary_form_name}'] = dfn.action(df_dx, forms[f'coeff.dfsi.{var_name}'])
+
+    # Compute the total linearized residual
+    forms[f'form.un.df1uva'] = reduce(
+        operator.add,
+        [forms[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
+        )
 
 def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
                           fsi_facet_labels, fixed_facet_labels):
