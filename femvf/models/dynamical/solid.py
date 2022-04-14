@@ -160,7 +160,16 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         return bvec.BlockMatrix(mats, labels=(self.state.keys, self.control.keys))
 
     def assem_dres_dprops(self):
-        pass
+        nu, nv = self.state['u'].size, self.state['v'].size
+        mats = [
+            [bmat.zero_mat(nu, prop_subvec.size) for prop_subvec in self.properties],
+            [bmat.zero_mat(nv, prop_subvec.size) for prop_subvec in self.properties]]
+
+        j_emod = self.properties.labels[0].index('emod')
+        mats[0][j_emod] = dfn.assemble(self.forms['form.bi.df1uva_demod'], dfn.PETScMatrix())
+
+        return bmat.BlockMatrix(
+            mats, labels=(self.state.labels[0], self.properties.labels[0]))
 
 class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
