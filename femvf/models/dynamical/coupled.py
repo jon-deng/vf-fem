@@ -45,7 +45,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         _ymid_props = bvec.BlockVector([np.array([1.0])], labels=[['ymid']])
         self.properties = bvec.concatenate_vec(
             [bvec.convert_bvec_to_petsc(model.properties) for model in self.models]
-            + [_ymid_props])
+            + [bvec.convert_bvec_to_petsc(_ymid_props)])
 
         ## -- FSI --
         # Below here is all extra stuff needed to do the coupling between fluid/solid
@@ -211,15 +211,47 @@ class FSIDynamicalSystem(DynamicalSystem):
             bmats, labels=(self.state.labels[0], self.state.labels[0]))
 
     def assem_dres_dprops(self):
-        raise NotImplementedError("Not implemented yet")
+
+        dslres_dslprops = bmat.convert_bmat_to_petsc(self.solid.assem_dres_dprops())
+        _dslres_dflprops = [
+            [bmat.zero_mat(slsubvec.size(), propsubvec.size)
+                for propsubvec in self.fluid.properties]
+            for slsubvec in self.solid.state]
+        dslres_dflprops = bmat.BlockMatrix(
+            _dslres_dflprops,
+            labels=(self.solid.state.labels[0], self.fluid.properties.labels[0]))
+        _dslres_dymid = [
+            [bmat.zero_mat(gops.size(slsubvec), gops.size(self.properties['ymid']))]
+            for slsubvec in self.solid.state]
+        dslres_dymid = bmat.BlockMatrix(
+            _dslres_dymid, labels=(self.solid.state.labels[0], ('ymid',)))
+
+        _dflres_dslprops = [
+            [bmat.zero_mat(gops.size(flsubvec), gops.size(propsubvec))
+                for propsubvec in self.solid.properties]
+            for flsubvec in self.fluid.state]
+        dflres_dslprops = bmat.BlockMatrix(
+            _dflres_dslprops,
+            labels=(self.fluid.state.labels[0], self.solid.properties.labels[0]))
+        dflres_dflprops = bmat.convert_bmat_to_petsc(self.fluid.assem_dres_dprops())
+        _dflres_dymid = [
+            [bmat.zero_mat(gops.size(flsubvec), gops.size(self.properties['ymid']))]
+            for flsubvec in self.fluid.state]
+        dflres_dymid = bmat.BlockMatrix(
+            _dflres_dymid, labels=(self.fluid.state.labels[0], ('ymid',)))
+
+        bmats = [
+            [dslres_dslprops, dslres_dflprops, dslres_dymid],
+            [dflres_dslprops, dflres_dflprops, dflres_dymid]]
+        return bmat.concatenate_mat(bmats)
 
     def assem_dres_dcontrol(self):
         _mats = [[bmat.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
-        dslres_dg = bvec.BlockMatrix(_mats, labels=(self.solid.state.keys, self.control.keys))
+        dslres_dg = bvec.BlockMatrix(_mats, labels=self.solid.state.labels+self.control.labels)
 
         dflres_dflg = bmat.convert_bmat_to_petsc(self.fluid.assem_dres_dcontrol())
         _mats = [[row[kk] for kk in range(1, dflres_dflg.rshape[1])] for row in dflres_dflg]
-        dflres_dg =  bvec.BlockMatrix(_mats, labels=(self.fluid.state.keys, self.control.keys))
+        dflres_dg =  bvec.BlockMatrix(_mats, labels=self.fluid.state.labels+self.control.labels)
         return bmat.concatenate_mat([[dslres_dg], [dflres_dg]])
 
     # TODO: Need to implement for optimization strategies

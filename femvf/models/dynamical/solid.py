@@ -14,7 +14,7 @@ Fv(x, xt, g) = v-ut
 import numpy as np
 import dolfin as dfn
 
-from blocktensor import vec as bvec, mat as bmat
+from blocktensor import vec as bvec, mat as bmat, subops
 
 from .base import DynamicalSystem
 from ..transient.solid import properties_bvec_from_forms
@@ -160,10 +160,10 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         return bvec.BlockMatrix(mats, labels=(self.state.keys, self.control.keys))
 
     def assem_dres_dprops(self):
-        nu, nv = self.state['u'].size, self.state['v'].size
+        nu, nv = self.state['u'].size(), self.state['v'].size()
         mats = [
-            [bmat.zero_mat(nu, prop_subvec.size) for prop_subvec in self.properties],
-            [bmat.zero_mat(nv, prop_subvec.size) for prop_subvec in self.properties]]
+            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.properties],
+            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.properties]]
 
         j_emod = self.properties.labels[0].index('emod')
         mats[0][j_emod] = dfn.assemble(self.forms['form.bi.df1uva_demod'], dfn.PETScMatrix())

@@ -295,6 +295,8 @@ if __name__ == '__main__':
         # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dcontrol(_model, control0, dcontrol)
 
+        test_assem_dres_dprops(model, props0, dprops)
+
     print("\n-- Test dres/dstate vs dres_state --")
     test_dres_dstate_vs_dres_state(model, model_linear, state0, del_state)
 

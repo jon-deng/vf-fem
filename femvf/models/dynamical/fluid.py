@@ -47,7 +47,7 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
 
         self.dcontrol = self.control.copy()
 
-        properties_vec = ['psub', 'psup', 'rho_air', 'zeta_min', 'zeta_sep']
+        properties_vec = ['rho_air', 'zeta_min', 'zeta_sep']
         self.properties = bla.BlockVector(
             [np.ones(1) for i in range(len(properties_vec))], labels=[properties_vec])
 
@@ -107,6 +107,24 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
             [-dq_darea, -dq_dpsub, -dq_dpsup],
             [-dp_darea, -dp_dpsub, -dp_dpsup]]
         return bla.BlockMatrix(mats, labels=(self.state.keys, self.control.keys))
+
+    def assem_dres_dprops(self):
+        # Depack variables from BlockVector for input to Bernoulli functions
+        # area = self.control['area']
+        # rho = self.properties['rho_air'][0]
+        # psub = self.control['psub']
+        # psup = self.control['psup']
+        # zeta_min = self.properties['zeta_min'][0]
+        # zeta_sep = self.properties['zeta_sep'][0]
+        # primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
+
+        mats = [
+            [np.zeros((state_subvec.size, prop_subvec.size))
+                for prop_subvec in self.properties]
+            for state_subvec in self.state]
+        return bla.BlockMatrix(mats, labels=(self.state.labels[0], self.properties.labels[0]))
+
+
 
 class LinearizedBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
@@ -177,3 +195,19 @@ class LinearizedBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
             [-dq_darea, -dq_dpsub, -dq_dpsup],
             [-dp_darea, -dp_dpsub, -dp_dpsup]]
         return bla.BlockMatrix(mats, labels=(self.state.keys, self.control.keys))
+
+    def assem_dres_dprops(self):
+        # Depack variables from BlockVector for input to Bernoulli functions
+        # area = self.control['area']
+        # rho = self.properties['rho_air'][0]
+        # psub = self.control['psub']
+        # psup = self.control['psup']
+        # zeta_min = self.properties['zeta_min'][0]
+        # zeta_sep = self.properties['zeta_sep'][0]
+        # primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
+
+        mats = [
+            [np.zeros((state_subvec.size, prop_subvec.size))
+                for prop_subvec in self.properties]
+            for state_subvec in self.state]
+        return bla.BlockMatrix(mats, labels=(self.state.labels[0], self.properties.labels[0]))
