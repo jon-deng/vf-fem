@@ -36,7 +36,7 @@ class FSIFunctional(SolidFunctional):
 
     def eval_dprops(self, f):
         vecs = [self.eval_dsl_props]
-        keys = self.properties.labels[0]
+        keys = self.props.labels[0]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
                 vecs.append(getattr(self.model, attr).get_properties_vec())
@@ -77,7 +77,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         return forms
 
     def eval(self, f):
-        self.model.set_properties(f.get_properties())
+        self.model.set_props(f.get_props())
         N_START = self.constants['n_start']
         N_STATE = f.size
 

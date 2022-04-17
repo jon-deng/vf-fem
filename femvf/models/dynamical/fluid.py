@@ -48,18 +48,18 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
         self.dcontrol = self.control.copy()
 
         properties_vec = ['rho_air', 'zeta_min', 'zeta_sep']
-        self.properties = bla.BlockVector(
+        self.props = bla.BlockVector(
             [np.ones(1) for i in range(len(properties_vec))], labels=[properties_vec])
 
 class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         area = self.control['area']
-        rho = self.properties['rho_air'][0]
+        rho = self.props['rho_air'][0]
         psub = self.control['psub'][0]
         psup = self.control['psup'][0]
-        zeta_min = self.properties['zeta_min'][0]
-        zeta_sep = self.properties['zeta_sep'][0]
+        zeta_min = self.props['zeta_min'][0]
+        zeta_sep = self.props['zeta_sep'][0]
 
         primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
         qp_explicit = bernoulli_qp(*primals)
@@ -92,11 +92,11 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_dres_dcontrol(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         area = self.control['area']
-        rho = self.properties['rho_air'][0]
+        rho = self.props['rho_air'][0]
         psub = self.control['psub']
         psup = self.control['psup']
-        zeta_min = self.properties['zeta_min'][0]
-        zeta_sep = self.properties['zeta_sep'][0]
+        zeta_min = self.props['zeta_min'][0]
+        zeta_sep = self.props['zeta_sep'][0]
         primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
 
         dq_darea, dp_darea = dbernoulli_qp_darea(*primals)
@@ -111,18 +111,18 @@ class Bernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_dres_dprops(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         # area = self.control['area']
-        # rho = self.properties['rho_air'][0]
+        # rho = self.props['rho_air'][0]
         # psub = self.control['psub']
         # psup = self.control['psup']
-        # zeta_min = self.properties['zeta_min'][0]
-        # zeta_sep = self.properties['zeta_sep'][0]
+        # zeta_min = self.props['zeta_min'][0]
+        # zeta_sep = self.props['zeta_sep'][0]
         # primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
 
         mats = [
             [np.zeros((state_subvec.size, prop_subvec.size))
-                for prop_subvec in self.properties]
+                for prop_subvec in self.props]
             for state_subvec in self.state]
-        return bla.BlockMatrix(mats, labels=(self.state.labels[0], self.properties.labels[0]))
+        return bla.BlockMatrix(mats, labels=(self.state.labels[0], self.props.labels[0]))
 
 
 
@@ -130,11 +130,11 @@ class LinearizedBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_res(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         area = self.control['area']
-        rho = self.properties['rho_air'][0]
+        rho = self.props['rho_air'][0]
         psub = self.control['psub'][0]
         psup = self.control['psup'][0]
-        zeta_min = self.properties['zeta_min'][0]
-        zeta_sep = self.properties['zeta_sep'][0]
+        zeta_min = self.props['zeta_min'][0]
+        zeta_sep = self.props['zeta_sep'][0]
 
         primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
         darea = self.dcontrol['area']
@@ -175,11 +175,11 @@ class LinearizedBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_dres_dcontrol(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         area = self.control['area']
-        rho = self.properties['rho_air'][0]
+        rho = self.props['rho_air'][0]
         psub = self.control['psub']
         psup = self.control['psup']
-        zeta_min = self.properties['zeta_min'][0]
-        zeta_sep = self.properties['zeta_sep'][0]
+        zeta_min = self.props['zeta_min'][0]
+        zeta_sep = self.props['zeta_sep'][0]
 
         primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
         darea = self.dcontrol['area']
@@ -199,15 +199,15 @@ class LinearizedBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
     def assem_dres_dprops(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         # area = self.control['area']
-        # rho = self.properties['rho_air'][0]
+        # rho = self.props['rho_air'][0]
         # psub = self.control['psub']
         # psup = self.control['psup']
-        # zeta_min = self.properties['zeta_min'][0]
-        # zeta_sep = self.properties['zeta_sep'][0]
+        # zeta_min = self.props['zeta_min'][0]
+        # zeta_sep = self.props['zeta_sep'][0]
         # primals = (area, self.s, psub, psup, rho, zeta_min, zeta_sep)
 
         mats = [
             [np.zeros((state_subvec.size, prop_subvec.size))
-                for prop_subvec in self.properties]
+                for prop_subvec in self.props]
             for state_subvec in self.state]
-        return bla.BlockMatrix(mats, labels=(self.state.labels+self.properties.labels))
+        return bla.BlockMatrix(mats, labels=(self.state.labels+self.props.labels))

@@ -148,7 +148,7 @@ class FullParameterization(Parameterization):
 
     def convert(self):
         model = self.model
-        subvec_bsizes = [bvec.size for bvec in (model.state0, model.control, model.properties)] + [1]
+        subvec_bsizes = [bvec.size for bvec in (model.state0, model.control, model.props)] + [1]
         ini_state, control, props, times = split_bvector_to_standard(model, self.bvector)
 
         return ini_state, [control], props, times
@@ -214,7 +214,7 @@ class NodalElasticModuli(Parameterization):
         self._bvector = self.init_vector()
 
     def init_vector(self):
-        vecs = [self.model.properties['emod'].copy()]
+        vecs = [self.model.props['emod'].copy()]
         labels = ['emod']
         return vec.BlockVector(vecs, labels=[labels])
 
@@ -223,7 +223,7 @@ class NodalElasticModuli(Parameterization):
         ini_state.set(0.0)
 
         controls = [self.model.control.copy()]
-        props = self.model.properties.copy()
+        props = self.model.props.copy()
 
         props['emod'] = self.bvector['emod']
         times = self.constants[0]['times']
@@ -248,7 +248,7 @@ class ElasticModuliAndInitialState(Parameterization):
     A parameterization consisting of nodal values of elastic moduli with defaults for the remaining parameters.
     """
     def init_vector(self):
-        vecs = [self.model.state0.copy(), self.model.properties['emod'].copy()]
+        vecs = [self.model.state0.copy(), self.model.props['emod'].copy()]
         labels = [*self.model.state0.labels[0], 'emod']
         return vec.BlockVector(vecs, labels=[labels])
 
@@ -257,7 +257,7 @@ class ElasticModuliAndInitialState(Parameterization):
         ini_state[:] = self.bvector[:-1]
 
         controls = [self.model.control.copy()]
-        props = self.model.properties.copy()
+        props = self.model.props.copy()
 
         props['emod'] = self.bvector['emod']
         times = self.constants['times']
@@ -279,7 +279,7 @@ class ElasticModuliAndInitialState(Parameterization):
         return out
 
 def split_bvector_to_standard(model, full_bvec):
-    subvec_bsizes = [bvec.size for bvec in (model.state0, model.control, model.properties)] + [1]
+    subvec_bsizes = [bvec.size for bvec in (model.state0, model.control, model.props)] + [1]
     subvec_idxs = np.cumsum([0] + subvec_bsizes)
 
     ini_state, control, props, times = [full_bvec[ii:jj] for ii, jj in zip(subvec_idxs[:-1], subvec_idxs[1:])]

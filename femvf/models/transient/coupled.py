@@ -53,7 +53,7 @@ class FSIModel(base.Model):
         self.control = self.fluid.control[1:].copy()
 
         _self_properties = bvec.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
-        self.properties = bvec.concatenate_vec([self.solid.properties, self.fluid.properties, _self_properties])
+        self.props = bvec.concatenate_vec([self.solid.props, self.fluid.props, _self_properties])
 
         ## FSI related stuff
         self._solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
@@ -100,11 +100,11 @@ class FSIModel(base.Model):
         for key, value in control.items():
             self.fluid.control[key][:] = value
 
-    def set_properties(self, props):
-        self.properties[:] = props
+    def set_props(self, props):
+        self.props[:] = props
 
-        self.solid.set_properties(props[:self.solid.properties.size])
-        self.fluid.set_properties(props[self.solid.properties.size:])
+        self.solid.set_props(props[:self.solid.props.size])
+        self.fluid.set_props(props[self.solid.props.size:])
 
     # Additional more friendly method for setting parameters (use the above defined methods)
     def set_params_fromfile(self, f, n, update_props=True):
@@ -124,7 +124,7 @@ class FSIModel(base.Model):
         """
         # Get data from the state file
         if update_props:
-            self.set_properties(f.get_properties())
+            self.set_props(f.get_props())
 
         state = f.get_state(n)
         control = None
@@ -153,7 +153,7 @@ class FSIModel(base.Model):
         """
         # Get data from the state file
         if update_props:
-            self.set_properties(f.get_properties())
+            self.set_props(f.get_props())
 
         state0 = f.get_state(n-1)
         state1 = f.get_state(n)
@@ -181,14 +181,14 @@ class FSIModel(base.Model):
         return ret
 
     def get_properties_vec(self):
-        return self.properties.copy()
+        return self.props.copy()
 
     ## Residual functions
     # The below residual function definitions are common to both explicit and implicit FSI models
     def apply_dres_dcontrol(self, x):
         ## Implement here since both FSI models should use this rule
         dres = self.get_state_vec()
-        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)
 
         # Only the flow rate and pressure residuals are sensitive to the
         # controls
@@ -200,7 +200,7 @@ class FSIModel(base.Model):
     def apply_dres_dcontrol_adj(self, x):
         ## Implement here since both FSI models should use this rule
         b = self.get_control_vec()
-        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)
 
         b['psub'][:] = np.dot(x['p'], dp_dpsub) + np.dot(x['q'], dq_dpsub)
         b['psup'][:] = np.dot(x['p'], dp_dpsup) + np.dot(x['q'], dq_dpsup)
@@ -225,7 +225,7 @@ class ExplicitFSIModel(FSIModel):
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.properties['ymid'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
+        self._solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
         fl_control = self.fluid.control.copy()
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)
@@ -615,8 +615,8 @@ class FSAIModel(FSIModel):
         control = bvec.BlockVector((np.array([1.0]),), labels=[('psub',)])
         self.control = control.copy()
 
-        self.properties = bvec.concatenate_vec(
-            [solid.properties, fluid.properties, acoustic.properties])
+        self.props = bvec.concatenate_vec(
+            [solid.props, fluid.props, acoustic.props])
 
         self._dt = 1.0
 
@@ -664,18 +664,18 @@ class FSAIModel(FSIModel):
         fl_control['psub'][:] = control['psub']
         self.fluid.set_control(fl_control)
 
-    def set_properties(self, props):
-        sl_nblock = len(self.solid.properties.size)
-        fl_nblock = len(self.fluid.properties.size)
-        ac_nblock = len(self.acoustic.properties.size)
+    def set_props(self, props):
+        sl_nblock = len(self.solid.props.size)
+        fl_nblock = len(self.fluid.props.size)
+        ac_nblock = len(self.acoustic.props.size)
 
         sl_props = props[:sl_nblock]
         fl_props = props[sl_nblock:sl_nblock+fl_nblock]
         ac_props = props[sl_nblock+fl_nblock:sl_nblock+fl_nblock+ac_nblock]
 
-        self.solid.set_properties(sl_props)
-        self.fluid.set_properties(fl_props)
-        self.acoustic.set_properties(ac_props)
+        self.solid.set_props(sl_props)
+        self.fluid.set_props(fl_props)
+        self.acoustic.set_props(ac_props)
 
     ## Coupling methods
     def set_ini_solid_state(self, sl_state0):
@@ -728,7 +728,7 @@ class FSAIModel(FSIModel):
         return ret
 
     def get_properties_vec(self, set_default=True):
-        ret = self.properties.copy()
+        ret = self.props.copy()
         if not set_default:
             ret.set(0.0)
         return ret
@@ -773,7 +773,7 @@ class FSAIModel(FSIModel):
             self.set_fin_acoustic_state(ac_state1)
             fl_state1, _ = self.fluid.solve_state1(self.fluid.state0)
 
-            dqbern_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)[4]
+            dqbern_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)[4]
             dpsup_dqac = self.acoustic.z[0]
             def res():
                 qbern = fl_state1[0]
@@ -801,7 +801,7 @@ class FSAIModel(FSIModel):
 
         ## Solve the coupled fluid/acoustic system
         # First compute some sensitivities that are needed
-        *_, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+        *_, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)
 
         # solve the coupled system for pressure and acoustic residuals
         dfq_dq = 1.0
@@ -947,7 +947,7 @@ class FSAIModel(FSIModel):
     def apply_dres_dcontrol_adj(self, x):
         ## Implement here since both FSI models should use this rule
         b = self.get_control_vec()
-        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.properties)
+        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)
 
         b['psub'][:] = np.dot(x['p'], dp_dpsub) + np.dot(x['q'][0], dq_dpsub)
         return -b

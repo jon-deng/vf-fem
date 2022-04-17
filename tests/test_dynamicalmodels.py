@@ -52,7 +52,7 @@ def setup_parameter_base(model):
     model_solid = model.solid
 
     # (linearization directions for linearized residuals)
-    props0 = model.properties.copy()
+    props0 = model.props.copy()
     props0['emod'].array[:] = 5e3*10
     props0['rho'].array[:] = 1.0
 
@@ -68,7 +68,7 @@ def setup_parameter_base(model):
     props0['zeta_sep'][0] = 1e-4
     props0['zeta_min'][0] = 1e-4
     props0['rho_air'][0] = 1.2e-3
-    model.set_properties(props0)
+    model.set_props(props0)
 
     control0 = model.control.copy()
     control0.set(1.0)
@@ -131,7 +131,7 @@ def setup_parameter_perturbation(model):
     dstatet.set(1e-6)
     _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
 
-    props0 = model.properties.copy()
+    props0 = model.props.copy()
     dprops = props0.copy()
     dprops.set(0)
     dprops['emod'] = 1.0
@@ -146,7 +146,7 @@ def _reset_parameter_base(model, state0, statet0, control0, props0, del_state, d
     model.set_state(state0)
     model.set_statet(statet0)
     model.set_control(control0)
-    model.set_properties(props0)
+    model.set_props(props0)
     model.set_dstate(del_state)
     model.set_dstatet(del_statet)
 
@@ -154,7 +154,7 @@ def _reset_parameter_perturbation(model):
     model.set_state(state0)
     model.set_statet(statet0)
     model.set_control(control0)
-    model.set_properties(props0)
+    model.set_props(props0)
     model.set_dstate(del_state)
     model.set_dstatet(del_statet)
 
@@ -218,8 +218,8 @@ def test_assem_dres_dcontrol(model, x0, dx):
 
 def test_assem_dres_dprops(model, x0, dx):
     """Test dF/dprops is correct"""
-    res = lambda state: _set_and_assemble(state, model.set_properties, model.assem_res)
-    jac = lambda state: _set_and_assemble(state, model.set_properties, model.assem_dres_dprops)
+    res = lambda state: _set_and_assemble(state, model.set_props, model.assem_res)
+    jac = lambda state: _set_and_assemble(state, model.set_props, model.assem_dres_dprops)
 
     _test_taylor(x0, dx, res, jac)
 

@@ -43,8 +43,8 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.control = bvec.convert_bvec_to_petsc(self.fluid.control[1:])
 
         _ymid_props = bvec.BlockVector([np.array([1.0])], labels=[['ymid']])
-        self.properties = bvec.concatenate_vec(
-            [bvec.convert_bvec_to_petsc(model.properties) for model in self.models]
+        self.props = bvec.concatenate_vec(
+            [bvec.convert_bvec_to_petsc(model.props) for model in self.models]
             + [bvec.convert_bvec_to_petsc(_ymid_props)])
 
         ## -- FSI --
@@ -109,7 +109,7 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         ## The below are needed to communicate FSI interactions
         # Set solid_area
-        self.solid_area[:] = 2*(self.properties['ymid'][0] - (self.solid_xref + self.solid.state['u'])[1::2])
+        self.solid_area[:] = 2*(self.props['ymid'][0] - (self.solid_xref + self.solid.state['u'])[1::2])
 
         # map solid_area to fluid area
         fluid_control = self.fluid.control.copy()
@@ -168,14 +168,14 @@ class FSIDynamicalSystem(DynamicalSystem):
         fl_control[1:][:] = control # Set psub/psup of the coupled model to the fluid model control
         self.fluid.set_control(fl_control)
 
-    def set_properties(self, props):
-        self.properties[:] = props
+    def set_props(self, props):
+        self.props[:] = props
         # You have to add a final size of 1 block to account for the final ymid
         # property block
-        block_sizes = [model.properties.size for model in self.models] + [1]
+        block_sizes = [model.props.size for model in self.models] + [1]
         sub_props = bvec.split_bvec(props, block_sizes)
         for model, sub_prop in zip(self.models, sub_props):
-            model.set_properties(sub_prop)
+            model.set_props(sub_prop)
 
     def assem_res(self):
         return bvec.concatenate_vec([bvec.convert_bvec_to_petsc(model.assem_res()) for model in self.models])
@@ -216,27 +216,27 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslres_dslprops = bmat.convert_bmat_to_petsc(self.solid.assem_dres_dprops())
         _dslres_dflprops = [
             [bmat.zero_mat(slsubvec.size(), propsubvec.size)
-                for propsubvec in self.fluid.properties]
+                for propsubvec in self.fluid.props]
             for slsubvec in self.solid.state]
         dslres_dflprops = bmat.BlockMatrix(
             _dslres_dflprops,
-            labels=(self.solid.state.labels[0], self.fluid.properties.labels[0]))
+            labels=(self.solid.state.labels[0], self.fluid.props.labels[0]))
         _dslres_dymid = [
-            [bmat.zero_mat(gops.size(slsubvec), gops.size(self.properties['ymid']))]
+            [bmat.zero_mat(gops.size(slsubvec), gops.size(self.props['ymid']))]
             for slsubvec in self.solid.state]
         dslres_dymid = bmat.BlockMatrix(
             _dslres_dymid, labels=(self.solid.state.labels[0], ('ymid',)))
 
         _dflres_dslprops = [
             [bmat.zero_mat(gops.size(flsubvec), gops.size(propsubvec))
-                for propsubvec in self.solid.properties]
+                for propsubvec in self.solid.props]
             for flsubvec in self.fluid.state]
         dflres_dslprops = bmat.BlockMatrix(
             _dflres_dslprops,
-            labels=(self.fluid.state.labels[0], self.solid.properties.labels[0]))
+            labels=(self.fluid.state.labels[0], self.solid.props.labels[0]))
         dflres_dflprops = bmat.convert_bmat_to_petsc(self.fluid.assem_dres_dprops())
         _dflres_dymid = [
-            [bmat.zero_mat(gops.size(flsubvec), gops.size(self.properties['ymid']))]
+            [bmat.zero_mat(gops.size(flsubvec), gops.size(self.props['ymid']))]
             for flsubvec in self.fluid.state]
         dflres_dymid = bmat.BlockMatrix(
             _dflres_dymid, labels=(self.fluid.state.labels[0], ('ymid',)))

@@ -118,7 +118,7 @@ def make_stress_invariant_statistics(model, fspace, dmeas):
     def stress_invariant_statistics(state, control, props):
         model.set_fin_state(state)
         model.set_control(control)
-        model.set_properties(props)
+        model.set_props(props)
 
         stats = []
         # For each expression, compute the min/max/average

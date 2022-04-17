@@ -72,7 +72,7 @@ def sigmoid(s, zeta=1):
     """
     return 1/(1+jnp.exp(-s/zeta))
 
-# @jax.jit
+@jax.jit
 def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     wmin = smooth_min_weight(area, zeta_min)
     amin = wavg(s, area, wmin)

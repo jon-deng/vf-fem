@@ -80,7 +80,7 @@ class ForwardConfig(unittest.TestCase):
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_properties(fluid_props)
+        # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
@@ -109,7 +109,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the properties
         y_gap = 0.01
 
-        props = model.properties.copy()
+        props = model.props.copy()
         # fl_props = model.fluid.get_properties_vec(set_default=True)
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
@@ -130,7 +130,7 @@ class ForwardConfig(unittest.TestCase):
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_properties(fluid_props)
+        # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
@@ -160,7 +160,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the properties
         y_gap = 0.01
 
-        props = model.properties.copy()
+        props = model.props.copy()
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
@@ -186,7 +186,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_properties(fluid_props)
+        # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
@@ -212,7 +212,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the properties
         y_gap = 0.01
 
-        props = model.properties.copy()
+        props = model.props.copy()
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
@@ -232,7 +232,7 @@ class ForwardConfig(unittest.TestCase):
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_properties(fluid_props)
+        # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
@@ -290,7 +290,7 @@ class TestIntegrate(ForwardConfig):
 
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
-        # C, N = model.acoustic.properties['soundspeed'][0], model.acoustic.properties['area'].size
+        # C, N = model.acoustic.props['soundspeed'][0], model.acoustic.props['area'].size
         # props['length'][:] = (0.5*dt*C) * N
 
         save_path = 'out/test_forward_fsai.h5'
@@ -309,7 +309,7 @@ class TestIntegrate(ForwardConfig):
         controls = [(1-np.exp(-t/tau))*_controls[0] for t in _times[:30]]
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
-        # C, N = model.acoustic.properties['soundspeed'][0], model.acoustic.properties['area'].size
+        # C, N = model.acoustic.props['soundspeed'][0], model.acoustic.props['area'].size
         # props['length'][:] = (0.5*dt*C) * N
 
         save_path = 'out/test_forward_variable_controls.h5'
@@ -404,7 +404,7 @@ class TestIntegrate(ForwardConfig):
 
 def proc_time_and_glottal_width(model, f):
     t = f.get_times()
-    props = f.get_properties()
+    props = f.get_props()
 
     glottal_width_sharp = solidfunc.make_sig_glottal_width_sharp(model)
     y = glottal_width_sharp(f)

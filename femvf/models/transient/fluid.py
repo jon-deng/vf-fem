@@ -51,7 +51,7 @@ class QuasiSteady1DFluid(base.Model):
         psub, psup = np.zeros(1), np.zeros(1)
         self.control = BlockVector((area, psub, psup), labels=(('area', 'psub', 'psup'),))
 
-        self.properties = self.get_properties_vec(set_default=True)
+        self.props = self.get_properties_vec(set_default=True)
 
         self._dt = 1.0
 
@@ -86,11 +86,11 @@ class QuasiSteady1DFluid(base.Model):
         """
         self.control[:] = control
 
-    def set_properties(self, props):
+    def set_props(self, props):
         """
         Set the fluid properties
         """
-        self.properties[:] = props
+        self.props[:] = props
 
     ## Get empty vectors
     def get_state_vec(self):
@@ -183,7 +183,7 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        qp, info = bernoulli_qp(self.s_vertices, *self.control.vecs, self.properties)
+        qp, info = bernoulli_qp(self.s_vertices, *self.control.vecs, self.props)
         ret_state1 = self.state1.copy()
         ret_state1['q'][0] = qp[0]
         ret_state1['p'][:] = qp[1]
@@ -244,9 +244,9 @@ class BernoulliMinimumSeparation(QuasiSteady1DFluid):
         psub = self.control['psub'][0]
         psup = self.control['psup'][0]
 
-        rho = self.properties['rho_air'][0]
-        zeta_min = self.properties['zeta_sep'][0]
-        zeta_sep = self.properties['zeta_min'][0]
+        rho = self.props['rho_air'][0]
+        zeta_min = self.props['zeta_sep'][0]
+        zeta_sep = self.props['zeta_min'][0]
 
         qp1 = bernoulli_sep_at_min.bernoulli_qp(
             area, s, psub, psup, rho, zeta_min, zeta_sep

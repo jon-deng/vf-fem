@@ -35,16 +35,16 @@ class Acoustic1D(base.Model):
         c = 340*100*np.ones(1)
         rrad = np.ones(1)
         lrad = np.ones(1)
-        self.properties = vec.BlockVector(
+        self.props = vec.BlockVector(
             (length, area, gamma, rho, c, rrad, lrad),
             labels=[('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad')])
 
     ## Setting parameters of the acoustic model
     @property
     def dt(self):
-        NTUBE = self.properties['area'].size
-        length = self.properties['length'][0]
-        C = self.properties['soundspeed'][0]
+        NTUBE = self.props['area'].size
+        length = self.props['length'][0]
+        C = self.props['soundspeed'][0]
         return (2*length/NTUBE) / C
 
     @dt.setter
@@ -62,8 +62,8 @@ class Acoustic1D(base.Model):
     def set_control(self, control):
         self.control[:] = control
 
-    def set_properties(self, props):
-        self.properties[:] = props
+    def set_props(self, props):
+        self.props[:] = props
 
     ## Getting empty vectors
     def get_state_vec(self):
@@ -77,7 +77,7 @@ class Acoustic1D(base.Model):
         return ret
 
     def get_properties_vec(self, set_default=True):
-        ret = self.properties.copy()
+        ret = self.props.copy()
         if not set_default:
             ret.set(0.0)
         return ret
@@ -85,10 +85,10 @@ class Acoustic1D(base.Model):
 class WRAnalog(Acoustic1D):
     @property
     def z(self):
-        return self.properties['rhoac']*self.properties['soundspeed']/self.properties['area']
+        return self.props['rhoac']*self.props['soundspeed']/self.props['area']
 
-    def set_properties(self, props):
-        super().set_properties(props)
+    def set_props(self, props):
+        super().set_props(props)
 
         # Reset the WRAnalog 'reflect' function when properties of the tract are updated
         # The reflection function behaviour only changes if the properties are changed
@@ -97,15 +97,15 @@ class WRAnalog(Acoustic1D):
 
     def init_wra(self):
         dt = self.dt
-        cspeed = self.properties['soundspeed'][0]
-        rho = self.properties['rhoac'][0]
-        area = self.properties['area'].copy()
-        gamma = self.properties['proploss'].copy()
+        cspeed = self.props['soundspeed'][0]
+        rho = self.props['rhoac'][0]
+        area = self.props['area'].copy()
+        gamma = self.props['proploss'].copy()
 
         ## Set radiation proeprties
         # Ignore below for now?
-        R = self.properties['rrad'][0]
-        L = self.properties['lrad'][0]
+        R = self.props['rrad'][0]
+        L = self.props['lrad'][0]
 
         # Formula given by Story and Flanagan (equations 2.103 and 2.104 from Story's thesis)
         PISTON_RAD = np.sqrt(area[-1]/np.pi)

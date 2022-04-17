@@ -63,7 +63,7 @@ props['zeta_ainv'][:] = ZETA
 
 ### Set the control and properties for the model
 model.set_control(control)
-model.set_properties(props)
+model.set_props(props)
 
 def test_static_configuration_coupled_newton():
     x_n, info = static.static_configuration_coupled_newton(model)

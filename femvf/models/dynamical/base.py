@@ -14,9 +14,9 @@ class DynamicalSystem:
 
     def set_control(self, control):
         self.control[:] = control
-        
-    def set_properties(self, props):
-        self.properties[:] = props
+
+    def set_props(self, props):
+        self.props[:] = props
 
 
     def set_dstate(self, dstate):
@@ -27,4 +27,3 @@ class DynamicalSystem:
 
     def set_dcontrol(self, dcontrol):
         self.dcontrol[:] = dcontrol
-        

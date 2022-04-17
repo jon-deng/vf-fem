@@ -24,7 +24,7 @@ class TestBernoulli:
         """
         fluid = setup_bernoulli()
 
-        fluid.set_properties(self.fluid_properties)
+        fluid.set_props(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
 
@@ -53,18 +53,18 @@ class TestBernoulli:
         ax = axs[1]
         ax.plot(xy_surf[:-1:2], xy_surf[1::2], ls='-.', c='k')
         ax.set_ylabel("y [cm]")
-        
+
         axs[0].legend()
         fig.savefig('test_fluid_Bernoulli.png')
         plt.show()
-        
+
     def test_flow_sensitivity(self):
         """
         Test if derivatives of the flow quantities/residuals are correct using finite differences
         """
         np.random.seed(0)
         fluid = self.fluid
-        fluid.set_properties(self.fluid_properties)
+        fluid.set_props(self.fluid_properties)
 
         psub0, psup0 = 8000, 0
         usurf0 = self.surface_coordinates
@@ -88,7 +88,7 @@ class TestBernoulli:
             vsurf = vsurf0
             psub = psub0 + h*dpsub
             psup = psup0 + h*dpsup
-            
+
             qp, _ = fluid.fluid_pressure(usurf, vsurf, psub, psup, self.fluid_properties)
             qs.append(qp['q'][0])
             ps.append(qp['p'])
@@ -118,7 +118,7 @@ class TestBernoulli:
 
         relerr = np.abs(dq - dq_fd)/np.abs(dq_fd)
         print("Relative error (q)", relerr)
-        
+
         # print(p_order_2[:, 25])
         # self.assertTrue((error))
 
@@ -167,7 +167,7 @@ class TestBernoulli:
         print("2nd order Taylor (q)", q_order_2)
 
         error = dp - dp_true
-        
+
         print(p_order_2[:, 25])
         self.assertTrue((error))
 
@@ -177,7 +177,7 @@ class TestBernoulli:
         """
         np.random.seed(0)
         fluid = self.fluid
-        fluid.set_properties(self.fluid_properties)
+        fluid.set_props(self.fluid_properties)
 
         surface_coordinates = self.surface_coordinates
 
@@ -201,7 +201,7 @@ class TestBernoulli:
         dp_solid = dp_du_solid*du_solid
 
         dp_solid_adj = dp_du_solid_adj.getVecRight()
-        
+
         dp_du_solid_adj.multTranspose(du_solid, dp_solid_adj)
 
         error = dp_solid[:] - dp_fluid
@@ -288,7 +288,7 @@ class TestSmoothApproximations(CommonSetup):
         self.f = self.s**2
 
         self.beta = 100.0
-        self.alpha = 75 
+        self.alpha = 75
         self.k =  -500
         self.sigma = 0.005
 
@@ -303,13 +303,13 @@ class TestSmoothApproximations(CommonSetup):
         f0 = fluid.smoothlb(a0, a_lb, alpha=self.fluid_properties['zeta_lb'])
         f1 = fluid.smoothlb(a0+da, a_lb, alpha=self.fluid_properties['zeta_lb'])
         df_da_fd = (f1-f0)/da
-    
+
     def test_smoothmin(self):
         """
         Plots the values of the smoothing factors
         """
         fluid = self.fluid
-        fluid.set_properties(self.fluid_properties)
+        fluid.set_props(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]
@@ -318,7 +318,7 @@ class TestSmoothApproximations(CommonSetup):
 
         # print(fluid_props.)
         print([fluid_props[key] for key in ('zeta_amin', 'zeta_sep', 'zeta_ainv')])
-        
+
         K_STABILITY = np.max(fluid_props['zeta_amin']*area)
         w_smooth_min = np.exp(fluid_props['zeta_amin']*area - K_STABILITY)
 
@@ -333,7 +333,7 @@ class TestSmoothApproximations(CommonSetup):
         Plots the values of the smoothing factors
         """
         fluid = self.fluid
-        fluid.set_properties(self.fluid_properties)
+        fluid.set_props(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]
@@ -402,7 +402,7 @@ class TestSmoothApproximationsInDiscontinuousLimit(CommonSetup):
         # self.zeta = 0.005
         self.alpha = 1e-4
         # self.zeta_lb = 0.005
-        # self.zeta_min = 0.005 
+        # self.zeta_min = 0.005
         # self.zeta_sig =  0.005
         # self.zeta_gau = 0.005
 
@@ -450,7 +450,7 @@ if __name__ == '__main__':
 
     # test = TestSmoothApproximationsInDiscontinuousLimit()
     # test.setUp()
-    # test.test_min() 
+    # test.test_min()
     # test.test_smoothlb()
     # test.test_gaussian()
     # test.test_smoothstep()

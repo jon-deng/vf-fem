@@ -112,8 +112,8 @@ class Solid(base.Model):
         self.state0 = BlockVector((self.u0.vector(), self.v0.vector(), self.a0.vector()), labels=[('u', 'v', 'a')])
         self.state1 = BlockVector((self.u1.vector(), self.v1.vector(), self.a1.vector()), labels=[('u', 'v', 'a')])
         self.control = BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
-        self.properties = self.get_properties_vec(set_default=True)
-        self.set_properties(self.properties)
+        self.props = self.get_properties_vec(set_default=True)
+        self.set_props(self.props)
 
         # TODO: You should move this to the solid since it's not the responsibility of this class to do solid specific stuff
         self.cached_form_assemblers = {
@@ -205,7 +205,7 @@ class Solid(base.Model):
     def set_control(self, p1):
         self.forms['coeff.fsi.p1'].vector()[:] = p1['p']
 
-    def set_properties(self, props):
+    def set_props(self, props):
         """
         Sets the properties of the solid
 

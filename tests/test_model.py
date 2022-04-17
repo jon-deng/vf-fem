@@ -71,7 +71,7 @@ class TestFSAIModel(unittest.TestCase):
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_properties(fluid_props)
+        # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
@@ -84,7 +84,7 @@ class TestFSAIModel(unittest.TestCase):
 
     def test_apply_dres_dstate1(self):
         model, ini_state, controls, props = self.config_fsai_model()
-        model.set_properties(props)
+        model.set_props(props)
 
         fin_state = ini_state.copy()
 
@@ -119,7 +119,7 @@ class TestFSAIModel(unittest.TestCase):
 
     def test_solve_dres_dstate1(self):
         model, ini_state, controls, props = self.config_fsai_model()
-        model.set_properties(props)
+        model.set_props(props)
 
         fin_state = ini_state.copy()
 
@@ -199,7 +199,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         self.model.set_fin_state(state1)
         self.model.set_ini_state(state0)
         self.model.set_control(control)
-        self.model.set_properties(props)
+        self.model.set_props(props)
         self.model.dt = dt
 
     def dres_dxx(self, dstate0, dcontrol, dprops, ddt):

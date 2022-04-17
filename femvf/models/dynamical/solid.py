@@ -60,8 +60,8 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
         self.dcontrol = bvec.BlockVector((self.forms['coeff.dfsi.p1'].vector(),), labels=[('p',)])
 
 
-        self.properties = self.get_properties_vec(set_default=True)
-        self.set_properties(self.properties)
+        self.props = self.get_properties_vec(set_default=True)
+        self.set_props(self.props)
 
     @property
     def forms(self):
@@ -76,7 +76,7 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
         defaults = self.PROPERTY_DEFAULTS if set_default else None
         return properties_bvec_from_forms(self.forms, defaults)
 
-    def set_properties(self, props):
+    def set_props(self, props):
         for key in props.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
@@ -162,14 +162,14 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size(), self.state['v'].size()
         mats = [
-            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.properties],
-            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.properties]]
+            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
+            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
 
-        j_emod = self.properties.labels[0].index('emod')
+        j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = dfn.assemble(self.forms['form.bi.df1uva_demod'], dfn.PETScMatrix())
 
         return bmat.BlockMatrix(
-            mats, labels=(self.state.labels[0], self.properties.labels[0]))
+            mats, labels=(self.state.labels[0], self.props.labels[0]))
 
 class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
     """
@@ -291,14 +291,14 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size(), self.state['v'].size()
         mats = [
-            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.properties],
-            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.properties]]
+            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
+            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
 
-        j_emod = self.properties.labels[0].index('emod')
+        j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = dfn.assemble(self.forms['form.bi.ddf1uva_demod'], dfn.PETScMatrix())
 
         return bmat.BlockMatrix(
-            mats, labels=self.state.labels+self.properties.labels)
+            mats, labels=self.state.labels+self.props.labels)
 
 
 class KelvinVoigt(SolidDynamicalSystem):

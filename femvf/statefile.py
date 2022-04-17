@@ -92,7 +92,7 @@ class StateFile:
         self.dset_chunk_cache = {}
         if mode == 'r' or 'a':
             ## Create caches for reading states and controls, since these vary in time
-            # h5py is supposed to do this caching but I found that each dataset read call in h5py 
+            # h5py is supposed to do this caching but I found that each dataset read call in h5py
             # has a lot of overhead so I made this cache instead
             for name in model.state0.keys:
                 self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
@@ -143,9 +143,9 @@ class StateFile:
     def variable_controls(self):
         if self.num_controls > 1:
             return True
-        else: 
+        else:
             return False
-    
+
     @property
     def num_controls(self):
         num = 1
@@ -244,13 +244,13 @@ class StateFile:
 
         for name, vec in zip(self.model.control.keys, self.model.control.vecs):
             NDOF = len(vec)
-            control_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF), 
+            control_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
                                          chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
     def init_properties(self):
         properties_group = self.root_group.require_group('properties')
 
-        for name, value in zip(self.model.properties.keys, self.model.properties.vecs):
+        for name, value in zip(self.model.props.keys, self.model.props.vecs):
             size = None
             try:
                 size = len(value)
@@ -261,7 +261,7 @@ class StateFile:
     def init_solver_info(self):
         solver_info_group = self.root_group.require_group('solver_info')
         for key in ['num_iter', 'rel_err', 'abs_err']:
-            solver_info_group.require_dataset(key, (self.size,), dtype=np.float64, maxshape=(None,), 
+            solver_info_group.require_dataset(key, (self.size,), dtype=np.float64, maxshape=(None,),
                                               chunks=(self.NCHUNK,))
 
     ## Functions for writing by appending
@@ -278,7 +278,7 @@ class StateFile:
             dset.resize(dset.shape[0]+1, axis=0)
 
             if isinstance(value, dfn.GenericVector):
-                # This converts dolfin vector types to numpy arrays which 
+                # This converts dolfin vector types to numpy arrays which
                 # allows the h5py to write them much faster
                 value = value[:]
             dset[-1, :] = value
@@ -303,7 +303,7 @@ class StateFile:
             dset = properties_group[name]
             # dset.resize(dset.shape[0]+1, axis=0)
             dset[:] = value
-    
+
     def append_time(self, time):
         """
         Append times to the file.
@@ -404,12 +404,12 @@ class StateFile:
 
         return control
 
-    def get_properties(self):
+    def get_props(self):
         properties = self.model.get_properties_vec()
 
         for name, vec in zip(properties.keys, properties.vecs):
             dset = self.root_group[f'properties/{name}']
-            try: 
+            try:
                 vec[:] = dset[:]
             except IndexError as e:
                 vec[()] = dset[()]

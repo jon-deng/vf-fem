@@ -29,10 +29,10 @@ class TestWRA(unittest.TestCase):
         # self.model.dt = self.LENGTH/self.model.NTUBE
         # Uniform tract
         props['area'][:] = 4.0
-        # Idealized /a/ 
+        # Idealized /a/
         # props['area'][:22] = 0.5
         # props['area'][22:] = 3
-        self.model.set_properties(props)
+        self.model.set_props(props)
 
         # Set the impulse flow input
         state0 = self.model.get_state_vec()
@@ -52,7 +52,7 @@ class TestWRA(unittest.TestCase):
         for n in range(1, times.size):
             self.model.set_ini_state(state0)
             self.model.set_control(control)
-            
+
             state1, _ = self.model.solve_state1()
             pinc[n, :] = state1['pinc']
             pref[n, :] = state1['pref']
@@ -84,7 +84,7 @@ class TestWRA(unittest.TestCase):
         z0 = ZMOUTH
         gamma_ref = (z_rad-z0)/(z_rad+z0)
         # To derive this formula, see the Lecture 6 of the acoustics class notes
-        z_tube = z0*(1+gamma_ref)*np.exp(-1j*omega*LENGTH/CSOUND)/(1-gamma_ref*np.exp(-2j*omega*LENGTH/CSOUND)) 
+        z_tube = z0*(1+gamma_ref)*np.exp(-1j*omega*LENGTH/CSOUND)/(1-gamma_ref*np.exp(-2j*omega*LENGTH/CSOUND))
         # breakpoint()
 
         qin_vec = np.zeros(times.size)
@@ -93,7 +93,7 @@ class TestWRA(unittest.TestCase):
         ax.plot(ft_freq[0:N//2], 20*np.log10(np.abs((ft_qin*z_tube)[0:N//2])), label='Ideal')
 
         ax.set_xticks(np.arange(0, ft_freq.max(), 500))
-        ax.set_ylabel("Frequency response [db]") 
+        ax.set_ylabel("Frequency response [db]")
         ax.set_xlabel("Frequency [Hz]")
         ax.set_xlim(0, 5000)
         ax.grid()
@@ -107,4 +107,3 @@ if __name__ == '__main__':
     test = TestWRA()
     test.setUp()
     test.test_uniform()
-    

@@ -30,7 +30,7 @@ def integrate(model, f, dfin_state):
     dfin_state : callable with signature dfin_state(f, i) -> dx^i vector
     """
     ## Set potentially constant values
-    model.set_properties(f.get_properties())
+    model.set_props(f.get_props())
 
     control0 = f.get_control(0)
     control1 = control0
