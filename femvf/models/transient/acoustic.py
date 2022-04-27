@@ -8,7 +8,7 @@ import jax
 from jax import numpy as jnp
 import numpy as jnp
 
-from blockarray import blockvec
+from blockarray import blockvec as vec
 
 class Acoustic1D(base.Model):
     def __init__(self, num_tube):

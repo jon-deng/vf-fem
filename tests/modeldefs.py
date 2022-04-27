@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dfn
 
-from femvf import blockvec
+from femvf import blockvec as vec
 from femvf.models import (
     Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model

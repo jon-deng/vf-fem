@@ -8,7 +8,7 @@ import numpy as np
 import scipy.signal as sig
 
 from .base import AbstractFunctional
-from blockarray import blockvec
+from blockarray import blockvec as vec
 
 class FluidFunctional(AbstractFunctional):
     """

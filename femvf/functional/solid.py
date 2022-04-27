@@ -21,7 +21,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from blockarray import blockvec
+from blockarray import blockvec as vec
 from .base import AbstractFunctional
 from ..models.solid import form_inf_strain, Solid
 
