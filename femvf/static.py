@@ -10,7 +10,7 @@ from .models.transient import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 from blockarray import subops as gops
-from blockarray.blockvec import BlockVector, concatenate_vec, convert_bvec_to_petsc
+from blockarray.blockvec import BlockVector, concatenate_vec, convert_subtype_to_petsc
 from blockarray.blockmat import BlockMatrix, zero_mat, ident_mat
 
 from nonlineq import newton_solve
@@ -202,7 +202,7 @@ def static_configuration_coupled_newton(model: comodel.FSIModel):
         return assem_res, solve_jac
 
     ### Initial guess
-    x_0 = convert_bvec_to_petsc(
+    x_0 = convert_subtype_to_petsc(
         concatenate_vec([solid.get_state_vec()[['u']], fluid.get_state_vec()[['q', 'p']]])
         )
 

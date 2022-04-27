@@ -30,22 +30,22 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.models = (self.solid, self.fluid)
 
         self.state = bvec.concatenate_vec(
-            [bvec.convert_bvec_to_petsc(model.state) for model in self.models])
+            [bvec.convert_subtype_to_petsc(model.state) for model in self.models])
         self.statet = bvec.concatenate_vec(
-            [bvec.convert_bvec_to_petsc(model.statet) for model in self.models])
+            [bvec.convert_subtype_to_petsc(model.statet) for model in self.models])
 
         self.dstate = bvec.concatenate_vec(
-            [bvec.convert_bvec_to_petsc(model.dstate) for model in self.models])
+            [bvec.convert_subtype_to_petsc(model.dstate) for model in self.models])
         self.dstatet = bvec.concatenate_vec(
-            [bvec.convert_bvec_to_petsc(model.dstatet) for model in self.models])
+            [bvec.convert_subtype_to_petsc(model.dstatet) for model in self.models])
 
         # This selects only psub and psup from the fluid control
-        self.control = bvec.convert_bvec_to_petsc(self.fluid.control[1:])
+        self.control = bvec.convert_subtype_to_petsc(self.fluid.control[1:])
 
         _ymid_props = bvec.BlockVector([np.array([1.0])], labels=[['ymid']])
         self.props = bvec.concatenate_vec(
-            [bvec.convert_bvec_to_petsc(model.props) for model in self.models]
-            + [bvec.convert_bvec_to_petsc(_ymid_props)])
+            [bvec.convert_subtype_to_petsc(model.props) for model in self.models]
+            + [bvec.convert_subtype_to_petsc(_ymid_props)])
 
         ## -- FSI --
         # Below here is all extra stuff needed to do the coupling between fluid/solid
@@ -178,17 +178,17 @@ class FSIDynamicalSystem(DynamicalSystem):
             model.set_props(sub_prop)
 
     def assem_res(self):
-        return bvec.concatenate_vec([bvec.convert_bvec_to_petsc(model.assem_res()) for model in self.models])
+        return bvec.concatenate_vec([bvec.convert_subtype_to_petsc(model.assem_res()) for model in self.models])
 
     def assem_dres_dstate(self):
-        dslres_dslx = bmat.convert_bmat_to_petsc(self.models[0].assem_dres_dstate())
+        dslres_dslx = bmat.convert_subtype_to_petsc(self.models[0].assem_dres_dstate())
         dslres_dflx = bla.mult_mat_mat(
-            bmat.convert_bmat_to_petsc(self.models[0].assem_dres_dcontrol()),
+            bmat.convert_subtype_to_petsc(self.models[0].assem_dres_dcontrol()),
             self.dslcontrol_dflstate)
 
-        dflres_dflx = bmat.convert_bmat_to_petsc(self.models[1].assem_dres_dstate())
+        dflres_dflx = bmat.convert_subtype_to_petsc(self.models[1].assem_dres_dstate())
         dflres_dslx = bla.mult_mat_mat(
-            bmat.convert_bmat_to_petsc(self.models[1].assem_dres_dcontrol()),
+            bmat.convert_subtype_to_petsc(self.models[1].assem_dres_dcontrol()),
             self.dflcontrol_dslstate)
         bmats = [
             [dslres_dslx, dslres_dflx],
@@ -198,13 +198,13 @@ class FSIDynamicalSystem(DynamicalSystem):
     def assem_dres_dstatet(self):
         # Because the fluid models is quasi-steady, there are no time varying FSI quantities
         # As a result, the off-diagonal block terms here are just zero
-        dslres_dslx = bmat.convert_bmat_to_petsc(self.models[0].assem_dres_dstatet())
+        dslres_dslx = bmat.convert_subtype_to_petsc(self.models[0].assem_dres_dstatet())
         # dfsolid_dxfluid = self.models[0].assem_dres_dcontrolt() * self.dslcontrolt_dflstatet
-        dslres_dflx = bmat.convert_bmat_to_petsc(self.null_dslstate_dflstate)
+        dslres_dflx = bmat.convert_subtype_to_petsc(self.null_dslstate_dflstate)
 
-        dflres_dflx = bmat.convert_bmat_to_petsc(self.models[1].assem_dres_dstatet())
+        dflres_dflx = bmat.convert_subtype_to_petsc(self.models[1].assem_dres_dstatet())
         # dffluid_dxsolid = self.models[1].assem_dres_dcontrolt() * self.dflcontrolt_dslstatet
-        dflres_dslx = bmat.convert_bmat_to_petsc(self.null_dflstate_dslstate)
+        dflres_dslx = bmat.convert_subtype_to_petsc(self.null_dflstate_dslstate)
         bmats = [
             [dslres_dslx, dslres_dflx],
             [dflres_dslx, dflres_dflx]]
@@ -213,7 +213,7 @@ class FSIDynamicalSystem(DynamicalSystem):
 
     def assem_dres_dprops(self):
 
-        dslres_dslprops = bmat.convert_bmat_to_petsc(self.solid.assem_dres_dprops())
+        dslres_dslprops = bmat.convert_subtype_to_petsc(self.solid.assem_dres_dprops())
         _dslres_dflprops = [
             [bmat.zero_mat(slsubvec.size(), propsubvec.size)
                 for propsubvec in self.fluid.props]
@@ -234,7 +234,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         dflres_dslprops = bmat.BlockMatrix(
             _dflres_dslprops,
             labels=(self.fluid.state.labels[0], self.solid.props.labels[0]))
-        dflres_dflprops = bmat.convert_bmat_to_petsc(self.fluid.assem_dres_dprops())
+        dflres_dflprops = bmat.convert_subtype_to_petsc(self.fluid.assem_dres_dprops())
         _dflres_dymid = [
             [bmat.zero_mat(gops.size(flsubvec), gops.size(self.props['ymid']))]
             for flsubvec in self.fluid.state]
@@ -250,8 +250,8 @@ class FSIDynamicalSystem(DynamicalSystem):
         _mats = [[bmat.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
         dslres_dg = bvec.BlockMatrix(_mats, labels=self.solid.state.labels+self.control.labels)
 
-        dflres_dflg = bmat.convert_bmat_to_petsc(self.fluid.assem_dres_dcontrol())
-        _mats = [[row[kk] for kk in range(1, dflres_dflg.rshape[1])] for row in dflres_dflg]
+        dflres_dflg = bmat.convert_subtype_to_petsc(self.fluid.assem_dres_dcontrol())
+        _mats = [[row[kk] for kk in range(1, dflres_dflg.r_shape[1])] for row in dflres_dflg]
         dflres_dg =  bvec.BlockMatrix(_mats, labels=self.fluid.state.labels+self.control.labels)
         return bmat.concatenate_mat([[dslres_dg], [dflres_dg]])
 

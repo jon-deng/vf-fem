@@ -167,18 +167,18 @@ def _test_taylor(x0, dx, res, jac):
     Test that the Taylor convergence order is 2
     """
     alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
-    res_ns = [res(x0+alpha*dx) for alpha in alphas]
+    res_ns = [res(x0+float(alpha)*dx) for alpha in alphas]
     res_0 = res(x0)
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
 
     errs = [
-        (dres_exact-alpha*dres_linear).norm()
+        (dres_exact-float(alpha)*dres_linear).norm()
         for dres_exact, alpha in zip(dres_exacts, alphas)
     ]
     magnitudes = [
-        1/2*(dres_exact+alpha*dres_linear).norm()
+        1/2*(dres_exact+float(alpha)*dres_linear).norm()
         for dres_exact, alpha in zip(dres_exacts, alphas)
     ]
     with np.errstate(invalid='ignore'):
