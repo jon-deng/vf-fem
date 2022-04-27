@@ -9,9 +9,9 @@ import numpy as np
 from .models.transient import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
-from blocktensor import vec, subops as gops
-from blocktensor.vec import BlockVector, concatenate_vec, convert_bvec_to_petsc
-from blocktensor.mat import BlockMatrix, zero_mat, ident_mat
+from blockarray import blockvec , subops as gops
+from blockarray.blockvec import BlockVector, concatenate_vec, convert_bvec_to_petsc
+from blockarray.blockmat import BlockMatrix, zero_mat, ident_mat
 
 from nonlineq import newton_solve
 

@@ -17,8 +17,8 @@ from ..equations.solid import newmark
 from ..fsi import FSIMap
 from . import base, solid as smd, fluid as fmd, acoustic as amd
 from femvf import meshutils
-from blocktensor import linalg
-from blocktensor import vec as bvec
+from blockarray import linalg
+from blockarray import blockvec as bvec
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 class FSIModel(base.Model):

@@ -14,7 +14,7 @@ Fv(x, xt, g) = v-ut
 import numpy as np
 import dolfin as dfn
 
-from blocktensor import vec as bvec, mat as bmat, subops
+from blockarray import blockvec as bvec, blockmat as bmat, subops
 
 from .base import DynamicalSystem
 from ..transient.solid import properties_bvec_from_forms

@@ -13,7 +13,7 @@ I'm using CGS : cm-g-s units
 
 import numpy as np
 
-from blocktensor import vec
+from blockarray import blockvec
 
 def integrate(model, f, dfin_state):
     """

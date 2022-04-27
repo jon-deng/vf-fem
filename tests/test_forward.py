@@ -22,7 +22,7 @@ import femvf.signals.solid as solidfunc
 # from femvf import callbacks
 # from femvf import linalg
 
-from blocktensor import vec
+from blockarray import blockvec
 
 class ForwardConfig(unittest.TestCase):
     def setUp(self):

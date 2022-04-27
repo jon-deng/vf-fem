@@ -6,7 +6,7 @@ import dolfin as dfn
 import numpy as np
 from petsc4py import PETSc as PETSc
 
-from blocktensor import mat as bmat, vec as bvec, subops as gops, linalg as bla
+from blockarray import blockmat as bmat, blockvec as bvec, subops as gops, linalg as bla
 
 from .base import DynamicalSystem
 from .fluid import BaseFluid1DDynamicalSystem

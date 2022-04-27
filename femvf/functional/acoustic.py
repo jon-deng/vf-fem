@@ -17,7 +17,7 @@ compute the sensitivity with respect to.
 """
 
 from .base import AbstractFunctional
-from blocktensor import vec
+from blockarray import blockvec
 
 class AcousticFunctional(AbstractFunctional):
     """

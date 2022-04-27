@@ -18,7 +18,7 @@ from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from . import base
 from ..equations.solid import newmark
-from blocktensor.linalg import BlockVector
+from blockarray.linalg import BlockVector
 
 from ..equations.solid import solidforms
 

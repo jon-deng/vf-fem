@@ -6,7 +6,7 @@ import numpy as np
 from jax import numpy as jnp
 import jax
 
-# from blocktensor import linalg as bla
+# from blockarray import linalg as bla
 
 # from .base import DynamicalSystem
 

@@ -12,7 +12,7 @@ from . import adjoint
 
 from . import statefile
 
-from blocktensor import linalg
+from blockarray import linalg
 
 # Make common packages available
 from . import functional as funcs
