@@ -11,7 +11,7 @@ def transform_to_make_signals(make_signal):
 
             props = f.get_props()
             signals = [
-                proc_signal(model, f.get_state(ii), f.get_control(ii), props)
+                proc_signal(f.get_state(ii), f.get_control(ii), props)
                 for ii in range(f.size)]
             return np.array(signals)
         return proc_signals

@@ -12,7 +12,7 @@ import ufl
 from .decorator import transform_to_make_signals
 
 def make_glottal_width_smooth(model):
-    def glottal_width_smooth(model, state, control, props):
+    def glottal_width_smooth(state, control, props):
         XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
 
         xcur = XREF.reshape(-1) + state['u'][:]
@@ -23,7 +23,7 @@ def make_glottal_width_smooth(model):
 make_sig_glottal_width_smooth = transform_to_make_signals(make_glottal_width_smooth)
 
 def make_glottal_width_sharp(model):
-    def glottal_width_sharp(model, state, control, props):
+    def glottal_width_sharp(state, control, props):
         XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
 
         xcur = XREF.reshape(-1) + state['u'][:]
@@ -34,7 +34,7 @@ def make_glottal_width_sharp(model):
 make_sig_glottal_width_sharp = transform_to_make_signals(make_glottal_width_sharp)
 
 def make_peak_contact_pressure(model):
-    def peak_contact_pressure(model, state, control, props):
+    def peak_contact_pressure(state, control, props):
         fsidofs = model.solid.vert_to_sdof[model.fsi_verts]
 
         model.set_fin_state(state)
