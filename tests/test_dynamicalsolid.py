@@ -8,7 +8,7 @@ from pprint import pprint
 
 from femvf.meshutils import load_fenics_xmlmesh
 # from femvf.models import solid as smd
-from femvf.dynamicalmodels import solid as dynsol
+from femvf.models.dynamical import solid as dynsol
 
 dfn.set_log_level(30)
 
@@ -24,7 +24,7 @@ def test_dynamical_kelvin_voigt():
     fsi_facet_labels = ['pressure']
     fixed_facet_labels = ['fixed']
     model = dynsol.KelvinVoigt(
-        mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id, 
+        mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
         fsi_facet_labels, fixed_facet_labels, residual_form_name='f1uva')
 
     model.assem_res()
