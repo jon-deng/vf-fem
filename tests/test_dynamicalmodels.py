@@ -1,5 +1,8 @@
 """
-This module contains tests for dynamical models
+This module tests correctness of the dynamical model's derivatives
+
+Correctness is tested by comparing finite difference derivatives against
+implemented derivatives.
 """
 
 from os import path
@@ -48,6 +51,9 @@ def setup_models():
     return model_coupled, model_coupled_linear
 
 def setup_parameter_base(model):
+    """
+    Return base parameters to compute derivatives at
+    """
     ## Set model properties/control/linearization directions
     model_solid = model.solid
 
@@ -104,6 +110,9 @@ def setup_parameter_base(model):
     return state0, statet0, control0, props0, del_state, del_statet
 
 def setup_parameter_perturbation(model):
+    """
+    Return parameters pertrubations to compute directional derivatives along
+    """
     model_solid = model.solid
 
     dstate = model.state.copy()
