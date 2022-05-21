@@ -94,10 +94,10 @@ class StateFile:
             ## Create caches for reading states and controls, since these vary in time
             # h5py is supposed to do this caching but I found that each dataset read call in h5py
             # has a lot of overhead so I made this cache instead
-            for name in model.state0.keys:
+            for name in model.state0.keys():
                 self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
 
-            for name in model.control.keys:
+            for name in model.control.keys():
                 # breakpoint()
                 self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.root_group[f'control/{name}'])
 
@@ -150,7 +150,7 @@ class StateFile:
     def num_controls(self):
         num = 1
         control_group = self.root_group['control']
-        for key in self.model.control.keys:
+        for key in self.model.control.keys():
             num = max(control_group[key].shape[0], num)
 
         return num
@@ -234,7 +234,7 @@ class StateFile:
 
     def init_state(self):
         state_group = self.root_group.require_group('state')
-        for name, vec in zip(self.model.state0.keys, self.model.state0.vecs):
+        for name, vec in zip(self.model.state0.keys(), self.model.state0.vecs):
             NDOF = len(vec)
             state_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
                                         chunks=(self.NCHUNK, NDOF), dtype=np.float64)
@@ -242,7 +242,7 @@ class StateFile:
     def init_control(self):
         control_group = self.root_group.require_group('control')
 
-        for name, vec in zip(self.model.control.keys, self.model.control.vecs):
+        for name, vec in zip(self.model.control.keys(), self.model.control.vecs):
             NDOF = len(vec)
             control_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
                                          chunks=(self.NCHUNK, NDOF), dtype=np.float64)
@@ -250,7 +250,7 @@ class StateFile:
     def init_properties(self):
         properties_group = self.root_group.require_group('properties')
 
-        for name, value in zip(self.model.props.keys, self.model.props.vecs):
+        for name, value in zip(self.model.props.keys(), self.model.props.vecs):
             size = None
             try:
                 size = len(value)
@@ -273,7 +273,7 @@ class StateFile:
         ----------
         """
         state_group = self.root_group['state']
-        for name, value in zip(state.keys, state.vecs):
+        for name, value in zip(state.keys(), state.vecs):
             dset = state_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
 
@@ -285,7 +285,7 @@ class StateFile:
 
     def append_control(self, control):
         control_group = self.root_group['control']
-        for name, value in zip(control.keys, control.vecs):
+        for name, value in zip(control.keys(), control.vecs):
             dset = control_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value
@@ -299,7 +299,7 @@ class StateFile:
         """
         properties_group = self.root_group['properties']
 
-        for name, value in zip(properties.keys, properties.vecs):
+        for name, value in zip(properties.keys(), properties.vecs):
             dset = properties_group[name]
             # dset.resize(dset.shape[0]+1, axis=0)
             dset[:] = value
@@ -370,7 +370,7 @@ class StateFile:
             A set of functions to set vector values for.
         """
         state = self.model.get_state_vec()
-        for vec, key in zip(state.vecs, state.keys):
+        for vec, key in zip(state.vecs, state.keys()):
             value = self.dset_chunk_cache[f'state/{key}'].get(n)
             try:
                 vec[:] = value
@@ -391,11 +391,11 @@ class StateFile:
             A set of functions to set vector values for.
         """
         control = self.model.get_control_vec()
-        num_controls = self.root_group[f'control/{control.keys[0]}'].size
+        num_controls = self.root_group[f'control/{control.keys()[0]}'].size
         if n > num_controls-1:
             n = num_controls-1
 
-        for vec, key in zip(control.vecs, control.keys):
+        for vec, key in zip(control.vecs, control.keys()):
             value = self.dset_chunk_cache[f'control/{key}'].get(n)
             try:
                 vec[:] = value
@@ -407,7 +407,7 @@ class StateFile:
     def get_props(self):
         properties = self.model.get_properties_vec()
 
-        for name, vec in zip(properties.keys, properties.vecs):
+        for name, vec in zip(properties.keys(), properties.vecs):
             dset = self.root_group[f'properties/{name}']
             try:
                 vec[:] = dset[:]
@@ -432,7 +432,7 @@ class StateFile:
         uva : tuple of 3 array_like
             A set of vectors to assign.
         """
-        for label, value in zip(state.keys, state.vecs):
+        for label, value in zip(state.keys(), state.vecs):
             self.root_group[label][n] = value
 
 class DatasetChunkCache:
