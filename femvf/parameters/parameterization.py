@@ -6,7 +6,7 @@ import math
 
 from collections import OrderedDict
 
-from blockarray.linalg import BlockVector
+from blockarray.blockvec import BlockVector
 from . import properties as props
 from .. import constants, linalg
 from ..solverconst import DEFAULT_NEWTON_SOLVER_PRM

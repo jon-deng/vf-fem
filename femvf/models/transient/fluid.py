@@ -11,7 +11,7 @@ import numpy as np
 from . import base
 from femvf.parameters.properties import property_vecs
 from femvf.constants import SI_DENSITY_TO_CGS
-from blockarray.linalg import BlockVector
+from blockarray.blockvec import BlockVector
 
 from ..equations.fluid.bernoulli_sep_at_ratio import (
     bernoulli_qp
