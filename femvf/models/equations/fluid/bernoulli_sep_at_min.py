@@ -54,12 +54,10 @@ def smooth_min_weight(f, zeta=1, axis=-1):
     This evaluates according to $\exp{-\frac{f}{\zeta}}$ and is normalized so
     that the maximum weight has a value of 1.0.
     """
-    # w = jnp.exp(-f/zeta)
-    log_w = -f/zeta
-    # To prevent overflow for the largest weight, normalize the maximum log-weight to 0
-    # This ensures the maximum weight is 1.0 while smaller weights will underflow to 0.0
-    log_w = log_w - np.max(log_w, axis=axis, keepdims=True)
-    return jnp.exp(log_w)
+    # The smooth minimum can be found by negating `zeta` in the soft maximum
+    # weighting formula. Use `jax.nn.softmax` since they handle numerical
+    # stability issues in the exponential terms.
+    return jax.nn.softmax(-f/zeta, axis=-1)
 
 # @jax.jit
 def sigmoid(s, zeta=1):
