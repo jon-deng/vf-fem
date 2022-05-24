@@ -25,7 +25,7 @@ def _set_dirichlet_bvec(dirichlet_bc, bvec):
             dirichlet_bc.apply(dfn.PETScVector(bvec[label]))
     return bvec
 
-def setup_models():
+def setup_coupled_models():
     """
     Setup the dynamical model objects
     """
@@ -50,7 +50,7 @@ def setup_models():
 
     return model_coupled, model_coupled_linear
 
-def setup_parameter_base(model):
+def setup_coupled_parameter_base(model):
     """
     Return base parameters to compute derivatives at
     """
@@ -109,7 +109,7 @@ def setup_parameter_base(model):
 
     return state0, statet0, control0, props0, del_state, del_statet
 
-def setup_parameter_perturbation(model):
+def setup_coupled_parameter_perturbation(model):
     """
     Return parameters pertrubations to compute directional derivatives along
     """
@@ -152,14 +152,6 @@ def setup_parameter_perturbation(model):
 
 
 def _reset_parameter_base(model, state0, statet0, control0, props0, del_state, del_statet):
-    model.set_state(state0)
-    model.set_statet(statet0)
-    model.set_control(control0)
-    model.set_props(props0)
-    model.set_dstate(del_state)
-    model.set_dstatet(del_statet)
-
-def _reset_parameter_perturbation(model):
     model.set_state(state0)
     model.set_statet(statet0)
     model.set_control(control0)
@@ -291,27 +283,24 @@ def test_dres_dstatet_vs_dres_statet(model, model_linear, x0, del_xt):
     breakpoint()
 
 if __name__ == '__main__':
-    model, model_linear = setup_models()
+    model, model_linear = setup_coupled_models()
     for _model in [model, model_linear]:
-        state0, statet0, control0, props0, del_state, del_statet = setup_parameter_base(_model)
+        state0, statet0, control0, props0, del_state, del_statet = setup_coupled_parameter_base(_model)
         base_parameters = (state0, statet0, control0, props0, del_state, del_statet)
         _reset_parameter_base(_model, *base_parameters)
 
-        dstate, dstatet, dcontrol, dprops = setup_parameter_perturbation(_model)
+        dstate, dstatet, dcontrol, dprops = setup_coupled_parameter_perturbation(_model)
 
     # breakpoint()
     for model_name, _model in zip(["Residual", "Linearized residual"], [model, model_linear]):
         print(model_name)
         print("-- Test dres/dstate --")
-        # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dstate(_model, state0, dstate)
 
         print("\n-- Test dres/dstatet --")
-        # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dstatet(_model, statet0, dstatet)
 
         print("\n-- Test dres/dcontrol --")
-        # _reset_parameter_base(_model, *base_parameters)
         test_assem_dres_dcontrol(_model, control0, dcontrol)
 
         print("\n-- Test dres/dprops --")
