@@ -24,7 +24,7 @@ def bernoulli_q(asep, psub, psup, rho):
     return q
 
 # @jax.jit
-def bernoulli_p(q, area, ssep, psub, psup, rho):
+def bernoulli_p(q, area, psub, psup, rho):
     """
     Return the pressure based on Bernoulli
     """
@@ -74,6 +74,9 @@ def sigmoid(s, zeta=1):
 
 @jax.jit
 def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
+    """
+    Return Bernoulli flow and pressure
+    """
     wmin = smooth_min_weight(area, zeta_min)
     amin = wavg(s, area, wmin)
     smin = wavg(s, s, wmin)
@@ -82,7 +85,7 @@ def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
     asep = amin
     ssep = smin
     q = bernoulli_q(asep, psub, psup, rho)
-    p = bernoulli_p(q, area, ssep, psub, psup, rho)
+    p = bernoulli_p(q, area, psub, psup, rho)
 
     # Separation coefficient ensure pressures tends to zero after separation
     f_sep = coeff_sep(s, ssep, zeta_sep)
@@ -92,6 +95,9 @@ def bernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep):
 # Use this weird combination of primals/tangent parameters because later we
 # want to compute the jacobian wrt area
 def dbernoulli_qp(area, s, psub, psup, rho, zeta_min, zeta_sep, tangents):
+    """
+    Return linearization of Bernoulli flow and pressure
+    """
     primals = (area, s, psub, psup, rho, zeta_min, zeta_sep)
     return jax.jvp(bernoulli_qp, primals, tangents)[1]
 
