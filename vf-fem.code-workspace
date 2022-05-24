@@ -22,7 +22,7 @@
 	"settings": {
 		"python.linting.enabled": true,
 		"python.linting.pylintEnabled": true,
-		"python.languageServer": "Jedi",
+		"python.languageServer": "Pylance",
 		"python.pythonPath": "/home/jdeng/anaconda3/envs/numerics/bin/python",
 		"files.trimTrailingWhitespace": true
 	}
