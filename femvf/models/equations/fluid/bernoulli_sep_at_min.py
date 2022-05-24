@@ -32,6 +32,9 @@ def bernoulli_p(q, area, psub, psup, rho):
     return p
 
 def coeff_sep(s, ssep, zeta_sep):
+    """
+    Return a weighting representing cut-off at the separation point
+    """
     # note that jnp.nn.sigmoid is used to model
     # return (1+jnp.exp((s-ssep)/zeta_sep))**-1
     # because of numerical stability
