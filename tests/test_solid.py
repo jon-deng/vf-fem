@@ -16,7 +16,7 @@ mesh_dir = '../meshes'
 mesh_name = 'M5-3layers'
 mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
 
-mesh, facet_func, cell_func, (vertex_labels, facet_label_to_id, cell_label_to_id) = \
+mesh, (vertex_func, facet_func, cell_func), (vertex_labels, facet_label_to_id, cell_label_to_id) = \
     load_fenics_xmlmesh(mesh_path)
 
 def test_base_form_definitions():
@@ -45,4 +45,3 @@ def test_hopf_form_definitions():
 if __name__ == '__main__':
     test_hopf_form_definitions()
 
-    

@@ -14,7 +14,7 @@ def test_dynamical_kelvin_voigt(mesh_path):
     """
     Test that the Kelvin Voigt model can be loaded
     """
-    mesh, facet_func, cell_func, (vertex_labels, facet_label_to_id, cell_label_to_id) = \
+    mesh, (vertex_func, facet_func, cell_func), (vertex_labels, facet_labels, cell_labels) = \
         load_fenics_xmlmesh(mesh_path)
     # breakpoint()
     fsi_facet_labels = ['pressure']
