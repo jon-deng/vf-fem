@@ -4,8 +4,119 @@ Functionality for dealing with meshes
 
 from os import path
 
+import meshio as mio
 import numpy as np
 import dolfin as dfn
+
+def split_meshio_cells(mesh):
+    """
+    Splits a `meshio.Mesh` into separate meshes with one cell block each
+
+    Parameters
+    ----------
+    mesh: meshio.Mesh
+    """
+    meshes = [
+        mio.Mesh(
+            mesh.points,
+            [cellblock],
+            cell_data={
+                key: [arrays[n]]
+                for key, arrays in mesh.cell_data.items()
+            }
+        )
+        for n, cellblock in enumerate(mesh.cells)
+    ]
+    return meshes
+
+def dim_from_type(cell_type):
+    """
+    Return the topoligical dimension of a cellblock type
+    """
+    if cell_type in {'point', 'vertex', 'node'}:
+        return 0
+    elif cell_type in {'line'}:
+        return 1
+    elif cell_type in {'triangle'}:
+        return 2
+    elif cell_type in {'tetrahedron'}:
+        return 3
+    else:
+        raise ValueError(f"Unknown cell type {cell_type}")
+
+def load_fenics_gmsh(mesh_path):
+    """
+    Loads a fenics mesh from .msh file
+
+    Parameters
+    ----------
+    mesh_path: str
+        Path of the .msh file
+    """
+    mesh_dir, mesh_fname = path.split(mesh_path)
+    mesh_name, mesh_ext = path.splitext(mesh_fname)
+
+    mio_mesh = mio.read(mesh_path)
+
+    # First load some basic information about the mesh and check compatibility
+    # with fenics
+    cell_types = [cell.type for cell in mio_mesh.cells]
+    cell_dims = [dim_from_type(cell_type) for cell_type in cell_types]
+
+    max_dim = max(cell_dims)
+    for dim in range(max_dim+1):
+        if cell_dims.count(max_dim) > 1:
+            raise ValueError(
+                f"The mesh contains multiple cell types of dimension {dim}"
+                " which is not supported!"
+            )
+
+    # Split multiple cell blocks in mio_mesh to separate meshes
+    split_meshes = split_meshio_cells(mio_mesh)
+    split_mesh_names = [
+        f'{mesh_name}_{n}_{cell_block_type}'
+        for n, cell_block_type in enumerate(cell_types)
+    ]
+    split_mesh_paths = [
+        path.join(mesh_dir, f'{split_mesh_name}.xdmf')
+        for split_mesh_name in split_mesh_names
+    ]
+    for (split_path_n, mesh_n) in zip(split_mesh_paths, split_meshes):
+        mio.write(split_path_n, mesh_n)
+
+    # Read the highest-dimensional mesh as the base dolfin mesh,
+    # which is assumed to be the last cell block
+    dfn_mesh = dfn.Mesh()
+    with dfn.XDMFFile(split_mesh_paths[-1]) as f:
+        f.read(dfn_mesh)
+
+    # Create `MeshValueCollection`s for each split cell block
+    vcs = [
+        dfn.MeshValueCollection('size_t', dfn_mesh, cell_dim)
+        for cell_dim in cell_dims
+    ]
+    for vc, split_mesh_path in zip(vcs, split_mesh_paths):
+        with dfn.XDMFFile(split_mesh_path) as f:
+            f.read(vc, 'gmsh:physical')
+
+    # Create a `MeshFunction` from each `MeshValueCollection` ordered by increasing
+    # dimension. If entities of a certain dimensions have no mesh function, they
+    # are None
+    _mfs = [dfn.MeshFunction('size_t', dfn_mesh, vc) for vc in vcs]
+    dim_to_mf = {mf.dim(): mf for mf in _mfs}
+    mfs = [dim_to_mf[dim] if dim in dim_to_mf else None for dim in range(max_dim+1)]
+
+    # Load mappings of 'field data' These associate labels to mesh function values
+    entities_label_to_id = [
+        {
+            key: value
+            for key, (value, entity_dim) in mio_mesh.field_data.items()
+            if entity_dim == dim
+        }
+        for dim in range(max_dim+1)
+    ]
+
+    return dfn_mesh, tuple(mfs), tuple(entities_label_to_id)
 
 def load_fenics_xmlmesh(mesh_path):
     """
@@ -40,7 +151,7 @@ def load_fenics_xmlmesh(mesh_path):
 
     vertexlabel_to_id, facetlabel_to_id, celllabel_to_id = parse_msh2_physical_groups(msh_function_path)
 
-    return mesh, facet_function, cell_function, (vertexlabel_to_id, facetlabel_to_id, celllabel_to_id)
+    return mesh, (None, facet_function, cell_function), (vertexlabel_to_id, facetlabel_to_id, celllabel_to_id)
 
 def parse_msh2_physical_groups(mesh_path):
     """
