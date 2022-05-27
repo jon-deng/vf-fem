@@ -11,6 +11,8 @@ Fu(x, xt, g) : defined in Fenics with UFL (derivatives via UFL forms)
 Fv(x, xt, g) = v-ut
 """
 
+from typing import Tuple, Mapping
+
 import numpy as np
 import dolfin as dfn
 
@@ -26,15 +28,19 @@ from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_f
 class BaseSolidDynamicalSystem(DynamicalSystem):
     PROPERTY_DEFAULTS = {}
     def __init__(
-        self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-        fsi_facet_labels, fixed_facet_labels, residual_form_name='f1uva'):
-
+            self,
+            mesh: dfn.Mesh,
+            mesh_funcs: Tuple[dfn.MeshFunction],
+            mesh_entities_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str],
+            residual_form_name='f1uva'
+        ):
 
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
         self.residual_form_name = residual_form_name
-        self._forms = self.form_definitions(mesh, facet_func, facet_label_to_id,
-                                            cell_func, cell_label_to_id, fsi_facet_labels, fixed_facet_labels)
+        self._forms = self.form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
         gen_residual_bilinear_forms(self._forms)
         gen_hopf_forms(self._forms)
 
@@ -68,8 +74,13 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
         return self._forms
 
     def form_definitions(
-        self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-        fsi_facet_labels, fixed_facet_labels):
+            self,
+            mesh: dfn.Mesh,
+            mesh_funcs: Tuple[dfn.MeshFunction],
+            mesh_entities_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str]
+        ):
         raise NotImplementedError("Must be implemented by child class")
 
     def get_properties_vec(self, set_default=True):
@@ -304,26 +315,20 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
 class KelvinVoigt(SolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solidforms.KelvinVoigt(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
 
 class LinearizedKelvinVoigt(LinearizedSolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solidforms.KelvinVoigt(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
 
 class Rayleigh(SolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solidforms.Rayleigh(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)

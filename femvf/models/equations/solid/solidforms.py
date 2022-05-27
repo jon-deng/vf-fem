@@ -4,6 +4,7 @@ Contains definitions of different solid model forms
 
 import operator
 from functools import reduce
+from typing import Tuple, Mapping
 
 import numpy as np
 import dolfin as dfn
@@ -253,9 +254,16 @@ def gen_unary_linearized_forms(forms):
         [forms[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
         )
 
-def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                          fsi_facet_labels, fixed_facet_labels):
+def base_form_definitions(
+        mesh: dfn.Mesh,
+        mesh_funcs: Tuple[dfn.MeshFunction],
+        mesh_entities_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str]
+    ):
     # Measures
+    vertex_func, facet_func, cell_func = mesh_funcs
+    vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
     dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
     ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
     _traction_ds = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
@@ -319,8 +327,10 @@ def base_form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_l
         'form.un.f1uva': 0.0,
 
         'mesh.mesh': mesh,
+        'mesh.vertex_label_to_id': vertex_label_to_id,
         'mesh.facet_label_to_id': facet_label_to_id,
         'mesh.cell_label_to_id': cell_label_to_id,
+        'mesh.vertex_function': vertex_func,
         'mesh.facet_function': facet_func,
         'mesh.cell_function': cell_func,
         'mesh.fsi_facet_labels': fsi_facet_labels,
@@ -554,8 +564,7 @@ def add_ap_force_form(forms):
     return forms
 
 def Rayleigh(
-    mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-    fsi_facet_labels, fixed_facet_labels):
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return \
         add_newmark_time_disc_form(
         add_manual_contact_traction_form(
@@ -564,12 +573,10 @@ def Rayleigh(
         add_inertial_form(
         add_isotropic_elastic_form(
         base_form_definitions(
-            mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-            fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
 
 def KelvinVoigt(
-    mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-    fsi_facet_labels, fixed_facet_labels):
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return \
         add_newmark_time_disc_form(
         add_manual_contact_traction_form(
@@ -578,12 +585,10 @@ def KelvinVoigt(
         add_inertial_form(
         add_isotropic_elastic_form(
         base_form_definitions(
-            mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-            fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
 
 def KelvinVoigtWEpithelium(
-    mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-    fsi_facet_labels, fixed_facet_labels):
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return  \
         add_newmark_time_disc_form(
         add_isotropic_membrane(
@@ -593,12 +598,10 @@ def KelvinVoigtWEpithelium(
         add_inertial_form(
         add_isotropic_elastic_form(
         base_form_definitions(
-            mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-            fsi_facet_labels, fixed_facet_labels))))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
 
 def IncompSwellingKelvinVoigt(
-    mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-    fsi_facet_labels, fixed_facet_labels):
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return \
         add_newmark_time_disc_form(
         add_manual_contact_traction_form(
@@ -607,12 +610,10 @@ def IncompSwellingKelvinVoigt(
         add_inertial_form(
         add_incompressible_isotropic_elastic_form(
         base_form_definitions(
-            mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-            fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
 
 def Approximate3DKelvinVoigt(
-    mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-    fsi_facet_labels, fixed_facet_labels):
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return \
         add_newmark_time_disc_form(
         add_manual_contact_traction_form(
@@ -622,5 +623,4 @@ def Approximate3DKelvinVoigt(
         add_inertial_form(
         add_isotropic_elastic_form(
         base_form_definitions(
-            mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-            fsi_facet_labels, fixed_facet_labels))))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))

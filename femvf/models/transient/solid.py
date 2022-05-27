@@ -11,6 +11,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 import warnings as wrn
+from typing import Tuple, Mapping
 
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from femvf.parameters.properties import property_vecs
@@ -56,16 +57,25 @@ class Solid(base.Model):
     # Subclasses have to set these values
     PROPERTY_DEFAULTS = None
 
-    def __init__(self, mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                 fsi_facet_labels, fixed_facet_labels):
+    def __init__(
+            self,
+            mesh: dfn.Mesh,
+            mesh_funcs: Tuple[dfn.MeshFunction],
+            mesh_entities_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str]
+        ):
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
 
-        self._forms = self.form_definitions(mesh, facet_func, facet_label_to_id,
-                                            cell_func, cell_label_to_id, fsi_facet_labels, fixed_facet_labels)
+        self._forms = self.form_definitions(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
         solidforms.gen_residual_bilinear_forms(self._forms)
 
         ## Store mesh related quantities
+        vertex_func, facet_func, cell_func = mesh_funcs
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
+
         self.mesh = mesh
         self.facet_func = facet_func
         self.cell_func = cell_func
@@ -147,8 +157,13 @@ class Solid(base.Model):
         return xref
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(
+            mesh: dfn.Mesh,
+            mesh_funcs: Tuple[dfn.MeshFunction],
+            mesh_entities_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str]
+        ):
         """
         Return a dictionary of ufl forms representing the solid in Fenics.
 
@@ -547,12 +562,10 @@ class Rayleigh(NodalContactSolid):
         'kcontact': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                          fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return \
             solidforms.Rayleigh(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 
 class KelvinVoigt(NodalContactSolid):
@@ -568,20 +581,16 @@ class KelvinVoigt(NodalContactSolid):
         'kcontact': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                          fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return solidforms.KelvinVoigt(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 
 class KelvinVoigtWEpithelium(KelvinVoigt):
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return  solidforms.KelvinVoigtWEpithelium(
-            mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-            fsi_facet_labels, fixed_facet_labels)
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 
 class IncompSwellingKelvinVoigt(NodalContactSolid):
@@ -598,12 +607,10 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
         'kcontact': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                          fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return \
             solidforms.IncompSwellingKelvinVoigt(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 
 class Approximate3DKelvinVoigt(NodalContactSolid):
@@ -616,12 +623,10 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         'kcontact': 1e11}
 
     @staticmethod
-    def form_definitions(mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                         fsi_facet_labels, fixed_facet_labels):
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return \
             solidforms.Approximate3DKelvinVoigt(
-                mesh, facet_func, facet_label_to_id, cell_func, cell_label_to_id,
-                fsi_facet_labels, fixed_facet_labels)
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 
 class CachedBiFormAssembler:

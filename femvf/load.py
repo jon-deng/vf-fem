@@ -13,32 +13,43 @@ from .models.dynamical import solid as dynsolidmodel, fluid as dynfluidmodel, co
 
 # from .dynamicalmodels.coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
 
-def load_solid_model(solid_mesh, SolidType,
-    pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
+def load_solid_model(
+        solid_mesh,
+        SolidType,
+        pressure_facet_labels=('pressure',),
+        fixed_facet_labels=('fixed',)
     ):
+    """
+    Loads a solid model
+    """
     # Process the mesh file(s)
-    mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
     if isinstance(solid_mesh, str):
         ext = path.splitext(solid_mesh)[1]
-        # if no extension is supplied, assume it's a fenics xml mesh
+        # if no extension is supplied, assume it's a .msh file from gmsh
         if ext == '':
             ext = '.xml'
 
         if ext.lower() == '.xml':
             # The solid mesh is an xml file
-            mesh, (vertex_func, facet_func, cell_func), (vertex_labels, facet_labels, cell_labels) = meshutils.load_fenics_xmlmesh(solid_mesh)
+            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_xmlmesh(solid_mesh)
+        elif ext.lower() == '.msh':
+            # The solid mesh is an gmsh file
+            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_gmsh(solid_mesh)
         else:
             raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
     else:
-        raise ValueError("Not sure what to do with this")
+        raise TypeError(f"`solid_mesh` must be a path (str) not {type(solid_mesh)}")
 
-    solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels,
-                      pressure_facet_labels, fixed_facet_labels)
-    return solid
+    return SolidType(mesh, mesh_funcs, mesh_entities_label_to_value, pressure_facet_labels, fixed_facet_labels)
 
 def load_transient_fsi_model(
-    solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'
+        solid_mesh,
+        fluid_mesh,
+        SolidType=smd.KelvinVoigt,
+        FluidType=fmd.Bernoulli,
+        fsi_facet_labels=('pressure',),
+        fixed_facet_labels=('fixed',),
+        coupling='explicit'
     ):
     """
     Factory function that loads a model based on input solid/fluid meshes.
@@ -69,9 +80,13 @@ def load_transient_fsi_model(
     return model
 
 def load_dynamical_fsi_model(
-    solid_mesh, fluid_mesh,
-    SolidType=dynsolidmodel.KelvinVoigt, FluidType=dynfluidmodel.Bernoulli1DDynamicalSystem,
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)):
+        solid_mesh,
+        fluid_mesh,
+        SolidType=dynsolidmodel.KelvinVoigt,
+        FluidType=dynfluidmodel.Bernoulli1DDynamicalSystem,
+        fsi_facet_labels=('pressure',),
+        fixed_facet_labels=('fixed',)
+    ):
     """
     Factory function that loads a model based on input solid/fluid meshes.
 
@@ -95,8 +110,19 @@ def load_dynamical_fsi_model(
 
     return dynfsimodel.FSIDynamicalSystem(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
-def load_transient_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
-                    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
+def load_transient_fsai_model(
+        solid_mesh,
+        fluid_mesh,
+        acoustic,
+        SolidType=smd.KelvinVoigt,
+        FluidType=fmd.Bernoulli,
+        fsi_facet_labels=('pressure',),
+        fixed_facet_labels=('fixed',),
+        coupling='explicit'
+    ):
+    """
+    Loads a transient FSAI model
+    """
     solid, fluid, fsi_verts = process_fsi(
         solid_mesh, fluid_mesh,
         SolidType=SolidType, FluidType=FluidType,
@@ -109,23 +135,19 @@ def load_transient_fsai_model(solid_mesh, fluid_mesh, acoustic, SolidType=smd.Ke
 
     return FSAIModel(solid, fluid, acoustic, dofs_fsi_solid, dofs_fsi_fluid)
 
-def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli,
-                fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',), coupling='explicit'):
+def process_fsi(
+        solid_mesh,
+        fluid_mesh,
+        SolidType=smd.KelvinVoigt,
+        FluidType=fmd.Bernoulli,
+        fsi_facet_labels=('pressure',),
+        fixed_facet_labels=('fixed',)
+    ):
+    """
+    Processes appropriate mappings between fluid/solid domains for FSI
+    """
     ## Load the solid
-    mesh, facet_func, cell_func, facet_labels, cell_labels = None, None, None, None, None
-    if isinstance(solid_mesh, str):
-        ext = path.splitext(solid_mesh)[1]
-        # if no extension is supplied, assume it's a fenics xml mesh
-        if ext == '':
-            ext = '.xml'
-
-        if ext.lower() == '.xml':
-            # The solid mesh is an xml file
-            mesh, (vertex_func, facet_func, cell_func), (vertex_labels, facet_labels, cell_labels) = meshutils.load_fenics_xmlmesh(solid_mesh)
-        else:
-            raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
-    solid = SolidType(mesh, facet_func, facet_labels, cell_func, cell_labels,
-                      fsi_facet_labels, fixed_facet_labels)
+    solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
@@ -142,9 +164,12 @@ def process_fsi(solid_mesh, fluid_mesh, SolidType=smd.KelvinVoigt, FluidType=fmd
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
-        FluidType,
-        (fmd.QuasiSteady1DFluid, dynfluidmodel.BaseFluid1DDynamicalSystem)
+            FluidType,
+            (fmd.QuasiSteady1DFluid, dynfluidmodel.BaseFluid1DDynamicalSystem)
         ):
+        mesh = solid.forms['mesh.mesh']
+        facet_func = solid.forms['mesh.facet_function']
+        facet_labels = solid.forms['mesh.facet_label_to_id']
         x, y = meshutils.streamwise1dmesh_from_edges(
             mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
         dx = x[1:] - x[:-1]
