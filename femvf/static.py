@@ -11,7 +11,8 @@ from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 from blockarray import subops as gops
 from blockarray.blockvec import BlockVector, concatenate_vec, convert_subtype_to_petsc
-from blockarray.blockmat import BlockMatrix, zero_mat, ident_mat
+from blockarray.blockmat import BlockMatrix
+from blockarray.subops import zero_mat, ident_mat
 
 from nonlineq import newton_solve
 

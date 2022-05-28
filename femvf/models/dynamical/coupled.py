@@ -6,7 +6,7 @@ import dolfin as dfn
 import numpy as np
 from petsc4py import PETSc as PETSc
 
-from blockarray import blockmat as bmat, blockvec as bvec, subops as gops, linalg as bla
+from blockarray import blockmat as bmat, blockvec as bvec, subops, linalg as bla
 
 from .base import DynamicalSystem
 from .fluid import BaseFluid1DDynamicalSystem
@@ -65,7 +65,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self._dfluid_dsolid_scalar = self.fsimap.dfluid_dsolid
 
         # The matrix here is d(p)_solid/d(q, p)_fluid
-        dslp_dflq = bmat.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
+        dslp_dflq = subops.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
         dslp_dflp = self._dsolid_dfluid_scalar
         mats = [[dslp_dflq, dslp_dflp]]
         self.dslcontrol_dflstate = bvec.BlockMatrix(mats, labels=(('p',), ('q', 'p')))
@@ -73,7 +73,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         # The matrix here is d(area)_fluid/d(u, v)_solid
         # pylint: disable=no-member
         mats = [
-            [bmat.zero_mat(nrow, ncol)
+            [subops.zero_mat(nrow, ncol)
             for ncol in self.solid.state.bshape[0]]
             for nrow in self.fluid.control.bshape[0]]
         dslarea_dslu = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state['u'].size()])
@@ -85,18 +85,18 @@ class FSIDynamicalSystem(DynamicalSystem):
             dslarea_dslu.setValues([ii], [2*ii, 2*ii+1], [0, -2])
         dslarea_dslu.assemble()
         dflarea_dslarea = self._dfluid_dsolid_scalar
-        dflarea_dslu = gops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
+        dflarea_dslu = subops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
         mats[0][0] = dflarea_dslu
         self.dflcontrol_dslstate = bvec.BlockMatrix(
             mats, labels=self.fluid.control.labels+self.solid.state.labels)
 
         # Make null BlockMats relating fluid/solid states
         mats = [
-            [bmat.zero_mat(slvec.size(), flvec.size) for flvec in self.fluid.state.vecs]
+            [subops.zero_mat(slvec.size(), flvec.size) for flvec in self.fluid.state.vecs]
             for slvec in self.solid.state.vecs]
         self.null_dslstate_dflstate = bvec.BlockMatrix(mats)
         mats = [
-            [bmat.zero_mat(flvec.size, slvec.size()) for slvec in self.solid.state.vecs]
+            [subops.zero_mat(flvec.size, slvec.size()) for slvec in self.solid.state.vecs]
             for flvec in self.fluid.state.vecs]
         self.null_dflstate_dslstate = bvec.BlockMatrix(mats)
 
@@ -134,16 +134,16 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # map linearized solid area to fluid area
         dfluid_control = self.fluid.dcontrol.copy()
-        dfluid_control['area'][:] = gops.mult_mat_vec(
+        dfluid_control['area'][:] = subops.mult_mat_vec(
             self._dfluid_dsolid_scalar,
-            gops.convert_vec_to_petsc(self.dsolid_area))
+            subops.convert_vec_to_petsc(self.dsolid_area))
         self.fluid.set_dcontrol(dfluid_control)
 
         # map linearized fluid pressure to solid pressure
         dsolid_control = self.solid.control.copy()
-        dsolid_control['p'][:] = gops.mult_mat_vec(
+        dsolid_control['p'][:] = subops.mult_mat_vec(
             self._dsolid_dfluid_scalar,
-            gops.convert_vec_to_petsc(self.fluid.dstate['p']))
+            subops.convert_vec_to_petsc(self.fluid.dstate['p']))
         self.solid.set_dcontrol(dsolid_control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
@@ -215,20 +215,20 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         dslres_dslprops = bmat.convert_subtype_to_petsc(self.solid.assem_dres_dprops())
         _dslres_dflprops = [
-            [bmat.zero_mat(slsubvec.size(), propsubvec.size)
+            [subops.zero_mat(slsubvec.size(), propsubvec.size)
                 for propsubvec in self.fluid.props]
             for slsubvec in self.solid.state]
         dslres_dflprops = bmat.BlockMatrix(
             _dslres_dflprops,
             labels=(self.solid.state.labels[0], self.fluid.props.labels[0]))
         _dslres_dymid = [
-            [bmat.zero_mat(gops.size(slsubvec), gops.size(self.props['ymid']))]
+            [subops.zero_mat(subops.size(slsubvec), subops.size(self.props['ymid']))]
             for slsubvec in self.solid.state]
         dslres_dymid = bmat.BlockMatrix(
             _dslres_dymid, labels=(self.solid.state.labels[0], ('ymid',)))
 
         _dflres_dslprops = [
-            [bmat.zero_mat(gops.size(flsubvec), gops.size(propsubvec))
+            [subops.zero_mat(subops.size(flsubvec), subops.size(propsubvec))
                 for propsubvec in self.solid.props]
             for flsubvec in self.fluid.state]
         dflres_dslprops = bmat.BlockMatrix(
@@ -236,7 +236,7 @@ class FSIDynamicalSystem(DynamicalSystem):
             labels=(self.fluid.state.labels[0], self.solid.props.labels[0]))
         dflres_dflprops = bmat.convert_subtype_to_petsc(self.fluid.assem_dres_dprops())
         _dflres_dymid = [
-            [bmat.zero_mat(gops.size(flsubvec), gops.size(self.props['ymid']))]
+            [subops.zero_mat(subops.size(flsubvec), subops.size(self.props['ymid']))]
             for flsubvec in self.fluid.state]
         dflres_dymid = bmat.BlockMatrix(
             _dflres_dymid, labels=(self.fluid.state.labels[0], ('ymid',)))
@@ -247,7 +247,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         return bmat.concatenate_mat(bmats)
 
     def assem_dres_dcontrol(self):
-        _mats = [[bmat.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
+        _mats = [[subops.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
         dslres_dg = bvec.BlockMatrix(_mats, labels=self.solid.state.labels+self.control.labels)
 
         dflres_dflg = bmat.convert_subtype_to_petsc(self.fluid.assem_dres_dcontrol())

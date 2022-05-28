@@ -134,8 +134,8 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
             tensor=dfn.PETScMatrix())
 
         n = self.v.vector().size()
-        dresv_du = dfn.PETScMatrix(bmat.zero_mat(n, n))
-        dresv_dv = dfn.PETScMatrix(bmat.ident_mat(n))
+        dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
+        dresv_dv = dfn.PETScMatrix(subops.ident_mat(n))
 
         mats = [
             [dresu_du, dresu_dv],
@@ -144,13 +144,13 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
-        dresu_dut = dfn.PETScMatrix(bmat.zero_mat(n, n))
+        dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
         dresu_dvt = dfn.assemble(
             self.forms['form.bi.df1uva_da1'],
             tensor=dfn.PETScMatrix())
 
-        dresv_dut = dfn.PETScMatrix(-1*bmat.ident_mat(n))
-        dresv_dvt = dfn.PETScMatrix(bmat.zero_mat(n, n))
+        dresv_dut = dfn.PETScMatrix(-1*subops.ident_mat(n))
+        dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))
 
         mats = [
             [dresu_dut, dresu_dvt],
@@ -163,7 +163,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
             self.forms['form.bi.df1uva_dp1'],
             tensor=dfn.PETScMatrix())
 
-        dresv_dcontrol = dfn.PETScMatrix(bmat.zero_mat(self.state['v'].size(), self.control['p'].size()))
+        dresv_dcontrol = dfn.PETScMatrix(subops.zero_mat(self.state['v'].size(), self.control['p'].size()))
 
         mats = [
             [dresu_dcontrol],
@@ -173,8 +173,8 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size(), self.state['v'].size()
         mats = [
-            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
-            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
+            [subops.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
+            [subops.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
 
         j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = dfn.assemble(self.forms['form.bi.df1uva_demod'], dfn.PETScMatrix())
@@ -240,8 +240,8 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
             )
 
         n = self.u.vector().size()
-        dresv_du = dfn.PETScMatrix(bmat.zero_mat(n, n))
-        dresv_dv = dfn.PETScMatrix(bmat.zero_mat(n, n))
+        dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
+        dresv_dv = dfn.PETScMatrix(subops.zero_mat(n, n))
 
         mats = [
             [dresu_du, dresu_dv],
@@ -250,7 +250,7 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
-        dresu_dut = dfn.PETScMatrix(bmat.zero_mat(n, n))
+        dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
         dresu_dvt = (
             dfn.assemble(
                 self.forms['form.bi.ddf1uva_u1_da1'],
@@ -266,8 +266,8 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScMatrix())
             )
 
-        dresv_dut = dfn.PETScMatrix(bmat.zero_mat(n, n))
-        dresv_dvt = dfn.PETScMatrix(bmat.zero_mat(n, n))
+        dresv_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
+        dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))
 
         mats = [
             [dresu_dut, dresu_dvt],
@@ -292,7 +292,7 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
                 tensor=dfn.PETScMatrix())
             )
 
-        dresv_dg = dfn.PETScMatrix(bmat.zero_mat(n, m))
+        dresv_dg = dfn.PETScMatrix(subops.zero_mat(n, m))
 
         mats = [
             [dresu_dg],
@@ -302,8 +302,8 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size(), self.state['v'].size()
         mats = [
-            [bmat.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
-            [bmat.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
+            [subops.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
+            [subops.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
 
         j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = dfn.assemble(self.forms['form.bi.ddf1uva_demod'], dfn.PETScMatrix())
