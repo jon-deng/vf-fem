@@ -141,7 +141,8 @@ def process_fsi(
         SolidType=smd.KelvinVoigt,
         FluidType=fmd.Bernoulli,
         fsi_facet_labels=('pressure',),
-        fixed_facet_labels=('fixed',)
+        fixed_facet_labels=('fixed',),
+        separation_vertex_label=('separation'),
     ):
     """
     Processes appropriate mappings between fluid/solid domains for FSI
@@ -161,6 +162,7 @@ def process_fsi(
     # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
     idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
     fsi_verts = fsi_verts[idx_sort]
+    fsi_coordinates = fsi_coordinates[idx_sort]
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
@@ -170,12 +172,41 @@ def process_fsi(
         mesh = solid.forms['mesh.mesh']
         facet_func = solid.forms['mesh.facet_function']
         facet_labels = solid.forms['mesh.facet_label_to_id']
+        # TODO: The streamwise mesh can already be known from the fsi_coordinates
+        # variable computed earlier
         x, y = meshutils.streamwise1dmesh_from_edges(
             mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
         dx = x[1:] - x[:-1]
         dy = y[1:] - y[:-1]
         s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-        fluid = FluidType(s)
+        if issubclass(FluidType, dynfluidmodel.BaseBernoulliFixedSeparation):
+            # If the fluid has a fixed-separation point, set the appropriate
+            # separation point for the fluid
+            vertex_label_to_id = solid.forms['mesh.vertex_label_to_id']
+            vertex_mf = solid.forms['mesh.vertex_function']
+            if vertex_mf is None:
+                raise ValueError("Loading a fixed separation point fluid model but solid mesh doesn't specify a separation point")
+
+            if 'separation' in vertex_label_to_id:
+                sep_mf_value = vertex_label_to_id['separation']
+                assert isinstance(sep_mf_value, int)
+            else:
+                raise ValueError("Loading a fixed separation point fluid model but solid mesh doesn't specify a separation point")
+
+            sep_vert = vertex_mf.values()[vertex_mf.values() == sep_mf_value]
+            if len(sep_vert) == 1:
+                sep_vert = sep_vert[0]
+            else:
+                raise ValueError(f"Single separation point expected but {len(sep_vert):d} were supplied")
+
+            idx_sep = np.where(fsi_verts == sep_vert)
+            if len(idx_sep) == 1:
+                idx_sep = idx_sep[0]
+            else:
+                raise ValueError(f"Expected to find single separation point on FSI surface but found {len(idx_sep):d} instead")
+            fluid = FluidType(s, idx_sep=idx_sep)
+        else:
+            fluid = FluidType(s)
     else:
         raise ValueError(f"This function does not yet support input fluid meshes.")
     return solid, fluid, fsi_verts
