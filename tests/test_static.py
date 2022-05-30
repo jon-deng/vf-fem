@@ -75,6 +75,7 @@ model.set_props(props)
 
 def test_static_solid_configuration():
     solid = model.solid
+    solid.dt = 100.0
     control = solid.control
     _p = np.zeros(control['p'].size())
     _p[model.fsimap.dofs_solid[:10]] = 500*10

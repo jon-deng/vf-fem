@@ -1,5 +1,22 @@
 """
-This module contains code that solves for static equilibium of models
+This module contains code that solves static problems
+
+Solving static problems requires some minor changes as the solid model equations
+are formulated over a time step and involve states before and after the time
+step ((u, v, a)_0 and (u, v, a)_1 for the displacement, velocity and
+acceleration). The residual then involves solving three equations
+    Fu(u1, u0, v0, a0; ...) = 0
+    Fv = v1 - vnewmark(u1, u0, v0, a0) = 0 * explicit solve once you know u1
+    Fa = a1 - anewmark(u1, u0, v0, a0) = 0 * explicit solve once you know u1
+
+where v1 and a1 are further functions of the initial state and time step.
+
+To recover the static problem, you have to ensure v1=0, a1=0 in the solution.
+To do this, you can use a very large time step dt.
+
+Another strategy is to manually ensure that u0=u1 and v0=a0=0. I think this
+approach is a little trickier as the jacobian dFu/du1 would change since u0 must
+be linked to u1.
 """
 
 from typing import Tuple, Mapping
@@ -49,7 +66,10 @@ def static_solid_configuration(
     solid.set_control(control)
     solid.set_props(props)
 
-    jac = dfn.derivative(solid.forms['form.un.f1uva'], solid.forms['coeff.state.u1'])
+    jac = dfn.derivative(
+        solid.forms['form.un.f1uva'],
+        solid.forms['coeff.state.u1']
+    )
     dfn.solve(
         solid.forms['form.un.f1uva'] == 0.0,
         solid.forms['coeff.state.u1'],
