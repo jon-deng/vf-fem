@@ -5,9 +5,9 @@ state to signals over all states in a file
 import numpy as np
 
 def transform_to_make_signals(make_signal):
-    def make_signals(model):
+    def make_signals(model, *args, **kwargs):
         def proc_signals(f):
-            proc_signal = make_signal(model)
+            proc_signal = make_signal(model, *args, **kwargs)
 
             props = f.get_props()
             signals = [
