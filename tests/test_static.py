@@ -74,25 +74,32 @@ model.set_control(control)
 model.set_props(props)
 
 def test_static_solid_configuration():
+    """
+    Test `static_solid_configuration`
+    """
     solid = model.solid
     solid.dt = 100.0
-    control = solid.control
-    _p = np.zeros(control['p'].size())
+    _p = np.zeros(solid.control['p'].size())
     _p[model.fsimap.dofs_solid[:10]] = 500*10
-    dfn.as_backend_type(control['p'])[:] = _p
+    dfn.as_backend_type(solid.control['p'])[:] = _p
 
-    props = solid.props
-    x_n, info = static.static_solid_configuration(solid, control, props)
-    print(x_n.norm())
+    x_n, info = static.static_solid_configuration(solid, solid.control, solid.props)
+    print('\n', x_n.norm())
     print(info)
 
 def test_static_configuration_coupled_newton():
-    x_n, info = static.static_coupled_configuration_newton(model)
+    """
+    Test `static_coupled_configuration_newton`
+    """
+    x_n, info = static.static_coupled_configuration_newton(model, control, props)
     print(x_n.norm())
     print(info)
 
 def test_static_configuration_coupled_picard():
-    x_n, info = static.static_coupled_configuration_picard(model)
+    """
+    Test `static_coupled_configuration_picard`
+    """
+    x_n, info = static.static_coupled_configuration_picard(model, control, props)
     print(x_n.norm())
     print(info)
 
