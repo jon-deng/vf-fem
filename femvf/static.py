@@ -2,6 +2,8 @@
 This module contains code that solves for static equilibium of models
 """
 
+from typing import Tuple, Mapping
+
 import dolfin as dfn
 from petsc4py import PETSc
 import numpy as np
@@ -25,7 +27,7 @@ def static_solid_configuration(
         solid: slmodel.Solid,
         control: BlockVector,
         props: BlockVector
-    ) -> BlockVector:
+    ) -> Tuple[BlockVector, Mapping]:
     """
     Return the static state of a solid model
 
@@ -57,7 +59,9 @@ def static_solid_configuration(
     )
 
     state_n['u'] = solid.state1['u']
-    return state_n
+
+    info = {}
+    return state_n, info
 
 def set_coupled_model_substate(model, xsub):
     """

@@ -7,6 +7,7 @@ problems in `femvf.forward`.
 
 import os
 import numpy as np
+import dolfin as dfn
 
 from femvf.models.transient import (
     solid as smd,
@@ -72,11 +73,22 @@ props['zeta_inv'][:] = ZETA
 model.set_control(control)
 model.set_props(props)
 
+def test_static_solid_configuration():
+    solid = model.solid
+    control = solid.control
+    _p = np.zeros(control['p'].size())
+    _p[model.fsimap.dofs_solid[:10]] = 500*10
+    dfn.as_backend_type(control['p'])[:] = _p
+
+    props = solid.props
+    x_n, info = static.static_solid_configuration(solid, control, props)
+    print(x_n.norm())
+    print(info)
+
 def test_static_configuration_coupled_newton():
     x_n, info = static.static_coupled_configuration_newton(model)
     print(x_n.norm())
     print(info)
-
 
 def test_static_configuration_coupled_picard():
     x_n, info = static.static_coupled_configuration_picard(model)
@@ -84,5 +96,6 @@ def test_static_configuration_coupled_picard():
     print(info)
 
 if __name__ == '__main__':
+    test_static_solid_configuration()
     test_static_configuration_coupled_picard()
     # test_static_configuration_coupled_newton()
