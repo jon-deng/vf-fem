@@ -58,6 +58,17 @@ def load_fenics_gmsh(mesh_path):
 
     mio_mesh = mio.read(mesh_path)
 
+    # Check if the z-coordinate is uniformly zero. If it is then automatically
+    # trim the z-coordinate to create a 2D mesh
+    if mio_mesh.points.shape[1] == 3:
+        if np.all(mio_mesh.points[:, 2] == 0):
+            mio_mesh = mio.Mesh(
+                mio_mesh.points[:, :2],
+                mio_mesh.cells,
+                cell_data=mio_mesh.cell_data,
+                field_data=mio_mesh.field_data
+            )
+
     # First load some basic information about the mesh and check compatibility
     # with fenics
     cell_types = [cell.type for cell in mio_mesh.cells]
