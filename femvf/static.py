@@ -73,7 +73,6 @@ def set_coupled_model_substate(model, xsub):
     model.set_ini_state(_state)
     model.set_fin_state(_state)
 
-# TODO: This one has a strange bug where the residual seems to oscillate wildly
 def static_coupled_configuration_picard(model: comodel.FSIModel):
     solid = model.solid
     fluid = model.fluid
@@ -89,8 +88,13 @@ def static_coupled_configuration_picard(model: comodel.FSIModel):
         set_coupled_model_substate(model, x_n)
 
         # solve for the solid deformation under the guessed fluid load
-        dfn.solve(solid.forms['form.un.f1uva'] == 0.0, solid.forms['coeff.state.u1'],
-                  bcs=[solid.bc_base], J=solid.forms['form.bi.df1uva_du1'], solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM})
+        dfn.solve(
+            solid.forms['form.un.f1uva'] == 0.0,
+            solid.forms['coeff.state.u1'],
+            bcs=[solid.bc_base],
+            J=solid.forms['form.bi.df1uva_du1'],
+            solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
+        )
         u = BlockVector([solid.state1['u'].copy()], labels=[['u']]) # the vector corresponding to solid.forms['coeff.state.u1']
 
         # update the fluid load for the new solid deformation
@@ -142,7 +146,7 @@ def static_coupled_configuration_picard(model: comodel.FSIModel):
     return x_n, info
 
 # TODO: This one has a strange bug where Newton convergence is very slow
-# I'm not sure if the answer it return is correct or not
+# I'm not sure if the answer it returns is correct or not
 def static_coupled_configuration_newton(model: comodel.FSIModel):
     """
     Return the static equilibrium state for a coupled model
@@ -156,11 +160,6 @@ def static_coupled_configuration_newton(model: comodel.FSIModel):
         """
         ### Set the state to linearize around
         set_coupled_model_substate(model, x_0)
-
-        ### Debugging
-        # state = model.state1
-        # print("In linear subproblem")
-        # print("State: ", [f"{key}: {gops.norm_vec(vec):.2e}" for key, vec in zip(state.labels[0], state)])
 
         ### Form the residual
         def assem_res():
@@ -243,7 +242,4 @@ def static_coupled_configuration_newton(model: comodel.FSIModel):
     #     x_n = x_n - dx_n
 
     x_n, info = newton_solve(x_0, make_linear_subproblem, step_size=1.0)
-    # breakpoint()
     return x_n, info
-
-    # print(info)
