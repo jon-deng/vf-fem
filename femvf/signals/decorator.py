@@ -6,10 +6,13 @@ import numpy as np
 
 def transform_to_make_signals(make_signal):
     def make_signals(model, *args, **kwargs):
+
         def proc_signals(f):
             proc_signal = make_signal(model, *args, **kwargs)
 
             props = f.get_props()
+            model.set_props(props)
+
             signals = [
                 proc_signal(f.get_state(ii), f.get_control(ii), props)
                 for ii in range(f.size)]
