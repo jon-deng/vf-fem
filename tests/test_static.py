@@ -1,11 +1,18 @@
 """
-Tests that solving for static configurations works
+Tests functionality of `femvf.static`
+
+Functions in `femvf.static` solve statics problems instead of the the transient
+problems in `femvf.forward`.
 """
 
 import os
 import numpy as np
 
-from femvf.models import solid as smd, fluid as fmd #, acoustic as amd
+from femvf.models.transient import (
+    solid as smd,
+    fluid as fmd,
+    # acoustic as amd
+)
 from femvf.load import load_transient_fsi_model
 from femvf.meshutils import process_meshlabel_to_dofs
 from femvf import static
@@ -47,7 +54,7 @@ y_gap = 0.01
 y_gap = 0.5
 y_contact_offset = 1/10*y_gap
 
-props['y_midline'][:] = y_max + y_gap
+props['ymid'][:] = y_max + y_gap
 props['ycontact'][:] = y_max + y_gap - y_contact_offset
 props['kcontact'][:] = 1e16
 
@@ -55,11 +62,11 @@ props['kcontact'][:] = 1e16
 ZETA = 1e-4
 R_SEP = 1.0
 props['r_sep'][:] = R_SEP
-props['ygap_lb'][:] = y_contact_offset
+props['area_lb'][:] = 2*y_contact_offset
 props['zeta_lb'][:] = 1e-6
-props['zeta_amin'][:] = ZETA
+props['zeta_min'][:] = ZETA
 props['zeta_sep'][:] = ZETA
-props['zeta_ainv'][:] = ZETA
+props['zeta_inv'][:] = ZETA
 
 ### Set the control and properties for the model
 model.set_control(control)
