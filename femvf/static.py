@@ -21,23 +21,43 @@ from nonlineq import newton_solve
 
 dfn.set_log_level(50)
 
-def static_configuration(solid: slmodel.Solid):
-    # Set the initial guess u=0 and constants (v, a) = (0, 0)
-    state = solid.get_state_vec()
-    state.set(0.0)
-    solid.set_fin_state(state)
-    solid.set_ini_state(state)
+def static_solid_configuration(
+        solid: slmodel.Solid,
+        control: BlockVector,
+        props: BlockVector
+    ) -> BlockVector:
+    """
+    Return the static state of a solid model
 
-    # Set initial pressure as 0 for the static problem
-    control = solid.get_control_vec()
-    control['p'][:] = 0.0
+    Parameters
+    ----------
+    solid :
+        The solid model to solve for a static state
+    control :
+        The control parameters of the solid model for the static state
+    props :
+        The properties of the solid model
+    """
+    # Set the initial guess u=0 and constants (v, a) = (0, 0)
+    state_n = solid.get_state_vec()
+    state_n.set(0.0)
+    solid.set_fin_state(state_n)
+    solid.set_ini_state(state_n)
+
+    solid.set_control(control)
+    solid.set_props(props)
 
     jac = dfn.derivative(solid.forms['form.un.f1uva'], solid.forms['coeff.state.u1'])
-    dfn.solve(solid.forms['form.un.f1uva'] == 0.0, solid.forms['coeff.state.u1'],
-              bcs=[solid.bc_base], J=jac, solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM})
+    dfn.solve(
+        solid.forms['form.un.f1uva'] == 0.0,
+        solid.forms['coeff.state.u1'],
+        bcs=[solid.bc_base],
+        J=jac,
+        solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
+    )
 
-    u = solid.state1['u']
-    return u
+    state_n['u'] = solid.state1['u']
+    return state_n
 
 def set_coupled_model_substate(model, xsub):
     """
@@ -53,8 +73,8 @@ def set_coupled_model_substate(model, xsub):
     model.set_ini_state(_state)
     model.set_fin_state(_state)
 
-# TODO: This one has a strange bug where residual seem to oscillate wildly
-def static_configuration_coupled_picard(model: comodel.FSIModel):
+# TODO: This one has a strange bug where the residual seems to oscillate wildly
+def static_coupled_configuration_picard(model: comodel.FSIModel):
     solid = model.solid
     fluid = model.fluid
     def norm(x):
@@ -123,7 +143,7 @@ def static_configuration_coupled_picard(model: comodel.FSIModel):
 
 # TODO: This one has a strange bug where Newton convergence is very slow
 # I'm not sure if the answer it return is correct or not
-def static_configuration_coupled_newton(model: comodel.FSIModel):
+def static_coupled_configuration_newton(model: comodel.FSIModel):
     """
     Return the static equilibrium state for a coupled model
     """

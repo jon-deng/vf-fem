@@ -66,13 +66,13 @@ model.set_control(control)
 model.set_props(props)
 
 def test_static_configuration_coupled_newton():
-    x_n, info = static.static_configuration_coupled_newton(model)
+    x_n, info = static.static_coupled_configuration_newton(model)
     print(x_n.norm())
     print(info)
 
 
 def test_static_configuration_coupled_picard():
-    x_n, info = static.static_configuration_coupled_picard(model)
+    x_n, info = static.static_coupled_configuration_picard(model)
     print(x_n.norm())
     print(info)
 
