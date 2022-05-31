@@ -8,6 +8,7 @@ import meshio as mio
 import numpy as np
 import dolfin as dfn
 
+# Load a mesh from the FEniCS .xdmf format via meshio
 def split_meshio_cells(mesh):
     """
     Splits a `meshio.Mesh` into separate meshes with one cell block each
@@ -129,6 +130,8 @@ def load_fenics_gmsh(mesh_path):
 
     return dfn_mesh, tuple(mfs), tuple(entities_label_to_id)
 
+# Load a mesh from the FEniCS .xml format
+# This format is no longer updated/promoted by FEniCS
 def load_fenics_xmlmesh(mesh_path):
     """
     Return mesh and facet/cell info
@@ -207,6 +210,7 @@ def parse_msh2_physical_groups(mesh_path):
             elif topo_dim == 2:
                 celllabel_to_id[name] = val
     return vertexlabel_to_id, facetlabel_to_id, celllabel_to_id
+
 
 def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     """
