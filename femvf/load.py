@@ -83,7 +83,7 @@ def load_dynamical_fsi_model(
         solid_mesh,
         fluid_mesh,
         SolidType=dynsolidmodel.KelvinVoigt,
-        FluidType=dynfluidmodel.Bernoulli1DDynamicalSystem,
+        FluidType=dynfluidmodel.BernoulliSmoothMinSep,
         fsi_facet_labels=('pressure',),
         fixed_facet_labels=('fixed',)
     ):

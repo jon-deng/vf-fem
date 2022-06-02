@@ -37,13 +37,13 @@ def setup_coupled_models():
     fluid_mesh = None
 
     SolidType = slmodel.KelvinVoigt
-    FluidType = flmodel.Bernoulli1DDynamicalSystem
+    FluidType = flmodel.BernoulliSmoothMinSep
     model_coupled = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     SolidType = slmodel.LinearizedKelvinVoigt
-    FluidType = flmodel.LinearizedBernoulli1DDynamicalSystem
+    FluidType = flmodel.LinearizedBernoulliSmoothMinSep
     model_coupled_linear = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))

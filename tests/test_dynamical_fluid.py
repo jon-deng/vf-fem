@@ -13,7 +13,7 @@ def setup_model():
     """
     # This is the surface coordinate [cm]
     s = np.linspace(0, 1, 52)
-    return dynfld.Bernoulli1DDynamicalSystem(s)
+    return dynfld.BernoulliSmoothMinSep(s)
 
 def test_pressure_qualitative(model):
     """

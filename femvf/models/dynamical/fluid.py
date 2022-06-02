@@ -25,7 +25,7 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
         self.s = s
 
 
-class BaseBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
+class BaseBernoulliSmoothMinSep(BaseFluid1DDynamicalSystem):
 
     def __init__(self, s):
         super().__init__(s)
@@ -51,7 +51,7 @@ class BaseBernoulli1DDynamicalSystem(BaseFluid1DDynamicalSystem):
         self.props = bla.BlockVector(
             [np.ones(1) for i in range(len(properties_vec))], labels=[properties_vec])
 
-class Bernoulli1DDynamicalSystem(BaseBernoulli1DDynamicalSystem):
+class BernoulliSmoothMinSep(BaseBernoulliSmoothMinSep):
     def assem_res(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         area = self.control['area']
@@ -124,7 +124,7 @@ class Bernoulli1DDynamicalSystem(BaseBernoulli1DDynamicalSystem):
             for state_subvec in self.state]
         return bla.BlockMatrix(mats, labels=(self.state.labels[0], self.props.labels[0]))
 
-class LinearizedBernoulli1DDynamicalSystem(BaseBernoulli1DDynamicalSystem):
+class LinearizedBernoulliSmoothMinSep(BaseBernoulliSmoothMinSep):
     def assem_res(self):
         # Depack variables from BlockVector for input to Bernoulli functions
         area = self.control['area']
