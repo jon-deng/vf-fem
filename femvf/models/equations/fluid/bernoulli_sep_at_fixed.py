@@ -6,71 +6,84 @@ import numpy as np
 from jax import numpy as jnp
 import jax
 
-## To disable jax:
-# jnp = np
 
-# pylint: disable=abstract-method
-# @jax.jit
-def bernoulli_q(asep, psub, psup, rho):
+def BernoulliFixedSep(s: jnp.ndarray, idx_sep: int):
     """
-    Return the flow rate based on Bernoulli
+    Return quantities defining a fixed-separation point Bernoulli model
     """
-    flow_sign = jnp.sign(psub-psup)
-    q = flow_sign * (2*jnp.abs(psub-psup)/rho)**0.5 * asep
-    return q
 
-# @jax.jit
-def bernoulli_p(q, area, psub, psup, rho):
-    """
-    Return the pressure based on Bernoulli
-    """
-    p = psub - 1/2*rho*(q/area)**2
-    return p
+    N = s.size
 
-def coeff_sep(idx_sep: int, n: int):
-    """
-    Return a weighting representing cut-off at the separation point
-
-    Parameters
-    ----------
-    idx_sep :
-        Node where separation occurs
-    n :
-        Number of nodes in the mesh
-    """
-    f = np.ones((n,))
+    # Separation coefficient to ensure pressures after the separation point
+    # match the supraglottal pressure
+    f = np.ones((N,))
     f[np.array(idx_sep)+1:] = 0
-    return f
 
-# @jax.jit
-def bernoulli_qp(area, s, psub, psup, rho, idx_sep):
-    """
-    Return Bernoulli flow and pressure
-    """
-    asep = area[idx_sep]
-    # ssep = s[idx_sep]
-    q = bernoulli_q(asep, psub, psup, rho)
-    p = bernoulli_p(q, area, psub, psup, rho)
+    def bernoulli_q(asep, psub, psup, rho):
+        """
+        Return the flow rate based on Bernoulli
+        """
+        flow_sign = jnp.sign(psub-psup)
+        q = flow_sign * (2*jnp.abs(psub-psup)/rho)**0.5 * asep
+        return q
 
-    # Separation coefficient ensure pressures tends to zero after separation
-    f_sep = coeff_sep(idx_sep, area.size)
-    p = f_sep * p
-    return q, p
+    # @jax.jit
+    def bernoulli_p(q, area, psub, psup, rho):
+        """
+        Return the pressure based on Bernoulli
+        """
+        p = psub - 1/2*rho*(q/area)**2
+        return p
 
-# Use this weird combination of primals/tangent parameters because later we
-# want to compute the jacobian wrt area
-def dbernoulli_qp(area, s, psub, psup, rho, idx_sep, tangents):
-    """
-    Return linearization of Bernoulli flow and pressure
-    """
-    primals = (area, s, psub, psup, rho, idx_sep)
-    return jax.jvp(bernoulli_qp, primals, tangents)[1]
+    # @jax.jit
+    def bernoulli_qp(area, psub, psup, rho):
+        """
+        Return Bernoulli flow and pressure
+        """
+        asep = area[idx_sep]
+        # ssep = s[idx_sep]
+        q = bernoulli_q(asep, psub, psup, rho)
+        p = bernoulli_p(q, area, psub, psup, rho)
 
-dbernoulli_qp_darea = jax.jacfwd(bernoulli_qp, argnums=0)
-ddbernoulli_qp_darea = jax.jacfwd(dbernoulli_qp, argnums=0)
+        # Separation coefficient ensure pressures tends to zero after separation
+        p = f * p + (1-f)*psup
+        return q, p
 
-dbernoulli_qp_dpsub = jax.jacfwd(bernoulli_qp, argnums=2)
-ddbernoulli_qp_dpsub = jax.jacfwd(dbernoulli_qp, argnums=2)
+    # Use this weird combination of primals/tangent parameters because later we
+    # want to compute the jacobian wrt area
+    def dbernoulli_qp(area, psub, psup, rho, tangents):
+        """
+        Return linearization of Bernoulli flow and pressure
+        """
+        primals = (area, psub, psup, rho)
+        return jax.jvp(bernoulli_qp, primals, tangents)[1]
 
-dbernoulli_qp_dpsup = jax.jacfwd(bernoulli_qp, argnums=3)
-ddbernoulli_qp_dpsup = jax.jacfwd(dbernoulli_qp, argnums=3)
+
+    # Key functions/variables that have to be exported
+    _state = {
+        'q': np.ones(1),
+        'p': np.ones(N)
+    }
+
+    _control = {
+        'area': np.ones(N),
+        'psub': np.ones(1),
+        'psup': np.ones(1)
+    }
+
+    _props = {
+        'rho': np.ones(N)
+    }
+
+    def res(state, control, props):
+        q, p = state.values()
+        area, psub, psup = control.values()
+
+        q_, p_ = bernoulli_qp(area, psub, psup, props['rho'])
+        return {'q': q-q_, 'p': p-p_}
+
+    dres_dstate = jax.jacfwd(res, argnums=0)
+    dres_dcontrol = jax.jacfwd(res, argnums=1)
+    dres_dprops = jax.jacfwd(res, argnums=2)
+
+    return s, (_state, _control, _props), res
