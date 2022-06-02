@@ -10,8 +10,8 @@ import numpy as np
 import dolfin as dfn
 
 from femvf.models.transient import (
-    solid as smd,
-    fluid as fmd,
+    solid as tsmd,
+    fluid as tfmd,
     # acoustic as amd
 )
 from femvf.load import load_transient_fsi_model
@@ -23,7 +23,7 @@ mesh_dir = '../meshes'
 mesh_name = 'M5-3layers'
 mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
 model = load_transient_fsi_model(
-    mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+    mesh_path, None, SolidType=tsmd.KelvinVoigt, FluidType=tfmd.Bernoulli, coupling='explicit')
 
 ### Specify control
 control = model.get_control_vec()

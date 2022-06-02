@@ -39,10 +39,10 @@ def coeff_sep(idx_sep: int, n: int):
         Number of nodes in the mesh
     """
     f = np.ones((n,))
-    f[idx_sep+1:] = 0
+    f[np.array(idx_sep)+1:] = 0
     return f
 
-@jax.jit
+# @jax.jit
 def bernoulli_qp(area, s, psub, psup, rho, idx_sep):
     """
     Return Bernoulli flow and pressure

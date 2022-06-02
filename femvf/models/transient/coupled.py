@@ -15,7 +15,7 @@ from petsc4py import PETSc
 
 from ..equations.solid import newmark
 from ..fsi import FSIMap
-from . import base, solid as smd, fluid as fmd, acoustic as amd
+from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 from femvf import meshutils
 from blockarray import linalg
 from blockarray import blockvec as bvec
@@ -41,7 +41,7 @@ class FSIModel(base.Model):
         increasing streamwise direction since the fluid mesh numbering is ordered like that too.
     fsi_coordinates
     """
-    def __init__(self, solid: smd.Solid, fluid: fmd.QuasiSteady1DFluid, solid_fsi_dofs, fluid_fsi_dofs):
+    def __init__(self, solid: tsmd.Solid, fluid: tfmd.QuasiSteady1DFluid, solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid
         self.fluid = fluid
 
@@ -785,7 +785,7 @@ class FSAIModel(FSIModel):
 
             return res, solve_jac
 
-        q, info = smd.newton_solve(bvec.BlockVector((ini_state['q'],), labels=[('qin',)]), make_linearized_flow_residual)
+        q, info = tsmd.newton_solve(bvec.BlockVector((ini_state['q'],), labels=[('qin',)]), make_linearized_flow_residual)
 
         self.acoustic.set_control(q)
         ac_state1, _ = self.acoustic.solve_state1()

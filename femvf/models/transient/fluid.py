@@ -258,3 +258,61 @@ class BernoulliMinimumSeparation(QuasiSteady1DFluid):
 
         info = {}
         return ret_state1, info
+
+class BernoulliFixedSeparation(QuasiSteady1DFluid):
+    """
+    Bernoulli fluid model with fixed separation point
+
+    """
+    PROPERTY_TYPES = {
+        'a_sub': ('const', ()),
+        'a_sup': ('const', ()),
+        'rho_air': ('const', ()),
+        'r_sep': ('const', ()),
+        'zeta_min': ('const', ()),
+        'zeta_sep': ('const', ()),
+        'zeta_lb': ('const', ()),
+        'area_lb': ('const', ())}
+
+    PROPERTY_DEFAULTS = {
+        'a_sub': 100000,
+        'a_sup': 0.6,
+        'r_sep': 1.0,
+        'rho_air': 1.225 * SI_DENSITY_TO_CGS,
+        'zeta_min': 0.002/3,
+        'zeta_sep': 0.002/3,
+        'zeta_lb': 0.002/3,
+        'area_lb': 0.001}
+
+    def __init__(self, s, idx_sep=0):
+        super().__init__(s)
+
+        self.IDX_SEP = idx_sep
+
+    ## Model res sensitivity interface
+    def res(self):
+        return self.state1 - self.solve_state1(self.state0)[0]
+
+    def solve_state1(self, state1):
+        """
+        Return the final flow state
+        """
+        s = self.s_vertices
+        area = self.control['area']
+        psub = self.control['psub'][0]
+        psup = self.control['psup'][0]
+
+        rho = self.props['rho_air'][0]
+        zeta_min = self.props['zeta_sep'][0]
+        zeta_sep = self.props['zeta_min'][0]
+
+        qp1 = bernoulli_sep_at_min.bernoulli_qp(
+            area, s, psub, psup, rho, zeta_min, zeta_sep
+            )
+
+        ret_state1 = self.state1.copy()
+        ret_state1['q'][0] = qp1[0]
+        ret_state1['p'][:] = qp1[1]
+
+        info = {}
+        return ret_state1, info

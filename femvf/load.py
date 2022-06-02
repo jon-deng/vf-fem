@@ -6,10 +6,10 @@ import numpy as np
 import dolfin as dfn
 
 from . import meshutils
-from .models.transient import solid as smd, fluid as fmd
+from .models.transient import solid as tsmd, fluid as tfmd
 from .models.transient.coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
 
-from .models.dynamical import solid as dynsolidmodel, fluid as dynfluidmodel, coupled as dynfsimodel
+from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dynfsimodel
 
 # from .dynamicalmodels.coupled import (FSAIModel, ExplicitFSIModel, ImplicitFSIModel)
 
@@ -45,10 +45,11 @@ def load_solid_model(
 def load_transient_fsi_model(
         solid_mesh,
         fluid_mesh,
-        SolidType=smd.KelvinVoigt,
-        FluidType=fmd.Bernoulli,
+        SolidType=tsmd.KelvinVoigt,
+        FluidType=tfmd.Bernoulli,
         fsi_facet_labels=('pressure',),
         fixed_facet_labels=('fixed',),
+        separation_vertex_label='separation',
         coupling='explicit'
     ):
     """
@@ -66,7 +67,8 @@ def load_transient_fsi_model(
         solid_mesh, fluid_mesh,
         SolidType=SolidType, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels,
-        fixed_facet_labels=fixed_facet_labels
+        fixed_facet_labels=fixed_facet_labels,
+        separation_vertex_label=separation_vertex_label
         )
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
@@ -82,10 +84,11 @@ def load_transient_fsi_model(
 def load_dynamical_fsi_model(
         solid_mesh,
         fluid_mesh,
-        SolidType=dynsolidmodel.KelvinVoigt,
-        FluidType=dynfluidmodel.BernoulliSmoothMinSep,
+        SolidType=dsmd.KelvinVoigt,
+        FluidType=dfmd.BernoulliSmoothMinSep,
         fsi_facet_labels=('pressure',),
-        fixed_facet_labels=('fixed',)
+        fixed_facet_labels=('fixed',),
+        separation_vertex_label='separation'
     ):
     """
     Factory function that loads a model based on input solid/fluid meshes.
@@ -102,7 +105,8 @@ def load_dynamical_fsi_model(
         solid_mesh, fluid_mesh,
         SolidType=SolidType, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels,
-        fixed_facet_labels=fixed_facet_labels
+        fixed_facet_labels=fixed_facet_labels,
+        separation_vertex_label=separation_vertex_label
         )
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
@@ -114,8 +118,8 @@ def load_transient_fsai_model(
         solid_mesh,
         fluid_mesh,
         acoustic,
-        SolidType=smd.KelvinVoigt,
-        FluidType=fmd.Bernoulli,
+        SolidType=tsmd.KelvinVoigt,
+        FluidType=tfmd.Bernoulli,
         fsi_facet_labels=('pressure',),
         fixed_facet_labels=('fixed',),
         coupling='explicit'
@@ -138,11 +142,11 @@ def load_transient_fsai_model(
 def process_fsi(
         solid_mesh,
         fluid_mesh,
-        SolidType=smd.KelvinVoigt,
-        FluidType=fmd.Bernoulli,
+        SolidType=tsmd.KelvinVoigt,
+        FluidType=tfmd.Bernoulli,
         fsi_facet_labels=('pressure',),
         fixed_facet_labels=('fixed',),
-        separation_vertex_label=('separation'),
+        separation_vertex_label='separation',
     ):
     """
     Processes appropriate mappings between fluid/solid domains for FSI
@@ -167,7 +171,7 @@ def process_fsi(
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
             FluidType,
-            (fmd.QuasiSteady1DFluid, dynfluidmodel.BaseFluid1DDynamicalSystem)
+            (tfmd.QuasiSteady1DFluid, dfmd.BaseFluid1DDynamicalSystem)
         ):
         mesh = solid.forms['mesh.mesh']
         facet_func = solid.forms['mesh.facet_function']
@@ -179,7 +183,7 @@ def process_fsi(
         dx = x[1:] - x[:-1]
         dy = y[1:] - y[:-1]
         s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-        if issubclass(FluidType, dynfluidmodel.BaseBernoulliFixedSeparation):
+        if issubclass(FluidType, dfmd.BaseBernoulliFixedSeparation):
             # If the fluid has a fixed-separation point, set the appropriate
             # separation point for the fluid
             vertex_label_to_id = solid.forms['mesh.vertex_label_to_id']
@@ -187,8 +191,8 @@ def process_fsi(
             if vertex_mf is None:
                 raise ValueError("Loading a fixed separation point fluid model but solid mesh doesn't specify a separation point")
 
-            if 'separation' in vertex_label_to_id:
-                sep_mf_value = vertex_label_to_id['separation']
+            if separation_vertex_label in vertex_label_to_id:
+                sep_mf_value = vertex_label_to_id[separation_vertex_label]
                 assert isinstance(sep_mf_value, int)
             else:
                 raise ValueError("Loading a fixed separation point fluid model but solid mesh doesn't specify a separation point")

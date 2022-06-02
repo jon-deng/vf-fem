@@ -16,7 +16,7 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
-from femvf.models.transient import solid as smd, fluid as fmd, acoustic as amd
+from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.signals.solid as solidfunc
 # from femvf import callbacks
@@ -41,8 +41,8 @@ class ForwardConfig(unittest.TestCase):
         ## Configure the model and its parameters
         model = load_transient_fsi_model(
             self.mesh_path, None,
-            SolidType=smd.KelvinVoigt,
-            FluidType=fmd.BernoulliMinimumSeparation, coupling='explicit'
+            SolidType=tsmd.KelvinVoigt,
+            FluidType=tfmd.BernoulliMinimumSeparation, coupling='explicit'
             )
 
         # Set the control vector
@@ -93,7 +93,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_rayleigh_model(self):
         ## Configure the model and its parameters
-        model = load_transient_fsi_model(self.mesh_path, None, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(self.mesh_path, None, SolidType=tsmd.Rayleigh, FluidType=tfmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500.0
@@ -147,7 +147,7 @@ class ForwardConfig(unittest.TestCase):
     def config_fsai_model(self):
         ## Configure the model and its parameters
         acoustic = amd.WRAnalog(44)
-        model = load_transient_fsai_model(self.mesh_path, None, acoustic, SolidType=smd.Rayleigh, FluidType=fmd.Bernoulli,
+        model = load_transient_fsai_model(self.mesh_path, None, acoustic, SolidType=tsmd.Rayleigh, FluidType=tfmd.Bernoulli,
                                 coupling='explicit')
 
         # Set the control vector
@@ -199,7 +199,7 @@ class ForwardConfig(unittest.TestCase):
 
     def config_approx3D_model(self):
         ## Configure the model and its parameters
-        model = load_transient_fsi_model(self.mesh_path, None, SolidType=smd.Approximate3DKelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(self.mesh_path, None, SolidType=tsmd.Approximate3DKelvinVoigt, FluidType=tfmd.Bernoulli, coupling='explicit')
 
         # Set the control vector
         p_sub = 500
