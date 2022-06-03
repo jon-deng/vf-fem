@@ -332,3 +332,10 @@ class Rayleigh(SolidDynamicalSystem):
     def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solidforms.Rayleigh(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
+
+class LinearizedRayleigh(LinearizedSolidDynamicalSystem):
+    PROPERTY_DEFAULTS = {}
+    @staticmethod
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+        return solidforms.Rayleigh(
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)

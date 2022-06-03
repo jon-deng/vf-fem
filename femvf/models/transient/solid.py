@@ -612,6 +612,23 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
             solidforms.IncompSwellingKelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
+class SwellingKelvinVoigt(NodalContactSolid):
+    """
+    Kelvin Voigt model allowing for a swelling field
+    """
+    PROPERTY_DEFAULTS = {
+        'emod': 10e3 * PASCAL_TO_CGS,
+        'v_swelling': 1.0,
+        'rho': 1000 * SI_DENSITY_TO_CGS,
+        'eta': 3.0,
+        'ycontact': 0.61-0.001,
+        'kcontact': 1e11}
+
+    @staticmethod
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
+        return \
+            solidforms.SwellingKelvinVoigt(
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 class Approximate3DKelvinVoigt(NodalContactSolid):
     PROPERTY_DEFAULTS = {

@@ -171,7 +171,7 @@ def gen_residual_bilinear_property_forms(forms):
 
     return df1_dsolid
 
-# These functions are mainly for generating forms that are needed for solving
+# These functions are mainly for generating derived forms that are needed for solving
 # the hopf bifurcation problem
 def gen_hopf_forms(forms):
     gen_unary_linearized_forms(forms)
@@ -254,6 +254,27 @@ def gen_unary_linearized_forms(forms):
         [forms[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
         )
 
+def add_newmark_time_disc_form(forms):
+    u0 = forms['coeff.state.u0']
+    v0 = forms['coeff.state.v0']
+    a0 = forms['coeff.state.a0']
+    u1 = forms['coeff.state.u1']
+    v1 = forms['coeff.state.v1']
+    a1 = forms['coeff.state.a1']
+
+    dt = dfn.Function(forms['fspace.scalar'])
+    gamma = dfn.Constant(1/2)
+    beta = dfn.Constant(1/4)
+    v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+    a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+
+    forms['form.un.f1'] = ufl.replace(forms['form.un.f1uva'], {v1: v1_nmk, a1: a1_nmk})
+    forms['coeff.time.dt'] = dt
+    forms['coeff.time.gamma'] = gamma
+    forms['coeff.time.beta'] = beta
+    return forms
+
+## These are the core form definitions
 def base_form_definitions(
         mesh: dfn.Mesh,
         mesh_funcs: Tuple[dfn.MeshFunction],
@@ -337,6 +358,7 @@ def base_form_definitions(
         'mesh.fixed_facet_labels': fixed_facet_labels}
     return forms
 
+# Inertial effect forms
 def add_inertial_form(forms):
     dx = forms['measure.dx']
     vector_test = forms['test.vector']
@@ -350,6 +372,7 @@ def add_inertial_form(forms):
     forms['expr.force_inertial'] = inertial_body_force
     return forms
 
+# Elastic effect forms
 def add_isotropic_elastic_form(forms):
     dx = forms['measure.dx']
     vector_test = forms['test.vector']
@@ -367,6 +390,56 @@ def add_isotropic_elastic_form(forms):
     forms['expr.stress_elastic'] = stress_elastic
     return forms
 
+def add_isotropic_elastic_with_incomp_swelling_form(forms):
+    dx = forms['measure.dx']
+    strain_test = forms['test.strain']
+
+    emod = dfn.Function(forms['fspace.scalar'])
+    nu = 0.5
+    u = forms['coeff.state.u1']
+    inf_strain = form_inf_strain(u)
+    v_swelling = dfn.Function(forms['fspace.scalar'])
+    k_swelling = dfn.Constant(1.0)
+    v_swelling.vector()[:] = 1.0
+    lame_mu = emod/2/(1+nu)
+    stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(u.geometric_dimension())
+
+    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
+    forms['coeff.prop.emod'] = emod
+    forms['coeff.prop.v_swelling'] = v_swelling
+    forms['coeff.prop.k_swelling'] = k_swelling
+    forms['expr.stress_elastic'] = stress_elastic
+    return forms
+
+def add_isotropic_elastic_with_swelling_form(forms):
+    dx = forms['measure.dx']
+    strain_test = forms['test.strain']
+
+    u = forms['coeff.state.u1']
+    inf_strain = form_inf_strain(u)
+    emod = dfn.Function(forms['fspace.scalar'])
+    nu = dfn.Constant(0.45)
+    v_swelling = dfn.Function(forms['fspace.scalar'])
+    v_swelling.vector()[:] = 1.0
+    m_swelling = dfn.Function(forms['fspace.scalar'])
+    m_swelling.vector()[:] = 1.0
+
+    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
+    lame_mu = emod/2/(1+nu)
+    stress_elastic = (
+        (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        - (lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(u.geometric_dimension())
+    )
+
+    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
+    forms['coeff.prop.emod'] = emod
+    forms['coeff.prop.nu'] = nu
+    forms['coeff.prop.v_swelling'] = v_swelling
+    forms['coeff.prop.m_swelling'] = m_swelling
+    forms['expr.stress_elastic'] = stress_elastic
+    return forms
+
+# Surface forcing forms
 def add_surface_pressure_form(forms):
     ds = forms['measure.ds_traction']
     vector_test = forms['test.vector']
@@ -398,26 +471,7 @@ def add_manual_contact_traction_form(forms):
     forms['coeff.prop.ycontact'] = ycontact
     return forms
 
-def add_newmark_time_disc_form(forms):
-    u0 = forms['coeff.state.u0']
-    v0 = forms['coeff.state.v0']
-    a0 = forms['coeff.state.a0']
-    u1 = forms['coeff.state.u1']
-    v1 = forms['coeff.state.v1']
-    a1 = forms['coeff.state.a1']
-
-    dt = dfn.Function(forms['fspace.scalar'])
-    gamma = dfn.Constant(1/2)
-    beta = dfn.Constant(1/4)
-    v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-    a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-    forms['form.un.f1'] = ufl.replace(forms['form.un.f1uva'], {v1: v1_nmk, a1: a1_nmk})
-    forms['coeff.time.dt'] = dt
-    forms['coeff.time.gamma'] = gamma
-    forms['coeff.time.beta'] = beta
-    return forms
-
+# Surface membrane forms
 def add_isotropic_membrane(forms):
     # Define the 8th order projector to get the planar strain component
     ds_traction = forms['measure.ds_traction']
@@ -482,6 +536,7 @@ def add_incompressible_epithelium_membrane(forms):
     forms['coeff.prop.th_membrane'] = th_membrane
     return forms
 
+# Viscous effect forms
 def add_rayleigh_viscous_form(forms):
     dx = forms['measure.dx']
     vector_test = forms['test.vector']
@@ -515,27 +570,6 @@ def add_kv_viscous_form(forms):
     forms['coeff.prop.eta'] = eta
     forms['expr.kv_stress'] = stress_visco
     forms['expr.kv_strain_rate'] = inf_strain_rate
-    return forms
-
-def add_incompressible_isotropic_elastic_form(forms):
-    dx = forms['measure.dx']
-    strain_test = forms['test.strain']
-
-    emod = dfn.Function(forms['fspace.scalar'])
-    nu = 0.5
-    u = forms['coeff.state.u1']
-    inf_strain = form_inf_strain(u)
-    v_swelling = dfn.Function(forms['fspace.scalar'])
-    k_swelling = dfn.Constant(1.0)
-    v_swelling.vector()[:] = 1.0
-    lame_mu = emod/2/(1+nu)
-    stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(u.geometric_dimension())
-
-    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
-    forms['coeff.prop.emod'] = emod
-    forms['coeff.prop.v_swelling'] = v_swelling
-    forms['coeff.prop.k_swelling'] = k_swelling
-    forms['expr.stress_elastic'] = stress_elastic
     return forms
 
 def add_ap_force_form(forms):
@@ -608,7 +642,19 @@ def IncompSwellingKelvinVoigt(
         add_surface_pressure_form(
         add_kv_viscous_form(
         add_inertial_form(
-        add_incompressible_isotropic_elastic_form(
+        add_isotropic_elastic_with_incomp_swelling_form(
+        base_form_definitions(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
+
+def SwellingKelvinVoigt(
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+    return \
+        add_newmark_time_disc_form(
+        add_manual_contact_traction_form(
+        add_surface_pressure_form(
+        add_kv_viscous_form(
+        add_inertial_form(
+        add_isotropic_elastic_with_swelling_form(
         base_form_definitions(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
 
