@@ -37,11 +37,11 @@ def create_primal_res_class(Parent):
             return bla.BlockMatrix(submats, shape, labels)
 
         def assem_dres_dstatet(self):
-            dresq_dq = np.diag(np.zeros(self.q.size))
-            dresq_dp = np.zeros((self.q.size, self.p.size))
+            dresq_dq = np.diag(np.zeros(self.state['q'].size))
+            dresq_dp = np.zeros((self.state['q'].size, self.state['p'].size))
 
-            dresp_dp = np.diag(np.zeros(self.p.size))
-            dresp_dq = np.zeros((self.p.size, self.q.size))
+            dresp_dp = np.diag(np.zeros(self.state['p'].size))
+            dresp_dq = np.zeros((self.state['p'].size, self.state['q'].size))
             mats = [
                 [dresq_dq, dresq_dp],
                 [dresp_dq, dresp_dp]]
@@ -77,11 +77,11 @@ def create_linearized_res_class(Parent):
             return bla.BlockMatrix(submats, shape, labels)
 
         def assem_dres_dstatet(self):
-            dresq_dq = np.diag(np.zeros(self.q.size))
-            dresq_dp = np.zeros((self.q.size, self.p.size))
+            dresq_dq = np.diag(np.zeros(self.state['q'].size))
+            dresq_dp = np.zeros((self.state['q'].size, self.state['p'].size))
 
-            dresp_dp = np.diag(np.zeros(self.p.size))
-            dresp_dq = np.zeros((self.p.size, self.q.size))
+            dresp_dp = np.diag(np.zeros(self.state['p'].size))
+            dresp_dq = np.zeros((self.state['p'].size, self.state['q'].size))
             mats = [
                 [dresq_dq, dresq_dp],
                 [dresp_dq, dresp_dp]]
