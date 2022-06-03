@@ -80,8 +80,8 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
     def __init__(self, s, res, state, control, props):
         self.s = s
 
-        # self._res = jax.jit(res)
-        self._res = res
+        self._res = jax.jit(res)
+        # self._res = res
         self._dres = lambda state, control, props, tangents: jax.jvp(res, (state, control, props), tangents)[1]
 
         self.state = bla.BlockVector(list(state.values()), labels=[list(state.keys())])
@@ -106,6 +106,11 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
             blockvec_to_dict(self.dcontrol),
             blockvec_to_dict(self.dprops)
         )
+
+        self.dstate.set(0.0)
+        self.dstatet.set(0.0)
+        self.dcontrol.set(0.0)
+        self.dprops.set(0.0)
 
 
 class BaseBernoulliSmoothMinSep(BaseFluid1DDynamicalSystem):
