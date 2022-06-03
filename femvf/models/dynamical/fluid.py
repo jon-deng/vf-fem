@@ -108,8 +108,8 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
     def __init__(self, s, res, state, control, props):
         self.s = s
 
-        self._res = jax.jit(res)
-        # self._res = res
+        # self._res = jax.jit(res)
+        self._res = res
         self._dres = lambda state, control, props, tangents: jax.jvp(res, (state, control, props), tangents)[1]
 
         self.state = bla.BlockVector(list(state.values()), labels=[list(state.keys())])

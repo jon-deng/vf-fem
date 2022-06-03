@@ -13,8 +13,8 @@ def setup_model():
     """
     # This is the surface coordinate [cm]
     s = np.linspace(0, 1, 70)
-    # return dynfld.BernoulliSmoothMinSep(s)
-    return dynfld.BernoulliFixedSeparation(s, idx_sep=15)
+    return dynfld.BernoulliSmoothMinSep(s)
+    # return dynfld.BernoulliFixedSeparation(s, idx_sep=15)
 
 def test_pressure_qualitative(model):
     """
@@ -48,6 +48,8 @@ def test_pressure_qualitative(model):
     fig.savefig('out/test_dynamicalfluid.png')
 
     print(model.assem_dres_dstate().bshape)
+    print(model.assem_dres_dcontrol().bshape)
+    print(model.assem_dres_dprops().bshape)
 
 if __name__ == '__main__':
     model = setup_model()

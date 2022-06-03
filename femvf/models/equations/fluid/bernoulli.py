@@ -42,7 +42,7 @@ def BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
         """
         Return Bernoulli flow and pressure
         """
-        print(idx_sep)
+        # print(idx_sep)
         asep = area[idx_sep]
         # ssep = s[idx_sep]
         q = bernoulli_q(asep, psub, psup, rho)
@@ -75,7 +75,7 @@ def BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
         area, psub, psup = control['area'], control['psub'], control['psup']
 
         q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'])
-        print(q.shape, p.shape, q_.shape, p_.shape)
+        # print(q.shape, p.shape, q_.shape, p_.shape)
         return {'q': q-q_, 'p': p-p_}
 
     return s, (_state, _control, _props), res
@@ -159,8 +159,8 @@ def BernoulliSmoothMinSep(s: jnp.ndarray):
     }
 
     def res(state, control, props):
-        q, p = state.values()
-        area, psub, psup = control.values()
+        q, p = state['q'], state['p']
+        area, psub, psup = control['area'], control['psub'], control['psup']
 
         q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'], props['zeta_min'], props['zeta_sep'])
         return {'q': q-q_, 'p': p-p_}
