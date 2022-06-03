@@ -12,9 +12,9 @@ def setup_model():
     Return a dynamical fluid model to test
     """
     # This is the surface coordinate [cm]
-    s = np.linspace(0, 1, 52)
+    s = np.linspace(0, 1, 70)
     # return dynfld.BernoulliSmoothMinSep(s)
-    return dynfld.BernoulliFixedSeparation(s, idx_sep=30)
+    return dynfld.BernoulliFixedSeparation(s, idx_sep=15)
 
 def test_pressure_qualitative(model):
     """
@@ -36,6 +36,7 @@ def test_pressure_qualitative(model):
     model.set_control(control)
 
     qp = -model.assem_res()
+    print(f"Residual has shape {qp.bshape}")
 
     fig, axs = plt.subplots(2, 1, sharex=True)
     axs[0].plot(model.s, qp['p'])
@@ -45,6 +46,8 @@ def test_pressure_qualitative(model):
     axs[1].set_ylabel("Area [cm]")
     axs[1].set_xlabel("s [cm]")
     fig.savefig('out/test_dynamicalfluid.png')
+
+    print(model.assem_dres_dstate().bshape)
 
 if __name__ == '__main__':
     model = setup_model()

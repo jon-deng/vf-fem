@@ -12,12 +12,13 @@ from . import base
 from femvf.parameters.properties import property_vecs
 from femvf.constants import SI_DENSITY_TO_CGS
 from blockarray.blockvec import BlockVector
+from blockarray import blockvec as bla
 
 from ..equations.fluid.bernoulli_sep_at_ratio import (
     bernoulli_qp
 )
 
-from ..equations.fluid import bernoulli_sep_at_min
+from ..equations.fluid import bernoulli
 
 ## 1D Bernoulli approximation codes
 
@@ -39,17 +40,17 @@ class QuasiSteady1DFluid(base.Model):
 
         p0 = np.zeros(NVERT)
         q0 = np.zeros((1,))
-        self.state0 = BlockVector((q0, p0), labels=(('q', 'p'),))
+        self.state0 = bla.BlockVector((q0, p0), labels=(('q', 'p'),))
 
         p1 = np.zeros(NVERT)
         q1 = np.zeros(1)
-        self.state1 = BlockVector((q1, p1), labels=(('q', 'p'),))
+        self.state1 = bla.BlockVector((q1, p1), labels=(('q', 'p'),))
 
         # form type quantities associated with the mesh
         # displacement and velocity along the surface at state 0 and 1
         area = np.ones(NVERT)
         psub, psup = np.zeros(1), np.zeros(1)
-        self.control = BlockVector((area, psub, psup), labels=(('area', 'psub', 'psup'),))
+        self.control = bla.BlockVector((area, psub, psup), labels=(('area', 'psub', 'psup'),))
 
         self.props = self.get_properties_vec(set_default=True)
 
@@ -109,7 +110,7 @@ class QuasiSteady1DFluid(base.Model):
             prop_defaults = self.PROPERTY_DEFAULTS
         vecs, labels = property_vecs(field_size, self.PROPERTY_TYPES, prop_defaults)
 
-        return BlockVector(vecs, labels=[labels])
+        return bla.BlockVector(vecs, labels=[labels])
 
     def get_control_vec(self):
         ret = self.control.copy()
@@ -206,113 +207,52 @@ class Bernoulli(QuasiSteady1DFluid):
     def apply_dres_dcontrol_adj(self, x):
         raise NotImplementedError()
 
-class BernoulliMinimumSeparation(QuasiSteady1DFluid):
+
+class _QuasiSteady1DFluid(QuasiSteady1DFluid):
+
+    def __init__(self, s, res, state, control, props):
+        self.s = s
+
+        self._res = res
+        self._dres = lambda state, control, props, tangents: jax.jvp(res, (state, control, props), tangents)[1]
+
+        self.state0 = bla.BlockVector(list(state.values()), labels=[list(state.keys())])
+        self.state1 = self.state0.copy()
+
+        self.control = bla.BlockVector(list(control.values()), labels=[list(control.keys())])
+
+        self.props = bla.BlockVector(list(props.values()), labels=[list(props.keys())])
+
+        self.primals = (
+            blockvec_to_dict(self.state1),
+            blockvec_to_dict(self.control),
+            blockvec_to_dict(self.props)
+        )
+
+    def res(self):
+        return self._res(*primals)
+
+    def solve_state1(self, state1):
+        """
+        Return the final flow state
+        """
+        info = {}
+        return self.state1 - self.res(), info
+
+class BernoulliMinimumSeparation(_QuasiSteady1DFluid):
     """
     Bernoulli fluid model with separation at the minimum
-
     """
-    PROPERTY_TYPES = {
-        'a_sub': ('const', ()),
-        'a_sup': ('const', ()),
-        'rho_air': ('const', ()),
-        'r_sep': ('const', ()),
-        'zeta_min': ('const', ()),
-        'zeta_sep': ('const', ()),
-        'zeta_lb': ('const', ()),
-        'area_lb': ('const', ())}
 
-    PROPERTY_DEFAULTS = {
-        'a_sub': 100000,
-        'a_sup': 0.6,
-        'r_sep': 1.0,
-        'rho_air': 1.225 * SI_DENSITY_TO_CGS,
-        'zeta_min': 0.002/3,
-        'zeta_sep': 0.002/3,
-        'zeta_lb': 0.002/3,
-        'area_lb': 0.001}
+    def __init__(self, s):
+        _, (_state, _control, _props), res = bernoulli.BernoulliSmoothMinSep(s)
+        super().__init__(s, res, _state, _control, _props)
 
-    ## Model res sensitivity interface
-    def res(self):
-        return self.state1 - self.solve_state1(self.state0)[0]
-
-    def solve_state1(self, state1):
-        """
-        Return the final flow state
-        """
-        s = self.s_vertices
-        area = self.control['area']
-        psub = self.control['psub'][0]
-        psup = self.control['psup'][0]
-
-        rho = self.props['rho_air'][0]
-        zeta_min = self.props['zeta_sep'][0]
-        zeta_sep = self.props['zeta_min'][0]
-
-        qp1 = bernoulli_sep_at_min.bernoulli_qp(
-            area, s, psub, psup, rho, zeta_min, zeta_sep
-            )
-
-        ret_state1 = self.state1.copy()
-        ret_state1['q'][0] = qp1[0]
-        ret_state1['p'][:] = qp1[1]
-
-        info = {}
-        return ret_state1, info
-
-class BernoulliFixedSeparation(QuasiSteady1DFluid):
+class BernoulliFixedSeparation(_QuasiSteady1DFluid):
     """
-    Bernoulli fluid model with fixed separation point
-
+    Bernoulli fluid model with separation at the minimum
     """
-    PROPERTY_TYPES = {
-        'a_sub': ('const', ()),
-        'a_sup': ('const', ()),
-        'rho_air': ('const', ()),
-        'r_sep': ('const', ()),
-        'zeta_min': ('const', ()),
-        'zeta_sep': ('const', ()),
-        'zeta_lb': ('const', ()),
-        'area_lb': ('const', ())}
-
-    PROPERTY_DEFAULTS = {
-        'a_sub': 100000,
-        'a_sup': 0.6,
-        'r_sep': 1.0,
-        'rho_air': 1.225 * SI_DENSITY_TO_CGS,
-        'zeta_min': 0.002/3,
-        'zeta_sep': 0.002/3,
-        'zeta_lb': 0.002/3,
-        'area_lb': 0.001}
 
     def __init__(self, s, idx_sep=0):
-        super().__init__(s)
-
-        self.IDX_SEP = idx_sep
-
-    ## Model res sensitivity interface
-    def res(self):
-        return self.state1 - self.solve_state1(self.state0)[0]
-
-    def solve_state1(self, state1):
-        """
-        Return the final flow state
-        """
-        s = self.s_vertices
-        area = self.control['area']
-        psub = self.control['psub'][0]
-        psup = self.control['psup'][0]
-
-        rho = self.props['rho_air'][0]
-        zeta_min = self.props['zeta_sep'][0]
-        zeta_sep = self.props['zeta_min'][0]
-
-        qp1 = bernoulli_sep_at_min.bernoulli_qp(
-            area, s, psub, psup, rho, zeta_min, zeta_sep
-            )
-
-        ret_state1 = self.state1.copy()
-        ret_state1['q'][0] = qp1[0]
-        ret_state1['p'][:] = qp1[1]
-
-        info = {}
-        return ret_state1, info
+        _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep=idx_sep)
+        super().__init__(s, res, _state, _control, _props)
