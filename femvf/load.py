@@ -183,7 +183,7 @@ def process_fsi(
         dx = x[1:] - x[:-1]
         dy = y[1:] - y[:-1]
         s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-        if issubclass(FluidType, dfmd.BaseBernoulliFixedSeparation):
+        if issubclass(FluidType, dfmd.BaseBernoulliFixedSep):
             # If the fluid has a fixed-separation point, set the appropriate
             # separation point for the fluid
             vertex_label_to_id = solid.forms['mesh.vertex_label_to_id']

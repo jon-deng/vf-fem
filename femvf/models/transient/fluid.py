@@ -7,6 +7,7 @@ The smaller the length, the sharper the smoothing. )
 """
 
 import numpy as np
+import jax
 
 from . import base
 from femvf.parameters.properties import property_vecs
@@ -17,6 +18,7 @@ from blockarray import blockvec as bla
 from ..equations.fluid.bernoulli_sep_at_ratio import (
     bernoulli_qp
 )
+from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
 from ..equations.fluid import bernoulli
 
@@ -230,7 +232,7 @@ class _QuasiSteady1DFluid(QuasiSteady1DFluid):
         )
 
     def res(self):
-        return self._res(*primals)
+        return self._res(*self.primals)
 
     def solve_state1(self, state1):
         """
@@ -239,7 +241,7 @@ class _QuasiSteady1DFluid(QuasiSteady1DFluid):
         info = {}
         return self.state1 - self.res(), info
 
-class BernoulliMinimumSeparation(_QuasiSteady1DFluid):
+class BernoulliSmoothMinSep(_QuasiSteady1DFluid):
     """
     Bernoulli fluid model with separation at the minimum
     """
@@ -248,7 +250,7 @@ class BernoulliMinimumSeparation(_QuasiSteady1DFluid):
         _, (_state, _control, _props), res = bernoulli.BernoulliSmoothMinSep(s)
         super().__init__(s, res, _state, _control, _props)
 
-class BernoulliFixedSeparation(_QuasiSteady1DFluid):
+class BernoulliFixedSep(_QuasiSteady1DFluid):
     """
     Bernoulli fluid model with separation at the minimum
     """

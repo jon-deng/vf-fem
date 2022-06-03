@@ -130,18 +130,18 @@ LinearizedBernoulliSmoothMinSep = create_dynamical_residual_class(
 )
 
 
-class BaseBernoulliFixedSeparation(BaseFluid1DDynamicalSystem):
+class BaseBernoulliFixedSep(BaseFluid1DDynamicalSystem):
 
     def __init__(self, s, idx_sep=0):
         _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep)
         super().__init__(s, res, _state, _control, _props)
 
-BernoulliFixedSeparation = create_dynamical_residual_class(
-    BaseBernoulliFixedSeparation,
+BernoulliFixedSep = create_dynamical_residual_class(
+    BaseBernoulliFixedSep,
     res_type='primal'
 )
 
-LinearizedBernoulliFixedSeparation = create_dynamical_residual_class(
-    BaseBernoulliFixedSeparation,
+LinearizedBernoulliFixedSep = create_dynamical_residual_class(
+    BaseBernoulliFixedSep,
     res_type='linearized'
 )

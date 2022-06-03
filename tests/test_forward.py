@@ -42,7 +42,7 @@ class ForwardConfig(unittest.TestCase):
         model = load_transient_fsi_model(
             self.mesh_path, None,
             SolidType=tsmd.KelvinVoigt,
-            FluidType=tfmd.BernoulliMinimumSeparation, coupling='explicit'
+            FluidType=tfmd.BernoulliSmoothMinSep, coupling='explicit'
             )
 
         # Set the control vector
