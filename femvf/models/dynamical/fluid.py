@@ -145,3 +145,19 @@ LinearizedBernoulliFixedSep = create_dynamical_residual_class(
     BaseBernoulliFixedSep,
     res_type='linearized'
 )
+
+class BaseBernoulliAreaRatioSep(BaseFluid1DDynamicalSystem):
+
+    def __init__(self, s):
+        _, (_state, _control, _props), res = bernoulli.BernoulliAreaRatioSep(s)
+        super().__init__(s, res, _state, _control, _props)
+
+BernoulliAreaRatioSep = create_dynamical_residual_class(
+    BaseBernoulliAreaRatioSep,
+    res_type='primal'
+)
+
+LinearizedBernoulliAreaRatioSep = create_dynamical_residual_class(
+    BaseBernoulliAreaRatioSep,
+    res_type='linearized'
+)

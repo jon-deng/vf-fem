@@ -13,8 +13,9 @@ def setup_model():
     """
     # This is the surface coordinate [cm]
     s = np.linspace(0, 1, 70)
-    return dynfld.BernoulliSmoothMinSep(s)
+    # return dynfld.BernoulliSmoothMinSep(s)
     # return dynfld.BernoulliFixedSep(s, idx_sep=15)
+    return dynfld.BernoulliAreaRatioSep(s)
 
 def test_pressure_qualitative(model):
     """
@@ -23,8 +24,9 @@ def test_pressure_qualitative(model):
     model.state.set(0.0)
 
     props = model.props
-    props['zeta_min'] = 1e-4
-    props['zeta_sep'] = 1e-3
+    props['r_sep'] = 1.5
+    # props['zeta_min'] = 1e-4
+    # props['zeta_sep'] = 1e-3
     model.set_props(props)
 
     s = model.s
