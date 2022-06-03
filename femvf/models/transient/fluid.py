@@ -232,7 +232,10 @@ class _QuasiSteady1DFluid(QuasiSteady1DFluid):
         )
 
     def res(self):
-        return self._res(*self.primals)
+        labels = self.state1.labels
+        subvecs = self._res(*self.primals)
+        subvecs, shape = flatten_nested_dict(subvecs, labels)
+        return bla.BlockVector(subvecs, shape, labels)
 
     def solve_state1(self, state1):
         """
