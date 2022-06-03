@@ -10,6 +10,7 @@ and where q and p stand for flow and pressure for a 1D fluid model
 """
 
 # from typing
+from multiprocessing.sharedctypes import Value
 import numpy as np
 import jax
 
@@ -22,16 +23,28 @@ from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
 # pylint: disable=missing-docstring
 
-def create_primal_res_class(Parent):
-    class PrimalResidual(Parent):
+def create_dynamical_residual_class(Parent, res_type):
+    class Residual(Parent):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            if res_type == 'primal':
+                self.__res = self._res
+                self.__res_args = self.primals
+            elif res_type == 'linearized':
+                self.__res = self._dres
+                self.__res_args = (*self.primals, self.tangents)
+            else:
+                raise ValueError(f"Unknown `res_type` of {res_type}")
+
         def assem_res(self):
-            submats = self._res(*self.primals)
+            submats = self.__res(*self.__res_args)
             labels = self.state.labels
             submats, shape = flatten_nested_dict(submats, labels)
             return bla.BlockVector(submats, shape, labels)
 
         def assem_dres_dstate(self):
-            submats = jax.jacfwd(self._res, argnums=0)(*self.primals)
+            submats = jax.jacfwd(self.__res, argnums=0)(*self.__res_args)
             labels = self.state.labels+self.state.labels
             submats, shape = flatten_nested_dict(submats, labels)
             return bla.BlockMatrix(submats, shape, labels)
@@ -49,59 +62,18 @@ def create_primal_res_class(Parent):
             return bla.BlockMatrix(mats, labels=labels)
 
         def assem_dres_dcontrol(self):
-            submats = jax.jacfwd(self._res, argnums=1)(*self.primals)
+            submats = jax.jacfwd(self.__res, argnums=1)(*self.__res_args)
             labels = self.state.labels+self.control.labels
             submats, shape = flatten_nested_dict(submats, labels)
             return bla.BlockMatrix(submats, shape, labels)
 
         def assem_dres_dprops(self):
-            submats = jax.jacfwd(self._res, argnums=2)(*self.primals)
+            submats = jax.jacfwd(self.__res, argnums=2)(*self.__res_args)
             labels = self.state.labels + self.props.labels
             submats, shape = flatten_nested_dict(submats, labels)
             return bla.BlockMatrix(submats, shape, labels)
 
-    return PrimalResidual
-
-def create_linearized_res_class(Parent):
-    class LinearizedResidual(Parent):
-        def assem_res(self):
-            submats = self._dres(*self.primals, self.tangents)
-            labels = self.state.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bla.BlockVector(submats, shape, labels)
-
-        def assem_dres_dstate(self):
-            submats = jax.jacfwd(self._dres, argnums=0)(*self.primals, self.tangents)
-            labels = self.state.labels+self.state.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bla.BlockMatrix(submats, shape, labels)
-
-        def assem_dres_dstatet(self):
-            dresq_dq = np.diag(np.zeros(self.state['q'].size))
-            dresq_dp = np.zeros((self.state['q'].size, self.state['p'].size))
-
-            dresp_dp = np.diag(np.zeros(self.state['p'].size))
-            dresp_dq = np.zeros((self.state['p'].size, self.state['q'].size))
-            mats = [
-                [dresq_dq, dresq_dp],
-                [dresp_dq, dresp_dp]]
-            labels = self.state.labels+self.state.labels
-            return bla.BlockMatrix(mats, labels=labels)
-
-        def assem_dres_dcontrol(self):
-            submats = jax.jacfwd(self._dres, argnums=1)(*self.primals, self.tangents)
-            labels = self.state.labels+self.control.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bla.BlockMatrix(submats, shape, labels)
-
-        def assem_dres_dprops(self):
-            submats = jax.jacfwd(self._dres, argnums=2)(*self.primals, self.tangents)
-            labels = self.state.labels + self.props.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bla.BlockMatrix(submats, shape, labels)
-    return LinearizedResidual
-
-
+    return Residual
 
 class BaseFluid1DDynamicalSystem(DynamicalSystem):
 
@@ -142,9 +114,15 @@ class BaseBernoulliSmoothMinSep(BaseFluid1DDynamicalSystem):
         _, (_state, _control, _props), res = bernoulli.BernoulliSmoothMinSep(s)
         super().__init__(s, res, _state, _control, _props)
 
-BernoulliSmoothMinSep = create_primal_res_class(BaseBernoulliSmoothMinSep)
+BernoulliSmoothMinSep = create_dynamical_residual_class(
+    BaseBernoulliSmoothMinSep,
+    res_type='primal'
+)
 
-LinearizedBernoulliSmoothMinSep = create_linearized_res_class(BaseBernoulliSmoothMinSep)
+LinearizedBernoulliSmoothMinSep = create_dynamical_residual_class(
+    BaseBernoulliSmoothMinSep,
+    res_type='linearized'
+)
 
 
 class BaseBernoulliFixedSeparation(BaseFluid1DDynamicalSystem):
@@ -153,6 +131,12 @@ class BaseBernoulliFixedSeparation(BaseFluid1DDynamicalSystem):
         _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep)
         super().__init__(s, res, _state, _control, _props)
 
-BernoulliFixedSeparation = create_primal_res_class(BaseBernoulliFixedSeparation)
+BernoulliFixedSeparation = create_dynamical_residual_class(
+    BaseBernoulliFixedSeparation,
+    res_type='primal'
+)
 
-LinearizedBernoulliFixedSeparation = create_linearized_res_class(BaseBernoulliFixedSeparation)
+LinearizedBernoulliFixedSeparation = create_dynamical_residual_class(
+    BaseBernoulliFixedSeparation,
+    res_type='linearized'
+)
