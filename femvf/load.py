@@ -193,7 +193,7 @@ def process_fsi(
 
             if separation_vertex_label in vertex_label_to_id:
                 sep_mf_value = vertex_label_to_id[separation_vertex_label]
-                assert isinstance(sep_mf_value, int)
+                # assert isinstance(sep_mf_value, int)
             else:
                 raise ValueError("Loading a fixed separation point fluid model but solid mesh doesn't specify a separation point")
 
