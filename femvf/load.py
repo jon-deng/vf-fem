@@ -203,7 +203,8 @@ def process_fsi(
             else:
                 raise ValueError(f"Single separation point expected but {len(sep_vert):d} were supplied")
 
-            idx_sep = np.where(fsi_verts == sep_vert)
+            fsi_verts_fluid_ord = np.arange(fsi_verts.size)
+            idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
             if len(idx_sep) == 1:
                 idx_sep = idx_sep[0]
             else:
