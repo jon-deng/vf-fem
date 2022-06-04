@@ -197,7 +197,7 @@ def process_fsi(
             else:
                 raise ValueError("Loading a fixed separation point fluid model but solid mesh doesn't specify a separation point")
 
-            sep_vert = vertex_mf.values()[vertex_mf.values() == sep_mf_value]
+            sep_vert = vertex_mf.array()[vertex_mf.array() == sep_mf_value]
             if len(sep_vert) == 1:
                 sep_vert = sep_vert[0]
             else:
