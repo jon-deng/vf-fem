@@ -261,3 +261,12 @@ class BernoulliFixedSep(_QuasiSteady1DFluid):
     def __init__(self, s, idx_sep=0):
         _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep=idx_sep)
         super().__init__(s, res, _state, _control, _props)
+
+class BernoulliAreaRatioSep(_QuasiSteady1DFluid):
+    """
+    Bernoulli fluid model with separation at the minimum
+    """
+
+    def __init__(self, s):
+        _, (_state, _control, _props), res = bernoulli.BernoulliAreaRatioSep(s)
+        super().__init__(s, res, _state, _control, _props)
