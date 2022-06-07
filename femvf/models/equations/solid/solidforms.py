@@ -287,8 +287,8 @@ def base_form_definitions(
     vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
     dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
     ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-    _traction_ds = [ds(facet_label_to_id[facet_label]) for facet_label in fsi_facet_labels]
-    traction_ds = sum(_traction_ds[1:], _traction_ds[0])
+    _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+    traction_ds = reduce(operator.add, _traction_ds)
 
     # Function space
     scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
