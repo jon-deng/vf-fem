@@ -147,10 +147,11 @@ def BernoulliAreaRatioSep(s: jnp.ndarray):
 
     s = jnp.array(s)
 
-    def bernoulli_qp(area, psub, psup, rho, r_sep):
+    def bernoulli_qp(area, psub, psup, rho, r_sep, area_lb):
         """
         Return Bernoulli flow and pressure
         """
+        area = jnp.maximum(area, area_lb)
         amin = jnp.min(area)
         idx_min = jnp.min(jnp.argmax(area == amin))
         smin = s[idx_min]
@@ -175,7 +176,7 @@ def BernoulliAreaRatioSep(s: jnp.ndarray):
         q, p = state['q'], state['p']
         area, psub, psup = control['area'], control['psub'], control['psup']
 
-        q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'], props['r_sep'])
+        q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'], props['r_sep'], props['area_lb'])
         return {'q': q-q_, 'p': p-p_}
 
     N = s.size
@@ -193,7 +194,8 @@ def BernoulliAreaRatioSep(s: jnp.ndarray):
 
     _props = {
         'rho_air': np.ones(1),
-        'r_sep': np.ones(1)
+        'r_sep': np.ones(1),
+        'area_lb': np.zeros(1)
     }
 
     return s, (_state, _control, _props), res
