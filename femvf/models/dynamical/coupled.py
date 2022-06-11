@@ -251,7 +251,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         dslres_dg = bvec.BlockMatrix(_mats, labels=self.solid.state.labels+self.control.labels)
 
         dflres_dflg = bmat.convert_subtype_to_petsc(self.fluid.assem_dres_dcontrol())
-        _mats = [[row[kk] for kk in range(1, dflres_dflg.r_shape[1])] for row in dflres_dflg]
+        _mats = [[row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg]
         dflres_dg =  bvec.BlockMatrix(_mats, labels=self.fluid.state.labels+self.control.labels)
         return bmat.concatenate_mat([[dslres_dg], [dflres_dg]])
 
