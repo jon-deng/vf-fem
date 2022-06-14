@@ -58,7 +58,7 @@ def load_fenics_gmsh(mesh_path):
     mesh_name, mesh_ext = path.splitext(mesh_fname)
 
     # This might print a blank line in some meshio versions
-    mio_mesh = mio.read(mesh_path)
+    mio_mesh = mio.read(mesh_path, file_format='gmsh')
 
     # Check if the z-coordinate is uniformly zero. If it is then automatically
     # trim the z-coordinate to create a 2D mesh
