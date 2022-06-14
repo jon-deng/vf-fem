@@ -57,6 +57,7 @@ def load_fenics_gmsh(mesh_path):
     mesh_dir, mesh_fname = path.split(mesh_path)
     mesh_name, mesh_ext = path.splitext(mesh_fname)
 
+    # This might print a blank line in some meshio versions
     mio_mesh = mio.read(mesh_path)
 
     # Check if the z-coordinate is uniformly zero. If it is then automatically
