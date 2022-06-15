@@ -437,6 +437,12 @@ def add_isotropic_elastic_with_swelling_form(forms):
     forms['coeff.prop.v_swelling'] = v_swelling
     forms['coeff.prop.m_swelling'] = m_swelling
     forms['expr.stress_elastic'] = stress_elastic
+
+    # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
+    # lame_mu = emod/2/(1+nu)
+
+    stress_zz = (m_swelling*(v_swelling-1) + 1)*lame_lambda*ufl.tr(inf_strain) - (lame_lambda+2/3*lame_mu)*(v_swelling-1)
+    forms['expr.stress_elastic_zz'] = stress_zz
     return forms
 
 # Surface forcing forms
