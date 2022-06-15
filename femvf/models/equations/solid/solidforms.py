@@ -422,7 +422,7 @@ def add_isotropic_elastic_with_swelling_form(forms):
     v_swelling = dfn.Function(forms['fspace.scalar'])
     v_swelling.vector()[:] = 1.0
     m_swelling = dfn.Function(forms['fspace.scalar'])
-    m_swelling.vector()[:] = 1.0
+    m_swelling.vector()[:] = 0.0
 
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     lame_mu = emod/2/(1+nu)
@@ -657,6 +657,19 @@ def SwellingKelvinVoigt(
         add_isotropic_elastic_with_swelling_form(
         base_form_definitions(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
+
+def SwellingKelvinVoigtWEpithelium(
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+    return \
+        add_newmark_time_disc_form(
+        add_isotropic_membrane(
+        add_manual_contact_traction_form(
+        add_surface_pressure_form(
+        add_kv_viscous_form(
+        add_inertial_form(
+        add_isotropic_elastic_with_swelling_form(
+        base_form_definitions(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
 
 def Approximate3DKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
