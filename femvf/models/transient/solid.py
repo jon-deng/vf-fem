@@ -630,7 +630,7 @@ class SwellingKelvinVoigt(NodalContactSolid):
             solidforms.SwellingKelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
-class SwellingKelvinVoightWEpithelium(NodalContactSolid):
+class SwellingKelvinVoigtWEpithelium(NodalContactSolid):
     @staticmethod
     def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return \
