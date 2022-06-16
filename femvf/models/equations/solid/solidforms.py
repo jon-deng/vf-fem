@@ -388,6 +388,10 @@ def add_isotropic_elastic_form(forms):
     forms['coeff.prop.emod'] = emod
     forms['coeff.prop.nu'] = nu
     forms['expr.stress_elastic'] = stress_elastic
+
+    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
+    stress_zz = lame_lambda*ufl.tr(inf_strain)
+    forms['expr.stress_elastic_zz'] = stress_zz
     return forms
 
 def add_isotropic_elastic_with_incomp_swelling_form(forms):
