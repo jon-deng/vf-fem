@@ -497,9 +497,10 @@ def add_manual_contact_traction_form(forms):
 def add_isotropic_membrane(forms):
     # Define the 8th order projector to get the planar strain component
     ds_traction = forms['measure.ds_traction']
-    n = forms['geom.facet_normal']
+    _n = forms['geom.facet_normal']
+    n = ufl.as_tensor([_n[0], _n[1], 0.0])
     nn = ufl.outer(n, n)
-    ident = ufl.Identity(n.geometric_dimension())
+    ident = ufl.Identity(n.ufl_shape[0])
     project_pp = ufl.outer(ident-nn, ident-nn)
 
     i, j, k, l = ufl.indices(4)
