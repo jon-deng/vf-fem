@@ -418,7 +418,7 @@ def add_isotropic_elastic_with_incomp_swelling_form(forms):
     k_swelling = dfn.Constant(1.0)
     v_swelling.vector()[:] = 1.0
     lame_mu = emod/2/(1+nu)
-    stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(u.geometric_dimension())
+    stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(inf_strain.ufl_shape[0])
 
     forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
     forms['coeff.prop.emod'] = emod
@@ -444,7 +444,7 @@ def add_isotropic_elastic_with_swelling_form(forms):
     lame_mu = emod/2/(1+nu)
     stress_elastic = (
         (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-        - (lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(u.geometric_dimension())
+        - (lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(inf_strain.ufl_shape[0])
     )
 
     forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
