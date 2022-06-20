@@ -133,6 +133,69 @@ def make_stress_invariant_statistics(model, fspace, dmeas):
     return stress_invariant_statistics
 make_sig_stress_invariant_statistics = transform_to_make_signals(make_stress_invariant_statistics)
 
+def make_stress_field_I1(model, fspace):
+    """
+    Return the first invariant stress field
+    """
+    kv_stress = model.solid.forms['expr.kv_stress']
+    el_stress = model.solid.forms['expr.stress_elastic']
+    S = el_stress + kv_stress
+
+    I1 = ufl.tr(S)
+    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+    I3 = ufl.det(S)
+
+    def stress_field(state, control, props):
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        return dfn.project(I1, fspace)
+
+    return stress_field
+
+def make_stress_field_I2(model, fspace):
+    """
+    Return the first invariant stress field
+    """
+    kv_stress = model.solid.forms['expr.kv_stress']
+    el_stress = model.solid.forms['expr.stress_elastic']
+    S = el_stress + kv_stress
+
+    I1 = ufl.tr(S)
+    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+    I3 = ufl.det(S)
+
+    def stress_field(state, control, props):
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        return dfn.project(I2, fspace)
+
+    return stress_field
+
+def make_stress_field_I3(model, fspace):
+    """
+    Return the first invariant stress field
+    """
+    kv_stress = model.solid.forms['expr.kv_stress']
+    el_stress = model.solid.forms['expr.stress_elastic']
+    S = el_stress + kv_stress
+
+    I1 = ufl.tr(S)
+    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+    I3 = ufl.det(S)
+
+    def stress_field(state, control, props):
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        return dfn.project(I2, fspace)
+
+    return stress_field
+
 def make_scalar_form(model, form):
     """
     Return a function that computes a scalar form for different coefficients
