@@ -165,6 +165,54 @@ class StressI3Field(StateMeasure):
 
         return dfn.project(self.I3, self.fspace)
 
+class StressHydrostaticField(StateMeasure):
+    def __init_measure_context__(self, *args, **kwargs):
+        model = self.model
+
+        kv_stress = model.solid.forms['expr.kv_stress']
+        el_stress = model.solid.forms['expr.stress_elastic']
+        S = el_stress + kv_stress
+
+        self.phydro = -1/3*ufl.tr(S)
+
+        self.fspace = kwargs.get(
+            'fspace',
+            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+
+    def __call__(self, state, control, props):
+        model = self.model
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        return dfn.project(self.phydro, self.fspace)
+
+class StressVonMisesField(StateMeasure):
+    def __init_measure_context__(self, *args, **kwargs):
+        model = self.model
+
+        kv_stress = model.solid.forms['expr.kv_stress']
+        el_stress = model.solid.forms['expr.stress_elastic']
+        S = el_stress + kv_stress
+
+        S_dev = S - 1/3*ufl.tr(S)*ufl.Identity(3)
+        j2 = 0.5*ufl.tr(S_dev*S_dev)
+        self.stress_field_vm = (3*j2)**(1/2)
+
+        self.fspace = kwargs.get(
+            'fspace',
+            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+
+    def __call__(self, state, control, props):
+        model = self.model
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        return dfn.project(self.stress_field_vm, self.fspace)
+
 def make_scalar_form(model, form):
     """
     Return a function that computes a scalar form for different coefficients

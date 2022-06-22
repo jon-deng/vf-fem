@@ -94,7 +94,7 @@ class TimeSeriesStats(Derived):
     """
 
     def __init__(self, func):
-        super().__init__(self, func)
+        super().__init__(func)
         self._ts = TimeSeries(func)
 
     @property
