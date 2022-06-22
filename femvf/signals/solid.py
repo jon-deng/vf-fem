@@ -9,192 +9,161 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from .decorator import transform_to_make_signals
+from .decorator import transform_to_make_signals, StateMeasure
 
-def make_glottal_width_smooth(model):
-    def glottal_width_smooth(state, control, props):
-        XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
+class MinGlottalWidth(StateMeasure):
 
-        xcur = XREF.reshape(-1) + state['u'][:]
+    def __init_measure_context__(self, *args, **kwargs):
+        self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
+
+    def __call__(self, state, control, props):
+        xcur = self.XREF.reshape(-1) + state['u'][:]
         widths = 2*(props['ymid'] - xcur[1::2])
         gw = np.min(widths)
         return gw
-    return glottal_width_smooth
-make_sig_glottal_width_smooth = transform_to_make_signals(make_glottal_width_smooth)
 
-def make_glottal_width_sharp(model):
-    def glottal_width_sharp(state, control, props):
-        XREF = model.solid.scalar_fspace.tabulate_dof_coordinates()
+class MaxContactPressure(StateMeasure):
 
-        xcur = XREF.reshape(-1) + state['u'][:]
-        widths = 2*(props['ymid'] - xcur[1::2])
-        gw = np.min(widths)
-        return gw
-    return glottal_width_sharp
-make_sig_glottal_width_sharp = transform_to_make_signals(make_glottal_width_sharp)
+    def __init_measure_context__(self, *args, **kwargs):
+        pass
 
-def make_peak_contact_pressure(model):
-    def peak_contact_pressure(state, control, props):
-        fsidofs = model.solid.vert_to_sdof[model.fsi_verts]
+    def __call__(self, state, control, props):
+        fsidofs = self.model.solid.vert_to_sdof[self.model.fsi_verts]
 
-        model.set_fin_state(state)
-        pcontact = -1*model.solid.forms['coeff.state.manual.tcontact'].vector()[1::2]
+        self.model.set_fin_state(state)
+        pcontact = -1*self.model.solid.forms['coeff.state.manual.tcontact'].vector()[1::2]
         return pcontact[fsidofs].max()
-    return peak_contact_pressure
-make_sig_peak_contact_pressure = transform_to_make_signals(make_peak_contact_pressure)
 
-def make_piecewise_elastic_stress(model):
-    V = dfn.TensorFunctionSpace(model.solid.mesh, 'DG', 0)
+class ElasticStressField(StateMeasure):
+    # TODO: Pretty sure this one doesn't work
+    def __init_measure_context__(self, *args, **kwargs):
+        self.V = dfn.TensorFunctionSpace(self.model.solid.mesh, 'DG', 0)
 
-    forms = model.solid.forms
-    stress = forms['expr.stress_elastic'] if 'expr.stress_elastic' in forms else 0.0
-    def piecewise_elastic_stress(state, control, props):
-        elementwise_stress = dfn.project(stress, V, solver_type='lu')
-        return elementwise_stress.vector()
-    return piecewise_elastic_stress
-make_sig_piecewise_elastic_stress = transform_to_make_signals(make_piecewise_elastic_stress)
+        forms = self.model.solid.forms
+        self.stress = forms['expr.stress_elastic'] if 'expr.stress_elastic' in forms else 0.0
 
-def make_contact_statistics(model):
-    # FSI_DOFS = model.solid.vert_to_sdof[model.fsi_verts]
+    def __call__(self, state, control, props):
+        self.model.set_state(state)
+        self.model.set_control(control)
 
-    ds = model.solid.forms['measure.ds_traction']
-    tcontact = model.solid.forms['coeff.state.manual.tcontact']
-    pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
-    contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
+        stress = dfn.project(self.stress, self.V, solver_type='lu')
+        return stress.vector()
 
-    contact_area_expr = contact_indicator*ds
-    total_pcontact_expr = pcontact*ds
+class ContactStatistics(StateMeasure):
 
-    def contact_statistics(state, control, props):
-        """
-        Returns (max p contact, avg p contact, total p contact, contact area)
-        """
-        model.set_fin_state(state)
-        tcontact_vec = tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
+    def __init_measure_context__(self, *args, **kwargs):
+        ds = self.model.solid.forms['measure.ds_traction']
+        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
+        contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
+
+        self.contact_area_expr = contact_indicator*ds
+        self.total_pcontact_expr = pcontact*ds
+        self.tcontact = tcontact
+
+    def __call__(self, state, control, props):
+        self.model.set_fin_state(state)
+
+        tcontact_vec = self.tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
         pcontact = np.linalg.norm(tcontact_vec, axis=-1)
 
         # idx_min = np.argmin(tcontact_mag)
         idx_max = np.argmax(pcontact)
-        total_pcontact = dfn.assemble(total_pcontact_expr)
-        area_contact = dfn.assemble(contact_area_expr)
+        total_pcontact = dfn.assemble(self.total_pcontact_expr)
+        area_contact = dfn.assemble(self.contact_area_expr)
         max_pcontact = pcontact[idx_max]
         avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
         return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
-    return contact_statistics
-make_sig_contact_statistics = transform_to_make_signals(make_contact_statistics)
 
-def make_viscoelastic_dissipation_rate(model, dmeas):
-    kv_stress = model.solid.forms['expr.kv_stress']
-    kv_strain_rate = model.solid.forms['expr.kv_strain_rate']
-    total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*dmeas
+class ViscousDissipationRate(StateMeasure):
 
-    assem_scalar_form = make_scalar_form(model, total_dissipation_rate)
-    def viscoelastic_dissipation_rate(state, control, props):
-        return assem_scalar_form(state, control, props)
+    def __init_measure_context__(self, *args, **kwargs):
+        model = self.model
+        dmeas = kwargs.get('measure', model.solid.forms['measure.dx'])
 
-    return viscoelastic_dissipation_rate
-make_sig_viscoelastic_dissipation_rate = transform_to_make_signals(make_viscoelastic_dissipation_rate)
+        kv_stress = model.solid.forms['expr.kv_stress']
+        kv_strain_rate = model.solid.forms['expr.kv_strain_rate']
+        total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*dmeas
 
-def make_stress_invariant_statistics(model, fspace, dmeas):
-    """
-    Return min/max/avg of the 3 stress invariants and the von-mises stress
-    """
-    kv_stress = model.solid.forms['expr.kv_stress']
-    el_stress = model.solid.forms['expr.stress_elastic']
-    S = el_stress + kv_stress
+        self.assem_scalar_form = make_scalar_form(model, total_dissipation_rate)
 
-    I1 = ufl.tr(S)
-    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
-    I3 = ufl.det(S)
+    def __call__(self, state, control, props):
+        return self.assem_scalar_form(state, control, props)
 
-    j2 = 1/3*I1**2-I2
-    SVONMISES = (3*j2)**0.5
+class StressI1Field(StateMeasure):
+    def __init_measure_context__(self, *args, **kwargs):
+        model = self.model
 
-    expressions = (I1, I2, I3, SVONMISES)
-    projectors = tuple([make_project(expr, fspace, dmeas) for expr in expressions])
-    expression_totals = tuple([expr*dmeas for expr in expressions])
-    meas_total = dfn.assemble(1*dmeas)
+        kv_stress = model.solid.forms['expr.kv_stress']
+        el_stress = model.solid.forms['expr.stress_elastic']
+        S = el_stress + kv_stress
 
-    def stress_invariant_statistics(state, control, props):
+        self.I1 = ufl.tr(S)
+        I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+        I3 = ufl.det(S)
+
+        self.fspace = kwargs.get(
+            'fspace',
+            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+
+    def __call__(self, state, control, props):
+        model = self.model
         model.set_fin_state(state)
         model.set_control(control)
         model.set_props(props)
 
-        stats = []
-        # For each expression, compute the min/max/average
-        for expr, project, expr_total in zip(expressions, projectors, expression_totals):
-            expr_vec = project().vector()
-            _min = np.min(expr_vec[:])
-            _max = np.max(expr_vec[:])
-            _avg = dfn.assemble(expr_total)/meas_total
-            stats += [_min, _max, _avg]
-        return np.array(stats)
+        return dfn.project(self.I1, self.fspace)
 
-    return stress_invariant_statistics
-make_sig_stress_invariant_statistics = transform_to_make_signals(make_stress_invariant_statistics)
+class StressI2Field(StateMeasure):
+    def __init_measure_context__(self, *args, **kwargs):
+        model = self.model
 
-def make_stress_field_I1(model, fspace):
-    """
-    Return the first invariant stress field
-    """
-    kv_stress = model.solid.forms['expr.kv_stress']
-    el_stress = model.solid.forms['expr.stress_elastic']
-    S = el_stress + kv_stress
+        kv_stress = model.solid.forms['expr.kv_stress']
+        el_stress = model.solid.forms['expr.stress_elastic']
+        S = el_stress + kv_stress
 
-    I1 = ufl.tr(S)
-    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
-    I3 = ufl.det(S)
+        I1 = ufl.tr(S)
+        self.I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+        I3 = ufl.det(S)
 
-    def stress_field(state, control, props):
+        self.fspace = kwargs.get(
+            'fspace',
+            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+
+    def __call__(self, state, control, props):
+        model = self.model
         model.set_fin_state(state)
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(I1, fspace)
+        return dfn.project(self.I2, self.fspace)
 
-    return stress_field
+class StressI3Field(StateMeasure):
+    def __init_measure_context__(self, *args, **kwargs):
+        model = self.model
 
-def make_stress_field_I2(model, fspace):
-    """
-    Return the first invariant stress field
-    """
-    kv_stress = model.solid.forms['expr.kv_stress']
-    el_stress = model.solid.forms['expr.stress_elastic']
-    S = el_stress + kv_stress
+        kv_stress = model.solid.forms['expr.kv_stress']
+        el_stress = model.solid.forms['expr.stress_elastic']
+        S = el_stress + kv_stress
 
-    I1 = ufl.tr(S)
-    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
-    I3 = ufl.det(S)
+        I1 = ufl.tr(S)
+        I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+        self.I3 = ufl.det(S)
 
-    def stress_field(state, control, props):
+        self.fspace = kwargs.get(
+            'fspace',
+            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+
+    def __call__(self, state, control, props):
+        model = self.model
         model.set_fin_state(state)
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(I2, fspace)
-
-    return stress_field
-
-def make_stress_field_I3(model, fspace):
-    """
-    Return the first invariant stress field
-    """
-    kv_stress = model.solid.forms['expr.kv_stress']
-    el_stress = model.solid.forms['expr.stress_elastic']
-    S = el_stress + kv_stress
-
-    I1 = ufl.tr(S)
-    I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
-    I3 = ufl.det(S)
-
-    def stress_field(state, control, props):
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
-
-        return dfn.project(I2, fspace)
-
-    return stress_field
+        return dfn.project(self.I3, self.fspace)
 
 def make_scalar_form(model, form):
     """
