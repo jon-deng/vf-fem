@@ -186,7 +186,7 @@ class StressHydrostaticField(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(self.phydro, self.fspace)
+        return dfn.project(self.phydro, self.fspace).vector()
 
 class StressVonMisesField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -211,7 +211,7 @@ class StressVonMisesField(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(self.stress_field_vm, self.fspace)
+        return dfn.project(self.stress_field_vm, self.fspace).vector()
 
 def make_scalar_form(model, form):
     """
