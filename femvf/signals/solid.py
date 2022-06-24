@@ -88,6 +88,8 @@ class ViscousDissipationRate(StateMeasure):
         self.assem_scalar_form = make_scalar_form(model, total_dissipation_rate)
 
     def __call__(self, state, control, props):
+        self.model.set_fin_state(state)
+        self.model.set_control(control)
         return self.assem_scalar_form(state, control, props)
 
 class StressI1Field(StateMeasure):
