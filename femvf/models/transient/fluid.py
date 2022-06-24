@@ -215,7 +215,7 @@ class _QuasiSteady1DFluid(QuasiSteady1DFluid):
     def __init__(self, s, res, state, control, props):
         self.s = s
 
-        self._res = res
+        self._res = jax.jit(res)
         self._dres = lambda state, control, props, tangents: jax.jvp(res, (state, control, props), tangents)[1]
 
         self.state0 = bla.BlockVector(list(state.values()), labels=[list(state.keys())])
