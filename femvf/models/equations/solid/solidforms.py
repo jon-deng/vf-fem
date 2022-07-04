@@ -305,6 +305,7 @@ def base_form_definitions(
     # Function space
     scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
     vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
+    scalar_dg0_fspace = dfn.FunctionSpace(mesh, 'DG', 0)
 
     # Trial/test function
     vector_trial = dfn.TrialFunction(vector_fspace)
@@ -339,6 +340,7 @@ def base_form_definitions(
 
         'fspace.vector': vector_fspace,
         'fspace.scalar': scalar_fspace,
+        'fspace.scalar_dg0': scalar_dg0_fspace,
 
         'test.scalar': scalar_test,
         'test.vector': vector_test,
@@ -376,7 +378,7 @@ def add_inertial_form(forms):
     vector_test = forms['test.vector']
 
     a = forms['coeff.state.a1']
-    rho = dfn.Function(forms['fspace.scalar'])
+    rho = dfn.Function(forms['fspace.scalar_dg0'])
     inertial_body_force = rho*a
 
     forms['form.un.f1uva'] += ufl.inner(inertial_body_force, vector_test) * dx
@@ -392,7 +394,7 @@ def add_isotropic_elastic_form(forms):
 
     u = forms['coeff.state.u1']
     inf_strain = form_inf_strain(u)
-    emod = dfn.Function(forms['fspace.scalar'])
+    emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = dfn.Constant(0.45)
     stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
 
@@ -410,11 +412,11 @@ def add_isotropic_elastic_with_incomp_swelling_form(forms):
     dx = forms['measure.dx']
     strain_test = forms['test.strain']
 
-    emod = dfn.Function(forms['fspace.scalar'])
+    emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = 0.5
     u = forms['coeff.state.u1']
     inf_strain = form_inf_strain(u)
-    v_swelling = dfn.Function(forms['fspace.scalar'])
+    v_swelling = dfn.Function(forms['fspace.scalar_dg0'])
     k_swelling = dfn.Constant(1.0)
     v_swelling.vector()[:] = 1.0
     lame_mu = emod/2/(1+nu)
@@ -433,11 +435,11 @@ def add_isotropic_elastic_with_swelling_form(forms):
 
     u = forms['coeff.state.u1']
     inf_strain = form_inf_strain(u)
-    emod = dfn.Function(forms['fspace.scalar'])
+    emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = dfn.Constant(0.45)
-    v_swelling = dfn.Function(forms['fspace.scalar'])
+    v_swelling = dfn.Function(forms['fspace.scalar_dg0'])
     v_swelling.vector()[:] = 1.0
-    m_swelling = dfn.Function(forms['fspace.scalar'])
+    m_swelling = dfn.Function(forms['fspace.scalar_dg0'])
     m_swelling.vector()[:] = 0.0
 
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
@@ -509,7 +511,7 @@ def add_isotropic_membrane(forms):
     strain_test = form_inf_strain(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    emod = dfn.Function(forms['fspace.scalar'])
+    emod = dfn.Function(forms['fspace.scalar_dg0'])
     th_membrane = dfn.Function(forms['fspace.scalar'])
     nu = dfn.Constant(0.45)
     mu = emod/2/(1+nu)
@@ -543,7 +545,7 @@ def add_incompressible_epithelium_membrane(forms):
     strain_test = form_inf_strain(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    emod_membrane = dfn.Function(forms['fspace.scalar'])
+    emod_membrane = dfn.Function(forms['fspace.scalar_dg0'])
     th_membrane = dfn.Function(forms['fspace.scalar'])
     nu = 0.5
     lame_mu = emod_membrane/2/(1+nu)
@@ -585,7 +587,7 @@ def add_kv_viscous_form(forms):
     strain_test = forms['test.strain']
     v = forms['coeff.state.v1']
 
-    eta = dfn.Function(forms['fspace.scalar'])
+    eta = dfn.Function(forms['fspace.scalar_dg0'])
     inf_strain_rate = form_inf_strain(v)
     stress_visco = eta*inf_strain_rate
 
