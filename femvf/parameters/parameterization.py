@@ -94,6 +94,13 @@ class Parameterization:
         y_dict = jax.jvp(self.map, x_dict, dx_dict)
         return dict_to_bvec(y_dict, self.y.labels)
 
+class Identity(Parameterization):
+
+    def make_map(self):
+        def map(x):
+            return x
+        return self.y, map
+
 class LayerModuli(Parameterization):
 
     def make_map(self):

@@ -40,4 +40,15 @@ class TestParameterization:
         y = layer_moduli.apply(x)
         assert all(np.all(x[label] == y['emod'][cell_label_to_dofs[label]]) for label in x.labels[0])
 
+    def test_identity(self, setup_model):
+        model = setup_model
+        identity = parameterization.Identity(model, model.props)
+
+        x = identity.x.copy()
+        x['emod'][:] = 1.0
+        x['rho'][:] = 2.0
+
+        y = identity.apply(x)
+        assert all(np.all(x[label] == y[label]) for label in x.labels[0])
+
 # if __name__ == '__main__':
