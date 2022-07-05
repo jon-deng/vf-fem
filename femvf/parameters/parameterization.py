@@ -104,7 +104,7 @@ class LayerModuli(Parameterization):
             new_emod = jnp.array(out_dict['emod'], copy=True)
             for label, value in x.items():
                 dofs = cell_label_to_dofs[label]
-                new_emod.at[dofs].set(value)
+                new_emod = new_emod.at[dofs].set(value)
 
             out_dict['emod'] = new_emod
             return out_dict
