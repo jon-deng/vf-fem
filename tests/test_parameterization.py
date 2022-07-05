@@ -32,7 +32,7 @@ class TestParameterization:
 
         layer_moduli = parameterization.LayerModuli(model, model.props)
 
-        x = layer_moduli.in_vec.copy()
+        x = layer_moduli.x.copy()
         x['cover'][0] = 1.0
         x['body'][0] = 2.0
         x.print_summary()
