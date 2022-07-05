@@ -63,7 +63,7 @@ class Parameterization:
         """
         in_dict = {label: subvec for label, subvec in in_vec.items()}
         out_dict = self.map(in_dict)
-        out_subvecs = [out_dict[label] for label in self._out_labels]
+        out_subvecs = [out_dict[label] for label in self._out_labels[0]]
         return bv.BlockVector(out_subvecs, labels=self._out_labels)
 
     def apply_vjp(self, in_vec: bv.BlockVector, din_vec: bv.BlockVector) -> bv.BlockVector:
@@ -72,7 +72,7 @@ class Parameterization:
         in_dict = {label: subvec for label, subvec in in_vec.items()}
         din_dict = {label: subvec for label, subvec in in_vec.items()}
         out_dict = jax.vjp(self.map, in_dict, din_dict)
-        out_subvecs = [out_dict[label] for label in self._out_labels]
+        out_subvecs = [out_dict[label] for label in self._out_labels[0]]
         return bv.BlockVector(out_subvecs, labels=self._out_labels)
 
     def apply_jvp(self, in_vec: bv.BlockVector, din_vec: bv.BlockVector) -> bv.BlockVector:
@@ -81,7 +81,7 @@ class Parameterization:
         in_dict = {label: subvec for label, subvec in in_vec.items()}
         din_dict = {label: subvec for label, subvec in in_vec.items()}
         out_dict = jax.jvp(self.map, in_dict, din_dict)
-        out_subvecs = [out_dict[label] for label in self._out_labels]
+        out_subvecs = [out_dict[label] for label in self._out_labels[0]]
         return bv.BlockVector(out_subvecs, labels=self._out_labels)
 
 class LayerModuli(Parameterization):
@@ -98,21 +98,20 @@ class LayerModuli(Parameterization):
         )
 
         out_labels = self._out_labels
-        out_subvecs = [self._out_default[label] for label in out_labels]
-        out_dict = {label: subvec for label, subvec in zip(out_subvecs, out_labels)}
+        out_subvecs = [self._out_default[label] for label in out_labels[0]]
+        out_dict = {label: subvec for label, subvec in zip(out_labels[0], out_subvecs)}
         def map(x):
-
             new_emod = jnp.array(out_dict['emod'], copy=True)
             for label, value in x.items():
                 dofs = cell_label_to_dofs[label]
-                new_emod.at[dofs] = value
+                new_emod.at[dofs].set(value)
 
             out_dict['emod'] = new_emod
             return out_dict
 
         ## Define the input vector
-        labels = list(cell_label_to_dofs.keys())
-        subvecs = [np.zeros(1) for _ in labels]
+        labels = (tuple(cell_label_to_dofs.keys()),)
+        subvecs = [np.zeros(1) for _ in labels[0]]
         in_vec = bv.BlockVector(subvecs, labels=labels)
 
         return in_vec, map

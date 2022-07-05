@@ -1,50 +1,43 @@
-import unittest
+
+import pytest
 
 import numpy as np
 
-from femvf.models import load_fsi_model, load_fsai_model, solid, fluid
-from femvf.load import load_transient_fsi_model, load_transient_fsai_model
-from femvf.parameters.parameterization import SubsetParameterization
+from femvf.models.transient import solid, fluid
+from femvf.load import load_transient_fsi_model
+from femvf import meshutils
+from femvf.parameters import parameterization
 
 from blockarray import linalg
 
-class TestParameterization(unittest.TestCase):
+class TestParameterization:
 
-    def setUp(self):
+    @pytest.fixture
+    def setup_model(self):
         mesh_path = '../meshes/M5-3layers.xml'
-        model = load_transient_fsi_model(mesh_path, None, SolidType=solid.KelvinVoigt, FluidType=fluid.Bernoulli)
+        model = load_transient_fsi_model(
+            mesh_path,
+            None,
+            SolidType=solid.KelvinVoigt,
+            FluidType=fluid.Bernoulli
+        )
+        return model
 
-        control = model.get_control_vec()
-        control['psub'][:] = 8000.0
+    def test_layer_moduli(self, setup_model):
+        model = setup_model
+        cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(
+            model.solid.forms,
+            model.solid.forms['coeff.prop.emod'].function_space()
+        )
 
-        times = np.linspace(0.0, 1e-3, 10)
-        self.param = SubsetParameterization(model, 10, ('emod',))
+        layer_moduli = parameterization.LayerModuli(model, model.props)
 
-    def test_dconvert(self):
-        p0 = self.param.copy()
-        dp_bvec_true = p0.bvector.copy()
-        dp_bvec_true.set(1e-4)
+        x = layer_moduli.in_vec.copy()
+        x['cover'][0] = 1.0
+        x['body'][0] = 2.0
+        x.print_summary()
 
-        p1 = self.param.copy()
-        p1.bvector[:] = p0.bvector + dp_bvec_true
+        y = layer_moduli.apply(x)
+        assert all(np.all(x[label] == y['emod'][cell_label_to_dofs[label]]) for label in x.labels[0])
 
-        args0 = p0.convert()
-        args1 = p1.convert()
-
-        dargs = []
-        for n, (arg0, arg1) in enumerate(zip(args0, args1)):
-            if n == 1:
-                dargs.append([arg1[0]-arg0[0]])
-            else:
-                dargs.append(arg1-arg0)
-
-        dp_bvec = p0.dconvert(*dargs)
-
-        err =  dp_bvec_true - dp_bvec
-        err_norm = linalg.dot(err, err)
-        breakpoint()
-
-if __name__ == '__main__':
-    test = TestParameterization()
-    test.setUp()
-    test.test_dconvert()
+# if __name__ == '__main__':
