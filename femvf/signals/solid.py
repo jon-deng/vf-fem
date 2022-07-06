@@ -88,6 +88,7 @@ class ViscousDissipationRate(StateMeasure):
         self.assem_scalar_form = make_scalar_form(model, total_dissipation_rate)
 
     def __call__(self, state, control, props):
+        self.model.set_props(props)
         self.model.set_fin_state(state)
         self.model.set_control(control)
         return self.assem_scalar_form(state, control, props)
@@ -214,6 +215,22 @@ class StressVonMisesField(StateMeasure):
         model.set_props(props)
 
         return dfn.project(self.stress_field_vm, self.fspace).vector()
+
+class StressVonMisesAverage(StressVonMisesField):
+    def __init_measure_context__(self, *args, **kwargs):
+        super().__init_measure_context__(self, *args, **kwargs)
+
+        dx = kwargs.get('dx', self.model.solid.forms['measure.dx'])
+        self.f = self.stress_field_vm*dx
+        self.total_dx = dfn.assemble(1*dx)
+
+    def __call__(self, state, control, props):
+        model = self.model
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        return dfn.assemble(self.f) / self.total_dx
 
 def make_scalar_form(model, form):
     """
