@@ -40,7 +40,7 @@ def dim_from_type(cell_type):
         return 1
     elif cell_type in {'triangle'}:
         return 2
-    elif cell_type in {'tetrahedron'}:
+    elif cell_type in {'tetrahedron', 'tetra'}:
         return 3
     else:
         raise ValueError(f"Unknown cell type {cell_type}")
