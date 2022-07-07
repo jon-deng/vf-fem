@@ -245,7 +245,7 @@ class ContactPressureField(StateMeasure):
         self.model.set_control(control)
         self.model.set_fin_state(state)
 
-        return dfn.project(self.pcontact, self.fspace, solver='lu').vector()
+        return dfn.project(self.pcontact, self.fspace).vector()
 
 def make_scalar_form(model, form):
     """
