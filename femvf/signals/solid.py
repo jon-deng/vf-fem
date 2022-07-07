@@ -116,7 +116,7 @@ class StressI1Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(self.I1, self.fspace)
+        return dfn.project(self.I1, self.fspace).vector()
 
 class StressI2Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -141,7 +141,7 @@ class StressI2Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(self.I2, self.fspace)
+        return dfn.project(self.I2, self.fspace).vector()
 
 class StressI3Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -166,7 +166,7 @@ class StressI3Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.project(self.I3, self.fspace)
+        return dfn.project(self.I3, self.fspace).vector()
 
 class StressHydrostaticField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -231,6 +231,21 @@ class StressVonMisesAverage(StressVonMisesField):
         model.set_props(props)
 
         return dfn.assemble(self.f) / self.total_dx
+
+class ContactPressureField(StateMeasure):
+
+    def __init_measure_context__(self, *args, **kwargs):
+        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
+        self.pcontact = pcontact
+        self.fspace = self.model.solid.forms['fspace.scalar']
+
+    def __call__(self, state, control, props):
+        self.model.set_props(props)
+        self.model.set_control(control)
+        self.model.set_fin_state(state)
+
+        return dfn.project(self.pcontact, self.fspace, solver='lu').vector()
 
 def make_scalar_form(model, form):
     """
