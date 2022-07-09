@@ -127,10 +127,10 @@ class Solid(base.Model):
 
         # TODO: You should move this to the solid since it's not the responsibility of this class to do solid specific stuff
         self.cached_form_assemblers = {
-            'bilin.df1_du1_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du1_adj']),
-            'bilin.df1_du0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_du0_adj']),
-            'bilin.df1_dv0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_dv0_adj']),
-            'bilin.df1_da0_adj': CachedBiFormAssembler(self.forms['form.bi.df1_da0_adj'])
+            'bilin.df1_du1_adj': CachedFormAssembler(self.forms['form.bi.df1_du1_adj']),
+            'bilin.df1_du0_adj': CachedFormAssembler(self.forms['form.bi.df1_du0_adj']),
+            'bilin.df1_dv0_adj': CachedFormAssembler(self.forms['form.bi.df1_dv0_adj']),
+            'bilin.df1_da0_adj': CachedFormAssembler(self.forms['form.bi.df1_da0_adj'])
         }
 
     @property
@@ -653,22 +653,34 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
 
-class CachedBiFormAssembler:
+class CachedFormAssembler:
     """
     Assembles a bilinear form using a cached sparsity pattern
 
     Parameters
     ----------
     form : ufl.Form
-    keep_diagonal : bool, optional
-        Whether to preserve diagonals in the form
+    kwargs :
+        Keyword arguments of `dfn.assemble` except for `tensor`
     """
 
-    def __init__(self, form, keep_diagonal=True):
+    def __init__(self, form, **kwargs):
         self._form = form
 
-        self._tensor = dfn.assemble(form, keep_diagonal=keep_diagonal, tensor=dfn.PETScMatrix())
-        self._tensor.zero()
+        if 'tensor' not in kwargs:
+            if len(form.arguments()) == 0:
+                tensor = dfn.Scalar()
+            if len(form.arguments()) == 1:
+                tensor = dfn.PETScVector()
+            if len(form.arguments()) == 2:
+                tensor = dfn.PETScMatrix()
+            else:
+                raise ValueError("Couldn't determing arity of form")
+        else:
+            tensor = kwargs['tensor']
+        self._tensor = tensor
+
+        self._kwargs = kwargs
 
     @property
     def tensor(self):
@@ -679,8 +691,7 @@ class CachedBiFormAssembler:
         return self._form
 
     def assemble(self):
-        out = self.tensor.copy()
-        return dfn.assemble(self.form, tensor=out)
+        return dfn.assemble(self.form, tensor=self.tensor, **self._kwargs)
 
 
 def newton_solve(x0, linearized_subproblem, params=None):
