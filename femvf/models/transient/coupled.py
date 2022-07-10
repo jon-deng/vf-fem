@@ -253,7 +253,7 @@ class ExplicitFSIModel(FSIModel):
         u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
         res = self.get_state_vec()
 
-        res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
+        res['u'][:] = self.solid.cached_form_assemblers['form.un.f1'].assemble()
         self.solid.bc_base.apply(res['u'])
         res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
@@ -328,7 +328,7 @@ class ExplicitFSIModel(FSIModel):
         return b
 
     def apply_dres_dstate0(self, x):
-        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1'], tensor=dfn.PETScMatrix())
+        dfu2_dp1 = self.solid.cached_form_assemblers['form.bi.df1_dp1'].assemble()
         self.solid.bc_base.zero(dfu2_dp1)
 
         # Map the fluid pressure state to the solid sides forcing pressure
@@ -346,7 +346,7 @@ class ExplicitFSIModel(FSIModel):
         return b
 
     def apply_dres_dstate0_adj(self, x):
-        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'], tensor=dfn.PETScMatrix())
+        dfu2_dp1 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
 
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
         dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
@@ -400,7 +400,7 @@ class ImplicitFSIModel(FSIModel):
         u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
         res = self.get_state_vec()
 
-        res['u'][:] = dfn.assemble(self.solid.forms['form.un.f1'])
+        res['u'][:] = self.solid.cached_form_assemblers['form.un.f1'].assemble()
         self.solid.bc_base.apply(res['u'])
         res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
@@ -427,7 +427,7 @@ class ImplicitFSIModel(FSIModel):
         # Calculate the initial residual
         self.set_fin_solid_state(uva1)
         self.set_fin_fluid_state(qp1)
-        res0 = dfn.assemble(self.solid.f1)
+        res0 = self.solid.cached_form_assemblers['form.un.f1'].assemble()
         self.solid.bc_base.apply(res0)
 
         # Set tolerances for the fixed point iterations
@@ -445,14 +445,13 @@ class ImplicitFSIModel(FSIModel):
             self.set_fin_fluid_state(qp1)
 
             # Calculate the error in the solid residual with the updated pressures
-            res = dfn.assemble(self.solid.f1)
+            res = self.solid.cached_form_assemblers['form.un.f1'].assemble()
             self.solid.bc_base.apply(res)
 
             abs_err = res.norm('l2')
             rel_err = abs_err/abs_err_prev
 
             nit += 1
-        res = dfn.assemble(self.solid.forms['form.un.f1'])
         self.solid.bc_base.apply(res)
 
         step_info = {'fluid_info': fluid_info,
@@ -469,7 +468,7 @@ class ImplicitFSIModel(FSIModel):
 
         solid = self.solid
 
-        dfu1_du1 = dfn.assemble(solid.df1_du1)
+        dfu1_du1 = self.solid.cached_form_assemblers['form.bi.df1_du1'].assemble()
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -498,7 +497,7 @@ class ImplicitFSIModel(FSIModel):
         dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-        dfu2_dp2 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+        dfu2_dp2 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
 
         # map dfu2_dp2 to have p on the fluid domain
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
@@ -921,7 +920,7 @@ class FSAIModel(FSIModel):
         return x
 
     def apply_dres_dstate0_adj(self, x):
-        dfu2_dp1 = dfn.assemble(self.solid.forms['form.bi.df1_dp1_adj'])
+        dfu2_dp1 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
 
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
         dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
