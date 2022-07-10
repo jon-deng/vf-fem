@@ -72,7 +72,7 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
 
         self.cached_form_assemblers = {
             key: CachedFormAssembler(self.forms[key]) for key in self.forms
-            if 'form.' in key
+            if ('form.' in key and self.forms[key] is not None)
         }
 
     @property
