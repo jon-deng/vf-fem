@@ -22,6 +22,9 @@ from ..equations.solid import newmark
 from blockarray.blockvec import BlockVector
 
 from ..equations.solid import solidforms
+from ..assemble import CachedFormAssembler
+
+
 
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
@@ -106,6 +109,11 @@ class Solid(base.Model):
         self.f1 = self.forms['form.un.f1']
         self.df1_du1 = self.forms['form.bi.df1_du1']
         self.df1_dsolid = solidforms.gen_residual_bilinear_property_forms(self.forms)
+        self.df1_dsolid_assemblers = {
+            key: CachedFormAssembler(self.df1_dsolid[key])
+            for key in self.df1_dsolid
+            if self.df1_dsolid[key] is not None
+        }
 
         ## Measures and boundary conditions
         self.dx = self.forms['measure.dx']
@@ -127,10 +135,8 @@ class Solid(base.Model):
 
         # TODO: You should move this to the solid since it's not the responsibility of this class to do solid specific stuff
         self.cached_form_assemblers = {
-            'bilin.df1_du1_adj': CachedFormAssembler(self.forms['form.bi.df1_du1_adj']),
-            'bilin.df1_du0_adj': CachedFormAssembler(self.forms['form.bi.df1_du0_adj']),
-            'bilin.df1_dv0_adj': CachedFormAssembler(self.forms['form.bi.df1_dv0_adj']),
-            'bilin.df1_da0_adj': CachedFormAssembler(self.forms['form.bi.df1_da0_adj'])
+            key: CachedFormAssembler(self.forms[key]) for key in self.forms
+            if 'form.' in key
         }
 
     @property
@@ -244,24 +250,13 @@ class Solid(base.Model):
                 coefficient.vector()[:] = props[key]
 
     ## Residual and sensitivity functions
-    def assem(self, form_name):
-        """
-        Assembles the form given by label `form_name`
-        """
-        form_key = f'form.bi.{form_name}'
-
-        if form_key in self.forms:
-            return dfn.assemble(self.forms[form_key])
-        else:
-            raise ValueError(f"`{form_name}` is not a valid form label")
-
     def res(self):
         dt = self.dt
         u1, v1, a1 = self.u1.vector(), self.v1.vector(), self.a1.vector()
         u0, v0, a0 = self.u0.vector(), self.v0.vector(), self.a0.vector()
 
         res = self.get_state_vec()
-        res['u'] = dfn.assemble(self.forms['form.un.f1'])
+        res['u'] = self.cached_form_assemblers['form.un.f1'].assemble()
         self.bc_base.apply(res['u'])
         res['v'] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
@@ -290,7 +285,7 @@ class Solid(base.Model):
 
     def solve_dres_dstate1(self, b):
         dt = self.dt
-        dfu2_du2 = dfn.assemble(self.forms['form.bi.df1_du1'])
+        dfu2_du2 = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -327,9 +322,9 @@ class Solid(base.Model):
     def apply_dres_dstate0(self, x):
         dt = self.dt
 
-        dfu2_du1 = dfn.assemble(self.forms['form.bi.df1_du0'], tensor=dfn.PETScMatrix())
-        dfu2_dv1 = dfn.assemble(self.forms['form.bi.df1_dv0'], tensor=dfn.PETScMatrix())
-        dfu2_da1 = dfn.assemble(self.forms['form.bi.df1_da0'], tensor=dfn.PETScMatrix())
+        dfu2_du1 = self.cached_form_assemblers['form.bi.df1_du0'].assemble()
+        dfu2_dv1 = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
+        dfu2_da1 = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
         for mat in (dfu2_du1, dfu2_dv1, dfu2_da1):
             self.bc_base.apply(mat)
 
@@ -385,11 +380,10 @@ class Solid(base.Model):
         b = self.get_properties_vec(set_default=False)
         for prop_name, vec in b.items():
             # assert self.df1_dsolid[key] is not None
-            df1_dprop = None
             if self.df1_dsolid[prop_name] is None:
                 df1_dprop = 0.0
             else:
-                df1_dprop = dfn.assemble(self.df1_dsolid[prop_name])
+                df1_dprop = self.df1_dsolid_assemblers[prop_name].assemble()
             val = df1_dprop*x['u']
 
             # Note this is a workaround because some properties are scalar values but stored as
@@ -401,7 +395,7 @@ class Solid(base.Model):
         return b
 
     def apply_dres_ddt(self, x):
-        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_ddt'], tensor=dfn.PETScMatrix())
+        dfu_ddt = self.cached_form_assemblers['form.bi.df1_ddt'].assemble()
         dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
         dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
 
@@ -420,7 +414,7 @@ class Solid(base.Model):
         # Note that dfu_ddt is a matrix because fenics doesn't allow taking derivative w.r.t a scalar
         # As a result, the time step is defined for each vertex. This is why 'ddt' is computed weirdly
         # below
-        dfu_ddt = dfn.assemble(self.forms['form.bi.df1_ddt_adj'], tensor=dfn.PETScMatrix())
+        dfu_ddt = self.cached_form_assemblers['form.bi.df1_ddt_adj'].assemble()
         dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
         dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
 
@@ -457,9 +451,9 @@ class NodalContactSolid(Solid):
         ## and an additional effect due to contact pressure
         dfu2_du2_nocontact = None
         if adjoint:
-            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1_adj'], tensor=dfn.PETScMatrix())
+            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1_du1_adj'].assemble()
         else:
-            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1_du1'], tensor=dfn.PETScMatrix())
+            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
 
         dfu2_du2 = dfu2_du2_nocontact + self._assem_dres_du_contact(adjoint)
         return dfu2_du2
@@ -468,9 +462,9 @@ class NodalContactSolid(Solid):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = None
         if adjoint:
-            dfu2_dtcontact = dfn.assemble(self.forms['form.bi.df1uva_dtcontact_adj'], tensor=dfn.PETScMatrix())
+            dfu2_dtcontact = self.cached_form_assemblers['form.bi.df1uva_dtcontact_adj'].assemble()
         else:
-            dfu2_dtcontact = dfn.assemble(self.forms['form.bi.df1uva_dtcontact'], tensor=dfn.PETScMatrix())
+            dfu2_dtcontact = self.cached_form_assemblers['form.bi.df1uva_dtcontact'].assemble()
 
         XREF = self.XREF.vector()
         kcontact = self.forms['coeff.prop.kcontact'].values()[0]
@@ -501,9 +495,9 @@ class NodalContactSolid(Solid):
         ## and an additional effect due to contact pressure
         dfu2_du2_nocontact = None
         if adjoint:
-            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1uva_du1_adj'])
+            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1uva_du1_adj'].assemble()
         else:
-            dfu2_du2_nocontact = dfn.assemble(self.forms['form.bi.df1uva_du1'])
+            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1uva_du1'].assemble()
 
         dfu2_du2_contact = self._assem_dres_du_contact(adjoint)
 
@@ -651,47 +645,6 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         return \
             solidforms.Approximate3DKelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
-
-
-class CachedFormAssembler:
-    """
-    Assembles a bilinear form using a cached sparsity pattern
-
-    Parameters
-    ----------
-    form : ufl.Form
-    kwargs :
-        Keyword arguments of `dfn.assemble` except for `tensor`
-    """
-
-    def __init__(self, form, **kwargs):
-        self._form = form
-
-        if 'tensor' not in kwargs:
-            if len(form.arguments()) == 0:
-                tensor = dfn.Scalar()
-            if len(form.arguments()) == 1:
-                tensor = dfn.PETScVector()
-            if len(form.arguments()) == 2:
-                tensor = dfn.PETScMatrix()
-            else:
-                raise ValueError("Couldn't determing arity of form")
-        else:
-            tensor = kwargs['tensor']
-        self._tensor = tensor
-
-        self._kwargs = kwargs
-
-    @property
-    def tensor(self):
-        return self._tensor
-
-    @property
-    def form(self):
-        return self._form
-
-    def assemble(self):
-        return dfn.assemble(self.form, tensor=self.tensor, **self._kwargs)
 
 
 def newton_solve(x0, linearized_subproblem, params=None):
