@@ -180,10 +180,9 @@ class Solid(base.Model):
 
     ## Functions for getting empty parameter vectors
     def get_state_vec(self):
-        u = dfn.Function(self.vector_fspace).vector()
-        v = dfn.Function(self.vector_fspace).vector()
-        a = dfn.Function(self.vector_fspace).vector()
-        return BlockVector((u, v, a), labels=[('u', 'v', 'a')])
+        ret = self.state1.copy()
+        ret.set(0.0)
+        return ret
 
     def get_control_vec(self):
         ret = self.control.copy()
@@ -479,7 +478,6 @@ class NodalContactSolid(Solid):
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
         dtcontact_du2 = self.u1.vector().copy()
-        # dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
         dpcontact_dgap, _ = solidforms.dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
