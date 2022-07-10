@@ -22,6 +22,7 @@ from .base import DynamicalSystem
 from ..transient.solid import properties_bvec_from_forms
 from ..equations.solid import solidforms
 from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
+from ..assemble import CachedFormAssembler
 
 # pylint: disable=abstract-method
 
@@ -68,6 +69,11 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
 
         self.props = self.get_properties_vec(set_default=True)
         self.set_props(self.props)
+
+        self.cached_form_assemblers = {
+            key: CachedFormAssembler(self.forms[key]) for key in self.forms
+            if 'form.' in key
+        }
 
     @property
     def forms(self):
@@ -119,19 +125,13 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
     #     return super().form_definitions(*args)
 
     def assem_res(self):
-        resu = dfn.assemble(
-            self.forms['form.un.f1uva'],
-            tensor=dfn.PETScVector())
+        resu = self.cached_form_assemblers['form.un.f1uva'].assemble()
         resv = self.v.vector() - self.ut.vector()
         return bvec.BlockVector([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
-        dresu_du = dfn.assemble(
-            self.forms['form.bi.df1uva_du1'],
-            tensor=dfn.PETScMatrix())
-        dresu_dv = dfn.assemble(
-            self.forms['form.bi.df1uva_dv1'],
-            tensor=dfn.PETScMatrix())
+        dresu_du = self.cached_form_assemblers['form.bi.df1uva_du1'].assemble()
+        dresu_dv = self.cached_form_assemblers['form.bi.df1uva_dv1'].assemble()
 
         n = self.v.vector().size()
         dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -145,9 +145,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
-        dresu_dvt = dfn.assemble(
-            self.forms['form.bi.df1uva_da1'],
-            tensor=dfn.PETScMatrix())
+        dresu_dvt = self.cached_form_assemblers['form.bi.df1uva_da1'].assemble()
 
         dresv_dut = dfn.PETScMatrix(-1*subops.ident_mat(n))
         dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -159,9 +157,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
-        dresu_dcontrol = dfn.assemble(
-            self.forms['form.bi.df1uva_dp1'],
-            tensor=dfn.PETScMatrix())
+        dresu_dcontrol = self.cached_form_assemblers['form.bi.df1uva_dp1'].assemble()
 
         dresv_dcontrol = dfn.PETScMatrix(subops.zero_mat(self.state['v'].size(), self.control['p'].size()))
 
@@ -177,7 +173,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
             [subops.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
 
         j_emod = self.props.labels[0].index('emod')
-        mats[0][j_emod] = dfn.assemble(self.forms['form.bi.df1uva_demod'], dfn.PETScMatrix())
+        mats[0][j_emod] = self.cached_form_assemblers['form.bi.df1uva_demod'].assemble()
 
         return bmat.BlockMatrix(
             mats, labels=(self.state.labels[0], self.props.labels[0]))
@@ -193,51 +189,27 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_res(self):
         resu = (
-            dfn.assemble(
-                self.forms['form.un.df1uva_u1'],
-                tensor=dfn.PETScVector())
-            + dfn.assemble(
-                self.forms['form.un.df1uva_v1'],
-                tensor=dfn.PETScVector())
-            + dfn.assemble(
-                self.forms['form.un.df1uva_p1'],
-                tensor=dfn.PETScVector())
-            + dfn.assemble(
-                self.forms['form.un.df1uva_a1'],
-                tensor=dfn.PETScVector())
-            )
+            self.cached_form_assemblers['form.un.df1uva_u1'].assemble()
+            + self.cached_form_assemblers['form.un.df1uva_v1'].assemble()
+            + self.cached_form_assemblers['form.un.df1uva_p1'].assemble()
+            + self.cached_form_assemblers['form.un.df1uva_a1'].assemble()
+        )
         resv = self.dv.vector() - self.dut.vector()
         return bvec.BlockVector([resu, resv], labels=[['u',  'v']])
 
     def assem_dres_dstate(self):
         dresu_du = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_u1_du1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_v1_du1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_p1_du1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_du1'],
-                tensor=dfn.PETScMatrix())
-            )
+            self.cached_form_assemblers['form.bi.ddf1uva_u1_du1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_v1_du1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_p1_du1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_a1_du1'].assemble()
+        )
         dresu_dv = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_u1_dv1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_v1_dv1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_p1_dv1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_dv1'],
-                tensor=dfn.PETScMatrix())
-            )
+            self.cached_form_assemblers['form.bi.ddf1uva_u1_dv1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_v1_dv1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_p1_dv1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_a1_dv1'].assemble()
+        )
 
         n = self.u.vector().size()
         dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -252,19 +224,11 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
         dresu_dvt = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_u1_da1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_v1_da1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_p1_da1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_da1'],
-                tensor=dfn.PETScMatrix())
-            )
+            self.cached_form_assemblers['form.bi.ddf1uva_u1_da1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_v1_da1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_p1_da1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_a1_da1'].assemble()
+        )
 
         dresv_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
         dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -278,19 +242,11 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
         n = self.u.vector().size()
         m = self.control['p'].size()
         dresu_dg = (
-            dfn.assemble(
-                self.forms['form.bi.ddf1uva_u1_dp1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_v1_dp1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_p1_dp1'],
-                tensor=dfn.PETScMatrix())
-            + dfn.assemble(
-                self.forms['form.bi.ddf1uva_a1_dp1'],
-                tensor=dfn.PETScMatrix())
-            )
+            self.cached_form_assemblers['form.bi.ddf1uva_u1_dp1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_v1_dp1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_p1_dp1'].assemble()
+            + self.cached_form_assemblers['form.bi.ddf1uva_a1_dp1'].assemble()
+        )
 
         dresv_dg = dfn.PETScMatrix(subops.zero_mat(n, m))
 
@@ -306,7 +262,7 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
             [subops.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
 
         j_emod = self.props.labels[0].index('emod')
-        mats[0][j_emod] = dfn.assemble(self.forms['form.bi.ddf1uva_demod'], dfn.PETScMatrix())
+        mats[0][j_emod] = self.cached_form_assemblers['form.bi.ddf1uva_demod'].assemble()
 
         return bmat.BlockMatrix(
             mats, labels=self.state.labels+self.props.labels)
