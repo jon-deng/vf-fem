@@ -19,6 +19,7 @@ from femvf.constants import PASCAL_TO_CGS
 from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.signals.solid as solidfunc
+from femvf.signals.decorator import TimeSeries
 # from femvf import callbacks
 # from femvf import linalg
 
@@ -64,7 +65,7 @@ class ForwardConfig(unittest.TestCase):
 
         props['ymid'][0] = y_midline
 
-        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
+        xy = model.solid.forms['fspace.scalar_dg0'].tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
         x_min, x_max = x.min(), x.max()
@@ -115,7 +116,7 @@ class ForwardConfig(unittest.TestCase):
         # fl_props = model.fluid.get_properties_vec(set_default=True)
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
-        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
+        xy = model.solid.forms['fspace.scalar_dg0'].tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
         x_min, x_max = x.min(), x.max()
@@ -408,7 +409,7 @@ def proc_time_and_glottal_width(model, f):
     t = f.get_times()
     props = f.get_props()
 
-    glottal_width_sharp = solidfunc.make_sig_glottal_width_sharp(model)
+    glottal_width_sharp = TimeSeries(solidfunc.MinGlottalWidth(model))
     y = glottal_width_sharp(f)
 
     return t, np.array(y)
