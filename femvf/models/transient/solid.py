@@ -158,8 +158,8 @@ class Solid(base.Model):
 
     @property
     def XREF(self):
-        xref = dfn.Function(self.vector_fspace)
-        xref.vector()[:] = self.scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
+        xref = self.u1.vector().copy()
+        xref[:] = self.scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
     @staticmethod
@@ -431,7 +431,7 @@ class NodalContactSolid(Solid):
     """
     def contact_traction(self, u):
         # This computes the nodal values of the contact traction function
-        XREF = self.XREF.vector()
+        XREF = self.XREF
         ycontact = self.forms['coeff.prop.ycontact'].values()[0]
         ncontact = self.forms['coeff.prop.ncontact'].values()
         kcontact = self.forms['coeff.prop.kcontact'].values()[0]
@@ -466,7 +466,7 @@ class NodalContactSolid(Solid):
         else:
             dfu2_dtcontact = self.cached_form_assemblers['form.bi.df1uva_dtcontact'].assemble()
 
-        XREF = self.XREF.vector()
+        XREF = self.XREF
         kcontact = self.forms['coeff.prop.kcontact'].values()[0]
         ycontact = self.forms['coeff.prop.ycontact'].values()[0]
         u1 = self.forms['coeff.state.u1'].vector()
@@ -478,7 +478,8 @@ class NodalContactSolid(Solid):
         # for a general collision plane normal, the operation 'df_dtc*dtc_du' will
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
-        dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
+        dtcontact_du2 = self.u1.vector().copy()
+        # dtcontact_du2 = dfn.Function(self.vector_fspace).vector()
         dpcontact_dgap, _ = solidforms.dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 

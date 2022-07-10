@@ -53,7 +53,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self.dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
         # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
 
-        self.solid_xref = self.solid.XREF.vector()
+        self.solid_xref = self.solid.XREF
 
         # solid and fluid fsi dofs should be created when the two models are created
         self.fsimap = FSIMap(

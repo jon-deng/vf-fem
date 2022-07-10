@@ -225,7 +225,7 @@ class ExplicitFSIModel(FSIModel):
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF.vector() + self.solid.state1['u'])[1::2])
+        self._solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
         fl_control = self.fluid.control.copy()
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)
