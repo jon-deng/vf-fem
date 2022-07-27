@@ -22,6 +22,32 @@ class MinGlottalWidth(StateMeasure):
         gw = np.min(widths)
         return gw
 
+class VertexGlottalWidth(StateMeasure):
+    def __init_measure_context__(self, vertex_name=None):
+        # Get the DOF/vertex number corresponding to `vertex_name`
+        if vertex_name is None:
+            raise ValueError("`vertex_name` must be supplied")
+        vertlabel_to_id = self.model.solid.forms['mesh.vertex_label_to_id']
+        vert_mf = self.model.solid.forms['mesh.vertex_function']
+        idx_vertex = vert_mf.where_equal(vertlabel_to_id[vertex_name])
+        if len(idx_vertex) == 0:
+            raise ValueError(f"No vertex named `{vertex_name}` found")
+        elif len(idx_vertex) > 1:
+            raise ValueError(f"Multiple vertices names `{vertex_name}` found")
+        else:
+            idx_vertex = idx_vertex[0]
+
+        vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.forms['fspace.vector'])
+        # Get the y-displacement DOF
+        self.idx_dof = vert_to_vdof[2*idx_vertex]
+
+        self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
+
+    def __call__(self, state, control, props):
+        xcur = self.XREF.reshape(-1) + state['u'][:]
+        widths = 2*(props['ymid'] - xcur[1::2])
+        return widths[self.idx_vertex]
+
 class MaxContactPressure(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
