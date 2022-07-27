@@ -274,6 +274,23 @@ class StressVonMisesAverage(StressVonMisesField):
 
         return dfn.assemble(self.f) / self.total_dx
 
+class StressVonMisesSpatialStats(StressVonMisesAverage):
+    def __init_measure_context__(self, *args, **kwargs):
+        super().__init_measure_context__(self, *args, **kwargs)
+
+        self.vm_field = dfn.Function(self.fspace).vector()
+
+    def __call__(self, state, control, props):
+        model = self.model
+        model.set_fin_state(state)
+        model.set_control(control)
+        model.set_props(props)
+
+        field = self.project(self.vm_field)
+        avg = dfn.assemble(self.f) / self.total_dx
+
+        return np.min(field), np.max(field), dfn.assemble(self.f) / self.total_dx
+
 class ContactPressureField(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
