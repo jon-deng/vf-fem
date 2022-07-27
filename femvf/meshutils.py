@@ -3,6 +3,7 @@ Functionality for dealing with meshes
 """
 
 from os import path
+import warnings
 
 import meshio as mio
 import numpy as np
@@ -45,7 +46,7 @@ def dim_from_type(cell_type):
     else:
         raise ValueError(f"Unknown cell type {cell_type}")
 
-def load_fenics_gmsh(mesh_path):
+def load_fenics_gmsh(mesh_path, overwrite_xdmf=False):
     """
     Loads a fenics mesh from .msh file
 
@@ -95,7 +96,15 @@ def load_fenics_gmsh(mesh_path):
         for split_mesh_name in split_mesh_names
     ]
     for (split_path_n, mesh_n) in zip(split_mesh_paths, split_meshes):
-        mio.write(split_path_n, mesh_n)
+        if not path.isfile(split_path_n):
+            mio.write(split_path_n, mesh_n)
+        elif overwrite_xdmf:
+            mio.write(split_path_n, mesh_n)
+        else:
+            warnings.warn(
+                "Loading 'gmsh' mesh from existing '.xdmf' files.",
+                category=UserWarning
+            )
 
     # Read the highest-dimensional mesh as the base dolfin mesh,
     # which is assumed to be the last cell block
