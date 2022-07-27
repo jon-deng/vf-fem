@@ -1,6 +1,5 @@
 """
-Contains the decorator used to transform function that return one signal at one
-state to signals over all states in a file
+Contains base classes for different functionals
 """
 
 from typing import Optional, Iterable

@@ -9,7 +9,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from .decorator import transform_to_make_signals, StateMeasure
+from .base import transform_to_make_signals, StateMeasure
 
 class MinGlottalWidth(StateMeasure):
 
