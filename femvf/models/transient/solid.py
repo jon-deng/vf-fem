@@ -345,11 +345,55 @@ class Solid(base.Model):
             x = state.copy()
 
             def solve(res):
-                return solve_dres_dstate1(dres_dstate1, x, res)
+                return self.solve_dres_dstate1(dres_dstate1, x, res)
             return assem_res, solve
 
         state_n, solve_info = newton_solve(state1, linearized_subproblem, params=newton_solver_prm)
         return state_n, solve_info
+
+    def solve_dres_dstate1(self, dres_dstate1, x, b):
+        """
+        Solve the linearized residual problem
+
+        This solution has a special format due to the Newmark time discretization.
+        As a result, the below code only has to do one matrix solve (for the 'u'
+        residual).
+        """
+        # dres_dstate1 = self.assem_dres_dstate1()
+
+        dfu1_du1 = dres_dstate1['u', 'u']
+        dfv1_du1 = dres_dstate1['v', 'u']
+        dfa1_du1 = dres_dstate1['a', 'u']
+
+        bu, bv, ba = b.vecs
+
+        dfn.solve(dfu1_du1, x['u'], bu, 'petsc')
+        x['v'][:] = bv - dfv1_du1*x['u']
+        x['a'][:] = ba - dfa1_du1*x['u']
+
+        return x
+
+    def solve_dres_dstate1_adj(self, dres_dstate1_adj, x, b):
+        """
+        Solve the linearized adjoint residual problem
+
+        This solution has a special format due to the Newmark time discretization.
+        As a result, the below code only has to do one matrix solve (for the 'u'
+        residual).
+        """
+        # Form key matrices
+        dfu_du = dres_dstate1_adj['u', 'u']
+        dfv_du = dres_dstate1_adj['v', 'u']
+        dfa_du = dres_dstate1_adj['a', 'u']
+
+        # Solve A^T b = x
+        bu, bv, ba = b.vecs
+        x['a'][:] = ba
+        x['v'][:] = bv
+
+        rhs_u = bu - (dfv_du*b['v'] + dfa_du*b['a'])
+        dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
+        return x
 
 
 class NodalContactSolid(Solid):
@@ -517,48 +561,3 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         return \
             solidforms.Approximate3DKelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
-
-
-def solve_dres_dstate1(dres_dstate1, x, b):
-    """
-    Solve the linearized residual problem
-
-    This solution has a special format due to the Newmark time discretization.
-    As a result, the below code only has to do one matrix solve (for the 'u'
-    residual).
-    """
-    # dres_dstate1 = self.assem_dres_dstate1()
-
-    dfu1_du1 = dres_dstate1['u', 'u']
-    dfv1_du1 = dres_dstate1['v', 'u']
-    dfa1_du1 = dres_dstate1['a', 'u']
-
-    bu, bv, ba = b.vecs
-
-    dfn.solve(dfu1_du1, x['u'], bu, 'petsc')
-    x['v'][:] = bv - dfv1_du1*x['u']
-    x['a'][:] = ba - dfa1_du1*x['u']
-
-    return x
-
-def solve_dres_dstate1_adj(dres_dstate1_adj, x, b):
-    """
-    Solve the linearized adjoint residual problem
-
-    This solution has a special format due to the Newmark time discretization.
-    As a result, the below code only has to do one matrix solve (for the 'u'
-    residual).
-    """
-    # Form key matrices
-    dfu_du = dres_dstate1_adj['u', 'u']
-    dfv_du = dres_dstate1_adj['v', 'u']
-    dfa_du = dres_dstate1_adj['a', 'u']
-
-    # Solve A^T b = x
-    bu, bv, ba = b.vecs
-    x['a'][:] = ba
-    x['v'][:] = bv
-
-    rhs_u = bu - (dfv_du*b['v'] + dfa_du*b['a'])
-    dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
-    return x
