@@ -22,7 +22,7 @@ from ..equations.solid import newmark
 from blockarray.blockvec import BlockVector
 
 from ..equations.solid import solidforms
-from ..assemble import CachedFormAssembler
+from ..assemblyutils import CachedFormAssembler
 
 
 
