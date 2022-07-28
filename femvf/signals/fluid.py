@@ -2,7 +2,7 @@
 This module contains definitions of functionals over the fluid state.
 """
 
-from .decorator import transform_to_make_signals, StateMeasure
+from .base import transform_to_make_signals, StateMeasure
 
 class SeparationPoint(StateMeasure):
 

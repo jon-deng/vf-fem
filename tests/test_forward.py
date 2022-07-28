@@ -19,7 +19,7 @@ from femvf.constants import PASCAL_TO_CGS
 from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.signals.solid as solidfunc
-from femvf.signals.decorator import TimeSeries
+from femvf.signals.base import TimeSeries
 # from femvf import callbacks
 # from femvf import linalg
 
