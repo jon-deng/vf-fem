@@ -17,14 +17,15 @@ from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from femvf.parameters.properties import property_vecs
 from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
+from blockarray.blockmat import BlockMatrix
+from blockarray.blockvec import BlockVector
+from blockarray.subops import diag_mat, zero_mat
+
 from . import base
 from ..equations.solid import newmark
-from blockarray.blockvec import BlockVector
 
 from ..equations.solid import solidforms
 from ..assemblyutils import CachedFormAssembler
-
-
 
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
@@ -255,6 +256,29 @@ class Solid(base.Model):
         res['v'] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
         return res
+
+    def assem_dres_dfin_state(self):
+        assert len(self.state1.bshape) == 1
+        N = self.state1.bshape[0][0]
+        dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        dfu_dv = zero_mat(N, N)
+        dfu_da = zero_mat(N, N)
+
+        dfv_du = diag_mat(N, 0 - newmark.newmark_v_du1(self.dt))
+        dfv_dv = diag_mat(N, 1)
+        dfv_da = zero_mat(N, N)
+
+        dfa_du = diag_mat(N, 0 - newmark.newmark_a_du1(self.dt))
+        dfa_dv = zero_mat(N, N)
+        dfa_da = diag_mat(N, 1)
+
+        return BlockMatrix(
+            [dfu_du, dfu_dv, dfu_da,
+            dfv_du, dfv_dv, dfv_da,
+            dfa_du, dfa_dv, dfa_da],
+            shape=(3, 3),
+            labels=2*self.state1.labels
+        )
 
     def solve_state1(self, state1, newton_solver_prm=None):
         if newton_solver_prm is None:
