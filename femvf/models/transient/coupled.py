@@ -327,54 +327,6 @@ class ExplicitFSIModel(FSIModel):
 
         return b
 
-    def apply_dres_dstate0(self, x):
-        dfu2_dp1 = self.solid.cached_form_assemblers['form.bi.df1_dp1'].assemble()
-        self.solid.bc_base.zero(dfu2_dp1)
-
-        # Map the fluid pressure state to the solid sides forcing pressure
-        dp_vec = dfn.PETScVector(dfu2_dp1.mat().getVecRight())
-        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
-        dp_vec[solid_dofs] = x['p'][fluid_dofs]
-
-        b = self.get_state_vec()
-        # compute solid blocks
-        b[:3] = self.solid.apply_dres_dstate0(x[:3])
-        b['u'][:] += dfu2_dp1 * dp_vec
-
-        # compute fluid blocks
-        b[3:] = self.fluid.apply_dres_dstate0(x[3:]) #+ solid effect is 0
-        return b
-
-    def apply_dres_dstate0_adj(self, x):
-        dfu2_dp1 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
-
-        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
-        dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
-        dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
-        matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(x['u']).vec()
-
-        b = self.get_state_vec()
-        # Set uva blocks of b
-        b[:3] = self.solid.apply_dres_dstate0_adj(x[:3])
-        b['q'][:] = 0.0
-        b['p'][:] = matvec_adj_p_rhs
-        return b
-
-    def apply_dres_dcontrol(self, x):
-        dres = self.get_state_vec()
-        dres.set(0.0)
-        return dres
-
-    def apply_dres_dp(self, x):
-        dres = self.get_state_vec()
-        dres.set(0.0)
-        return dres
-
-    def apply_dres_dp_adj(self, x):
-        bsolid = self.solid.apply_dres_dp_adj(x[:3])
-        bfluid = self.fluid.apply_dres_dp_adj(x[3:])
-        return bvec.concatenate_vec([bsolid, bfluid])
-
 class ImplicitFSIModel(FSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
     def set_ini_fluid_state(self, qp0):
@@ -485,7 +437,6 @@ class ImplicitFSIModel(FSIModel):
         x['p'][:] = b['p'] - dfn.PETScVector(dfp2_du2*x['u'].vec())
         return x
 
-    ## Adjoint solver methods
     def solve_dres_dstate1_adj(self, b):
         """
         Solve, dF/du^T x = f
@@ -556,47 +507,6 @@ class ImplicitFSIModel(FSIModel):
         adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
 
         return bvec.concatenate_vec([adj_uva, adj_qp])
-
-    def apply_dres_dstate0_adj(self, x):
-        adj_u2, adj_v2, adj_a2, adj_q2, adj_p2 = x
-
-        ## Assemble sensitivity matrices
-        # dt2 = it_params2['dt']
-        solid = self.solid
-        dt = self.dt
-        # model.set_iter_params(**it_params2)
-
-        dfu2_du1 = solid.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-        dfu2_dv1 = solid.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-        dfu2_da1 = solid.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
-
-        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
-        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
-        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
-        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
-        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
-        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
-
-        ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-        # Allocate a vector the for fluid side mat-vec multiplication
-        b = x.copy()
-        b['u'][:] = (dfu2_du1*adj_u2 + dfv2_du1*adj_v2 + dfa2_du1*adj_a2)
-        b['v'][:] = (dfu2_dv1*adj_u2 + dfv2_dv1*adj_v2 + dfa2_dv1*adj_a2)
-        b['a'][:] = (dfu2_da1*adj_u2 + dfv2_da1*adj_v2 + dfa2_da1*adj_a2)
-        b['q'][:] = 0
-        b['p'][:] = 0
-
-        return b
-
-    def apply_dres_dp_adj(self, x):
-        # bsolid = self.solid.get_properties_vec()
-        # bfluid = self.fluid.get_properties_vec()
-        bsolid = self.solid.apply_dres_dp_adj(x[:3])
-        bfluid = self.fluid.apply_dres_dp_adj(x[3:])
-        return bvec.concatenate_vec([bsolid, bfluid])
-
-    def apply_dres_dcontrol_adj(self, x):
-        return super().apply_dres_dcontrol_adj(x)
 
 class FSAIModel(FSIModel):
     """
@@ -918,35 +828,3 @@ class FSAIModel(FSIModel):
         x_uva[:] = self.solid.solve_dres_dstate1_adj(b_uva)
 
         return x
-
-    def apply_dres_dstate0_adj(self, x):
-        dfu2_dp1 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
-
-        solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
-        dfu2_dp1 = dfn.as_backend_type(dfu2_dp1).mat()
-        dfu2_dp1 = linalg.reorder_mat_rows(dfu2_dp1, solid_dofs, fluid_dofs, fluid_dofs.size)
-        matvec_adj_p_rhs = dfu2_dp1*dfn.as_backend_type(x['u']).vec()
-
-        b = self.get_state_vec()
-        # Set uva blocks of b
-        b[:3] = self.solid.apply_dres_dstate0_adj(x[:3])
-        b['q'][:] = 0.0
-        b['p'][:] = matvec_adj_p_rhs
-
-        # Set acoustics state blocks of b
-        b[-2:] = self.acoustic.apply_dres_dstate0_adj(x[-2:])
-        return b
-
-    def apply_dres_dp_adj(self, x):
-        bsl = self.solid.apply_dres_dp_adj(x[:3])
-        bfl = self.fluid.apply_dres_dp_adj(x[3:5])
-        bac = self.acoustic.apply_dres_dp_adj(x[5:])
-        return bvec.concatenate_vec([bsl, bfl, bac])
-
-    def apply_dres_dcontrol_adj(self, x):
-        ## Implement here since both FSI models should use this rule
-        b = self.get_control_vec()
-        _, _, dq_dpsub, dp_dpsub, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)
-
-        b['psub'][:] = np.dot(x['p'], dp_dpsub) + np.dot(x['q'][0], dq_dpsub)
-        return -b
