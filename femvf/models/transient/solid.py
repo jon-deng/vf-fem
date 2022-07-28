@@ -245,7 +245,7 @@ class Solid(base.Model):
                 coefficient.vector()[:] = props[key]
 
     ## Residual and sensitivity functions
-    def res(self):
+    def assem_res(self):
         dt = self.dt
         u1, v1, a1 = self.u1.vector(), self.v1.vector(), self.a1.vector()
         u0, v0, a0 = self.u0.vector(), self.v0.vector(), self.a0.vector()
@@ -323,7 +323,7 @@ class Solid(base.Model):
             solver : callable(type(state)) -> type(state)
             """
             self.set_fin_state(state)
-            assem_res = self.res
+            assem_res = self.assem_res
             solve = self.solve_dres_dstate1
             return assem_res, solve
 

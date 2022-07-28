@@ -179,7 +179,7 @@ class Bernoulli(QuasiSteady1DFluid):
         'area_lb': 0.001}
 
     ## Model res sensitivity interface
-    def res(self):
+    def assem_res(self):
         return self.state1 - self.solve_state1(self.state0)[0]
 
     def solve_state1(self, state1):
@@ -231,7 +231,7 @@ class _QuasiSteady1DFluid(QuasiSteady1DFluid):
             blockvec_to_dict(self.props)
         )
 
-    def res(self):
+    def assem_res(self):
         labels = self.state1.labels
         subvecs = self._res(*self.primals)
         subvecs, shape = flatten_nested_dict(subvecs, labels)
@@ -242,7 +242,7 @@ class _QuasiSteady1DFluid(QuasiSteady1DFluid):
         Return the final flow state
         """
         info = {}
-        return self.state1 - self.res(), info
+        return self.state1 - self.assem_res(), info
 
 class BernoulliSmoothMinSep(_QuasiSteady1DFluid):
     """

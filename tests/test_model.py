@@ -193,7 +193,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
     ## Convenience functions to represent the residual being tested
     def res(self, state1, state0, control, props, dt):
         self.set_linearization(state1, state0, control, props, dt)
-        return self.model.res()
+        return self.model.assem_res()
 
     def set_linearization(self, state1, state0, control, props, dt):
         self.model.set_fin_state(state1)

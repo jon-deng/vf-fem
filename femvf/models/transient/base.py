@@ -34,7 +34,7 @@ class Model:
         raise NotImplementedError("")
 
     ## Residual and sensitivity methods
-    def res(self):
+    def assem_res(self):
         """
         Return the (nonlinear) residual for the current time step
         """

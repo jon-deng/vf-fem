@@ -136,7 +136,7 @@ class WRAnalog(Acoustic1D):
         info = {}
         return state1, info
 
-    def res(self):
+    def assem_res(self):
         return self.state1 - self.solve_state1()[0]
 
     def solve_dres_dstate1_adj(self, x):

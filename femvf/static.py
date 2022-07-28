@@ -198,7 +198,7 @@ def static_coupled_configuration_newton(
 
         ### Form the residual
         def assem_res():
-            return model.res()
+            return model.assem_res()
 
         ### Form the jacobian
         def solve_jac(res):

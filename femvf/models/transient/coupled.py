@@ -244,7 +244,7 @@ class ExplicitFSIModel(FSIModel):
         self.fluid.set_fin_state(qp1)
 
     ## Solver functions
-    def res(self):
+    def assem_res(self):
         """
         Return the residual vector, F
         """
@@ -391,7 +391,7 @@ class ImplicitFSIModel(FSIModel):
         self.solid.set_control(control)
 
     ## Forward solver methods
-    def res(self):
+    def assem_res(self):
         """
         Return the residual vector, F
         """
@@ -733,7 +733,7 @@ class FSAIModel(FSIModel):
         return ret
 
     ## Solver methods
-    def res(self):
+    def assem_res(self):
         res_sl = self.solid.res()
         res_fl = self.fluid.res()
         res_ac = self.acoustic.res()
