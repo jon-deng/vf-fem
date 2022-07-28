@@ -332,15 +332,25 @@ class ImplicitFSIModel(FSIModel):
     def set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
 
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
-        control = bvec.BlockVector((p0_solid,), labels=self.solid.control.labels)
-
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
-        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
-        control = bvec.BlockVector((p1_solid,), labels=self.solid.control.labels)
-        self.solid.set_control(control)
+        sl_control = self.solid.control
+        self.fsimap.map_fluid_to_solid(qp1[1], sl_control['p'])
+        self.solid.set_control(sl_control)
+
+    def set_ini_solid_state(self, uva0):
+        """Set the initial solid state"""
+        self.solid.set_ini_state(uva0)
+
+    def set_fin_solid_state(self, uva1):
+        self.solid.set_fin_state(uva1)
+
+        # For both implicit/explicit coupling, the final fluid area corresponds to the final solid deformation
+        self._solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
+        fl_control = self.fluid.control
+        self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
+        self.fluid.set_control(fl_control)
 
     ## Forward solver methods
     def assem_res(self):
