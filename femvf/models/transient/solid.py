@@ -351,132 +351,6 @@ class Solid(base.Model):
         state_n, solve_info = newton_solve(state1, linearized_subproblem, params=newton_solver_prm)
         return state_n, solve_info
 
-    # TODO: Remove/clean the below functions
-    # The functions below are used in the adjoint time integrator but I stopped
-    # using this approach. Since the code has been refactored, the adjoint
-    # time integrator could be redone in a much nicer way
-
-    def solve_dres_dstate1_adj(self, x):
-        # Form key matrices
-        dfu2_du2 = self.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
-        dfv2_du2 = 0 - newmark.newmark_v_du1(self.dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(self.dt)
-
-        # Solve b^T A = x^T
-        xu, xv, xa = x.vecs
-        b = self.get_state_vec()
-        b['a'][:] = xa
-        b['v'][:] = xv
-
-        rhs_u = xu - (dfv2_du2*b['v'] + dfa2_du2*b['a'])
-
-        self.bc_base.apply(dfu2_du2, rhs_u)
-        dfn.solve(dfu2_du2, b['u'], rhs_u, 'petsc')
-        return b
-
-    def apply_dres_dstate0(self, x):
-        dt = self.dt
-
-        dfu2_du1 = self.cached_form_assemblers['form.bi.df1_du0'].assemble()
-        dfu2_dv1 = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
-        dfu2_da1 = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
-        for mat in (dfu2_du1, dfu2_dv1, dfu2_da1):
-            self.bc_base.apply(mat)
-
-        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
-        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
-        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
-
-        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
-        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
-        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
-
-        ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-        # Allocate a vector the for fluid side mat-vec multiplication
-        b = self.get_state_vec()
-        b['u'][:] = (dfu2_du1*x['u'] + dfu2_dv1*x['v'] + dfu2_da1*x['a'])
-        b['v'][:] = (dfv2_du1*x['u'] + dfv2_dv1*x['v'] + dfv2_da1*x['a'])
-        b['a'][:] = (dfa2_du1*x['u'] + dfa2_dv1*x['v'] + dfa2_da1*x['a'])
-        return b
-
-    def apply_dres_dstate0_adj(self, b):
-        dt = self.dt
-
-        dfu2_du1 = self.cached_form_assemblers['bilin.df1_du0_adj'].assemble()
-        dfu2_dv1 = self.cached_form_assemblers['bilin.df1_dv0_adj'].assemble()
-        dfu2_da1 = self.cached_form_assemblers['bilin.df1_da0_adj'].assemble()
-
-        dfv2_du1 = 0 - newmark.newmark_v_du0(dt)
-        dfv2_dv1 = 0 - newmark.newmark_v_dv0(dt)
-        dfv2_da1 = 0 - newmark.newmark_v_da0(dt)
-
-        dfa2_du1 = 0 - newmark.newmark_a_du0(dt)
-        dfa2_dv1 = 0 - newmark.newmark_a_dv0(dt)
-        dfa2_da1 = 0 - newmark.newmark_a_da0(dt)
-
-        ## Do the matrix vector multiplication that gets the RHS for the adjoint equations
-        # Allocate a vector the for fluid side mat-vec multiplication
-        x = b.copy()
-        x['u'][:] = (dfu2_du1*b['u'] + dfv2_du1*b['v'] + dfa2_du1*b['a'])
-        x['v'][:] = (dfu2_dv1*b['u'] + dfv2_dv1*b['v'] + dfa2_dv1*b['a'])
-        x['a'][:] = (dfu2_da1*b['u'] + dfv2_da1*b['v'] + dfa2_da1*b['a'])
-        return x
-
-    def apply_dres_dcontrol(self, x):
-        raise NotImplementedError
-
-    def apply_dres_dcontrol_adj(self, x):
-        raise NotImplementedError
-
-    def apply_dres_dp(self, x):
-        raise NotImplementedError
-
-    def apply_dres_dp_adj(self, x):
-        b = self.get_properties_vec(set_default=False)
-        for prop_name, vec in b.items():
-            # assert self.df1_dsolid[key] is not None
-            if self.df1_dsolid[prop_name] is None:
-                df1_dprop = 0.0
-            else:
-                df1_dprop = self.df1_dsolid_assemblers[prop_name].assemble()
-            val = df1_dprop*x['u']
-
-            # Note this is a workaround because some properties are scalar values but stored as
-            # vectors in order to take their derivatives. This is the case for time step, `dt`
-            if vec.size == 1:
-                val = val.sum()
-
-            vec[:] = val
-        return b
-
-    def apply_dres_ddt(self, x):
-        dfu_ddt = self.cached_form_assemblers['form.bi.df1_ddt'].assemble()
-        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
-        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
-
-        ddt = x
-        ddt_vec = dfn.PETScVector(dfu_ddt.mat().getVecRight())
-        ddt_vec[:] = ddt
-        self.bc_base.zero(dfu_ddt)
-
-        dres = self.get_state_vec()
-        dres['u'][:] = dfu_ddt*ddt_vec
-        dres['v'][:] = dfv_ddt*ddt
-        dres['a'][:] = dfa_ddt*ddt
-        return dres
-
-    def apply_dres_ddt_adj(self, b):
-        # Note that dfu_ddt is a matrix because fenics doesn't allow taking derivative w.r.t a scalar
-        # As a result, the time step is defined for each vertex. This is why 'ddt' is computed weirdly
-        # below
-        dfu_ddt = self.cached_form_assemblers['form.bi.df1_ddt_adj'].assemble()
-        dfv_ddt = 0 - newmark.newmark_v_dt(self.state1[0], *self.state0.vecs, self.dt)
-        dfa_ddt = 0 - newmark.newmark_a_dt(self.state1[0], *self.state0.vecs, self.dt)
-
-        bu, bv, ba = b
-        ddt = (dfu_ddt*bu).sum() + dfv_ddt.inner(bv) + dfa_ddt.inner(ba)
-        return ddt
-
 
 class NodalContactSolid(Solid):
     """
@@ -701,9 +575,14 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
             solidforms.Approximate3DKelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
+
 def solve_dres_dstate1(dres_dstate1, x, b):
     """
+    Solve the linearized residual problem
 
+    This solution has a special format due to the Newmark time discretization.
+    As a result, the below code only has to do one matrix solve (for the 'u'
+    residual).
     """
     # dres_dstate1 = self.assem_dres_dstate1()
 
@@ -717,4 +596,26 @@ def solve_dres_dstate1(dres_dstate1, x, b):
     x['v'][:] = bv - dfv1_du1*x['u']
     x['a'][:] = ba - dfa1_du1*x['u']
 
+    return x
+
+def solve_dres_dstate1_adj(dres_dstate1_adj, x, b):
+    """
+    Solve the linearized adjoint residual problem
+
+    This solution has a special format due to the Newmark time discretization.
+    As a result, the below code only has to do one matrix solve (for the 'u'
+    residual).
+    """
+    # Form key matrices
+    dfu_du = dres_dstate1_adj['u', 'u']
+    dfv_du = dres_dstate1_adj['v', 'u']
+    dfa_du = dres_dstate1_adj['a', 'u']
+
+    # Solve A^T b = x
+    bu, bv, ba = b.vecs
+    x['a'][:] = ba
+    x['v'][:] = bv
+
+    rhs_u = bu - (dfv_du*b['v'] + dfa_du*b['a'])
+    dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
     return x
