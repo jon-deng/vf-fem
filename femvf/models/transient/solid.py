@@ -375,19 +375,14 @@ class NodalContactSolid(Solid):
 
         self.forms['coeff.state.manual.tcontact'].vector()[:] = self.contact_traction(state['u'])
 
-    def _assem_dres_du(self, adjoint=False):
-        ## dres_du has two components: one due to the standard u/v/a variables
-        ## and an additional effect due to contact pressure
-        dfu2_du2_nocontact = None
-        if adjoint:
-            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1_du1_adj'].assemble()
-        else:
-            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+    def assem_dres_dstate1(self):
+        dres_dstate1 = super().assem_dres_dstate1()
 
-        dfu2_du2 = dfu2_du2_nocontact + self._assem_dres_du_contact(adjoint)
-        return dfu2_du2
+        _ = dres_dstate1['u', 'u']
+        _ += self._assem_dresu_du_contact()
+        return dres_dstate1
 
-    def _assem_dres_du_contact(self, adjoint=False):
+    def _assem_dresu_du_contact(self, adjoint=False):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = None
         if adjoint:
@@ -417,58 +412,6 @@ class NodalContactSolid(Solid):
             dfu2_dtcontact.mat().diagonalScale(None, dtcontact_du2.vec())
         dfu2_du2_contact = dfu2_dtcontact
         return dfu2_du2_contact
-
-    # TODO: refactor this copy-paste
-    def _assem_dresuva_du(self, adjoint=False):
-        ## dres_du has two components: one due to the standard u/v/a variables
-        ## and an additional effect due to contact pressure
-        dfu2_du2_nocontact = None
-        if adjoint:
-            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1uva_du1_adj'].assemble()
-        else:
-            dfu2_du2_nocontact = self.cached_form_assemblers['form.bi.df1uva_du1'].assemble()
-
-        dfu2_du2_contact = self._assem_dres_du_contact(adjoint)
-
-        return dfu2_du2_nocontact + dfu2_du2_contact
-
-    def solve_dres_dstate1(self, b):
-        dt = self.dt
-        # Contact will change this matrix!
-        dfu2_du2 = self._assem_dres_du()
-
-        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-
-        # Solve A x = b
-        bu, bv, ba = b.vecs
-        x = self.get_state_vec()
-
-        self.bc_base.apply(dfu2_du2)
-        dfn.solve(dfu2_du2, x['u'], bu, 'petsc')
-
-        x['v'][:] = bv - dfv2_du2*x['u']
-        x['a'][:] = ba - dfa2_du2*x['u']
-
-        return x
-
-    def solve_dres_dstate1_adj(self, x):
-        # Form key matrices
-        dfu2_du2 = self._assem_dres_du(adjoint=True)
-        dfv2_du2 = 0 - newmark.newmark_v_du1(self.dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(self.dt)
-
-        # Solve b^T A = x^T
-        xu, xv, xa = x.vecs
-        b = self.get_state_vec()
-        b['a'][:] = xa
-        b['v'][:] = xv
-
-        rhs_u = xu - (dfv2_du2*b['v'] + dfa2_du2*b['a'])
-
-        self.bc_base.apply(dfu2_du2, rhs_u)
-        dfn.solve(dfu2_du2, b['u'], rhs_u, 'petsc')
-        return b
 
 
 class Rayleigh(NodalContactSolid):
