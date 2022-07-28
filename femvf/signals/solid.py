@@ -39,14 +39,13 @@ class VertexGlottalWidth(StateMeasure):
 
         vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.forms['fspace.vector'])
         # Get the y-displacement DOF
-        self.idx_dof = vert_to_vdof[2*idx_vertex]
+        self.idx_dof = vert_to_vdof[2*idx_vertex+1]
 
         self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
 
     def __call__(self, state, control, props):
         xcur = self.XREF.reshape(-1) + state['u'][:]
-        widths = 2*(props['ymid'] - xcur[1::2])
-        return widths[self.idx_dof]
+        return 2*(props['ymid'] - xcur[self.idx_dof])
 
 class MaxContactPressure(StateMeasure):
 
