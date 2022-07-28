@@ -51,24 +51,28 @@ class VertexGlottalWidth(StateMeasure):
 class MaxContactPressure(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
-        pass
+        self.coeff_tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
 
     def __call__(self, state, control, props):
+        self.model.set_fin_state(state)
         fsidofs = self.model.solid.vert_to_sdof[self.model.fsi_verts]
 
-        self.model.set_fin_state(state)
-        pcontact = -1*self.model.solid.forms['coeff.state.manual.tcontact'].vector()[1::2]
+        tcontact = self.coeff_tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
+        pcontact = np.linalg.norm(tcontact, axis=-1)
         return pcontact[fsidofs].max()
 
 class ElasticStressField(StateMeasure):
     # TODO: Pretty sure this one doesn't work
     def __init_measure_context__(self, *args, **kwargs):
-        self.V = dfn.TensorFunctionSpace(self.model.solid.mesh, 'DG', 0)
+        self.fspace = kwargs.get(
+            'fspace', dfn.TensorFunctionSpace(self.model.solid.mesh, 'DG', 0)
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
 
         forms = self.model.solid.forms
         dx = forms['measure.dx']
-        self.stress = forms['expr.stress_elastic'] if 'expr.stress_elastic' in forms else 0.0
-        self.project = make_project(self.stress, self.V, dx)
+        self.expr_stress = forms['expr.stress_elastic'] if 'expr.stress_elastic' in forms else 0.0
+        self.project = make_project(self.expr_stress, self.V, dx)
 
     def __call__(self, state, control, props):
         self.model.set_state(state)
@@ -80,25 +84,25 @@ class ElasticStressField(StateMeasure):
 class ContactStatistics(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
-        ds = self.model.solid.forms['measure.ds_traction']
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.ds_traction'])
+
         tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
         pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
         contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
 
-        self.contact_area_expr = contact_indicator*ds
-        self.total_pcontact_expr = pcontact*ds
-        self.tcontact = tcontact
+        self.expr_contact_area = contact_indicator*self.dx
+        self.expr_total_p_contact = pcontact*self.dx
+        self.coeff_tcontact = tcontact
 
     def __call__(self, state, control, props):
         self.model.set_fin_state(state)
 
-        tcontact_vec = self.tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
+        tcontact_vec = self.coeff_tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
         pcontact = np.linalg.norm(tcontact_vec, axis=-1)
 
-        # idx_min = np.argmin(tcontact_mag)
         idx_max = np.argmax(pcontact)
-        total_pcontact = dfn.assemble(self.total_pcontact_expr)
-        area_contact = dfn.assemble(self.contact_area_expr)
+        total_pcontact = dfn.assemble(self.expr_total_p_contact)
+        area_contact = dfn.assemble(self.expr_contact_area)
         max_pcontact = pcontact[idx_max]
         avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
         return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
@@ -106,40 +110,35 @@ class ContactStatistics(StateMeasure):
 class ViscousDissipationRate(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
-        model = self.model
-        dmeas = kwargs.get('measure', model.solid.forms['measure.dx'])
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
 
-        kv_stress = model.solid.forms['expr.kv_stress']
-        kv_strain_rate = model.solid.forms['expr.kv_strain_rate']
-        total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*dmeas
-
-        self.assem_scalar_form = make_scalar_form(model, total_dissipation_rate)
+        kv_stress = self.model.solid.forms['expr.kv_stress']
+        kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
+        self.expr_total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*self.dx
 
     def __call__(self, state, control, props):
         self.model.set_props(props)
         self.model.set_fin_state(state)
         self.model.set_control(control)
-        return self.assem_scalar_form(state, control, props)
+        return dfn.assemble(self.expr_total_dissipation_rate)
 
 class StressI1Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
-        model = self.model
+        self.fspace = kwargs.get(
+            'fspace', dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
 
+        model = self.model
         kv_stress = model.solid.forms['expr.kv_stress']
         el_stress = model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
-        self.I1 = ufl.tr(S)
+        self.expr_I1 = ufl.tr(S)
         I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
         I3 = ufl.det(S)
 
-        self.fspace = kwargs.get(
-            'fspace',
-            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
-        )
-        dx = model.solid.forms['measure.dx']
-
-        self.project = make_project(self.I1, self.fspace, dx)
+        self.project = make_project(self.expr_I1, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -151,6 +150,11 @@ class StressI1Field(StateMeasure):
 
 class StressI2Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
+        self.fspace = kwargs.get(
+            'fspace', dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
+
         model = self.model
 
         kv_stress = model.solid.forms['expr.kv_stress']
@@ -158,16 +162,10 @@ class StressI2Field(StateMeasure):
         S = el_stress + kv_stress
 
         I1 = ufl.tr(S)
-        self.I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+        self.expr_I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
         I3 = ufl.det(S)
 
-        self.fspace = kwargs.get(
-            'fspace',
-            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
-        )
-        dx = model.solid.forms['measure.dx']
-
-        self.project = make_project(self.I2, self.fspace, dx)
+        self.project = make_project(self.expr_I2, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -179,23 +177,22 @@ class StressI2Field(StateMeasure):
 
 class StressI3Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
+        self.fspace = kwargs.get(
+            'fspace', dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
+
         model = self.model
 
         kv_stress = model.solid.forms['expr.kv_stress']
         el_stress = model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
-        I1 = ufl.tr(S)
-        I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
-        self.I3 = ufl.det(S)
+        # I1 = ufl.tr(S)
+        # I2 = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+        self.expr_I3 = ufl.det(S)
 
-        self.fspace = kwargs.get(
-            'fspace',
-            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
-        )
-        dx = model.solid.forms['measure.dx']
-
-        self.project = make_project(self.I3, self.fspace, dx)
+        self.project = make_project(self.expr_I3, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -207,48 +204,42 @@ class StressI3Field(StateMeasure):
 
 class StressHydrostaticField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
-        model = self.model
+        self.fspace = kwargs.get(
+            'fspace', dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
 
-        kv_stress = model.solid.forms['expr.kv_stress']
-        el_stress = model.solid.forms['expr.stress_elastic']
+        kv_stress = self.model.solid.forms['expr.kv_stress']
+        el_stress = self.model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
-        self.phydro = -1/3*ufl.tr(S)
-
-        self.fspace = kwargs.get(
-            'fspace',
-            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
-        )
-
-        dx = model.solid.forms['measure.dx']
-        self.project = make_project(self.phydro, self.fspace, dx)
+        self.expr_p_hydro = -1/3*ufl.tr(S)
+        self.project = make_project(self.expr_p_hydro, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
-        model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
+        self.model.set_fin_state(state)
+        self.model.set_control(control)
+        self.model.set_props(props)
 
         return self.project(dfn.Function(self.fspace).vector())
 
 class StressVonMisesField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
-        model = self.model
+        self.fspace = kwargs.get(
+            'fspace', dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
 
-        kv_stress = model.solid.forms['expr.kv_stress']
-        el_stress = model.solid.forms['expr.stress_elastic']
+        kv_stress = self.model.solid.forms['expr.kv_stress']
+        el_stress = self.model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
         S_dev = S - 1/3*ufl.tr(S)*ufl.Identity(3)
         j2 = 0.5*ufl.tr(S_dev*S_dev)
-        self.stress_field_vm = (3*j2)**(1/2)
+        self.expr_vm_stress_field = (3*j2)**(1/2)
 
-        self.fspace = kwargs.get(
-            'fspace',
-            dfn.FunctionSpace(model.solid.forms['mesh.mesh'], 'DG', 0)
-        )
-        dx = model.solid.forms['measure.dx']
-        self.project = make_project(self.stress_field_vm, self.fspace, dx)
+        self.vec = dfn.Function(self.fspace).vector()
+        self.project = make_project(self.expr_vm_stress_field, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -256,15 +247,14 @@ class StressVonMisesField(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return self.project(self.vec)
 
 class StressVonMisesAverage(StressVonMisesField):
     def __init_measure_context__(self, *args, **kwargs):
         super().__init_measure_context__(self, *args, **kwargs)
 
-        dx = kwargs.get('dx', self.model.solid.forms['measure.dx'])
-        self.f = self.stress_field_vm*dx
-        self.total_dx = dfn.assemble(1*dx)
+        self.expr_avg = self.expr_vm_stress_field*self.dx
+        self.expr_total_dx = dfn.assemble(1*self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -272,13 +262,11 @@ class StressVonMisesAverage(StressVonMisesField):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.assemble(self.f) / self.total_dx
+        return dfn.assemble(self.expr_avg) / self.expr_total_dx
 
 class StressVonMisesSpatialStats(StressVonMisesAverage):
     def __init_measure_context__(self, *args, **kwargs):
         super().__init_measure_context__(self, *args, **kwargs)
-
-        self.vm_field = dfn.Function(self.fspace).vector()
 
     def __call__(self, state, control, props):
         model = self.model
@@ -287,27 +275,31 @@ class StressVonMisesSpatialStats(StressVonMisesAverage):
         model.set_props(props)
 
         field = self.project(self.vm_field)
-        avg = dfn.assemble(self.f) / self.total_dx
+        avg = dfn.assemble(self.expr_avg) / self.expr_total_dx
 
-        return np.min(field), np.max(field), dfn.assemble(self.f) / self.total_dx
+        return np.min(field), np.max(field), avg
 
 class ContactPressureField(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
-        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
-        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
-        self.pcontact = pcontact
-        self.fspace = self.model.solid.forms['fspace.scalar']
+        self.fspace = kwargs.get(
+            'fspace', self.model.solid.forms['fspace.scalar']
+        )
+        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
 
-        dx = self.model.solid.forms['measure.ds_traction']
-        self.project = make_project(self.pcontact, self.fspace, dx)
+        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        # `tcontact*tcontact` should be the square of contact pressure
+        self.expr_p_contact = ufl.inner(tcontact, tcontact)**0.5
+
+        self.project = make_project(self.expr_p_contact, self.fspace, self.dx)
+        self.vec = dfn.Function(self.fspace).vector()
 
     def __call__(self, state, control, props):
         self.model.set_props(props)
         self.model.set_control(control)
         self.model.set_fin_state(state)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return self.project(self.vec)
 
 def make_scalar_form(model, form):
     """
@@ -320,12 +312,7 @@ def make_scalar_form(model, form):
 
     return scalar_form
 
-def make_scalar_expr_statistics(model, expr, fspace, dmeas):
-    """
-    Return a function that computes statistics from a scalar expression
-    """
-
-def make_project(expr, fspace, dmeas):
+def make_project(expr, fspace, measure):
     """
     Project an expression onto the function space w.r.t the measure
 
@@ -335,14 +322,14 @@ def make_project(expr, fspace, dmeas):
         An ufl expression
     fspace:
         The function space that `expr` will be projected on
-    dmeas: ufl.Measure
+    measure: ufl.Measure
         The measure that the projection will be applied over
     """
     trial = dfn.TrialFunction(fspace)
     test = dfn.TestFunction(fspace)
-    A = dfn.assemble(trial*test*dmeas, keep_diagonal=True, tensor=dfn.PETScMatrix())
+    A = dfn.assemble(trial*test*measure, keep_diagonal=True, tensor=dfn.PETScMatrix())
     A.ident_zeros()
-    lhs_expr = expr*test*dmeas
+    lhs_expr = expr*test*measure
 
     bvec = dfn.PETScVector()
     def project(x):
