@@ -21,6 +21,8 @@ from blockarray.blockmat import BlockMatrix
 from blockarray.blockvec import BlockVector
 from blockarray.subops import diag_mat, zero_mat
 
+from nonlineq import newton_solve
+
 from . import base
 from ..equations.solid import newmark
 
@@ -261,16 +263,16 @@ class Solid(base.Model):
         assert len(self.state1.bshape) == 1
         N = self.state1.bshape[0][0]
         dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
-        dfu_dv = zero_mat(N, N)
-        dfu_da = zero_mat(N, N)
+        dfu_dv = dfn.PETScMatrix(zero_mat(N, N))
+        dfu_da = dfn.PETScMatrix(zero_mat(N, N))
 
-        dfv_du = diag_mat(N, 0 - newmark.newmark_v_du1(self.dt))
-        dfv_dv = diag_mat(N, 1)
-        dfv_da = zero_mat(N, N)
+        dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du1(self.dt)))
+        dfv_dv = dfn.PETScMatrix(diag_mat(N, 1))
+        dfv_da = dfn.PETScMatrix(zero_mat(N, N))
 
-        dfa_du = diag_mat(N, 0 - newmark.newmark_a_du1(self.dt))
-        dfa_dv = zero_mat(N, N)
-        dfa_da = diag_mat(N, 1)
+        dfa_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_du1(self.dt)))
+        dfa_dv = dfn.PETScMatrix(zero_mat(N, N))
+        dfa_da = dfn.PETScMatrix(diag_mat(N, 1))
 
         submats = [
             dfu_du, dfu_dv, dfu_da,
@@ -289,13 +291,13 @@ class Solid(base.Model):
         for mat in (dfu_du, dfu_dv, dfu_da):
             self.bc_base.apply(mat)
 
-        dfv_du = diag_mat(N, 0 - newmark.newmark_v_du0(self.dt))
-        dfv_dv = diag_mat(N, 0 - newmark.newmark_v_dv0(self.dt))
-        dfv_da = diag_mat(N, 0 - newmark.newmark_v_da0(self.dt))
+        dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du0(self.dt)))
+        dfv_dv = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_dv0(self.dt)))
+        dfv_da = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_da0(self.dt)))
 
-        dfa_du = diag_mat(N, 0 - newmark.newmark_a_du0(self.dt))
-        dfa_dv = diag_mat(N, 0 - newmark.newmark_a_dv0(self.dt))
-        dfa_da = diag_mat(N, 0 - newmark.newmark_a_da0(self.dt))
+        dfa_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_du0(self.dt)))
+        dfa_dv = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_dv0(self.dt)))
+        dfa_da = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_da0(self.dt)))
 
         submats = [
             dfu_du, dfu_dv, dfu_da,
@@ -322,6 +324,7 @@ class Solid(base.Model):
     def assem_dres_dprops(self):
         raise NotImplementedError("Not implemented yet!")
 
+    ## Time stepping function?
     def solve_state1(self, state1, newton_solver_prm=None):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
@@ -337,29 +340,21 @@ class Solid(base.Model):
             """
             self.set_fin_state(state)
             assem_res = self.assem_res
-            solve = self.solve_dres_dstate1
+
+            dres_dstate1 = self.assem_dres_dstate1()
+            x = state.copy()
+
+            def solve(res):
+                return solve_dres_dstate1(dres_dstate1, x, res)
             return assem_res, solve
 
-        state_n, solve_info = newton_solve(state1, linearized_subproblem, newton_solver_prm)
+        state_n, solve_info = newton_solve(state1, linearized_subproblem, params=newton_solver_prm)
         return state_n, solve_info
 
-    def solve_dres_dstate1(self, b):
-        dt = self.dt
-        dfu2_du2 = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
-        dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
-        dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-
-        # Solve A x = b
-        bu, bv, ba = b.vecs
-        x = self.get_state_vec()
-
-        self.bc_base.apply(dfu2_du2)
-        dfn.solve(dfu2_du2, x['u'], bu, 'petsc')
-
-        x['v'][:] = bv - dfv2_du2*x['u']
-        x['a'][:] = ba - dfa2_du2*x['u']
-
-        return x
+    # TODO: Remove/clean the below functions
+    # The functions below are used in the adjoint time integrator but I stopped
+    # using this approach. Since the code has been refactored, the adjoint
+    # time integrator could be redone in a much nicer way
 
     def solve_dres_dstate1_adj(self, x):
         # Form key matrices
@@ -706,51 +701,20 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
             solidforms.Approximate3DKelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
-
-def newton_solve(x0, linearized_subproblem, params=None):
+def solve_dres_dstate1(dres_dstate1, x, b):
     """
-    Solve a non-linear problem with Newton-Raphson
 
-    Parameters
-    ----------
-    x0 : A
-        Initial guess
-    linearized_subproblem : fn(A) -> (fn() -> A, fn(A) -> A)
-        Callable returning a residual and linear solver about a linearizing state.
-    params : dict
-        Dictionary of parameters for newton solver
-        {'absolute_tolerance', 'relative_tolerance', 'maximum_iterations'}
-
-    Returns
-    -------
-    xn
     """
-    if params is None:
-        params = DEFAULT_NEWTON_SOLVER_PRM
+    # dres_dstate1 = self.assem_dres_dstate1()
 
-    abs_tol, rel_tol = params['absolute_tolerance'], params['relative_tolerance']
-    max_iter = params['maximum_iterations']
+    dfu1_du1 = dres_dstate1['u', 'u']
+    dfv1_du1 = dres_dstate1['v', 'u']
+    dfa1_du1 = dres_dstate1['a', 'u']
 
-    abs_errs, rel_errs = [], []
-    n = 0
-    state_n = x0
-    while True:
-        assem_res_n, solve_n = linearized_subproblem(state_n)
-        res_n = assem_res_n()
+    bu, bv, ba = b.vecs
 
-        abs_err = abs(res_n.norm())
-        abs_errs.append(abs_err)
-        rel_err = 0.0 if abs_errs[0] == 0 else abs_err/abs_errs[0]
-        rel_errs.append(rel_err)
+    dfn.solve(dfu1_du1, x['u'], bu, 'petsc')
+    x['v'][:] = bv - dfv1_du1*x['u']
+    x['a'][:] = ba - dfa1_du1*x['u']
 
-        if abs_err <= abs_tol or rel_err <= rel_tol or n > max_iter:
-            break
-        else:
-            dstate_n = solve_n(res_n)
-            state_n = state_n - dstate_n
-            n += 1
-
-    if n > max_iter:
-        wrn.warn("Newton solve failed to converge before maximum "
-                 "iteration count reached.", UserWarning)
-    return state_n, {'num_iter': n, 'abs_err': abs_errs[-1], 'rel_err': rel_errs[-1]}
+    return x
