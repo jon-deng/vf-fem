@@ -274,11 +274,40 @@ class Solid(base.Model):
 
         return BlockMatrix(
             [dfu_du, dfu_dv, dfu_da,
-            dfv_du, dfv_dv, dfv_da,
-            dfa_du, dfa_dv, dfa_da],
+                dfv_du, dfv_dv, dfv_da,
+                dfa_du, dfa_dv, dfa_da],
             shape=(3, 3),
             labels=2*self.state1.labels
         )
+
+    def assem_dres_dstate0(self):
+        assert len(self.state1.bshape) == 1
+        N = self.state1.bshape[0][0]
+
+        dfu_du = self.cached_form_assemblers['form.bi.df1_du0'].assemble()
+        dfu_dv = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
+        dfu_da = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
+        for mat in (dfu_du, dfu_dv, dfu_da):
+            self.bc_base.apply(mat)
+
+        dfv_du = diag_mat(N, 0 - newmark.newmark_v_du0(self.dt))
+        dfv_dv = diag_mat(N, 0 - newmark.newmark_v_dv0(self.dt))
+        dfv_da = diag_mat(N, 0 - newmark.newmark_v_da0(self.dt))
+
+        dfa_du = diag_mat(N, 0 - newmark.newmark_a_du0(self.dt))
+        dfa_dv = diag_mat(N, 0 - newmark.newmark_a_dv0(self.dt))
+        dfa_da = diag_mat(N, 0 - newmark.newmark_a_da0(self.dt))
+
+        return BlockMatrix(
+            [dfu_du, dfu_dv, dfu_da,
+                dfv_du, dfv_dv, dfv_da,
+                dfa_du, dfa_dv, dfa_da],
+            shape=(3, 3),
+            labels=2*self.state1.labels
+        )
+
+    def assem_dres_dcontrol(self):
+        pass
 
     def solve_state1(self, state1, newton_solver_prm=None):
         if newton_solver_prm is None:
