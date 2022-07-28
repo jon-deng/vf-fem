@@ -46,7 +46,7 @@ class VertexGlottalWidth(StateMeasure):
     def __call__(self, state, control, props):
         xcur = self.XREF.reshape(-1) + state['u'][:]
         widths = 2*(props['ymid'] - xcur[1::2])
-        return widths[self.idx_vertex]
+        return widths[self.idx_dof]
 
 class MaxContactPressure(StateMeasure):
 
