@@ -133,7 +133,6 @@ class Solid(base.Model):
         self.props = self.get_properties_vec(set_default=True)
         self.set_props(self.props)
 
-        # TODO: You should move this to the solid since it's not the responsibility of this class to do solid specific stuff
         self.cached_form_assemblers = {
             key: CachedFormAssembler(self.forms[key]) for key in self.forms
             if 'form.' in key
