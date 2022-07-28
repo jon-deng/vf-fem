@@ -272,13 +272,12 @@ class Solid(base.Model):
         dfa_dv = zero_mat(N, N)
         dfa_da = diag_mat(N, 1)
 
-        return BlockMatrix(
-            [dfu_du, dfu_dv, dfu_da,
-                dfv_du, dfv_dv, dfv_da,
-                dfa_du, dfa_dv, dfa_da],
-            shape=(3, 3),
-            labels=2*self.state1.labels
-        )
+        submats = [
+            dfu_du, dfu_dv, dfu_da,
+            dfv_du, dfv_dv, dfv_da,
+            dfa_du, dfa_dv, dfa_da
+        ]
+        return BlockMatrix(submats, shape=(3, 3), labels=2*self.state1.labels)
 
     def assem_dres_dstate0(self):
         assert len(self.state1.bshape) == 1
@@ -298,16 +297,30 @@ class Solid(base.Model):
         dfa_dv = diag_mat(N, 0 - newmark.newmark_a_dv0(self.dt))
         dfa_da = diag_mat(N, 0 - newmark.newmark_a_da0(self.dt))
 
-        return BlockMatrix(
-            [dfu_du, dfu_dv, dfu_da,
-                dfv_du, dfv_dv, dfv_da,
-                dfa_du, dfa_dv, dfa_da],
-            shape=(3, 3),
-            labels=2*self.state1.labels
-        )
+        submats = [
+            dfu_du, dfu_dv, dfu_da,
+            dfv_du, dfv_dv, dfv_da,
+            dfa_du, dfa_dv, dfa_da
+        ]
+        return BlockMatrix(submats, shape=(3, 3), labels=2*self.state1.labels)
 
     def assem_dres_dcontrol(self):
-        pass
+        N = self.state1.bshape[0][0]
+        M = self.control.bshape[0][0]
+
+        # It should be hardcoded that the control is just the surface pressure
+        assert self.control.shape[0] == 1
+        dfu_dcontrol = self.cached_form_assemblers['form.bi.df1_dp1'].assemble()
+        dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
+
+        submats = [
+            [dfu_dcontrol],
+            [dfv_dcontrol]
+        ]
+        return BlockMatrix(submats, labels=self.state1.labels+self.control.labels)
+
+    def assem_dres_dprops(self):
+        raise NotImplementedError("Not implemented yet!")
 
     def solve_state1(self, state1, newton_solver_prm=None):
         if newton_solver_prm is None:
