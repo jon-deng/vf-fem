@@ -201,9 +201,7 @@ class Solid(base.Model):
         ----------
         u0, v0, a0 : array_like
         """
-        self.forms['coeff.state.u0'].vector()[:] = uva0[0]
-        self.forms['coeff.state.v0'].vector()[:] = uva0[1]
-        self.forms['coeff.state.a0'].vector()[:] = uva0[2]
+        self.state0[:] = uva0
 
     def set_fin_state(self, uva1):
         """
@@ -217,12 +215,10 @@ class Solid(base.Model):
         ----------
         u1, v1, a1 : array_like
         """
-        self.forms['coeff.state.u1'].vector()[:] = uva1[0]
-        self.forms['coeff.state.v1'].vector()[:] = uva1[1]
-        self.forms['coeff.state.a1'].vector()[:] = uva1[2]
+        self.state1[:] = uva1
 
     def set_control(self, p1):
-        self.forms['coeff.fsi.p1'].vector()[:] = p1['p']
+        self.control[:] = p1
 
     def set_props(self, props):
         """
