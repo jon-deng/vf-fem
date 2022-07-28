@@ -257,7 +257,7 @@ class Solid(base.Model):
         res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
         return res
 
-    def assem_dres_dfin_state(self):
+    def assem_dres_dstate1(self):
         assert len(self.state1.bshape) == 1
         N = self.state1.bshape[0][0]
         dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
