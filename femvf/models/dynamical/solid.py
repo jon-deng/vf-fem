@@ -108,8 +108,8 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
     # Convenience methods
     @property
     def XREF(self):
-        xref = self.u1.vector().copy()
-        xref[:] = self.scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
+        xref = self.state['u'].copy()
+        xref[:] = self.forms['fspace.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
 
