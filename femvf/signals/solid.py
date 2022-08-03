@@ -45,7 +45,7 @@ class VertexGlottalWidth(StateMeasure):
 
     def __call__(self, state, control, props):
         xcur = self.XREF.reshape(-1) + state['u'][:]
-        return 2*(props['ymid'] - xcur[self.idx_dof])
+        return 2*(props['ymid'][0] - xcur[self.idx_dof])
 
 class MaxContactPressure(StateMeasure):
 
@@ -253,7 +253,7 @@ class StressVonMisesAverage(StressVonMisesField):
         super().__init_measure_context__(self, *args, **kwargs)
 
         self.expr_avg = self.expr_vm_stress_field*self.dx
-        self.expr_total_dx = dfn.assemble(1*self.dx)
+        self.total_dx = dfn.assemble(1*self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -261,7 +261,7 @@ class StressVonMisesAverage(StressVonMisesField):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.assemble(self.expr_avg) / self.expr_total_dx
+        return dfn.assemble(self.expr_avg) / self.total_dx
 
 class StressVonMisesSpatialStats(StressVonMisesAverage):
     def __init_measure_context__(self, *args, **kwargs):
@@ -273,10 +273,10 @@ class StressVonMisesSpatialStats(StressVonMisesAverage):
         model.set_control(control)
         model.set_props(props)
 
-        field = self.project(self.vm_field)
-        avg = dfn.assemble(self.expr_avg) / self.expr_total_dx
+        field = self.project(self.vec)
+        avg = dfn.assemble(self.expr_avg) / self.total_dx
 
-        return np.min(field), np.max(field), avg
+        return np.min(field[:]), np.max(field[:]), avg
 
 class ContactPressureField(StateMeasure):
 
