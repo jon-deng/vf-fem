@@ -216,9 +216,9 @@ class StressHydrostaticField(StateMeasure):
         self.project = make_project(self.expr_p_hydro, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
-        self.model.set_fin_state(state)
-        self.model.set_control(control)
         self.model.set_props(props)
+        self.model.set_control(control)
+        self.model.set_fin_state(state)
 
         return np.array(self.project(dfn.Function(self.fspace).vector()))
 
@@ -242,9 +242,9 @@ class StressVonMisesField(StateMeasure):
 
     def __call__(self, state, control, props):
         model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
         model.set_props(props)
+        model.set_control(control)
+        model.set_fin_state(state)
 
         return np.array(self.project(self.vec))
 
