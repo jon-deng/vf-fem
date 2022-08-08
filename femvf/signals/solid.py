@@ -298,7 +298,7 @@ class ContactPressureField(StateMeasure):
         self.model.set_control(control)
         self.model.set_fin_state(state)
 
-        return self.project(self.vec)
+        return np.array(self.project(self.vec))
 
 def make_scalar_form(model, form):
     """
