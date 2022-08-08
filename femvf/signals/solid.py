@@ -96,7 +96,7 @@ class ContactStatistics(StateMeasure):
     def __call__(self, state, control, props):
         self.model.set_fin_state(state)
 
-        tcontact_vec = self.coeff_tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
+        tcontact_vec = np.array(self.coeff_tcontact.vector()[:]).reshape(-1, 2) # [FSI_DOFS]
         pcontact = np.linalg.norm(tcontact_vec, axis=-1)
 
         idx_max = np.argmax(pcontact)
@@ -145,7 +145,7 @@ class StressI1Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressI2Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -172,7 +172,7 @@ class StressI2Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressI3Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -199,7 +199,7 @@ class StressI3Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressHydrostaticField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -220,7 +220,7 @@ class StressHydrostaticField(StateMeasure):
         self.model.set_control(control)
         self.model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressVonMisesField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -246,7 +246,7 @@ class StressVonMisesField(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(self.vec)
+        return np.array(self.project(self.vec))
 
 class StressVonMisesAverage(StressVonMisesField):
     def __init_measure_context__(self, *args, **kwargs):
