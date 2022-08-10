@@ -181,12 +181,12 @@ class Solid(base.Model):
     ## Functions for getting empty parameter vectors
     def get_state_vec(self):
         ret = self.state1.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_control_vec(self):
         ret = self.control.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_properties_vec(self, set_default=True):
@@ -237,16 +237,16 @@ class Solid(base.Model):
         ----------
         props : Property / dict-like
         """
-        for key in props.labels[0]:
+        for key, value in zip(props.labels[0], props.sub[:]):
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
             if isinstance(coefficient, dfn.function.constant.Constant):
-                coefficient.assign(dfn.Constant(np.squeeze(props[key])))
+                coefficient.assign(dfn.Constant(np.squeeze(value)))
             else:
-                coefficient.vector()[:] = props[key]
+                coefficient.vector()[:] = value
 
     ## Residual and sensitivity functions
     def res(self):
@@ -256,7 +256,7 @@ class Solid(base.Model):
 
         res = self.get_state_vec()
         res['u'] = self.cached_form_assemblers['form.un.f1'].assemble()
-        self.bc_base.apply(res['u'])
+        self.bc_base.apply(res.sub['u'])
         res['v'] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
         return res
@@ -443,7 +443,7 @@ class NodalContactSolid(Solid):
         # This sets the 'standard' state variables u/v/a
         super().set_fin_state(state)
 
-        self.forms['coeff.state.manual.tcontact'].vector()[:] = self.contact_traction(state['u'])
+        self.forms['coeff.state.manual.tcontact'].vector()[:] = self.contact_traction(state.sub['u'])
 
     def _assem_dres_du(self, adjoint=False):
         ## dres_du has two components: one due to the standard u/v/a variables
@@ -511,14 +511,14 @@ class NodalContactSolid(Solid):
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
         # Solve A x = b
-        bu, bv, ba = b.vecs
+        bu, bv, ba = b.sub[:].flat
         x = self.get_state_vec()
 
         self.bc_base.apply(dfu2_du2)
-        dfn.solve(dfu2_du2, x['u'], bu, 'petsc')
+        dfn.solve(dfu2_du2, x.sub['u'], bu, 'petsc')
 
-        x['v'][:] = bv - dfv2_du2*x['u']
-        x['a'][:] = ba - dfa2_du2*x['u']
+        x['v'][:] = bv - dfv2_du2*x.sub['u']
+        x['a'][:] = ba - dfa2_du2*x.sub['u']
 
         return x
 

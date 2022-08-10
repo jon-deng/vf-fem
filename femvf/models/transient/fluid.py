@@ -186,7 +186,7 @@ class Bernoulli(QuasiSteady1DFluid):
         """
         Return the final flow state
         """
-        qp, info = bernoulli_qp(self.s_vertices, *self.control.vecs, self.props)
+        qp, info = bernoulli_qp(self.s_vertices, *self.control.sub_blocks, self.props)
         ret_state1 = self.state1.copy()
         ret_state1['q'][0] = qp[0]
         ret_state1['p'][:] = qp[1]
