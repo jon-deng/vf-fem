@@ -97,7 +97,7 @@ class FSIModel(base.Model):
     def set_control(self, control):
         self.control[:] = control
 
-        for key, value in control.items():
+        for key, value in control.sub_items():
             self.fluid.control[key][:] = value
 
     def set_props(self, props):
@@ -236,7 +236,7 @@ class ExplicitFSIModel(FSIModel):
 
         # For explicit coupling, the final solid pressure corresponds to the initial fluid pressure
         sl_control = self.solid.control.copy()
-        self.fsimap.map_fluid_to_solid(qp0[1], sl_control['p'])
+        self.fsimap.map_fluid_to_solid(qp0.sub[1], sl_control.sub['p'])
         self.solid.set_control(sl_control)
 
     def set_fin_fluid_state(self, qp1):
@@ -380,13 +380,13 @@ class ImplicitFSIModel(FSIModel):
     def set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
 
-        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0[1])
+        p0_solid = self.map_fsi_scalar_from_fluid_to_solid(qp0.sub[1])
         control = bvec.BlockVector((p0_solid,), labels=self.solid.control.labels)
 
     def set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
-        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1[1])
+        p1_solid = self.map_fsi_scalar_from_fluid_to_solid(qp1.sub[1])
         control = bvec.BlockVector((p1_solid,), labels=self.solid.control.labels)
         self.solid.set_control(control)
 

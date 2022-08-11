@@ -237,7 +237,7 @@ class Solid(base.Model):
         ----------
         props : Property / dict-like
         """
-        for key, value in zip(props.labels[0], props.sub[:]):
+        for key, value in props.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
