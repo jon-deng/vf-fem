@@ -234,15 +234,17 @@ class StateFile:
 
     def init_state(self):
         state_group = self.root_group.require_group('state')
-        for name, vec in zip(self.model.state0.keys(), self.model.state0.sub_blocks):
+        for name, vec in self.model.state0.items():
             NDOF = len(vec)
-            state_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
-                                        chunks=(self.NCHUNK, NDOF), dtype=np.float64)
+            state_group.require_dataset(
+                name, (self.size, NDOF), maxshape=(None, NDOF),
+                chunks=(self.NCHUNK, NDOF), dtype=np.float64
+            )
 
     def init_control(self):
         control_group = self.root_group.require_group('control')
 
-        for name, vec in zip(self.model.control.keys(), self.model.control.blocks):
+        for name, vec in self.model.control.items():
             NDOF = len(vec)
             control_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
                                          chunks=(self.NCHUNK, NDOF), dtype=np.float64)
@@ -250,7 +252,7 @@ class StateFile:
     def init_properties(self):
         properties_group = self.root_group.require_group('properties')
 
-        for name, value in zip(self.model.props.keys(), self.model.props.blocks):
+        for name, value in self.model.props.items():
             size = None
             try:
                 size = len(value)
@@ -261,8 +263,10 @@ class StateFile:
     def init_solver_info(self):
         solver_info_group = self.root_group.require_group('solver_info')
         for key in ['num_iter', 'rel_err', 'abs_err']:
-            solver_info_group.require_dataset(key, (self.size,), dtype=np.float64, maxshape=(None,),
-                                              chunks=(self.NCHUNK,))
+            solver_info_group.require_dataset(
+                key, (self.size,), dtype=np.float64, maxshape=(None,),
+                chunks=(self.NCHUNK,)
+            )
 
     ## Functions for writing by appending
     def append_state(self, state):
@@ -273,19 +277,14 @@ class StateFile:
         ----------
         """
         state_group = self.root_group['state']
-        for name, value in state.sub_items():
+        for name, value in state.items():
             dset = state_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
-
-            if isinstance(value, dfn.GenericVector):
-                # This converts dolfin vector types to numpy arrays which
-                # allows the h5py to write them much faster
-                value = value[:]
             dset[-1, :] = value
 
     def append_control(self, control):
         control_group = self.root_group['control']
-        for name, value in control.sub_items():
+        for name, value in control.items():
             dset = control_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value
@@ -299,7 +298,7 @@ class StateFile:
         """
         properties_group = self.root_group['properties']
 
-        for name, value in properties.sub_items():
+        for name, value in properties.items():
             dset = properties_group[name]
             # dset.resize(dset.shape[0]+1, axis=0)
             dset[:] = value
@@ -331,8 +330,7 @@ class StateFile:
 
     def append_solver_info(self, solver_info):
         solver_info_group = self.root_group['solver_info']
-        for key in solver_info_group.keys():
-            dset = solver_info_group[key]
+        for key, dset in solver_info_group.items():
             dset.resize(dset.shape[0]+1, axis=0)
             if key in solver_info:
                 dset[-1] = solver_info[key]
@@ -370,7 +368,7 @@ class StateFile:
             A set of functions to set vector values for.
         """
         state = self.model.get_state_vec()
-        for vec, key in zip(state.blocks, state.keys()):
+        for key, vec in state.items():
             value = self.dset_chunk_cache[f'state/{key}'].get(n)
             try:
                 vec[:] = value
@@ -395,7 +393,7 @@ class StateFile:
         if n > num_controls-1:
             n = num_controls-1
 
-        for vec, key in zip(control.blocks, control.keys()):
+        for key, vec in control.items():
             value = self.dset_chunk_cache[f'control/{key}'].get(n)
             try:
                 vec[:] = value
