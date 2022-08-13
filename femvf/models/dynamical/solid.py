@@ -108,7 +108,7 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
     # Convenience methods
     @property
     def XREF(self):
-        xref = self.state['u'].copy()
+        xref = self.state.sub['u'].copy()
         xref[:] = self.forms['fspace.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
@@ -159,7 +159,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         n = self.u.vector().size()
         dresu_dcontrol = self.cached_form_assemblers['form.bi.df1uva_dp1'].assemble()
 
-        dresv_dcontrol = dfn.PETScMatrix(subops.zero_mat(self.state['v'].size(), self.control['p'].size()))
+        dresv_dcontrol = dfn.PETScMatrix(subops.zero_mat(self.state['v'].size, self.control['p'].size))
 
         mats = [
             [dresu_dcontrol],
@@ -167,10 +167,10 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         return bvec.BlockMatrix(mats, labels=self.state.labels+self.control.labels)
 
     def assem_dres_dprops(self):
-        nu, nv = self.state['u'].size(), self.state['v'].size()
+        nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
-            [subops.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
-            [subops.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
+            [subops.zero_mat(nu, prop_subvec.size) for prop_subvec in self.props],
+            [subops.zero_mat(nv, prop_subvec.size) for prop_subvec in self.props]]
 
         j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.df1uva_demod'].assemble()
