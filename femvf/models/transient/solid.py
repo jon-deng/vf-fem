@@ -11,6 +11,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 import warnings as wrn
+import functools
 from typing import Tuple, Mapping
 
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -249,37 +250,54 @@ class Solid(base.Model):
     ## Residual and sensitivity functions
     def assem_res(self):
         dt = self.dt
-        u1, v1, a1 = self.u1.vector(), self.v1.vector(), self.a1.vector()
-        u0, v0, a0 = self.u0.vector(), self.v0.vector(), self.a0.vector()
+        u1, v1, a1 = self.state1.sub_blocks.flat
 
-        res = self.get_state_vec()
-        res['u'] = self.cached_form_assemblers['form.un.f1'].assemble()
+        res = self.state1.copy()
+        values = [
+            self.cached_form_assemblers['form.un.f1'].assemble(),
+            v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt),
+            a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt)
+        ]
+        res[:] = values
         self.bc_base.apply(res.sub['u'])
-        res['v'] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
-        res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
         return res
 
-    def assem_dres_dstate1(self):
-        assert len(self.state1.bshape) == 1
+    @functools.cached_property
+    def _const_assem_dres_dstate1(self):
+        # These are constant matrices that only have to be computed once
         N = self.state1.bshape[0][0]
-        dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        # dfu_du = dfn.PETScMatrix(diag_mat(N, 1))
+        dfu_du = None
         dfu_dv = dfn.PETScMatrix(zero_mat(N, N))
         dfu_da = dfn.PETScMatrix(zero_mat(N, N))
 
-        dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du1(self.dt)))
+        dfv_du = dfn.PETScMatrix(diag_mat(N, 1))
         dfv_dv = dfn.PETScMatrix(diag_mat(N, 1))
         dfv_da = dfn.PETScMatrix(zero_mat(N, N))
 
-        dfa_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_du1(self.dt)))
+        dfa_du = dfn.PETScMatrix(diag_mat(N, 1))
         dfa_dv = dfn.PETScMatrix(zero_mat(N, N))
         dfa_da = dfn.PETScMatrix(diag_mat(N, 1))
+        return (
+            dfu_du, dfu_dv, dfu_da,
+            dfv_du, dfv_dv, dfv_da,
+            dfa_du, dfa_dv, dfa_da
+        )
+
+    def assem_dres_dstate1(self):
+        dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        (_, dfu_dv, dfu_da,
+        dfv_du, dfv_dv, dfv_da,
+        dfa_du, dfa_dv, dfa_da) = self._const_assem_dres_dstate1
+        dfv_du = -newmark.newmark_v_du1(self.dt) * dfv_du
+        dfa_du = -newmark.newmark_a_du1(self.dt) * dfa_du
 
         submats = [
             dfu_du, dfu_dv, dfu_da,
             dfv_du, dfv_dv, dfv_da,
             dfa_du, dfa_dv, dfa_da
         ]
-        return BlockMatrix(submats, shape=(3, 3), labels=2*self.state1.labels)
+        return BlockMatrix(submats, shape=(3, 3), labels=2*self.state1.labels, check_bshape=False)
 
     def assem_dres_dstate0(self):
         assert len(self.state1.bshape) == 1
@@ -329,6 +347,7 @@ class Solid(base.Model):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
 
+        x = state1.copy()
         def linearized_subproblem(state):
             """
             Return a solver and residual corresponding to the linearized subproblem
@@ -342,7 +361,6 @@ class Solid(base.Model):
             assem_res = self.assem_res
 
             dres_dstate1 = self.assem_dres_dstate1()
-            x = state.copy()
 
             def solve(res):
                 return self.solve_dres_dstate1(dres_dstate1, x, res)
