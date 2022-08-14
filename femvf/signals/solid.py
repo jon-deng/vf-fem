@@ -39,14 +39,13 @@ class VertexGlottalWidth(StateMeasure):
 
         vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.forms['fspace.vector'])
         # Get the y-displacement DOF
-        self.idx_dof = vert_to_vdof[2*idx_vertex]
+        self.idx_dof = vert_to_vdof[2*idx_vertex+1]
 
         self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
 
     def __call__(self, state, control, props):
         xcur = self.XREF.reshape(-1) + state['u'][:]
-        widths = 2*(props['ymid'] - xcur[1::2])
-        return widths[self.idx_vertex]
+        return 2*(props['ymid'][0] - xcur[self.idx_dof])
 
 class MaxContactPressure(StateMeasure):
 
@@ -97,7 +96,7 @@ class ContactStatistics(StateMeasure):
     def __call__(self, state, control, props):
         self.model.set_fin_state(state)
 
-        tcontact_vec = self.coeff_tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
+        tcontact_vec = np.array(self.coeff_tcontact.vector()[:]).reshape(-1, 2) # [FSI_DOFS]
         pcontact = np.linalg.norm(tcontact_vec, axis=-1)
 
         idx_max = np.argmax(pcontact)
@@ -146,7 +145,7 @@ class StressI1Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressI2Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -173,7 +172,7 @@ class StressI2Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressI3Field(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -200,7 +199,7 @@ class StressI3Field(StateMeasure):
         model.set_control(control)
         model.set_props(props)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressHydrostaticField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -217,11 +216,11 @@ class StressHydrostaticField(StateMeasure):
         self.project = make_project(self.expr_p_hydro, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
-        self.model.set_fin_state(state)
-        self.model.set_control(control)
         self.model.set_props(props)
+        self.model.set_control(control)
+        self.model.set_fin_state(state)
 
-        return self.project(dfn.Function(self.fspace).vector())
+        return np.array(self.project(dfn.Function(self.fspace).vector()))
 
 class StressVonMisesField(StateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
@@ -243,18 +242,18 @@ class StressVonMisesField(StateMeasure):
 
     def __call__(self, state, control, props):
         model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
         model.set_props(props)
+        model.set_control(control)
+        model.set_fin_state(state)
 
-        return self.project(self.vec)
+        return np.array(self.project(self.vec))
 
 class StressVonMisesAverage(StressVonMisesField):
     def __init_measure_context__(self, *args, **kwargs):
         super().__init_measure_context__(self, *args, **kwargs)
 
         self.expr_avg = self.expr_vm_stress_field*self.dx
-        self.expr_total_dx = dfn.assemble(1*self.dx)
+        self.total_dx = dfn.assemble(1*self.dx)
 
     def __call__(self, state, control, props):
         model = self.model
@@ -262,7 +261,7 @@ class StressVonMisesAverage(StressVonMisesField):
         model.set_control(control)
         model.set_props(props)
 
-        return dfn.assemble(self.expr_avg) / self.expr_total_dx
+        return dfn.assemble(self.expr_avg) / self.total_dx
 
 class StressVonMisesSpatialStats(StressVonMisesAverage):
     def __init_measure_context__(self, *args, **kwargs):
@@ -274,10 +273,10 @@ class StressVonMisesSpatialStats(StressVonMisesAverage):
         model.set_control(control)
         model.set_props(props)
 
-        field = self.project(self.vm_field)
-        avg = dfn.assemble(self.expr_avg) / self.expr_total_dx
+        field = self.project(self.vec)
+        avg = dfn.assemble(self.expr_avg) / self.total_dx
 
-        return np.min(field), np.max(field), avg
+        return np.min(field[:]), np.max(field[:]), avg
 
 class ContactPressureField(StateMeasure):
 
@@ -299,7 +298,7 @@ class ContactPressureField(StateMeasure):
         self.model.set_control(control)
         self.model.set_fin_state(state)
 
-        return self.project(self.vec)
+        return np.array(self.project(self.vec))
 
 def make_scalar_form(model, form):
     """

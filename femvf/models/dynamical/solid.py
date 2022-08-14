@@ -121,8 +121,8 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
     # Convenience methods
     @property
     def XREF(self):
-        xref = self.u1.vector().copy()
-        xref[:] = self.scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
+        xref = self.state['u'].copy()
+        xref[:] = self.forms['fspace.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
 
@@ -294,6 +294,22 @@ class LinearizedKelvinVoigt(LinearizedSolidDynamicalSystem):
     def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solidforms.KelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
+
+class KelvinVoigtWEpithelium(SolidDynamicalSystem):
+    PROPERTY_DEFAULTS = {}
+    @staticmethod
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+        return solidforms.KelvinVoigtWEpithelium(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
+        )
+
+class LinearizedKelvinVoigtWEpithelium(LinearizedSolidDynamicalSystem):
+    PROPERTY_DEFAULTS = {}
+    @staticmethod
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+        return solidforms.KelvinVoigtWEpithelium(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
+        )
 
 class Rayleigh(SolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
