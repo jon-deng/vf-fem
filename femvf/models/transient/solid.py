@@ -360,9 +360,8 @@ class Solid(base.Model):
             self.set_fin_state(state)
             assem_res = self.assem_res
 
-            dres_dstate1 = self.assem_dres_dstate1()
-
             def solve(res):
+                dres_dstate1 = self.assem_dres_dstate1()
                 return self.solve_dres_dstate1(dres_dstate1, x, res)
             return assem_res, solve
 
