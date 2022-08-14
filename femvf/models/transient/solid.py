@@ -361,15 +361,16 @@ class Solid(base.Model):
         """
         # dres_dstate1 = self.assem_dres_dstate1()
 
-        dfu1_du1 = dres_dstate1['u', 'u']
-        dfv1_du1 = dres_dstate1['v', 'u']
-        dfa1_du1 = dres_dstate1['a', 'u']
+        dfu1_du1 = dres_dstate1.sub['u', 'u']
+        dfv1_du1 = dres_dstate1.sub['v', 'u']
+        dfa1_du1 = dres_dstate1.sub['a', 'u']
 
-        bu, bv, ba = b.vecs
+        bu, bv, ba = b.sub_blocks
 
-        dfn.solve(dfu1_du1, x['u'], bu, 'petsc')
-        x['v'][:] = bv - dfv1_du1*x['u']
-        x['a'][:] = ba - dfa1_du1*x['u']
+        xu = x.sub['u']
+        dfn.solve(dfu1_du1, xu, bu, 'petsc')
+        x['v'][:] = bv - dfv1_du1*xu
+        x['a'][:] = ba - dfa1_du1*xu
 
         return x
 
@@ -382,14 +383,14 @@ class Solid(base.Model):
         residual).
         """
         # Form key matrices
-        dfu_du = dres_dstate1_adj['u', 'u']
-        dfv_du = dres_dstate1_adj['v', 'u']
-        dfa_du = dres_dstate1_adj['a', 'u']
+        dfu_du = dres_dstate1_adj.sub['u', 'u']
+        dfv_du = dres_dstate1_adj.sub['v', 'u']
+        dfa_du = dres_dstate1_adj.sub['a', 'u']
 
         # Solve A^T b = x
-        bu, bv, ba = b.vecs
-        x['a'][:] = ba
-        x['v'][:] = bv
+        bu, bv, ba = b.sub_blocks
+        x.sub['a'][:] = ba
+        x.sub['v'][:] = bv
 
         rhs_u = bu - (dfv_du*b['v'] + dfa_du*b['a'])
         dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
@@ -422,7 +423,7 @@ class NodalContactSolid(Solid):
     def assem_dres_dstate1(self):
         dres_dstate1 = super().assem_dres_dstate1()
 
-        _ = dres_dstate1['u', 'u']
+        _ = dres_dstate1.sub['u', 'u']
         _ += self._assem_dresu_du_contact()
         return dres_dstate1
 
