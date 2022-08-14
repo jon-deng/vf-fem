@@ -23,8 +23,6 @@ shapes = OrderedDict()
 
 import numpy as np
 
-from blockarray.subops import set_vec
-
 def property_size(field_size, prop_type):
     """
     Return the size of a vector for a fluid model
@@ -56,6 +54,6 @@ def property_vecs(field_size, prop_types, prop_defaults=None):
 
     if prop_defaults is not None:
         for label, vec in zip(labels, vecs):
-            set_vec(vec, prop_defaults[label])
+            vec[:] = prop_defaults[label]
 
     return vecs, labels

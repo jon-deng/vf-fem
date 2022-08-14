@@ -107,10 +107,10 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
             blockvec_to_dict(self.dprops)
         )
 
-        self.dstate.set(0.0)
-        self.dstatet.set(0.0)
-        self.dcontrol.set(0.0)
-        self.dprops.set(0.0)
+        self.dstate[:] = 0.0
+        self.dstatet[:] = 0.0
+        self.dcontrol[:] = 0.0
+        self.dprops[:] = 0.0
 
 
 class BaseBernoulliSmoothMinSep(BaseFluid1DDynamicalSystem):

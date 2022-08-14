@@ -1,0 +1,50 @@
+Timer unit: 1e-06 s
+
+Total time: 0.945287 s
+File: /home/jdeng/code/block-array/blockarray/labelledarray.py
+Function: __getitem__ at line 339
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   339                                               @profile
+   340                                               def __getitem__(self, multi_idx) -> Union[T, 'LabelledArray[T]']:
+   341                                                   # This ensures that single axis indices (i.e. `x[1]`, `x[:]`) are
+   342                                                   # converted to a size 1 tuple; the indexing functions all expect
+   343                                                   # multi index tuples
+   344     21951      56539.0      2.6      6.0          multi_idx = (multi_idx,) if not isinstance(multi_idx, tuple) else multi_idx
+   345                                           
+   346     21951      85310.0      3.9      9.0          n_slice = [isinstance(idx, slice) for idx in multi_idx].count(True)
+   347                                                   # n_ellipsis = [idx == Ellipsis for idx in multi_idx].count(True)
+   348     21951      62450.0      2.8      6.6          n_int = [isinstance(idx, int) for idx in multi_idx].count(True)
+   349     21951      59403.0      2.7      6.3          n_str = [isinstance(idx, str) for idx in multi_idx].count(True)
+   350                                                   # n_list = [isinstance(idx, list) for idx in multi_idx].count(True)
+   351                                           
+   352                                                   # TODO: Make indexing faster by handling special indexing cases
+   353     21951      51524.0      2.3      5.5          if (n_int == len(multi_idx) and self.f_ndim == 1):
+   354      9132      24584.0      2.7      2.6              ret_array = [self.array[multi_idx]]
+   355      9132      23833.0      2.6      2.5              f_shape = (-1,)*self.f_ndim
+   356      9132      14156.0      1.6      1.5              f_labels = ()
+   357     12819      34224.0      2.7      3.6          elif (n_str == len(multi_idx) and self.f_ndim == 1):
+   358      8879      47705.0      5.4      5.0              _multi_idx = tuple(label_to_idx[label] for label_to_idx, label in zip(self._MULTI_LABEL_TO_IDX, multi_idx))
+   359      8879      26807.0      3.0      2.8              ret_array = [self.array[_multi_idx]]
+   360      8879      24348.0      2.7      2.6              f_shape = (-1,)*self.f_ndim
+   361      8879      13828.0      1.6      1.5              f_labels = ()
+   362      3940       6549.0      1.7      0.7          elif n_slice == len(multi_idx):
+   363      3940      12845.0      3.3      1.4              ret_array = self.array[multi_idx]
+   364      3940       9961.0      2.5      1.1              f_shape = list(self.f_shape)
+   365      3940       8931.0      2.3      0.9              f_labels = list(self.f_labels)
+   366      7880      69442.0      8.8      7.3              for ii, ax_idx, ax_size, ax_labels in zip(self.dims, multi_idx, ret_array.shape, self.labels):
+   367      3940       7190.0      1.8      0.8                  f_shape[ii] = ax_size
+   368      3940       8072.0      2.0      0.9                  f_labels[ii] = ax_labels[ax_idx]
+   369      3940       7004.0      1.8      0.7              f_shape = tuple(f_shape)
+   370      3940       6421.0      1.6      0.7              f_labels = tuple(f_labels)
+   371      3940      17636.0      4.5      1.9              ret_array = ret_array.reshape(-1)
+   372                                                   else:
+   373                                                       ret_array, f_shape, f_labels = self._getitem_general(multi_idx)
+   374                                           
+   375     21951      60130.0      2.7      6.4          if f_shape == (-1,) * self.f_ndim:
+   376     18011      31940.0      1.8      3.4              assert len(ret_array) == 1
+   377     18011      28047.0      1.6      3.0              return ret_array[0]
+   378                                                   else:
+   379      3940     146408.0     37.2     15.5              return LabelledArray(ret_array, f_shape, f_labels)
+

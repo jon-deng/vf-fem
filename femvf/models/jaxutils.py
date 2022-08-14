@@ -6,7 +6,7 @@ These are some functions used to interface jax dict outputs and BlockArray
 from blockarray.labelledarray import flatten_array
 
 def blockvec_to_dict(blockvec):
-    return {key: subvec for key, subvec in blockvec.items()}
+    return {key: subvec for key, subvec in blockvec.sub_items()}
 
 def flatten_nested_dict_values(dict_array, labels):
     return tuple([

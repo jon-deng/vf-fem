@@ -17,7 +17,7 @@ class MinGlottalWidth(StateMeasure):
         self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
 
     def __call__(self, state, control, props):
-        xcur = self.XREF.reshape(-1) + state['u'][:]
+        xcur = self.XREF.reshape(-1) + state.sub['u'][:]
         widths = 2*(props['ymid'] - xcur[1::2])
         gw = np.min(widths)
         return gw

@@ -55,24 +55,24 @@ def bernoulli_qp(s, area, psub, psup, fluid_props):
         The coordinates of the vertices at minimum and separation areas
     """
     flow_sign = np.sign(psub-psup)
-    rho = fluid_props['rho_air']
-    asub = fluid_props['a_sub']
-    asup = fluid_props['a_sup']
+    rho = fluid_props.sub['rho_air']
+    asub = fluid_props.sub['a_sub']
+    asup = fluid_props.sub['a_sup']
 
     a = area
-    asafe = smoothlb(a, fluid_props['area_lb'], fluid_props['zeta_lb'])
+    asafe = smoothlb(a, fluid_props.sub['area_lb'], fluid_props.sub['zeta_lb'])
 
     # Calculate minimum and separation areas/locations
-    smin, amin = smooth_min_area(s, asafe, fluid_props['zeta_min'])
+    smin, amin = smooth_min_area(s, asafe, fluid_props.sub['zeta_min'])
 
     # Bound all areas to the 'smooth' minimum area above
     # This is done because of the weighting scheme; the smooth min is always slightly larger
     # then the actual min, which leads to problems in the calculated pressures at very small
     # areas where small areas can have huge area ratios leading to weird Bernoulli behaviour
-    asafe = smoothlb(asafe, amin, fluid_props['zeta_lb'])
+    asafe = smoothlb(asafe, amin, fluid_props.sub['zeta_lb'])
 
-    asep = fluid_props['r_sep'] * amin
-    zeta_sep, zeta_ainv = fluid_props['zeta_sep'], fluid_props['zeta_inv']
+    asep = fluid_props.sub['r_sep'] * amin
+    zeta_sep, zeta_ainv = fluid_props.sub['zeta_sep'], fluid_props.sub['zeta_inv']
     ssep = smooth_separation_point(s, smin, asafe, asep, zeta_sep, zeta_ainv, flow_sign)
 
     # Compute the flow rate based on pressure drop from "reference" to
@@ -88,7 +88,7 @@ def bernoulli_qp(s, area, psub, psup, fluid_props):
     qsqr = flow_rate_sqr(pref, aref, psep, asep, rho)
     pbern = pbernoulli(qsqr, pref, aref, asafe, rho)
 
-    sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(s, ssep, alpha=fluid_props['zeta_sep'])
+    sepmult = -(flow_sign-1)/2 + flow_sign*smoothstep(s, ssep, alpha=fluid_props.sub['zeta_sep'])
     p = sepmult * pbern + (1-sepmult)*psep
     q = flow_sign*qsqr**0.5
 

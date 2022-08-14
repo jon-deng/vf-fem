@@ -65,7 +65,7 @@ class FSIDynamicalSystem(DynamicalSystem):
         self._dfluid_dsolid_scalar = self.fsimap.dfluid_dsolid
 
         # The matrix here is d(p)_solid/d(q, p)_fluid
-        dslp_dflq = subops.zero_mat(self.solid.control['p'].size(), self.fluid.state['q'].size)
+        dslp_dflq = subops.zero_mat(self.solid.control['p'].size, self.fluid.state['q'].size)
         dslp_dflp = self._dsolid_dfluid_scalar
         mats = [[dslp_dflq, dslp_dflp]]
         self.dslcontrol_dflstate = bvec.BlockMatrix(mats, labels=(('p',), ('q', 'p')))
@@ -76,7 +76,7 @@ class FSIDynamicalSystem(DynamicalSystem):
             [subops.zero_mat(nrow, ncol)
             for ncol in self.solid.state.bshape[0]]
             for nrow in self.fluid.control.bshape[0]]
-        dslarea_dslu = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state['u'].size()])
+        dslarea_dslu = PETSc.Mat().createAIJ([self.solid_area.size(), self.solid.state['u'].size])
         dslarea_dslu.setUp() # should set preallocation manually in the future
         for ii in range(dslarea_dslu.size[0]):
             # Each solid area is only sensitive to the y component of u, so that's set here
@@ -92,12 +92,12 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         # Make null BlockMats relating fluid/solid states
         mats = [
-            [subops.zero_mat(slvec.size(), flvec.size) for flvec in self.fluid.state.vecs]
-            for slvec in self.solid.state.vecs]
+            [subops.zero_mat(slvec.size, flvec.size) for flvec in self.fluid.state.blocks]
+            for slvec in self.solid.state.blocks]
         self.null_dslstate_dflstate = bvec.BlockMatrix(mats)
         mats = [
-            [subops.zero_mat(flvec.size, slvec.size()) for slvec in self.solid.state.vecs]
-            for flvec in self.fluid.state.vecs]
+            [subops.zero_mat(flvec.size, slvec.size) for slvec in self.solid.state.blocks]
+            for flvec in self.fluid.state.blocks]
         self.null_dflstate_dslstate = bvec.BlockMatrix(mats)
 
     def set_state(self, state):
@@ -109,7 +109,7 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         ## The below are needed to communicate FSI interactions
         # Set solid_area
-        self.solid_area[:] = 2*(self.props['ymid'][0] - (self.solid_xref + self.solid.state['u'])[1::2])
+        self.solid_area[:] = 2*(self.props['ymid'][0] - (self.solid_xref + self.solid.state.sub['u'])[1::2])
 
         # map solid_area to fluid area
         fluid_control = self.fluid.control.copy()

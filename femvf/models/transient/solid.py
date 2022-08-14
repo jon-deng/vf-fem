@@ -183,12 +183,12 @@ class Solid(base.Model):
     ## Functions for getting empty parameter vectors
     def get_state_vec(self):
         ret = self.state1.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_control_vec(self):
         ret = self.control.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_properties_vec(self, set_default=True):
@@ -235,16 +235,16 @@ class Solid(base.Model):
         ----------
         props : Property / dict-like
         """
-        for key in props.labels[0]:
+        for key, value in props.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = self.forms['coeff.prop.'+key]
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
             if isinstance(coefficient, dfn.function.constant.Constant):
-                coefficient.assign(dfn.Constant(np.squeeze(props[key])))
+                coefficient.assign(dfn.Constant(np.squeeze(value)))
             else:
-                coefficient.vector()[:] = props[key]
+                coefficient.vector()[:] = value
 
     ## Residual and sensitivity functions
     def assem_res(self):
@@ -254,7 +254,7 @@ class Solid(base.Model):
 
         res = self.get_state_vec()
         res['u'] = self.cached_form_assemblers['form.un.f1'].assemble()
-        self.bc_base.apply(res['u'])
+        self.bc_base.apply(res.sub['u'])
         res['v'] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
         res['a'] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
         return res
@@ -417,7 +417,7 @@ class NodalContactSolid(Solid):
         # This sets the 'standard' state variables u/v/a
         super().set_fin_state(state)
 
-        self.forms['coeff.state.manual.tcontact'].vector()[:] = self.contact_traction(state['u'])
+        self.forms['coeff.state.manual.tcontact'].vector()[:] = self.contact_traction(state.sub['u'])
 
     def assem_dres_dstate1(self):
         dres_dstate1 = super().assem_dres_dstate1()
@@ -456,7 +456,6 @@ class NodalContactSolid(Solid):
             dfu2_dtcontact.mat().diagonalScale(None, dtcontact_du2.vec())
         dfu2_du2_contact = dfu2_dtcontact
         return dfu2_du2_contact
-
 
 class Rayleigh(NodalContactSolid):
     """

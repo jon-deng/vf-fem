@@ -13,7 +13,7 @@ import dolfin as dfn
 # import h5py
 
 import femvf.statefile as sf
-from femvf.forward import integrate, integrate_linear
+from femvf.forward import integrate, integrate_linear, integrate_step
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
@@ -45,6 +45,7 @@ class ForwardConfig(unittest.TestCase):
             SolidType=tsmd.KelvinVoigt,
             FluidType=tfmd.BernoulliSmoothMinSep, coupling='explicit'
             )
+        # breakpoint()
 
         # Set the control vector
         p_sub = 500.0
@@ -87,7 +88,7 @@ class ForwardConfig(unittest.TestCase):
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
-        ini_state.set(0.0)
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -137,7 +138,7 @@ class ForwardConfig(unittest.TestCase):
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.get_state_vec()
-        ini_state.set(0.0)
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
