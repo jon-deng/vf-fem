@@ -101,7 +101,7 @@ class Solid(base.Model):
         # TODO: Should clean up form attributes
 
 
-        # self.dt_form = self.forms['coeff.time.dt']
+        self._dt_form = self.forms['coeff.time.dt']
 
         # self.f1 = self.forms['form.un.f1']
         # self.df1_du1 = self.forms['form.bi.df1_du1']
@@ -157,16 +157,16 @@ class Solid(base.Model):
     # The dt property makes the time step form behave like a scalar
     @property
     def dt(self):
-        return self.dt_form.vector()[0]
+        return self._dt_form.vector()[0]
 
     @dt.setter
     def dt(self, value):
-        self.dt_form.vector()[:] = value
+        self._dt_form.vector()[:] = value
 
     @property
     def XREF(self):
-        xref = self.u1.vector().copy()
-        xref[:] = self.scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
+        xref = self.state0.sub[0].copy()
+        xref[:] = self.forms['fspace.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
         return xref
 
     @staticmethod
@@ -248,7 +248,7 @@ class Solid(base.Model):
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt)
         ]
         res[:] = values
-        self.bc_base.apply(res.sub['u'])
+        self.forms['bc.dirichlet'].apply(res.sub['u'])
         return res
 
     @functools.cached_property
@@ -453,7 +453,7 @@ class NodalContactSolid(Solid):
         # for a general collision plane normal, the operation 'df_dtc*dtc_du' will
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
-        dtcontact_du2 = self.u1.vector().copy()
+        dtcontact_du2 = self.forms['coeff.state.u1'].vector().copy()
         dpcontact_dgap, _ = solidforms.dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 

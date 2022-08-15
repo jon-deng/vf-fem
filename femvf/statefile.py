@@ -202,8 +202,8 @@ class StateFile:
         Writes the dofmaps for scalar and vector data
         """
         solid = self.model.solid
-        scalar_dofmap_processor = solid.scalar_fspace.dofmap()
-        vector_dofmap_processor = solid.vector_fspace.dofmap()
+        scalar_dofmap_processor = solid.forms['fspace.scalar'].dofmap()
+        vector_dofmap_processor = solid.forms['fspace.vector'].dofmap()
 
         scalar_dofmap = np.array([scalar_dofmap_processor.cell_dofs(cell.index())
                                   for cell in dfn.cells(solid.mesh)])
@@ -367,7 +367,7 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
-        state = self.model.get_state_vec()
+        state = self.model.state0.copy()
         for key, vec in state.items():
             value = self.dset_chunk_cache[f'state/{key}'].get(n)
             try:
@@ -388,7 +388,7 @@ class StateFile:
         out : tuple of 3 dfn.Function
             A set of functions to set vector values for.
         """
-        control = self.model.get_control_vec()
+        control = self.model.control.copy()
         num_controls = self.root_group[f'control/{control.keys()[0]}'].size
         if n > num_controls-1:
             n = num_controls-1
@@ -403,7 +403,7 @@ class StateFile:
         return control
 
     def get_props(self):
-        properties = self.model.get_properties_vec()
+        properties = self.model.props.copy()
 
         for name, vec in zip(properties.keys(), properties.blocks):
             dset = self.root_group[f'properties/{name}']
