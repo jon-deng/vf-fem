@@ -59,7 +59,7 @@ def static_solid_configuration(
     """
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
     state_n = solid.get_state_vec()
-    state_n.set(0.0)
+    state_n[:] = 0.0
     solid.set_fin_state(state_n)
     solid.set_ini_state(state_n)
 
