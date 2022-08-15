@@ -68,14 +68,3 @@ class Model:
         """
         raise NotImplementedError()
 
-    def solve_dres_dstate1(self, b: BlockVec) -> BlockVec:
-        """
-        Solve dF/du1 x = b
-        """
-        raise NotImplementedError()
-
-    def solve_dres_dstate1_adj(self, x: BlockVec) -> BlockVec:
-        """
-        Solve dF/du1^T b = x
-        """
-        raise NotImplementedError()

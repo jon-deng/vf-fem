@@ -6,17 +6,13 @@ Currently a lot of code is being duplicated to do the coupling through different
 approaches (very confusing)
 """
 
-from os import path
-import warnings
 import numpy as np
 import dolfin as dfn
 from petsc4py import PETSc
-# import ufl
 
 from ..equations.solid import newmark
 from ..fsi import FSIMap
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
-from femvf import meshutils
 from blockarray import linalg
 from blockarray import blockvec as bvec
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -63,20 +59,22 @@ class FSIModel(base.Model):
             self.fluid.state1['p'].size, self._solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs
             )
 
-    ## These have to be defined to exchange data between fluid/solid domains
-    def set_ini_solid_state(self, uva0):
+    # These have to be defined to exchange data between fluid/solid domains
+    # Explicit/implicit coupling methods may define these in differnt ways to
+    # achieve the desired coupling
+    def _set_ini_solid_state(self, uva0):
         raise NotImplementedError("")
 
-    def set_fin_solid_state(self, uva1):
+    def _set_fin_solid_state(self, uva1):
         raise NotImplementedError("")
 
-    def set_ini_fluid_state(self, qp0):
+    def _set_ini_fluid_state(self, qp0):
         raise NotImplementedError("")
 
-    def set_fin_fluid_state(self, qp1):
+    def _set_fin_fluid_state(self, qp1):
         raise NotImplementedError("")
 
-    ## Methods for settings parameters of the model
+    ## Parameter setting methods
     @property
     def dt(self):
         return self.solid.dt
@@ -87,12 +85,12 @@ class FSIModel(base.Model):
         self.fluid.dt = value
 
     def set_ini_state(self, state):
-        self.set_ini_solid_state(state[:3])
-        self.set_ini_fluid_state(state[3:])
+        self._set_ini_solid_state(state[:3])
+        self._set_ini_fluid_state(state[3:])
 
     def set_fin_state(self, state):
-        self.set_fin_solid_state(state[:3])
-        self.set_fin_fluid_state(state[3:])
+        self._set_fin_solid_state(state[:3])
+        self._set_fin_fluid_state(state[3:])
 
     def set_control(self, control):
         self.control[:] = control
@@ -107,6 +105,7 @@ class FSIModel(base.Model):
         self.fluid.set_props(props[self.solid.props.size:-1])
 
     ## Residual functions
+    # TODO: Implemement the residual assembly functions
     # The below residual function definitions are common to both explicit and implicit FSI models
     def apply_dres_dcontrol(self, x):
         ## Implement here since both FSI models should use this rule
@@ -139,11 +138,11 @@ class FSIModel(base.Model):
         return self.solid.apply_dres_ddt_adj(x_solid)
 
 class ExplicitFSIModel(FSIModel):
-    def set_ini_solid_state(self, uva0):
+    def _set_ini_solid_state(self, uva0):
         """Set the initial solid state"""
         self.solid.set_ini_state(uva0)
 
-    def set_fin_solid_state(self, uva1):
+    def _set_fin_solid_state(self, uva1):
         """Set the final solid state and communicate FSI interactions"""
         self.solid.set_fin_state(uva1)
 
@@ -153,7 +152,7 @@ class ExplicitFSIModel(FSIModel):
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
         self.fluid.set_control(fl_control)
 
-    def set_ini_fluid_state(self, qp0):
+    def _set_ini_fluid_state(self, qp0):
         """Set the fluid state and communicate FSI interactions"""
         self.fluid.set_ini_state(qp0)
 
@@ -162,7 +161,7 @@ class ExplicitFSIModel(FSIModel):
         self.fsimap.map_fluid_to_solid(qp0.sub[1], sl_control.sub['p'])
         self.solid.set_control(sl_control)
 
-    def set_fin_fluid_state(self, qp1):
+    def _set_fin_fluid_state(self, qp1):
         """Set the final fluid state"""
         self.fluid.set_fin_state(qp1)
 
@@ -198,7 +197,7 @@ class ExplicitFSIModel(FSIModel):
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
         uva1, solid_info = self.solid.solve_state1(ini_state[:3], newton_solver_prm)
 
-        self.set_fin_solid_state(uva1)
+        self._set_fin_solid_state(uva1)
         qp1, fluid_info = self.fluid.solve_state1(ini_state[3:])
 
         step_info = solid_info
@@ -252,21 +251,21 @@ class ExplicitFSIModel(FSIModel):
 
 class ImplicitFSIModel(FSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
-    def set_ini_fluid_state(self, qp0):
+    def _set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
 
-    def set_fin_fluid_state(self, qp1):
+    def _set_fin_fluid_state(self, qp1):
         self.fluid.set_fin_state(qp1)
 
         sl_control = self.solid.control
         self.fsimap.map_fluid_to_solid(qp1[1], sl_control['p'])
         self.solid.set_control(sl_control)
 
-    def set_ini_solid_state(self, uva0):
+    def _set_ini_solid_state(self, uva0):
         """Set the initial solid state"""
         self.solid.set_ini_state(uva0)
 
-    def set_fin_solid_state(self, uva1):
+    def _set_fin_solid_state(self, uva1):
         self.solid.set_fin_state(uva1)
 
         # For both implicit/explicit coupling, the final fluid area corresponds to the final solid deformation
@@ -310,8 +309,8 @@ class ImplicitFSIModel(FSIModel):
         qp1 = ini_state[3:].copy()
 
         # Calculate the initial residual
-        self.set_fin_solid_state(uva1)
-        self.set_fin_fluid_state(qp1)
+        self._set_fin_solid_state(uva1)
+        self._set_fin_fluid_state(qp1)
         res0 = self.solid.cached_form_assemblers['form.un.f1'].assemble()
         self.solid.bc_base.apply(res0)
 
@@ -325,9 +324,9 @@ class ImplicitFSIModel(FSIModel):
             uva1, _ = self.solid.solve_state1(uva1, newton_solver_prm)
 
             # Compute new fluid pressures for the updated solid position
-            self.set_fin_solid_state(uva1)
+            self._set_fin_solid_state(uva1)
             qp1, fluid_info = self.fluid.solve_state1(qp1)
-            self.set_fin_fluid_state(qp1)
+            self._set_fin_fluid_state(qp1)
 
             # Calculate the error in the solid residual with the updated pressures
             res = self.solid.cached_form_assemblers['form.un.f1'].assemble()
@@ -484,8 +483,8 @@ class FSAIModel(FSIModel):
         fl_state = state[sl_nblock:sl_nblock+fl_nblock]
         ac_state = state[sl_nblock+fl_nblock:sl_nblock+fl_nblock+ac_nblock]
 
-        self.set_ini_solid_state(sl_state)
-        self.set_ini_fluid_state(fl_state)
+        self._set_ini_solid_state(sl_state)
+        self._set_ini_fluid_state(fl_state)
         self.set_ini_acoustic_state(ac_state)
 
     def set_fin_state(self, state):
@@ -497,8 +496,8 @@ class FSAIModel(FSIModel):
         fl_state = state[sl_nblock:sl_nblock+fl_nblock]
         ac_state = state[sl_nblock+fl_nblock:sl_nblock+fl_nblock+ac_nblock]
 
-        self.set_fin_solid_state(sl_state)
-        self.set_fin_fluid_state(fl_state)
+        self._set_fin_solid_state(sl_state)
+        self._set_fin_fluid_state(fl_state)
         self.set_fin_acoustic_state(ac_state)
 
     def set_control(self, control):
@@ -520,10 +519,10 @@ class FSAIModel(FSIModel):
         self.acoustic.set_props(ac_props)
 
     ## Coupling methods
-    def set_ini_solid_state(self, sl_state0):
+    def _set_ini_solid_state(self, sl_state0):
         self.solid.set_ini_state(sl_state0)
 
-    def set_ini_fluid_state(self, fl_state0):
+    def _set_ini_fluid_state(self, fl_state0):
         self.fluid.set_ini_state(fl_state0)
 
         # for explicit coupling
@@ -535,7 +534,7 @@ class FSAIModel(FSIModel):
     def set_ini_acoustic_state(self, ac_state0):
         self.acoustic.set_ini_state(ac_state0)
 
-    def set_fin_solid_state(self, sl_state1):
+    def _set_fin_solid_state(self, sl_state1):
         self.solid.set_fin_state(sl_state1)
 
         fl_control = self.fluid.control.copy()
@@ -546,7 +545,7 @@ class FSAIModel(FSIModel):
 
         self.fluid.set_control(fl_control)
 
-    def set_fin_fluid_state(self, fl_state1):
+    def _set_fin_fluid_state(self, fl_state1):
         self.fluid.set_fin_state(fl_state1)
 
         ac_control = fl_state_to_ac_control(fl_state1, self.acoustic.control.copy())
@@ -590,7 +589,7 @@ class FSAIModel(FSIModel):
         self.set_fin_state(ini_state)
         ini_slstate = ini_state[:3]
         sl_state1, solver_info = self.solid.solve_state1(ini_slstate, newton_solver_prm)
-        self.set_fin_solid_state(sl_state1)
+        self._set_fin_solid_state(sl_state1)
         # print(self.solid.res().norm())
         # if self.solid.res().norm() > 1e-4:
         #     breakpoint()

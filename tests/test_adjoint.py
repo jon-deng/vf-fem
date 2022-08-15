@@ -359,14 +359,14 @@ class TestBasicGradientSingleStep(TaylorTest):
         uva0 = self.model.solid.get_state_vec()
         uva0['v'][:] = 0.0
         self.model.solid.bc_base.apply(uva0['v'])
-        self.model.set_ini_solid_state(uva0)
+        self.model._set_ini_solid_state(uva0)
 
         control['psub'][:] = 800 * PASCAL_TO_CGS
         # control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
         self.model.set_control(control)
 
-        self.model.set_fin_solid_state(uva0)
+        self.model._set_fin_solid_state(uva0)
         qp0, _ = self.model.fluid.solve_qp1()
 
         self.state0 = self.model.get_state_vec()

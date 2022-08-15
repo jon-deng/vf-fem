@@ -83,6 +83,7 @@ class QuasiSteady1DFluid(base.Model):
         subvecs, shape = flatten_nested_dict(subvecs, labels)
         return bla.BlockVector(subvecs, shape, labels)
 
+    ## Solver functions
     def solve_state1(self, state1):
         """
         Return the final flow state
