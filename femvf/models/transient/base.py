@@ -2,7 +2,7 @@
 This module defines the basic interface for a transient model.
 """
 
-from typing import TypeVar, Union
+from typing import TypeVar, Union, Tuple, Mapping, Any
 
 from blockarray import subops
 from blockarray import blockvec as bv, blockmat as bm
@@ -31,40 +31,99 @@ class Model:
     """
     ## Parameter setting functions
     def set_ini_state(self, state0: BlockVec):
+        """
+        Set the initial state (`self.state0`)
+
+        Parameters
+        ----------
+        state0: BlockVec
+            The state to set
+        """
         raise NotImplementedError()
 
     def set_fin_state(self, state1: BlockVec):
+        """
+        Set the final state (`self.state1`)
+
+        Parameters
+        ----------
+        state1: BlockVec
+            The state to set
+        """
         raise NotImplementedError()
 
     def set_control(self, control: BlockVec):
+        """
+        Set the control (`self.control`)
+
+        Parameters
+        ----------
+        control: BlockVec
+            The controls to set
+        """
         raise NotImplementedError()
 
     def set_props(self, props: BlockVec):
+        """
+        Set the properties (`self.props`)
+
+        Parameters
+        ----------
+        props: BlockVec
+            The properties to set
+        """
         raise NotImplementedError()
 
     ## Residual and sensitivity methods
     def assem_res(self) -> BlockVec:
         """
-        Return the (nonlinear) residual for the current time step
+        Return the residual of the current time step
         """
         raise NotImplementedError()
 
     def assem_dres_dstate0(self) -> BlockMat:
+        """
+        Return the residual sensitivity to the initial state for the time step
+        """
         raise NotImplementedError()
 
     def assem_dres_dstate1(self) -> BlockMat:
+        """
+        Return the residual sensitivity to the final state for the time step
+        """
         raise NotImplementedError()
 
     def assem_dres_dcontrol(self) -> BlockMat:
+        """
+        Return the residual sensitivity to the control for the time step
+        """
         raise NotImplementedError()
 
     def assem_dres_dprops(self) -> BlockMat:
+        """
+        Return the residual sensitivity to the properties for the time step
+        """
         raise NotImplementedError()
 
     ## Solver methods
-    def solve_state1(self, state1: BlockVec) -> BlockVec:
+    def solve_state1(self, state1: BlockVec) -> Tuple[BlockVec, Mapping[str, Any]]:
         """
-        Solve for the final state such that the residual = 0
+        Solve for the final state for the time step
+
+        Parameters
+        ----------
+        state1: BlockVec
+            An initial guess for the final state. For nonlinear models, this
+            serves as the initial guess for an iterative procedure.
+
+        Returns
+        -------
+        BlockVec
+            The final state at the end of the time step
+        dict
+            A dictionary of information about the solution. This depends on the
+            solver but usually includes information like: the number of
+            iterations, residual error, etc.
         """
         raise NotImplementedError()
 
