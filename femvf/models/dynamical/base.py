@@ -19,26 +19,26 @@ class DynamicalSystem:
     # def __init__()
 
     def set_state(self, state: BlockVec):
-        self.state[:] = state
+        raise NotImplementedError()
 
     def set_statet(self, statet: BlockVec):
-        self.statet[:] = statet
+        raise NotImplementedError()
 
     def set_control(self, control: BlockVec):
-        self.control[:] = control
+        raise NotImplementedError()
 
     def set_props(self, props: BlockVec):
-        self.props[:] = props
+        raise NotImplementedError()
 
 
     def set_dstate(self, dstate: BlockVec):
-        self.dstate[:] = dstate
+        raise NotImplementedError()
 
     def set_dstatet(self, dstatet: BlockVec):
-        self.dstatet[:] = dstatet
+        raise NotImplementedError()
 
     def set_dcontrol(self, dcontrol: BlockVec):
-        self.dcontrol[:] = dcontrol
+        raise NotImplementedError()
 
 
     def assem_res(self) -> BlockVec:

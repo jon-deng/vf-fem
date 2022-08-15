@@ -106,6 +106,15 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
         defaults = self.PROPERTY_DEFAULTS if set_default else None
         return properties_bvec_from_forms(self.forms, defaults)
 
+    def set_state(self, state):
+        self.state[:] = state
+
+    def set_statet(self, statet):
+        self.statet[:] = statet
+
+    def set_control(self, control):
+        self.control[:] = control
+
     def set_props(self, props):
         for key in props.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
@@ -117,6 +126,16 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
                 coefficient.assign(dfn.Constant(np.squeeze(props[key])))
             else:
                 coefficient.vector()[:] = props[key]
+
+
+    def set_dstate(self, dstate):
+        self.dstate[:] = dstate
+
+    def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
+
+    def set_dcontrol(self, dcontrol):
+        self.dcontrol[:] = dcontrol
 
     # Convenience methods
     @property
