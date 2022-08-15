@@ -61,9 +61,6 @@ class Solid(base.Model):
     """
     Class representing the discretized governing equations of a solid
     """
-    # Subclasses have to set these values
-    PROPERTY_DEFAULTS = None
-
     def __init__(
             self,
             mesh: dfn.Mesh,
@@ -80,67 +77,74 @@ class Solid(base.Model):
         solidforms.gen_residual_bilinear_forms(self._forms)
 
         ## Store mesh related quantities
-        vertex_func, facet_func, cell_func = mesh_funcs
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
+        # vertex_func, facet_func, cell_func = mesh_funcs
+        # vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
 
-        self.mesh = mesh
-        self.facet_func = facet_func
-        self.cell_func = cell_func
-        self.facet_label_to_id = facet_label_to_id
-        self.cell_label_to_id = cell_label_to_id
+        # self.mesh = mesh
+        # self.facet_func = facet_func
+        # self.cell_func = cell_func
+        # self.facet_label_to_id = facet_label_to_id
+        # self.cell_label_to_id = cell_label_to_id
 
-        self.fsi_facet_labels = fsi_facet_labels
-        self.fixed_facet_labels = fixed_facet_labels
+        # self.fsi_facet_labels = fsi_facet_labels
+        # self.fixed_facet_labels = fixed_facet_labels
 
         ## Store some key quantites related to the forms
-        self.vector_fspace = self.forms['fspace.vector']
-        self.scalar_fspace = self.forms['fspace.scalar']
+        # self.vector_fspace = self.forms['fspace.vector']
+        # self.scalar_fspace = self.forms['fspace.scalar']
 
-        self.scalar_trial = self.forms['trial.scalar']
-        self.vector_trial = self.forms['trial.vector']
-        self.scalar_test = self.forms['test.scalar']
-        self.vector_test = self.forms['test.vector']
+        # self.scalar_trial = self.forms['trial.scalar']
+        # self.vector_trial = self.forms['trial.vector']
+        # self.scalar_test = self.forms['test.scalar']
+        # self.vector_test = self.forms['test.vector']
 
-        self.u0 = self.forms['coeff.state.u0']
-        self.v0 = self.forms['coeff.state.v0']
-        self.a0 = self.forms['coeff.state.a0']
-        self.u1 = self.forms['coeff.state.u1']
-        self.v1 = self.forms['coeff.state.v1']
-        self.a1 = self.forms['coeff.state.a1']
+        # TODO: Should clean up form attributes
 
-        self.dt_form = self.forms['coeff.time.dt']
 
-        self.f1 = self.forms['form.un.f1']
-        self.df1_du1 = self.forms['form.bi.df1_du1']
-        self.df1_dsolid = solidforms.gen_residual_bilinear_property_forms(self.forms)
-        self.df1_dsolid_assemblers = {
-            key: CachedFormAssembler(self.df1_dsolid[key])
-            for key in self.df1_dsolid
-            if self.df1_dsolid[key] is not None
-        }
+        # self.dt_form = self.forms['coeff.time.dt']
+
+        # self.f1 = self.forms['form.un.f1']
+        # self.df1_du1 = self.forms['form.bi.df1_du1']
+        # self.df1_dsolid = solidforms.gen_residual_bilinear_property_forms(self.forms)
+        # self.df1_dsolid_assemblers = {
+        #     key: CachedFormAssembler(self.df1_dsolid[key])
+        #     for key in self.df1_dsolid
+        #     if self.df1_dsolid[key] is not None
+        # }
 
         ## Measures and boundary conditions
-        self.dx = self.forms['measure.dx']
-        self.ds = self.forms['measure.ds']
-        self.bc_base = self.forms['bc.dirichlet']
+        # self.dx = self.forms['measure.dx']
+        # self.ds = self.forms['measure.ds']
+        # self.bc_base = self.forms['bc.dirichlet']
 
         ## Index mappings
-        self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
-        self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
-        self.vdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.vector'])
-        self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
+        # self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
+        # self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
+        # self.vdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.vector'])
+        # self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
+
+        u0 = self.forms['coeff.state.u0']
+        v0 = self.forms['coeff.state.v0']
+        a0 = self.forms['coeff.state.a0']
+        u1 = self.forms['coeff.state.u1']
+        v1 = self.forms['coeff.state.v1']
+        a1 = self.forms['coeff.state.a1']
 
         ## Define the state/controls/properties
-        self.state0 = BlockVector((self.u0.vector(), self.v0.vector(), self.a0.vector()), labels=[('u', 'v', 'a')])
-        self.state1 = BlockVector((self.u1.vector(), self.v1.vector(), self.a1.vector()), labels=[('u', 'v', 'a')])
+        self.state0 = BlockVector((u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')])
+        self.state1 = BlockVector((u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')])
         self.control = BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
-        self.props = self.get_properties_vec(set_default=True)
+        self.props = properties_bvec_from_forms(self.forms)
         self.set_props(self.props)
 
         self.cached_form_assemblers = {
             key: CachedFormAssembler(self.forms[key]) for key in self.forms
             if 'form.' in key
         }
+
+    @property
+    def mesh(self):
+        return self.forms['mesh.mesh']
 
     @property
     def solid(self):
@@ -180,21 +184,6 @@ class Solid(base.Model):
         the `Solid`.
         """
         raise NotImplementedError("Subclasses must implement this function")
-
-    ## Functions for getting empty parameter vectors
-    def get_state_vec(self):
-        ret = self.state1.copy()
-        ret[:] = 0.0
-        return ret
-
-    def get_control_vec(self):
-        ret = self.control.copy()
-        ret[:] = 0.0
-        return ret
-
-    def get_properties_vec(self, set_default=True):
-        defaults = self.PROPERTY_DEFAULTS if set_default else None
-        return properties_bvec_from_forms(self.forms, defaults)
 
     ## Parameter setting functions
     def set_ini_state(self, uva0):

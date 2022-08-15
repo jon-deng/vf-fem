@@ -79,10 +79,10 @@ class ForwardConfig(unittest.TestCase):
         props['zeta_min'][0] = 1e-8
 
         # Set the initial state
-        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
+        xy = model.solid.forms['fspace.vector'].tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
+        u0 = dfn.Function(model.solid.forms['fspace.vector']).vector()
 
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
