@@ -10,7 +10,6 @@ and where q and p stand for flow and pressure for a 1D fluid model
 """
 
 # from typing
-from multiprocessing.sharedctypes import Value
 import numpy as np
 import jax
 
