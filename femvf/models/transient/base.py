@@ -11,6 +11,9 @@ T = TypeVar('T')
 Vector = Union[subops.DfnVector, subops.GenericSubarray, subops.PETScVector]
 Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
 
+BlockVec = bv.BlockVector[Vector]
+BlockMat = bm.BlockMatrix[Matrix]
+
 class Model:
     """
     This object represents the equations defining a system over one time step.
@@ -27,51 +30,51 @@ class Model:
     defined.
     """
     ## Parameter setting functions
-    def set_ini_state(self, state0: bv.BlockVector[Vector]):
+    def set_ini_state(self, state0: BlockVec):
         raise NotImplementedError()
 
-    def set_fin_state(self, state1: bv.BlockVector[Vector]):
+    def set_fin_state(self, state1: BlockVec):
         raise NotImplementedError()
 
-    def set_control(self, control: bv.BlockVector[Vector]):
+    def set_control(self, control: BlockVec):
         raise NotImplementedError()
 
-    def set_props(self, props: bv.BlockVector[Vector]):
+    def set_props(self, props: BlockVec):
         raise NotImplementedError()
 
     ## Residual and sensitivity methods
-    def assem_res(self) -> bv.BlockVector[Vector]:
+    def assem_res(self) -> BlockVec:
         """
         Return the (nonlinear) residual for the current time step
         """
         raise NotImplementedError()
 
-    def assem_dres_dstate0(self) -> bm.BlockMatrix[Matrix]:
+    def assem_dres_dstate0(self) -> BlockMat:
         raise NotImplementedError()
 
-    def assem_dres_dstate1(self) -> bm.BlockMatrix[Matrix]:
+    def assem_dres_dstate1(self) -> BlockMat:
         raise NotImplementedError()
 
-    def assem_dres_dcontrol(self) -> bm.BlockMatrix[Matrix]:
+    def assem_dres_dcontrol(self) -> BlockMat:
         raise NotImplementedError()
 
-    def assem_dres_dprops(self) -> bm.BlockMatrix[Matrix]:
+    def assem_dres_dprops(self) -> BlockMat:
         raise NotImplementedError()
 
     ## Solver methods
-    def solve_state1(self, state1: bv.BlockVector[Vector]) -> bv.BlockVector[Vector]:
+    def solve_state1(self, state1: BlockVec) -> BlockVec:
         """
         Solve for the final state such that the residual = 0
         """
         raise NotImplementedError()
 
-    def solve_dres_dstate1(self, b: bv.BlockVector[Vector]) -> bv.BlockVector[Vector]:
+    def solve_dres_dstate1(self, b: BlockVec) -> BlockVec:
         """
         Solve dF/du1 x = b
         """
         raise NotImplementedError()
 
-    def solve_dres_dstate1_adj(self, x: bv.BlockVector[Vector]) -> bv.BlockVector[Vector]:
+    def solve_dres_dstate1_adj(self, x: BlockVec) -> BlockVec:
         """
         Solve dF/du1^T b = x
         """
