@@ -12,7 +12,7 @@ Vector = Union[subops.DfnVector, subops.GenericSubarray, subops.PETScVector]
 Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
 
 BlockVec = bv.BlockVector[Vector]
-BlockMat = bv.BlockMatrix[Matrix]
+BlockMat = bm.BlockMatrix[Matrix]
 
 class DynamicalSystem:
 
