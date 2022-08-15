@@ -30,6 +30,14 @@ class Model:
     defined.
     """
     ## Parameter setting functions
+
+    @property
+    def dt(self):
+        """
+        Return/set the time step
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
+
     def set_ini_state(self, state0: BlockVec):
         """
         Set the initial state (`self.state0`)
@@ -39,7 +47,7 @@ class Model:
         state0: BlockVec
             The state to set
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def set_fin_state(self, state1: BlockVec):
         """
@@ -50,7 +58,7 @@ class Model:
         state1: BlockVec
             The state to set
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def set_control(self, control: BlockVec):
         """
@@ -61,7 +69,7 @@ class Model:
         control: BlockVec
             The controls to set
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def set_props(self, props: BlockVec):
         """
@@ -72,38 +80,38 @@ class Model:
         props: BlockVec
             The properties to set
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     ## Residual and sensitivity methods
     def assem_res(self) -> BlockVec:
         """
         Return the residual of the current time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def assem_dres_dstate0(self) -> BlockMat:
         """
         Return the residual sensitivity to the initial state for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def assem_dres_dstate1(self) -> BlockMat:
         """
         Return the residual sensitivity to the final state for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def assem_dres_dcontrol(self) -> BlockMat:
         """
         Return the residual sensitivity to the control for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     def assem_dres_dprops(self) -> BlockMat:
         """
         Return the residual sensitivity to the properties for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     ## Solver methods
     def solve_state1(self, state1: BlockVec) -> Tuple[BlockVec, Mapping[str, Any]]:
@@ -125,5 +133,5 @@ class Model:
             solver but usually includes information like: the number of
             iterations, residual error, etc.
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
