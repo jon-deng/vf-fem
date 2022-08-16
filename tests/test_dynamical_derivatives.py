@@ -159,7 +159,10 @@ def _reset_parameter_base(model, state0, statet0, control0, props0, del_state, d
 
 def _set_and_assemble(x, set_x, assem):
     set_x(x)
-    return assem()
+    # A copy is needed because the assembler functions often return the same matrix/vector object
+    # As a result, not creating copies will keep overwriting 'previous' instances of an assembled
+    # tensor
+    return assem().copy()
 
 def _test_taylor(x0, dx, res, jac):
     """
