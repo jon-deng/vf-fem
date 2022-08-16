@@ -35,7 +35,7 @@ class TestWRA(unittest.TestCase):
         self.model.set_props(props)
 
         # Set the impulse flow input
-        state0 = self.model..state0.copy()
+        state0 = self.model.state0.copy()
         state0.set(0.0)
         qin = 1.0
         state0['pref'][:2] = self.model.inputq(qin, state0['pinc'][:2])

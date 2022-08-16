@@ -74,7 +74,7 @@ class TestFSAIModel(unittest.TestCase):
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model..state0.copy()
+        ini_state = model.state0.copy()
         ini_state.set(0.0)
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
@@ -88,7 +88,7 @@ class TestFSAIModel(unittest.TestCase):
 
         fin_state = ini_state.copy()
 
-        dx_fd = model..state0.copy()
+        dx_fd = model.state0.copy()
         dx_fd.set(0.0)
         # dx_fd['u'] = 0.0
         dx_fd['q'] = 1e-2
@@ -123,7 +123,7 @@ class TestFSAIModel(unittest.TestCase):
 
         fin_state = ini_state.copy()
 
-        dx_fd = model..state0.copy()
+        dx_fd = model.state0.copy()
         dx_fd.set(0.0)
         # dx_fd['u'] = 0.0
         # dx_fd['q'] = 1e-2
@@ -166,8 +166,8 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         self.model, self.props = load_fsi_rayleigh_model(coupling='explicit')
 
-        self.state1 = self.model..state0.copy()
-        self.state0 = self.model..state0.copy()
+        self.state1 = self.model.state0.copy()
+        self.state0 = self.model.state0.copy()
         self.control = self.model.get_control_vec()
         self.dt = 1e-4
 
@@ -231,7 +231,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         from `dres` and compare whether the results are sufficiently similar
         """
         # Define step vector for state1
-        dstate1 = self.model..state0.copy()
+        dstate1 = self.model.state0.copy()
         bc_base = self.model.solid.bc_base
         dstate1['u'][:] = 1e-8
         dstate1['v'][:] = 1e-8
@@ -263,7 +263,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         and compare whether the results are sufficiently similar
         """
         # Define step vectors to use for state, control, etc.
-        dstate0 = self.model..state0.copy()
+        dstate0 = self.model.state0.copy()
         dcontrol = self.model.get_control_vec()
         dprops = self.model.get_properties_vec()
         ddt = 1e-9

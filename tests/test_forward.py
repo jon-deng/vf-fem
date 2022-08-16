@@ -199,7 +199,7 @@ class ForwardConfig(unittest.TestCase):
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model..state0.copy()
+        ini_state = model.state0.copy()
         ini_state.set(0.0)
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
@@ -245,7 +245,7 @@ class ForwardConfig(unittest.TestCase):
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model..state0.copy()
+        ini_state = model.state0.copy()
         ini_state.set(0.0)
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
@@ -371,7 +371,7 @@ class TestIntegrate(ForwardConfig):
         times = vec.BlockVector((np.linspace(0, 0.01, NTIME),), labels=[('times',)])
 
         ## Specify the test change in model parameters
-        dini_state = model..state0.copy()
+        dini_state = model.state0.copy()
         dcontrol = model.get_control_vec()
         dprops = model.get_properties_vec()
         dprops.set(0.0)

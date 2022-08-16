@@ -154,7 +154,7 @@ class WRAnalog(Acoustic1D):
         args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
-        x_ = vec.concatenate_vec([self..state0.copy(), x])
+        x_ = vec.concatenate_vec([self.state0.copy(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
         return -vec.BlockVector(bvecs, labels=self.state1.labels)
@@ -400,7 +400,7 @@ def input_and_output_impedance(model, n=2**12):
     """
     Return the input and output impedances
     """
-    state0 = model..state0.copy()
+    state0 = model.state0.copy()
     state0.set(0.0)
 
     qinp_impulse = 1.0

@@ -102,7 +102,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         return work
 
     def eval_duva(self, f, n):
-        duva = self.model.solid..state0.copy()
+        duva = self.model.solid.state0.copy()
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
         N_START = self.constants['n_start']
@@ -131,7 +131,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid..state0.copy()
+        dqp = self.model.fluid.state0.copy()
 
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
@@ -246,7 +246,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         return res
 
     def eval_duva(self, f, n):
-        duva = self.model.solid..state0.copy()
+        duva = self.model.solid.state0.copy()
         N_START = self.constants['n_start']
         N_STATE = f.size
 
@@ -265,7 +265,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid..state0.copy()
+        dqp = self.model.fluid.state0.copy()
         N_START = self.constants['n_start']
         # N_STATE = f.size
 

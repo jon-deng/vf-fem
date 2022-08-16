@@ -12,7 +12,7 @@ from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 def solve_prephonatory_configuration(solid):
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
-    state = solid..state0.copy()
+    state = solid.state0.copy()
     state.set(0.0)
     solid.set_fin_state(state)
     solid.set_ini_state(state)
