@@ -58,7 +58,7 @@ def static_solid_configuration(
         The properties of the solid model
     """
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
-    state_n = solid.get_state_vec()
+    state_n = solid..state0.copy()
     state_n.set(0.0)
     solid.set_fin_state(state_n)
     solid.set_ini_state(state_n)
@@ -87,7 +87,7 @@ def set_coupled_model_substate(model, xsub):
     """
     Set the coupled model state
     """
-    _state = model.get_state_vec()
+    _state = model..state0.copy()
     for key in xsub.labels[0]:
         gops.set_vec(_state[key], xsub[key])
         # _state[key][:] = xsub[key].array
@@ -135,7 +135,7 @@ def static_coupled_configuration_picard(
         return concatenate_vec([u, qp.copy()])
 
     # Set the initial state
-    x_n = model.get_state_vec()[['u', 'q', 'p']]
+    x_n = model..state0.copy()[['u', 'q', 'p']]
     x_n.set(0)
 
     abs_errs = []

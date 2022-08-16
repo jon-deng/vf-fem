@@ -30,7 +30,7 @@ class AcousticFunctional(AbstractFunctional):
         super().__init__(model, ())
 
     def eval_dstate(self, f, n):
-        vecs = [self.model.solid.get_state_vec(), self.model.fluid.get_state_vec(), self.eval_dac_state(f, n)]
+        vecs = [self.model.solid..state0.copy(), self.model.fluid..state0.copy(), self.eval_dac_state(f, n)]
         return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
@@ -80,7 +80,7 @@ class RmsRadiatedPressure(AcousticFunctional):
         else:
             dprad_ms = 2*prad_n*dt
 
-        dac = self.model.acoustic.get_state_vec()
+        dac = self.model.acoustic..state0.copy()
         dac['pref'][-1] = 0.5*prad_ms**-0.5 * dprad_ms
 
         return dac
@@ -146,7 +146,7 @@ class AcousticPower(AcousticFunctional):
         dwork_dfmouth = prad/ZMOUTH/2*dt
         dwork_dbmouth = -prad/ZMOUTH/2*dt
 
-        dac = self.model.acoustic.get_state_vec()
+        dac = self.model.acoustic..state0.copy()
         dac.set(0.0)
         if n > 0:
             dac['pref'][-1] += dwork_dprad/T

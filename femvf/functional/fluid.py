@@ -24,10 +24,10 @@ class FluidFunctional(AbstractFunctional):
     # The provided eval_dfl_state only supplies the fluid state component so needs to be
     # extended to include states of the remaining components (which are just zero)
     def eval_dstate(self, f, n):
-        vecs = [self.model.solid.get_state_vec(), self.eval_dfl_state(f, n)]
+        vecs = [self.model.solid..state0.copy(), self.eval_dfl_state(f, n)]
 
         if hasattr(self.model, 'acoustic'):
-            vecs.append(self.model.acoustic.get_state_vec())
+            vecs.append(self.model.acoustic..state0.copy())
         return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
@@ -58,7 +58,7 @@ class FinalPressureNorm(FluidFunctional):
         return np.linalg.norm(state['p'])**2
 
     def eval_dfl_state(self, f, n):
-        dqp = self.model.fluid.get_state_vec()
+        dqp = self.model.fluid..state0.copy()
 
         if n == f.size-1:
             state = f.get_state(n)
@@ -86,7 +86,7 @@ class FinalFlowRateNorm(FluidFunctional):
         return qp['q'][0]
 
     def eval_dfl_state(self, f, n):
-        dqp = self.model.fluid.get_state_vec()
+        dqp = self.model.fluid..state0.copy()
 
         if n == f.size-1:
             # qp = f.get_state(n)[3:5]
@@ -134,7 +134,7 @@ class AvgSubglottalPower(FluidFunctional):
         return work/(times[N_STATE-1]-times[N_START])
 
     def eval_dfl_state(self, f, n):
-        dqp = self.model.fluid.get_state_vec()
+        dqp = self.model.fluid..state0.copy()
         dqp.set(0.0)
 
         N_START = self.constants['n_start']
@@ -239,7 +239,7 @@ class AvgAcousticPower(FluidFunctional):
         return res
 
     def eval_dfl_state(self, f, n):
-        dqp = self.model.fluid.get_state_vec()
+        dqp = self.model.fluid..state0.copy()
 
         ## Load the flow rate
         n_start = self.constants['n_start']

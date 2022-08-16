@@ -334,7 +334,7 @@ class Power(AbstractFunctional):
 
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
-        
+
         assert a > 0 # This is not defined if a < 0
         return b*a**(b-1)*da + np.log(a)*a**b*db
 
@@ -399,7 +399,7 @@ class Scalar(AbstractFunctional):
         return self._val
 
     def eval_dstate(self, f, n):
-        return self.model.get_state_vec()
+        return self.model..state0.copy()
 
     def eval_dprops(self, f):
         dprops = self.model.get_properties_vec()

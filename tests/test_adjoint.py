@@ -92,7 +92,7 @@ class TaylorTest(unittest.TestCase):
         """
         ## Set a zero search direction if one isn't specified
         if dstate is None:
-            dstate = self.model.get_state_vec()
+            dstate = self.model..state0.copy()
             dstate.set(0.0)
 
         if dcontrols is None:
@@ -193,7 +193,7 @@ class TestBasicGradient(TaylorTest):
         times_meas = np.linspace(t_start, t_final, 32)
         self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
-        self.state0 = self.model.get_state_vec()
+        self.state0 = self.model..state0.copy()
         self.state0['v'][:] = 1e-3
         self.model.solid.bc_base.apply(self.state0['v'])
 
@@ -249,7 +249,7 @@ class TestBasicGradient(TaylorTest):
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
         self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        dstate = self.model..state0.copy()
         dstate['u'][:] = step_dir*0.01
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -272,7 +272,7 @@ class TestBasicGradient(TaylorTest):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        dstate = self.model..state0.copy()
         dstate['v'][:] = step_dir*0.1
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -294,7 +294,7 @@ class TestBasicGradient(TaylorTest):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        dstate = self.model..state0.copy()
         dstate['a'][:] = step_dir
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -356,7 +356,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
         control = self.model.get_control_vec()
-        uva0 = self.model.solid.get_state_vec()
+        uva0 = self.model.solid..state0.copy()
         uva0['v'][:] = 0.0
         self.model.solid.bc_base.apply(uva0['v'])
         self.model._set_ini_solid_state(uva0)
@@ -369,7 +369,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         self.model._set_fin_solid_state(uva0)
         qp0, _ = self.model.fluid.solve_qp1()
 
-        self.state0 = self.model.get_state_vec()
+        self.state0 = self.model..state0.copy()
         self.state0[3:5] = qp0
 
         # Step sizes and scale factor
@@ -419,7 +419,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
         self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        dstate = self.model..state0.copy()
 
         dstate['u'][:] = step_dir*0.00005
         dstate['v'][:] = 0.0
@@ -445,7 +445,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        dstate = self.model..state0.copy()
         dstate['u'][:] = 0
         dstate['v'][:] = step_dir*1e-5
         dstate['a'][:] = 0.0
@@ -469,7 +469,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         step_dir[:] = _step_dir
 
         self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        dstate = self.model..state0.copy()
         dstate['u'][:] = 0.0
         dstate['v'][:] = 0.0
         dstate['a'][:] = step_dir*1e-5

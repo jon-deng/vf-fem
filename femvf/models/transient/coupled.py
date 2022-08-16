@@ -287,7 +287,7 @@ class ExplicitFSIModel(FSIModel):
         """
         Solve, dF/du x = f
         """
-        x = self.get_state_vec()
+        x = self..state0.copy()
 
         x[:3] = self.solid.solve_dres_dstate1(b[:3])
 
@@ -312,7 +312,7 @@ class ExplicitFSIModel(FSIModel):
         dfp2_du2 = 0 - dp_du
 
         ## Do the linear algebra that solves for x
-        b = self.get_state_vec()
+        b = self..state0.copy()
         b_qp, b_uva = b[3:], b[:3]
 
         # This performs the fluid part of the solve
@@ -396,7 +396,7 @@ class ImplicitFSIModel(FSIModel):
         Solve, dF/du x = f
         """
         dt = self.solid.dt
-        x = self.get_state_vec()
+        x = self..state0.copy()
 
         solid = self.solid
 
@@ -440,8 +440,8 @@ class ImplicitFSIModel(FSIModel):
         dfp2_du2 = 0 - dp_du
 
         ## Do the linear algebra that solves for the adjoint states
-        adj_uva = self.solid.get_state_vec()
-        adj_qp = self.fluid.get_state_vec()
+        adj_uva = self.solid..state0.copy()
+        adj_qp = self.fluid..state0.copy()
 
         adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
 
@@ -497,7 +497,7 @@ class FSAIModel(FSIModel):
         self.fluid = fluid
         self.acoustic = acoustic
 
-        state = bv.concatenate_vec([solid.get_state_vec(), fluid.get_state_vec(), acoustic.get_state_vec()])
+        state = bv.concatenate_vec([solid..state0.copy(), fluid..state0.copy(), acoustic..state0.copy()])
         self.state0 = state
         self.state1 = state.copy()
 
@@ -735,7 +735,7 @@ class FSAIModel(FSIModel):
         """
         Solve, dF/du x = f
         """
-        x = self.get_state_vec()
+        x = self..state0.copy()
         ## Assmeble any needed sensitivity matrices
         dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=False)
         dfq2_du2 = 0 - dq_du
@@ -773,7 +773,7 @@ class FSAIModel(FSIModel):
         """
         Solve, dF/du^T x = f
         """
-        x = self.get_state_vec()
+        x = self..state0.copy()
 
         ## Solve the coupled fluid/acoustic system first
         A = self._form_dflac_dflac()
