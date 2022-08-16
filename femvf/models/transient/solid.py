@@ -38,11 +38,10 @@ def properties_bvec_from_forms(forms, defaults=None):
     for label in labels:
         coefficient = forms['coeff.prop.'+label]
 
-        # vec = None
-        # Generally the size of the vector comes directly from the property,
-        # for examples, constants are size 1, scalar fields have size matching number of dofs
-        # Time step is a special case since it is size 1 but is made to be a field as
-        # a workaround
+        # Generally the size of the vector comes directly from the property;
+        # i.e. constants are size 1, scalar fields have size matching number of dofs, etc.
+        # The time step `dt` is a special case since it is size 1 but is specificied as a field as
+        # a workaround in order to take derivatives
         if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
             vec = np.ones(coefficient.values().size)
             vec[:] = coefficient.values()
@@ -76,53 +75,9 @@ class Solid(base.Model):
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
         solidforms.gen_residual_bilinear_forms(self._forms)
 
-        ## Store mesh related quantities
-        # vertex_func, facet_func, cell_func = mesh_funcs
-        # vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
-
-        # self.mesh = mesh
-        # self.facet_func = facet_func
-        # self.cell_func = cell_func
-        # self.facet_label_to_id = facet_label_to_id
-        # self.cell_label_to_id = cell_label_to_id
-
-        # self.fsi_facet_labels = fsi_facet_labels
-        # self.fixed_facet_labels = fixed_facet_labels
-
-        ## Store some key quantites related to the forms
-        # self.vector_fspace = self.forms['fspace.vector']
-        # self.scalar_fspace = self.forms['fspace.scalar']
-
-        # self.scalar_trial = self.forms['trial.scalar']
-        # self.vector_trial = self.forms['trial.vector']
-        # self.scalar_test = self.forms['test.scalar']
-        # self.vector_test = self.forms['test.vector']
-
-        # TODO: Should clean up form attributes
-
-
         self._dt_form = self.forms['coeff.time.dt']
 
-        # self.f1 = self.forms['form.un.f1']
-        # self.df1_du1 = self.forms['form.bi.df1_du1']
-        # self.df1_dsolid = solidforms.gen_residual_bilinear_property_forms(self.forms)
-        # self.df1_dsolid_assemblers = {
-        #     key: CachedFormAssembler(self.df1_dsolid[key])
-        #     for key in self.df1_dsolid
-        #     if self.df1_dsolid[key] is not None
-        # }
-
-        ## Measures and boundary conditions
-        # self.dx = self.forms['measure.dx']
-        # self.ds = self.forms['measure.ds']
-        # self.bc_base = self.forms['bc.dirichlet']
-
-        ## Index mappings
-        # self.vert_to_vdof = dfn.vertex_to_dof_map(self.forms['fspace.vector'])
-        # self.vert_to_sdof = dfn.vertex_to_dof_map(self.forms['fspace.scalar'])
-        # self.vdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.vector'])
-        # self.sdof_to_vert = dfn.dof_to_vertex_map(self.forms['fspace.scalar'])
-
+        ## Define the state/controls/properties
         u0 = self.forms['coeff.state.u0']
         v0 = self.forms['coeff.state.v0']
         a0 = self.forms['coeff.state.a0']
@@ -130,7 +85,6 @@ class Solid(base.Model):
         v1 = self.forms['coeff.state.v1']
         a1 = self.forms['coeff.state.a1']
 
-        ## Define the state/controls/properties
         self.state0 = BlockVector((u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')])
         self.state1 = BlockVector((u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')])
         self.control = BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
