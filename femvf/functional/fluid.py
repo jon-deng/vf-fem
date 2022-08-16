@@ -32,7 +32,7 @@ class FluidFunctional(AbstractFunctional):
 
     def eval_dprops(self, f):
         dsolid = self.model.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         vecs = [dsolid, self.eval_dfl_props(f)]
 
         if hasattr(self.model, 'acoustic'):
@@ -68,7 +68,7 @@ class FinalPressureNorm(FluidFunctional):
 
     def eval_dfl_props(self, f):
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
@@ -96,7 +96,7 @@ class FinalFlowRateNorm(FluidFunctional):
 
     def eval_dfl_props(self, f):
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
@@ -135,7 +135,7 @@ class AvgSubglottalPower(FluidFunctional):
 
     def eval_dfl_state(self, f, n):
         dqp = self.model.fluid.state0.copy()
-        dqp.set(0.0)
+        dqp[:] = 0.0
 
         N_START = self.constants['n_start']
         N_STATE = f.size
@@ -163,7 +163,7 @@ class AvgSubglottalPower(FluidFunctional):
 
     def eval_dfl_props(self, f):
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
@@ -282,7 +282,7 @@ class AvgAcousticPower(FluidFunctional):
 
     def eval_dfl_props(self, f):
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_ddt(self, f, n):

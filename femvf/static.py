@@ -59,7 +59,7 @@ def static_solid_configuration(
     """
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
     state_n = solid.state0.copy()
-    state_n.set(0.0)
+    state_n[:] = 0.0
     solid.set_fin_state(state_n)
     solid.set_ini_state(state_n)
 
@@ -136,7 +136,7 @@ def static_coupled_configuration_picard(
 
     # Set the initial state
     x_n = model.state0.copy()[['u', 'q', 'p']]
-    x_n.set(0)
+    x_n[:] = 0
 
     abs_errs = []
     rel_errs = []
@@ -208,7 +208,7 @@ def static_coupled_configuration_newton(
 
     ### Initial guess
     x_0 = model.state0.copy()
-    x_0.set(0.0)
+    x_0[:] = 0.0
 
     x_n, info = newton_solve(x_0, make_linear_subproblem, step_size=1.0)
     return x_n, info

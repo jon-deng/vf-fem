@@ -93,19 +93,19 @@ class TaylorTest(unittest.TestCase):
         ## Set a zero search direction if one isn't specified
         if dstate is None:
             dstate = self.model.state0.copy()
-            dstate.set(0.0)
+            dstate[:] = 0.0
 
         if dcontrols is None:
             dcontrols = [self.model.control.copy()]
-            dcontrols[0].set(0.0)
+            dcontrols[0][:] = 0.0
 
         if dprops is None:
             dprops = self.model.props.copy()
-            dprops.set(0.0)
+            dprops[:] = 0.0
 
         if dtimes is None:
             dtimes = self.times.copy()
-            dtimes.set(0.0)
+            dtimes[:] = 0.0
 
         ## Conduct a line search along the specified direction
         if self.OVERWRITE_LSEARCH or not os.path.exists(lsearch_fname):
@@ -214,7 +214,7 @@ class TestBasicGradient(TaylorTest):
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
-        dprops.set(0.0)
+        dprops[:] = 0.0
         dprops['emod'][:] = 1.0*step_size*10
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)
@@ -384,7 +384,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
-        dprops.set(0.0)
+        dprops[:] = 0.0
         dprops['emod'][:] = 1.0*step_size/5
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)

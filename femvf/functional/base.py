@@ -403,7 +403,7 @@ class Scalar(AbstractFunctional):
 
     def eval_dprops(self, f):
         dprops = self.model.props.copy()
-        dprops.set(0.0)
+        dprops[:] = 0.0
         return dprops
 
     def eval_ddt(self, f, n):

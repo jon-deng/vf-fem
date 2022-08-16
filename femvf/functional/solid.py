@@ -141,7 +141,7 @@ class PeriodicError(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -189,7 +189,7 @@ class ComponentPeriodicError(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -270,7 +270,7 @@ class PeriodicEnergyError(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
 
         alphau = self.constants['alpha']
 
@@ -323,7 +323,7 @@ class FinalDisplacementNorm(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -366,7 +366,7 @@ class FinalVelocityNorm(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -410,7 +410,7 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -487,7 +487,7 @@ class ElasticEnergyDifference(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
 
         self.model.set_solid_props(f.get_solid_props(0))
         u_ini_vec = f.get_state(0)[0]
@@ -583,7 +583,7 @@ class KV3DDampingWork(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
 
         N_START = N_START = self.constants['n_start']
         N_STATE = f.size
@@ -691,7 +691,7 @@ class KVDampingWork(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
 
         N_START = N_START = self.constants['n_start']
         N_STATE = f.size
@@ -783,7 +783,7 @@ class RayleighDampingWork(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
 
         dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.solid.dt
         return dsolid
@@ -870,7 +870,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
 
     def eval_dsl_props(self, f):
         dsolid = self.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):

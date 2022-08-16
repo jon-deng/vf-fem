@@ -68,18 +68,18 @@ class Acoustic1D(base.Model):
     ## Getting empty vectors
     def get_state_vec(self):
         ret = self.state0.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_control_vec(self):
         ret = self.control.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_properties_vec(self, set_default=True):
         ret = self.props.copy()
         if not set_default:
-            ret.set(0.0)
+            ret[:] = 0.0
         return ret
 
 class WRAnalog(Acoustic1D):
@@ -161,7 +161,7 @@ class WRAnalog(Acoustic1D):
 
     def apply_dres_dp_adj(self, x):
         b = self.props.copy()
-        b.set(0.0)
+        b[:] = 0.0
         return b
 
 def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
@@ -401,12 +401,12 @@ def input_and_output_impedance(model, n=2**12):
     Return the input and output impedances
     """
     state0 = model.state0.copy()
-    state0.set(0.0)
+    state0[:] = 0.0
 
     qinp_impulse = 1.0
     state0['pref'][:2] = model.inputq(qinp_impulse, state0['pinc'][:2])
     control = model.control.copy()
-    control.set(0.0)
+    control[:] = 0.0
 
     times = np.arange(0, n)*model.dt
 

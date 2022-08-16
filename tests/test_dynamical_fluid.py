@@ -21,7 +21,7 @@ def test_pressure_qualitative(model):
     """
     Generate qualitative plot of predicted Bernoulli pressures
     """
-    model.state.set(0.0)
+    model.state[:] = 0.0
 
     props = model.props
     props['r_sep'] = 1.5

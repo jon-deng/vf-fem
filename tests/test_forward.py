@@ -200,7 +200,7 @@ class ForwardConfig(unittest.TestCase):
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
-        ini_state.set(0.0)
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -246,7 +246,7 @@ class ForwardConfig(unittest.TestCase):
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
-        ini_state.set(0.0)
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -374,11 +374,11 @@ class TestIntegrate(ForwardConfig):
         dini_state = model.state0.copy()
         dcontrol = model.control.copy()
         dprops = model.props.copy()
-        dprops.set(0.0)
+        dprops[:] = 0.0
         # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
         dtimes = vec.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
         dtimes['times'][-1] = 1e-10
-        dini_state.set(0.0)
+        dini_state[:] = 0.0
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
             model.solid.bc_base.apply(vec)
 

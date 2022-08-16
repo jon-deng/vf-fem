@@ -75,7 +75,7 @@ class TestFSAIModel(unittest.TestCase):
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
-        ini_state.set(0.0)
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -89,7 +89,7 @@ class TestFSAIModel(unittest.TestCase):
         fin_state = ini_state.copy()
 
         dx_fd = model.state0.copy()
-        dx_fd.set(0.0)
+        dx_fd[:] = 0.0
         # dx_fd['u'] = 0.0
         dx_fd['q'] = 1e-2
         # dx_fd['p'][:] = 1e-2
@@ -124,7 +124,7 @@ class TestFSAIModel(unittest.TestCase):
         fin_state = ini_state.copy()
 
         dx_fd = model.state0.copy()
-        dx_fd.set(0.0)
+        dx_fd[:] = 0.0
         # dx_fd['u'] = 0.0
         # dx_fd['q'] = 1e-2
         # dx_fd['p'] = 1e-2

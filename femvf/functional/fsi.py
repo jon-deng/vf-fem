@@ -161,12 +161,12 @@ class TransferWorkbyVelocity(FSIFunctional):
 
     def eval_dsolid(self, f):
         dsolid = self.model.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dfluid(self, f):
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
@@ -280,12 +280,12 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
 
     def eval_dsolid(self, f):
         dsolid = self.model.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dfluid(self, f):
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):

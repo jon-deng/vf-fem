@@ -53,7 +53,7 @@ def test_pressure_qualitative(model):
     control['psub'][:] = 800.0 * 10
     model.set_control(control)
 
-    model.state.set(0.0)
+    model.state[:] = 0.0
     # Setting the state should automatically update the fluid area control
     model.set_state(model.state)
 

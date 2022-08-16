@@ -608,18 +608,18 @@ class FSAIModel(FSIModel):
     ## Empty parameter vectors
     def get_control_vec(self):
         ret = self.control.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_state_vec(self):
         ret = self.state0.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_properties_vec(self, set_default=True):
         ret = self.props.copy()
         if not set_default:
-            ret.set(0.0)
+            ret[:] = 0.0
         return ret
 
     ## Solver methods
@@ -697,7 +697,7 @@ class FSAIModel(FSIModel):
         dfp_dp = 1.0
         dfpinc_dpinc = PETSc.Mat().createAIJ((b['pinc'].size, b['pinc'].size), nnz=b['pinc'].size)
         diag = PETSc.Vec().createSeq(b['pinc'].size)
-        diag.set(1.0)
+        diag[:] = 1.0
         dfpinc_dpinc.setDiagonal(diag)
         dfpref_dpref = 1.0
 
@@ -714,7 +714,7 @@ class FSAIModel(FSIModel):
         # dacoustic / dfluid
         dfpref_dq = PETSc.Mat().createAIJ((b['pref'].size, b['q'].size), nnz=2)
         dcontrol = self.acoustic.control.copy()
-        dcontrol.set(0.0)
+        dcontrol[:] = 0.0
         dcontrol['qin'][:] = 1.0
         dfpref_dqin = self.acoustic.apply_dres_dcontrol(dcontrol)['pref'][:2]
         dqin_dq = 1.0

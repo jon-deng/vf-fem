@@ -35,10 +35,10 @@ class AcousticFunctional(AbstractFunctional):
 
     def eval_dprops(self, f):
         dsolid = self.model.solid.props.copy()
-        dsolid.set(0.0)
+        dsolid[:] = 0.0
 
         dfluid = self.model.fluid.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
 
         vecs = [dsolid, dfluid, self.eval_dac_props(f)]
 
@@ -87,7 +87,7 @@ class RmsRadiatedPressure(AcousticFunctional):
 
     def eval_dac_props(self, f):
         dfluid = self.acoustic.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
@@ -147,7 +147,7 @@ class AcousticPower(AcousticFunctional):
         dwork_dbmouth = -prad/ZMOUTH/2*dt
 
         dac = self.model.acoustic.state0.copy()
-        dac.set(0.0)
+        dac[:] = 0.0
         if n > 0:
             dac['pref'][-1] += dwork_dprad/T
             dac['pinc'][-2] += dwork_dfmouth/T
@@ -160,7 +160,7 @@ class AcousticPower(AcousticFunctional):
 
     def eval_dac_props(self, f):
         dfluid = self.model.acoustic.props.copy()
-        dfluid.set(0.0)
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
