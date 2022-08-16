@@ -92,20 +92,20 @@ class TaylorTest(unittest.TestCase):
         """
         ## Set a zero search direction if one isn't specified
         if dstate is None:
-            dstate = self.model.get_state_vec()
-            dstate.set(0.0)
+            dstate = self.model.state0.copy()
+            dstate[:] = 0.0
 
         if dcontrols is None:
-            dcontrols = [self.model.get_control_vec()]
-            dcontrols[0].set(0.0)
+            dcontrols = [self.model.control.copy()]
+            dcontrols[0][:] = 0.0
 
         if dprops is None:
-            dprops = self.model.get_properties_vec()
-            dprops.set(0.0)
+            dprops = self.model.props.copy()
+            dprops[:] = 0.0
 
         if dtimes is None:
             dtimes = self.times.copy()
-            dtimes.set(0.0)
+            dtimes[:] = 0.0
 
         ## Conduct a line search along the specified direction
         if self.OVERWRITE_LSEARCH or not os.path.exists(lsearch_fname):
@@ -193,11 +193,11 @@ class TestBasicGradient(TaylorTest):
         times_meas = np.linspace(t_start, t_final, 32)
         self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
-        self.state0 = self.model.get_state_vec()
+        self.state0 = self.model.state0.copy()
         self.state0['v'][:] = 1e-3
-        self.model.solid.bc_base.apply(self.state0['v'])
+        self.model.solid.forms['bc.dirichlet'].apply(self.state0['v'])
 
-        control = self.model.get_control_vec()
+        control = self.model.control.copy()
         control['psub'][:] = 800 * PASCAL_TO_CGS
         # control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
@@ -214,7 +214,7 @@ class TestBasicGradient(TaylorTest):
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
-        dprops.set(0.0)
+        dprops[:] = 0.0
         dprops['emod'][:] = 1.0*step_size*10
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)
@@ -248,8 +248,8 @@ class TestBasicGradient(TaylorTest):
         # step_dir[surface_dofs[:, 0].flat] = 0.0
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
-        self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
+        dstate = self.model.state0.copy()
         dstate['u'][:] = step_dir*0.01
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -271,8 +271,8 @@ class TestBasicGradient(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
+        dstate = self.model.state0.copy()
         dstate['v'][:] = step_dir*0.1
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -293,8 +293,8 @@ class TestBasicGradient(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
+        dstate = self.model.state0.copy()
         dstate['a'][:] = step_dir
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -318,7 +318,7 @@ class TestBasicGradient(TaylorTest):
         hs = 2.0**(np.arange(7)-5)
         step_size = 1.0e0 * PASCAL_TO_CGS
 
-        dcontrol = self.model.get_control_vec()
+        dcontrol = self.model.control.copy()
         dcontrol['psub'][:] = 1.0*step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])
@@ -355,21 +355,21 @@ class TestBasicGradientSingleStep(TaylorTest):
         # times_meas = np.linspace(t_start, t_final, 3)
         self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
-        control = self.model.get_control_vec()
-        uva0 = self.model.solid.get_state_vec()
+        control = self.model.control.copy()
+        uva0 = self.model.solid.state0.copy()
         uva0['v'][:] = 0.0
-        self.model.solid.bc_base.apply(uva0['v'])
-        self.model.set_ini_solid_state(uva0)
+        self.model.solid.forms['bc.dirichlet'].apply(uva0['v'])
+        self.model._set_ini_solid_state(uva0)
 
         control['psub'][:] = 800 * PASCAL_TO_CGS
         # control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
         self.model.set_control(control)
 
-        self.model.set_fin_solid_state(uva0)
+        self.model._set_fin_solid_state(uva0)
         qp0, _ = self.model.fluid.solve_qp1()
 
-        self.state0 = self.model.get_state_vec()
+        self.state0 = self.model.state0.copy()
         self.state0[3:5] = qp0
 
         # Step sizes and scale factor
@@ -384,7 +384,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprops = self.props.copy()
-        dprops.set(0.0)
+        dprops[:] = 0.0
         dprops['emod'][:] = 1.0*step_size/5
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)
@@ -418,8 +418,8 @@ class TestBasicGradientSingleStep(TaylorTest):
         # step_dir[surface_dofs[:, 0].flat] = 0.0
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
-        self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
+        dstate = self.model.state0.copy()
 
         dstate['u'][:] = step_dir*0.00005
         dstate['v'][:] = 0.0
@@ -444,8 +444,8 @@ class TestBasicGradientSingleStep(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
+        dstate = self.model.state0.copy()
         dstate['u'][:] = 0
         dstate['v'][:] = step_dir*1e-5
         dstate['a'][:] = 0.0
@@ -468,8 +468,8 @@ class TestBasicGradientSingleStep(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
-        dstate = self.model.get_state_vec()
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
+        dstate = self.model.state0.copy()
         dstate['u'][:] = 0.0
         dstate['v'][:] = 0.0
         dstate['a'][:] = step_dir*1e-5
@@ -483,7 +483,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         hs = 2.0**(np.arange(7)-5)
         step_size = 5.0e0 * PASCAL_TO_CGS
 
-        dcontrol = self.model.get_control_vec()
+        dcontrol = self.model.control.copy()
         dcontrol['psub'][:] = 1.0*step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])

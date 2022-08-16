@@ -58,7 +58,7 @@ def static_solid_configuration(
         The properties of the solid model
     """
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
-    state_n = solid.get_state_vec()
+    state_n = solid.state0.copy()
     state_n[:] = 0.0
     solid.set_fin_state(state_n)
     solid.set_ini_state(state_n)
@@ -73,7 +73,7 @@ def static_solid_configuration(
     dfn.solve(
         solid.forms['form.un.f1uva'] == 0.0,
         solid.forms['coeff.state.u1'],
-        bcs=[solid.bc_base],
+        bcs=[solid.forms['bc.dirichlet']],
         J=jac,
         solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
     )
@@ -87,9 +87,9 @@ def set_coupled_model_substate(model, xsub):
     """
     Set the coupled model state
     """
-    _state = model.get_state_vec()
-    for key in xsub.labels[0]:
-        gops.set_vec(_state[key], xsub[key])
+    _state = model.state0.copy()
+    _labels = list(xsub.labels[0])
+    _state[_labels] = xsub
         # _state[key][:] = xsub[key].array
     # Set both initial and final states to ensure that the fluid pressure
     # is set for the final state; for explicit models only the initial fluid
@@ -122,7 +122,7 @@ def static_coupled_configuration_picard(
         dfn.solve(
             solid.forms['form.un.f1uva'] == 0.0,
             solid.forms['coeff.state.u1'],
-            bcs=[solid.bc_base],
+            bcs=[solid.forms['bc.dirichlet']],
             J=solid.forms['form.bi.df1uva_du1'],
             solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
         )
@@ -135,8 +135,8 @@ def static_coupled_configuration_picard(
         return concatenate_vec([u, qp.copy()])
 
     # Set the initial state
-    x_n = model.get_state_vec()[['u', 'q', 'p']]
-    x_n.set(0)
+    x_n = model.state0.copy()[['u', 'q', 'p']]
+    x_n[:] = 0
 
     abs_errs = []
     rel_errs = []
@@ -155,7 +155,7 @@ def static_coupled_configuration_picard(
         set_coupled_model_substate(model, x_n)
 
         res = dfn.assemble(solid.forms['form.un.f1uva'])
-        solid.bc_base.apply(res)
+        solid.forms['bc.dirichlet'].apply(res)
 
         abs_errs.append(norm(res))
         rel_errs.append(abs_errs[-1]/abs_errs[0])
@@ -198,7 +198,7 @@ def static_coupled_configuration_newton(
 
         ### Form the residual
         def assem_res():
-            return model.res()
+            return model.assem_res()
 
         ### Form the jacobian
         def solve_jac(res):
@@ -208,7 +208,7 @@ def static_coupled_configuration_newton(
 
     ### Initial guess
     x_0 = model.state0.copy()
-    x_0.set(0.0)
+    x_0[:] = 0.0
 
     x_n, info = newton_solve(x_0, make_linear_subproblem, step_size=1.0)
     return x_n, info

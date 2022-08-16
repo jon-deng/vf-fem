@@ -33,7 +33,7 @@ class TestFSAIModel(unittest.TestCase):
         # Set the control vector
         p_sub = 500
 
-        control = model.get_control_vec()
+        control = model.control.copy()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         controls = [control]
 
@@ -74,8 +74,8 @@ class TestFSAIModel(unittest.TestCase):
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model.get_state_vec()
-        ini_state.set(0.0)
+        ini_state = model.state0.copy()
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -88,14 +88,14 @@ class TestFSAIModel(unittest.TestCase):
 
         fin_state = ini_state.copy()
 
-        dx_fd = model.get_state_vec()
-        dx_fd.set(0.0)
+        dx_fd = model.state0.copy()
+        dx_fd[:] = 0.0
         # dx_fd['u'] = 0.0
         dx_fd['q'] = 1e-2
         # dx_fd['p'][:] = 1e-2
         # dx_fd['pinc'][:] = 1e-2
         # dx_fd['pref'][:] = 1e-2
-        model.solid.bc_base.apply(dx_fd['u'])
+        model.solid.forms['bc.dirichlet'].apply(dx_fd['u'])
 
         breakpoint()
         model.set_fin_state(fin_state)
@@ -123,13 +123,13 @@ class TestFSAIModel(unittest.TestCase):
 
         fin_state = ini_state.copy()
 
-        dx_fd = model.get_state_vec()
-        dx_fd.set(0.0)
+        dx_fd = model.state0.copy()
+        dx_fd[:] = 0.0
         # dx_fd['u'] = 0.0
         # dx_fd['q'] = 1e-2
         # dx_fd['p'] = 1e-2
         # dx_fd['pref'][:2] = 1e-2
-        model.solid.bc_base.apply(dx_fd['u'])
+        model.solid.forms['bc.dirichlet'].apply(dx_fd['u'])
 
         model.set_fin_state(fin_state)
         res0 = model.res()
@@ -166,12 +166,12 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         self.model, self.props = load_fsi_rayleigh_model(coupling='explicit')
 
-        self.state1 = self.model.get_state_vec()
-        self.state0 = self.model.get_state_vec()
-        self.control = self.model.get_control_vec()
+        self.state1 = self.model.state0.copy()
+        self.state0 = self.model.state0.copy()
+        self.control = self.model.control.copy()
         self.dt = 1e-4
 
-        bc_base = self.model.solid.bc_base
+        bc_base = self.model.solid.forms['bc.dirichlet']
         self.state0['u'][:] = 1e-4
         self.state0['v'][:] = 1e-4
         self.state0['a'][:] = 1e-4
@@ -193,7 +193,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
     ## Convenience functions to represent the residual being tested
     def res(self, state1, state0, control, props, dt):
         self.set_linearization(state1, state0, control, props, dt)
-        return self.model.res()
+        return self.model.assem_res()
 
     def set_linearization(self, state1, state0, control, props, dt):
         self.model.set_fin_state(state1)
@@ -231,8 +231,8 @@ class TestModelResidualSensitivity(unittest.TestCase):
         from `dres` and compare whether the results are sufficiently similar
         """
         # Define step vector for state1
-        dstate1 = self.model.get_state_vec()
-        bc_base = self.model.solid.bc_base
+        dstate1 = self.model.state0.copy()
+        bc_base = self.model.solid.forms['bc.dirichlet']
         dstate1['u'][:] = 1e-8
         dstate1['v'][:] = 1e-8
         dstate1['a'][:] = 1e-8
@@ -263,12 +263,12 @@ class TestModelResidualSensitivity(unittest.TestCase):
         and compare whether the results are sufficiently similar
         """
         # Define step vectors to use for state, control, etc.
-        dstate0 = self.model.get_state_vec()
-        dcontrol = self.model.get_control_vec()
-        dprops = self.model.get_properties_vec()
+        dstate0 = self.model.state0.copy()
+        dcontrol = self.model.control.copy()
+        dprops = self.model.props.copy()
         ddt = 1e-9
 
-        bc_base = self.model.solid.bc_base
+        bc_base = self.model.solid.forms['bc.dirichlet']
         dstate0['u'][:] = 1e-4
         dstate0['v'][:] = 1e-4
         dstate0['a'][:] = 1e-4

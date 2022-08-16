@@ -39,7 +39,7 @@ class FSIFunctional(SolidFunctional):
         keys = self.props.labels[0]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
-                vecs.append(getattr(self.model, attr).get_properties_vec())
+                vecs.append(getattr(self.model, attr).props.copy())
         return vec.concatenate_vec(vecs)
 
 class TransferWorkbyVelocity(FSIFunctional):
@@ -102,7 +102,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         return work
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state_vec()
+        duva = self.model.solid.state0.copy()
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
         N_START = self.constants['n_start']
@@ -131,7 +131,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state_vec()
+        dqp = self.model.fluid.state0.copy()
 
         # The work terms that involve state n are given by
         # ... + 1/2*(power[n-1]+power[n])*(t[n]-t[n-1]) + 1/2*(power[n]+power[n+1])*(t[n+1]-t[n]) + ...
@@ -160,13 +160,13 @@ class TransferWorkbyVelocity(FSIFunctional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.model.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties_vec()
-        dfluid.set(0.0)
+        dfluid = self.model.fluid.props.copy()
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):
@@ -246,7 +246,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         return res
 
     def eval_duva(self, f, n):
-        duva = self.model.solid.get_state_vec()
+        duva = self.model.solid.state0.copy()
         N_START = self.constants['n_start']
         N_STATE = f.size
 
@@ -265,7 +265,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         return duva
 
     def eval_dqp(self, f, n):
-        dqp = self.model.fluid.get_state_vec()
+        dqp = self.model.fluid.state0.copy()
         N_START = self.constants['n_start']
         # N_STATE = f.size
 
@@ -279,13 +279,13 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.model.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties_vec()
-        dfluid.set(0.0)
+        dfluid = self.model.fluid.props.copy()
+        dfluid[:] = 0.0
         return dfluid
 
     def eval_dt0(self, f, n):

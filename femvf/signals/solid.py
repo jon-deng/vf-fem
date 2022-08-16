@@ -14,7 +14,7 @@ from .base import transform_to_make_signals, StateMeasure
 class MinGlottalWidth(StateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):
-        self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
+        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
     def __call__(self, state, control, props):
         xcur = self.XREF.reshape(-1) + state.sub['u'][:]

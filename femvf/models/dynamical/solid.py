@@ -1,14 +1,27 @@
 """
-Contains a solid nonlinear dynamic system class definition
+Solid nonlinear dynamical system class definitions
 
-The nonlinear dynamic systems here are defined in Fenics and augmented a bit manually. The basic
-dynamical system residual has a block form
-F(x, xt, g) = [Fu(x, xt, g), Fv(x, xt)]
-x = [u, v]
-xt = [ut, vt]
-and where
-Fu(x, xt, g) : defined in Fenics with UFL (derivatives via UFL forms)
-Fv(x, xt, g) = v-ut
+The nonlinear dynamical systems here are defined in "FEniCS" and then augmented
+a bit manually. The basic dynamical system is represented by a nonlinear
+residual with the block form:
+    - `F(x, xt, g) = [Fu(x, xt, g, p), Fv(x, xt)]`
+    - `x = [u, v]`
+    - `xt = [ut, vt]`
+where `F` denotes the nonlinear residual and `x` and `xt` are the 'state' and
+'state time derivative', respectively. The variables `u` and `v` stand for
+'position' and 'velocity'. The final two parameters `g` and `p` denote some
+arbitrary collections of control and model parameters, respectively.
+
+The two blocks of `F` are defined by:
+    - `Fu(x, xt, g)` is defined symbolically in "FEniCS" with with the `ufl`
+    form language.
+    - `Fv(x, xt, g)` is defined by `v-ut` through the derivative trick used to
+    convert second order ODEs to first order.
+
+The classes represent either the residual `F` or its linearization `F`, and each
+class gives methods to evaluate the residual and its derivatives w.r.t the
+parameters `x`, `xt`, `g`, `p`. This is done in the classes
+`SolidDynamicalSystem` and `LinearizedSolidDynamicalSystem` below.
 """
 
 from typing import Tuple, Mapping
@@ -22,7 +35,7 @@ from .base import DynamicalSystem
 from ..transient.solid import properties_bvec_from_forms
 from ..equations.solid import solidforms
 from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
-from ..assemble import CachedFormAssembler
+from ..assemblyutils import CachedFormAssembler
 
 # pylint: disable=abstract-method
 
@@ -93,6 +106,15 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
         defaults = self.PROPERTY_DEFAULTS if set_default else None
         return properties_bvec_from_forms(self.forms, defaults)
 
+    def set_state(self, state):
+        self.state[:] = state
+
+    def set_statet(self, statet):
+        self.statet[:] = statet
+
+    def set_control(self, control):
+        self.control[:] = control
+
     def set_props(self, props):
         for key in props.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
@@ -104,6 +126,16 @@ class BaseSolidDynamicalSystem(DynamicalSystem):
                 coefficient.assign(dfn.Constant(np.squeeze(props[key])))
             else:
                 coefficient.vector()[:] = props[key]
+
+
+    def set_dstate(self, dstate):
+        self.dstate[:] = dstate
+
+    def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
+
+    def set_dcontrol(self, dcontrol):
+        self.dcontrol[:] = dcontrol
 
     # Convenience methods
     @property

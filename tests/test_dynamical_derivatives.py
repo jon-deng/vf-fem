@@ -130,10 +130,8 @@ def setup_coupled_parameter_perturbation(model):
         dstate['v'] = dxv
     if 'q' in dstate:
         dstate['q'] = 1e-3
-        # gops.set_vec(dstate['q'], 0.0)
     if 'p' in dstate:
         dstate['p'] = 1e-3
-        # gops.set_vec(dstate['p'], 0.0)
     _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
 
     dstatet = dstate.copy()
@@ -241,7 +239,7 @@ def test_dres_dstate_vs_dres_state(model, model_linear, x0, del_x):
 
     model_linear.set_dstate(del_x)
     _zero_del_xt = model_linear.dstatet.copy()
-    _zero_del_xt.set(0)
+    _zero_del_xt[:] = 0
     model_linear.set_dstatet(_zero_del_xt)
 
     dres_state_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)
@@ -270,7 +268,7 @@ def test_dres_dstatet_vs_dres_statet(model, model_linear, x0, del_xt):
 
     model_linear.set_dstatet(del_xt)
     _zero_del_x = model_linear.dstate.copy()
-    _zero_del_x.set(0)
+    _zero_del_x[:] = 0
     model_linear.set_dstate(_zero_del_x)
 
     dres_statet_b = _set_and_assemble(x0, model_linear.set_state, model_linear.assem_res)

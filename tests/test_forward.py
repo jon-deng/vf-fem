@@ -50,7 +50,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the control vector
         p_sub = 500.0
 
-        control = model.get_control_vec()
+        control = model.control
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
 
@@ -62,7 +62,7 @@ class ForwardConfig(unittest.TestCase):
         y_gap = 0.01
         y_midline = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
-        props = model.get_properties_vec()
+        props = model.props
 
         props['ymid'][0] = y_midline
 
@@ -75,19 +75,21 @@ class ForwardConfig(unittest.TestCase):
         props['eta'][()] = 4e-3
         props['kcontact'][()] = 1e11
         props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
+        props['rho'] = 1.0
 
-        props['zeta_min'][0] = 1e-8
+        props['zeta_min'] = 1e-8
+        props['zeta_sep'] = 1e-8
 
         # Set the initial state
-        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
+        xy = model.solid.forms['fspace.vector'].tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
+        u0 = dfn.Function(model.solid.forms['fspace.vector']).vector()
 
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model.get_state_vec()
+        ini_state = model.state0
         ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
@@ -97,12 +99,12 @@ class ForwardConfig(unittest.TestCase):
 
     def config_fsi_rayleigh_model(self):
         ## Configure the model and its parameters
-        model = load_transient_fsi_model(self.mesh_path, None, SolidType=tsmd.Rayleigh, FluidType=tfmd.Bernoulli, coupling='explicit')
+        model = load_transient_fsi_model(self.mesh_path, None, SolidType=tsmd.Rayleigh, FluidType=tfmd.BernoulliSmoothMinSep, coupling='explicit')
 
         # Set the control vector
         p_sub = 500.0
 
-        control = model.get_control_vec()
+        control = model.control
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
 
@@ -113,7 +115,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the properties
         y_gap = 0.01
 
-        props = model.props.copy()
+        props = model.props
         # fl_props = model.fluid.get_properties_vec(set_default=True)
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
@@ -127,17 +129,21 @@ class ForwardConfig(unittest.TestCase):
         props['rayleigh_k'][()] = 4e-3
         props['kcontact'][()] = 1e11
         props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
+        props['rho'] = 1.0
+
+        props['zeta_min'] = 1e-8
+        props['zeta_sep'] = 1e-8
 
         # Set the initial state
-        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
+        xy = model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
+        u0 = dfn.Function(model.solid.forms['fspace.vector']).vector()
 
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model.get_state_vec()
+        ini_state = model.state0.copy()
         ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
@@ -157,7 +163,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the control vector
         p_sub = 500
 
-        control = model.get_control_vec()
+        control = model.control.copy()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         controls = [control]
 
@@ -193,8 +199,8 @@ class ForwardConfig(unittest.TestCase):
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model.get_state_vec()
-        ini_state.set(0.0)
+        ini_state = model.state0.copy()
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -208,7 +214,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the control vector
         p_sub = 500
 
-        control = model.get_control_vec()
+        control = model.control.copy()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
         controls = [control]
@@ -239,8 +245,8 @@ class ForwardConfig(unittest.TestCase):
         # model.fluid.set_props(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model.get_state_vec()
-        ini_state.set(0.0)
+        ini_state = model.state0.copy()
+        ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
@@ -365,16 +371,16 @@ class TestIntegrate(ForwardConfig):
         times = vec.BlockVector((np.linspace(0, 0.01, NTIME),), labels=[('times',)])
 
         ## Specify the test change in model parameters
-        dini_state = model.get_state_vec()
-        dcontrol = model.get_control_vec()
-        dprops = model.get_properties_vec()
-        dprops.set(0.0)
+        dini_state = model.state0.copy()
+        dcontrol = model.control.copy()
+        dprops = model.props.copy()
+        dprops[:] = 0.0
         # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
         dtimes = vec.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
         dtimes['times'][-1] = 1e-10
-        dini_state.set(0.0)
+        dini_state[:] = 0.0
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
-            model.solid.bc_base.apply(vec)
+            model.solid.forms['bc.dirichlet'].apply(vec)
 
         ## Integrate the model at x, and x+dx
         def _integrate(model, state, control, props, times, h5file, overwrite=False):

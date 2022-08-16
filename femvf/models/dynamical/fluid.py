@@ -10,7 +10,6 @@ and where q and p stand for flow and pressure for a 1D fluid model
 """
 
 # from typing
-from multiprocessing.sharedctypes import Value
 import numpy as np
 import jax
 
@@ -111,6 +110,28 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
         self.dstatet[:] = 0.0
         self.dcontrol[:] = 0.0
         self.dprops[:] = 0.0
+
+    def set_state(self, state):
+        self.state[:] = state
+
+    def set_statet(self, statet):
+        self.statet[:] = statet
+
+    def set_control(self, control):
+        self.control[:] = control
+
+    def set_props(self, props):
+        self.props[:] = props
+
+
+    def set_dstate(self, dstate):
+        self.dstate[:] = dstate
+
+    def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
+
+    def set_dcontrol(self, dcontrol):
+        self.dcontrol[:] = dcontrol
 
 
 class BaseBernoulliSmoothMinSep(BaseFluid1DDynamicalSystem):

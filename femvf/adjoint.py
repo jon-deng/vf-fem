@@ -37,9 +37,9 @@ def integrate(model, f, dfin_state):
 
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
-    adj_props = model.get_properties_vec()
-    adj_props.set(0.0)
-    adj_controls = [model.get_control_vec() for i in range(f.num_controls)]
+    adj_props = model.props.copy()
+    adj_props[:] = 0.0
+    adj_controls = [model.control.copy() for i in range(f.num_controls)]
 
     ## Load states/parameters
     N = f.size

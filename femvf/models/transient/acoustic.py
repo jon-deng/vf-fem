@@ -68,18 +68,18 @@ class Acoustic1D(base.Model):
     ## Getting empty vectors
     def get_state_vec(self):
         ret = self.state0.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_control_vec(self):
         ret = self.control.copy()
-        ret.set(0.0)
+        ret[:] = 0.0
         return ret
 
     def get_properties_vec(self, set_default=True):
         ret = self.props.copy()
         if not set_default:
-            ret.set(0.0)
+            ret[:] = 0.0
         return ret
 
 class WRAnalog(Acoustic1D):
@@ -136,7 +136,7 @@ class WRAnalog(Acoustic1D):
         info = {}
         return state1, info
 
-    def res(self):
+    def assem_res(self):
         return self.state1 - self.solve_state1()[0]
 
     def solve_dres_dstate1_adj(self, x):
@@ -154,14 +154,14 @@ class WRAnalog(Acoustic1D):
         args = (*self.state0.vecs, *self.control.vecs)
         _, A = jax.linearize(self.reflect, *args)
 
-        x_ = vec.concatenate_vec([self.get_state_vec(), x])
+        x_ = vec.concatenate_vec([self.state0.copy(), x])
         bvecs = [np.asarray(vec) for vec in A(*x_.vecs)]
 
         return -vec.BlockVector(bvecs, labels=self.state1.labels)
 
     def apply_dres_dp_adj(self, x):
-        b = self.get_properties_vec()
-        b.set(0.0)
+        b = self.props.copy()
+        b[:] = 0.0
         return b
 
 def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
@@ -400,13 +400,13 @@ def input_and_output_impedance(model, n=2**12):
     """
     Return the input and output impedances
     """
-    state0 = model.get_state_vec()
-    state0.set(0.0)
+    state0 = model.state0.copy()
+    state0[:] = 0.0
 
     qinp_impulse = 1.0
     state0['pref'][:2] = model.inputq(qinp_impulse, state0['pinc'][:2])
-    control = model.get_control_vec()
-    control.set(0.0)
+    control = model.control.copy()
+    control[:] = 0.0
 
     times = np.arange(0, n)*model.dt
 

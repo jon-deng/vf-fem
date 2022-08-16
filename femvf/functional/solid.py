@@ -65,14 +65,14 @@ class SolidFunctional(AbstractFunctional):
         vecs = [self.eval_dsl_state(f, n)]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
-                vecs.append(getattr(self.model, attr).get_state_vec())
+                vecs.append(getattr(self.model, attr).state0.copy())
         return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
         vecs = [self.eval_dsl_props(f)]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
-                vecs.append(getattr(self.model, attr).get_properties_vec())
+                vecs.append(getattr(self.model, attr).props.copy())
         return vec.concatenate_vec(vecs)
 
 class PeriodicError(SolidFunctional):
@@ -127,7 +127,7 @@ class PeriodicError(SolidFunctional):
         return alphau**2*erru + errv + erra
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
         alphau = self.constants['alpha']
         if n == 0:
             duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
@@ -140,8 +140,8 @@ class PeriodicError(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -180,7 +180,7 @@ class ComponentPeriodicError(SolidFunctional):
         return erru
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
         if n == 0:
             duva[self.IDX_COMP][:] = dfn.assemble(self.forms['dresu_du_0'])
         elif n == f.size-1:
@@ -188,8 +188,8 @@ class ComponentPeriodicError(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -257,7 +257,7 @@ class PeriodicEnergyError(SolidFunctional):
         return alphau**2*erru + errv
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
 
         alphau = self.constants['alpha']
         if n == 0:
@@ -269,8 +269,8 @@ class PeriodicEnergyError(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
 
         alphau = self.constants['alpha']
 
@@ -313,7 +313,7 @@ class FinalDisplacementNorm(SolidFunctional):
         return dfn.assemble(self.forms['res'])
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
 
         if n == f.size-1:
             self.forms['u'].vector()[:] = f.get_state(n)[0]
@@ -322,8 +322,8 @@ class FinalDisplacementNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -356,7 +356,7 @@ class FinalVelocityNorm(SolidFunctional):
         return dfn.assemble(self.forms['res'])
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
 
         if n == f.size-1:
             self.forms['v'].vector()[:] = f.get_state(n)[1]
@@ -365,8 +365,8 @@ class FinalVelocityNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -400,7 +400,7 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
         return dfn.assemble(self.forms['res'])
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
 
         if n == f.size-1:
             self.forms['u'].vector()[:] = f.get_state(n)[0]
@@ -409,8 +409,8 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -462,7 +462,7 @@ class ElasticEnergyDifference(SolidFunctional):
         return (en_elastic_fin - en_elastic_ini)**2
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
         if n == 0 or n == f.size-1:
             u_ini_vec = f.get_state(0)[0]
             u_fin_vec = f.get_state(-1)[0]
@@ -486,8 +486,8 @@ class ElasticEnergyDifference(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
 
         self.model.set_solid_props(f.get_solid_props(0))
         u_ini_vec = f.get_state(0)[0]
@@ -562,7 +562,7 @@ class KV3DDampingWork(SolidFunctional):
         return res
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
         N_START = self.constants['n_start']
         N_STATE = f.size
         time = f.get_times()
@@ -582,8 +582,8 @@ class KV3DDampingWork(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
 
         N_START = N_START = self.constants['n_start']
         N_STATE = f.size
@@ -671,7 +671,7 @@ class KVDampingWork(SolidFunctional):
         return res
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
         N_START = self.constants['n_start']
         N_STATE = f.size
         time = f.get_times()
@@ -690,8 +690,8 @@ class KVDampingWork(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
 
         N_START = N_START = self.constants['n_start']
         N_STATE = f.size
@@ -776,14 +776,14 @@ class RayleighDampingWork(SolidFunctional):
         return res
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
 
         duva['v'][:] = dfn.assemble(self.forms['ddamping_power_dv']) * self.solid.dt
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
 
         dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.solid.dt
         return dsolid
@@ -841,7 +841,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
         return np.sum((np.array(gw_model) - self.constants['gw_meas'])**2)
 
     def eval_dsl_state(self, f, n):
-        duva = self.solid.get_state_vec()
+        duva = self.solid.state0.copy()
         model = self.model
 
         # Get the initial locations of the nodes
@@ -869,8 +869,8 @@ class GlottalWidthErrorNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
-        dsolid.set(0.0)
+        dsolid = self.solid.props.copy()
+        dsolid[:] = 0.0
         return dsolid
 
     def eval_dt0(self, f, n):

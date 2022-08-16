@@ -2,6 +2,18 @@
 This module defines the basic interface for a transient model.
 """
 
+from typing import TypeVar, Union, Tuple, Mapping, Optional, Any
+
+from blockarray import subops
+from blockarray import blockvec as bv, blockmat as bm
+
+T = TypeVar('T')
+Vector = Union[subops.DfnVector, subops.GenericSubarray, subops.PETScVector]
+Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
+
+BlockVec = bv.BlockVector[Vector]
+BlockMat = bm.BlockMatrix[Matrix]
+
 class Model:
     """
     This object represents the equations defining a system over one time step.
@@ -17,67 +29,119 @@ class Model:
     Derivatives of F w.r.t u1, u0, g, p, dt and adjoint of those operators should all be
     defined.
     """
-    ## Get empty vectors
-    def get_state_vec(self):
-        """
-        Return empty flow speed and pressure state vectors
-        """
-        raise NotImplementedError("")
+    ## Parameter setting functions
 
-    def get_properties_vec(self, set_default=True):
+    @property
+    def dt(self):
         """
-        Return a BlockVector representing the properties of the fluid
+        Return/set the time step
         """
-        raise NotImplementedError("")
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def get_control_vec(self):
-        raise NotImplementedError("")
+    def set_ini_state(self, state0: BlockVec):
+        """
+        Set the initial state (`self.state0`)
+
+        Parameters
+        ----------
+        state0: BlockVec
+            The state to set
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
+
+    def set_fin_state(self, state1: BlockVec):
+        """
+        Set the final state (`self.state1`)
+
+        Parameters
+        ----------
+        state1: BlockVec
+            The state to set
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
+
+    def set_control(self, control: BlockVec):
+        """
+        Set the control (`self.control`)
+
+        Parameters
+        ----------
+        control: BlockVec
+            The controls to set
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
+
+    def set_props(self, props: BlockVec):
+        """
+        Set the properties (`self.props`)
+
+        Parameters
+        ----------
+        props: BlockVec
+            The properties to set
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     ## Residual and sensitivity methods
-    def res(self):
+    def assem_res(self) -> BlockVec:
         """
-        Return the (nonlinear) residual for the current time step
+        Return the residual of the current time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def solve_state1(self, state1):
+    def assem_dres_dstate0(self) -> BlockMat:
         """
-        Solve for the final state such that the residual = 0
+        Return the residual sensitivity to the initial state for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def solve_dres_dstate1(self, b):
+    def assem_dres_dstate1(self) -> BlockMat:
         """
-        Solve dF/du1 x = b
+        Return the residual sensitivity to the final state for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def solve_dres_dstate1_adj(self, x):
+    def assem_dres_dcontrol(self) -> BlockMat:
         """
-        Solve dF/du1^T b = x
+        Return the residual sensitivity to the control for the time step
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def apply_dres_dstate0(self, x):
-        raise NotImplementedError()
+    def assem_dres_dprops(self) -> BlockMat:
+        """
+        Return the residual sensitivity to the properties for the time step
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def apply_dres_dstate0_adj(self, b):
-        raise NotImplementedError()
+    ## Solver methods
+    def solve_state1(
+            self,
+            state1: BlockVec,
+            options: Optional[Mapping[str, Any]]
+        ) -> Tuple[BlockVec, Mapping[str, Any]]:
+        """
+        Solve for the final state for the time step
 
-    def apply_dres_dcontrol(self, x):
-        raise NotImplementedError()
+        Parameters
+        ----------
+        state1: BlockVec
+            An initial guess for the final state. For nonlinear models, this
+            serves as the initial guess for an iterative procedure.
 
-    def apply_dres_dcontrol_adj(self, x):
-        raise NotImplementedError()
+        Returns
+        -------
+        BlockVec
+            The final state at the end of the time step
+        dict
+            A dictionary of information about the solution. This depends on the
+            solver but usually includes information like: the number of
+            iterations, residual error, etc.
+        """
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def apply_dres_dp(self, x):
-        raise NotImplementedError()
-
-    def apply_dres_dp_adj(self, x):
-        raise NotImplementedError()
-
-    def apply_dres_ddt(self, x):
-        raise NotImplementedError()
-
-    def apply_dres_ddt_adj(self, b):
-        raise NotImplementedError()
+    # TODO: If you want to take derivatives of Transient models, you will need
+    # to implement solvers for the jacobian and its adjoint
+    # (`solve_dres_dstate1` and `solve_dres_dstate1_adj`).
+    # In addition you'll need adjoints of all the `assem_*` functions
+    # Currently some of these functions are left over from a previous implementation
+    # but no longer work due to code changes.
