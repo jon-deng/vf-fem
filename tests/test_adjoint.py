@@ -195,7 +195,7 @@ class TestBasicGradient(TaylorTest):
 
         self.state0 = self.model.state0.copy()
         self.state0['v'][:] = 1e-3
-        self.model.solid.bc_base.apply(self.state0['v'])
+        self.model.solid.forms['bc.dirichlet'].apply(self.state0['v'])
 
         control = self.model.control.copy()
         control['psub'][:] = 800 * PASCAL_TO_CGS
@@ -248,7 +248,7 @@ class TestBasicGradient(TaylorTest):
         # step_dir[surface_dofs[:, 0].flat] = 0.0
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
-        self.model.solid.bc_base.apply(step_dir)
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['u'][:] = step_dir*0.01
 
@@ -271,7 +271,7 @@ class TestBasicGradient(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['v'][:] = step_dir*0.1
 
@@ -293,7 +293,7 @@ class TestBasicGradient(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['a'][:] = step_dir
 
@@ -358,7 +358,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         control = self.model.control.copy()
         uva0 = self.model.solid.state0.copy()
         uva0['v'][:] = 0.0
-        self.model.solid.bc_base.apply(uva0['v'])
+        self.model.solid.forms['bc.dirichlet'].apply(uva0['v'])
         self.model._set_ini_solid_state(uva0)
 
         control['psub'][:] = 800 * PASCAL_TO_CGS
@@ -418,7 +418,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         # step_dir[surface_dofs[:, 0].flat] = 0.0
         # step_dir[surface_dofs[:, 1].flat] = 0.0
 
-        self.model.solid.bc_base.apply(step_dir)
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
 
         dstate['u'][:] = step_dir*0.00005
@@ -444,7 +444,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['u'][:] = 0
         dstate['v'][:] = step_dir*1e-5
@@ -468,7 +468,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
         step_dir[:] = _step_dir
 
-        self.model.solid.bc_base.apply(step_dir)
+        self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['u'][:] = 0.0
         dstate['v'][:] = 0.0

@@ -95,7 +95,7 @@ class TestFSAIModel(unittest.TestCase):
         # dx_fd['p'][:] = 1e-2
         # dx_fd['pinc'][:] = 1e-2
         # dx_fd['pref'][:] = 1e-2
-        model.solid.bc_base.apply(dx_fd['u'])
+        model.solid.forms['bc.dirichlet'].apply(dx_fd['u'])
 
         breakpoint()
         model.set_fin_state(fin_state)
@@ -129,7 +129,7 @@ class TestFSAIModel(unittest.TestCase):
         # dx_fd['q'] = 1e-2
         # dx_fd['p'] = 1e-2
         # dx_fd['pref'][:2] = 1e-2
-        model.solid.bc_base.apply(dx_fd['u'])
+        model.solid.forms['bc.dirichlet'].apply(dx_fd['u'])
 
         model.set_fin_state(fin_state)
         res0 = model.res()
@@ -171,7 +171,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         self.control = self.model.control.copy()
         self.dt = 1e-4
 
-        bc_base = self.model.solid.bc_base
+        bc_base = self.model.solid.forms['bc.dirichlet']
         self.state0['u'][:] = 1e-4
         self.state0['v'][:] = 1e-4
         self.state0['a'][:] = 1e-4
@@ -232,7 +232,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         # Define step vector for state1
         dstate1 = self.model.state0.copy()
-        bc_base = self.model.solid.bc_base
+        bc_base = self.model.solid.forms['bc.dirichlet']
         dstate1['u'][:] = 1e-8
         dstate1['v'][:] = 1e-8
         dstate1['a'][:] = 1e-8
@@ -268,7 +268,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         dprops = self.model.props.copy()
         ddt = 1e-9
 
-        bc_base = self.model.solid.bc_base
+        bc_base = self.model.solid.forms['bc.dirichlet']
         dstate0['u'][:] = 1e-4
         dstate0['v'][:] = 1e-4
         dstate0['a'][:] = 1e-4

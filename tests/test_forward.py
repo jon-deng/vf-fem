@@ -380,7 +380,7 @@ class TestIntegrate(ForwardConfig):
         dtimes['times'][-1] = 1e-10
         dini_state[:] = 0.0
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
-            model.solid.bc_base.apply(vec)
+            model.solid.forms['bc.dirichlet'].apply(vec)
 
         ## Integrate the model at x, and x+dx
         def _integrate(model, state, control, props, times, h5file, overwrite=False):

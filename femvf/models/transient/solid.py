@@ -249,7 +249,7 @@ class Solid(base.Model):
         dfu_dv = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
         dfu_da = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
         for mat in (dfu_du, dfu_dv, dfu_da):
-            self.bc_base.apply(mat)
+            self.forms['bc.dirichlet'].apply(mat)
 
         dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du0(self.dt)))
         dfv_dv = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_dv0(self.dt)))

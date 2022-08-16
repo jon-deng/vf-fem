@@ -73,7 +73,7 @@ def static_solid_configuration(
     dfn.solve(
         solid.forms['form.un.f1uva'] == 0.0,
         solid.forms['coeff.state.u1'],
-        bcs=[solid.bc_base],
+        bcs=[solid.forms['bc.dirichlet']],
         J=jac,
         solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
     )
@@ -122,7 +122,7 @@ def static_coupled_configuration_picard(
         dfn.solve(
             solid.forms['form.un.f1uva'] == 0.0,
             solid.forms['coeff.state.u1'],
-            bcs=[solid.bc_base],
+            bcs=[solid.forms['bc.dirichlet']],
             J=solid.forms['form.bi.df1uva_du1'],
             solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
         )
@@ -155,7 +155,7 @@ def static_coupled_configuration_picard(
         set_coupled_model_substate(model, x_n)
 
         res = dfn.assemble(solid.forms['form.un.f1uva'])
-        solid.bc_base.apply(res)
+        solid.forms['bc.dirichlet'].apply(res)
 
         abs_errs.append(norm(res))
         rel_errs.append(abs_errs[-1]/abs_errs[0])
