@@ -84,7 +84,7 @@ class QuasiSteady1DFluid(base.Model):
         return bla.BlockVector(subvecs, shape, labels)
 
     ## Solver functions
-    def solve_state1(self, state1):
+    def solve_state1(self, state1, options=None):
         """
         Return the final flow state
         """

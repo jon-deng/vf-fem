@@ -331,9 +331,9 @@ class Solid(base.Model):
         raise NotImplementedError("Not implemented yet!")
 
     ## Solver functions
-    def solve_state1(self, state1, newton_solver_prm=None):
-        if newton_solver_prm is None:
-            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+    def solve_state1(self, state1, options=None):
+        if options is None:
+            options = DEFAULT_NEWTON_SOLVER_PRM
 
         x = state1.copy()
         def linearized_subproblem(state):
@@ -353,7 +353,7 @@ class Solid(base.Model):
                 return self.solve_dres_dstate1(dres_dstate1, x, res)
             return assem_res, solve
 
-        state_n, solve_info = newton_solve(state1, linearized_subproblem, params=newton_solver_prm)
+        state_n, solve_info = newton_solve(state1, linearized_subproblem, params=options)
         return state_n, solve_info
 
     def solve_dres_dstate1(self, dres_dstate1, x, b):

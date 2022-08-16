@@ -266,19 +266,17 @@ class ExplicitFSIModel(FSIModel):
         return bm.concatenate_mat(bmats)
 
     # Forward solver methods
-    def solve_state1(self, ini_state, newton_solver_prm=None):
+    def solve_state1(self, ini_state, options=None):
         """
         Solve for the final state given an initial guess
         """
         # Set the initial guess for the final state
         self.set_fin_state(ini_state)
 
-        if newton_solver_prm is None:
-            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
-        uva1, solid_info = self.solid.solve_state1(ini_state[:3], newton_solver_prm)
+        uva1, solid_info = self.solid.solve_state1(ini_state[:3], options)
 
         self._set_fin_solid_state(uva1)
-        qp1, fluid_info = self.fluid.solve_state1(ini_state[3:])
+        qp1, fluid_info = self.fluid.solve_state1(ini_state[3:], options)
 
         step_info = solid_info
         step_info.update({'fluid_info': fluid_info})
@@ -363,14 +361,14 @@ class ImplicitFSIModel(FSIModel):
         res_fl = self.fluid.assem_res()
         return bv.concatenate_vec(res_sl, res_fl)
 
-    def solve_state1(self, ini_state, newton_solver_prm=None):
+    def solve_state1(self, ini_state, options=None):
         """
         Solve for the final state given an initial guess
 
         This uses a fixed-point iteration where the solid is solved, then the fluid and so-on.
         """
-        if newton_solver_prm is None:
-            newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
+        if options is None:
+            options = DEFAULT_NEWTON_SOLVER_PRM
 
         def iterative_subproblem(x):
             uva1_0 = x[:3]
@@ -378,7 +376,7 @@ class ImplicitFSIModel(FSIModel):
 
             def solve(res):
                 # Solve the solid with the previous iteration's fluid pressures
-                uva1, _ = self.solid.solve_state1(uva1_0, newton_solver_prm)
+                uva1, _ = self.solid.solve_state1(uva1_0, options)
 
                 # Compute new fluid pressures for the updated solid position
                 self._set_fin_solid_state(uva1)
@@ -391,7 +389,7 @@ class ImplicitFSIModel(FSIModel):
 
             return assem_res, solve
 
-        return iterative_solve(ini_state, iterative_subproblem, norm=bv.norm, params=newton_solver_prm)
+        return iterative_solve(ini_state, iterative_subproblem, norm=bv.norm, params=options)
 
     def solve_dres_dstate1(self, b):
         """

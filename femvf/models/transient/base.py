@@ -2,7 +2,7 @@
 This module defines the basic interface for a transient model.
 """
 
-from typing import TypeVar, Union, Tuple, Mapping, Any
+from typing import TypeVar, Union, Tuple, Mapping, Optional, Any
 
 from blockarray import subops
 from blockarray import blockvec as bv, blockmat as bm
@@ -114,7 +114,11 @@ class Model:
         raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     ## Solver methods
-    def solve_state1(self, state1: BlockVec) -> Tuple[BlockVec, Mapping[str, Any]]:
+    def solve_state1(
+            self,
+            state1: BlockVec,
+            options: Optional[Mapping[str, Any]]
+        ) -> Tuple[BlockVec, Mapping[str, Any]]:
         """
         Solve for the final state for the time step
 
