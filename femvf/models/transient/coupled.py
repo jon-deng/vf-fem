@@ -119,13 +119,13 @@ class FSIModel(base.Model):
 
         # Make null BlockMats relating fluid/solid states
         mats = [
-            [subops.zero_mat(slvec.size, flvec.size) for flvec in self.fluid.state.blocks]
-            for slvec in self.solid.state.blocks
+            [subops.zero_mat(slvec.size, flvec.size) for flvec in self.fluid.state0.blocks]
+            for slvec in self.solid.state0.blocks
         ]
         self.null_dslstate_dflstate = bm.BlockMatrix(mats)
         mats = [
-            [subops.zero_mat(flvec.size, slvec.size) for slvec in self.solid.state.blocks]
-            for flvec in self.fluid.state.blocks
+            [subops.zero_mat(flvec.size, slvec.size) for slvec in self.solid.state0.blocks]
+            for flvec in self.fluid.state0.blocks
         ]
         self.null_dflstate_dslstate = bm.BlockMatrix(mats)
 
