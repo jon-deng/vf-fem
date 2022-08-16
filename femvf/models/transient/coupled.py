@@ -175,6 +175,17 @@ class FSIModel(base.Model):
 
 
 class ExplicitFSIModel(FSIModel):
+
+    # The functions below are set to represent an explicit (staggered) coupling
+    # This means for a timestep:
+    # - The fluid loading on the solid domain is based on the fluid loads
+    #   at the beginning of the time step. i.e. the fluid loading is
+    #   constant/known
+    #     - Setting the initial fluid state changes the solid control
+    # - The geometry of the fluid domain is based on the deformation of
+    #   the solid in the current time step. i.e. the geometry of the fluid
+    #   changes based on the computed deformation for the current time step
+    #    - Setting the final solid state updates the fluid control
     def _set_ini_solid_state(self, uva0):
         """Set the initial solid state"""
         self.solid.set_ini_state(uva0)
