@@ -79,7 +79,7 @@ def test_static_solid_configuration():
     """
     solid = model.solid
     solid.dt = 100.0
-    _p = np.zeros(solid.control['p'].size())
+    _p = np.zeros(solid.control['p'].size)
     _p[model.fsimap.dofs_solid[:10]] = 500*10
     dfn.as_backend_type(solid.control['p'])[:] = _p
 
