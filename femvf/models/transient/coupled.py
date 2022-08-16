@@ -763,7 +763,7 @@ class FSAIModel(FSIModel):
         ksp.setOperators(A)
         ksp.solve(rhs, adj_z)
 
-        x[3:].set_vec(adj_z)
+        x[3:] = adj_z
         # print(linalg.dot(x[3:], x[3:]))
 
         return x
@@ -791,7 +791,7 @@ class FSAIModel(FSIModel):
         ksp.setOperators(A)
         ksp.solveTranspose(rhs, adj_z)
 
-        x[3:].set_vec(adj_z)
+        x[3:] = adj_z
 
         ## Assemble sensitivity matrices
         dq_du, dp_du = self.fluid.solve_dqp1_du1_solid(self, adjoint=True)

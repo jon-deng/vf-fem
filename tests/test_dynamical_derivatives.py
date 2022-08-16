@@ -130,10 +130,8 @@ def setup_coupled_parameter_perturbation(model):
         dstate['v'] = dxv
     if 'q' in dstate:
         dstate['q'] = 1e-3
-        # gops.set_vec(dstate['q'], 0.0)
     if 'p' in dstate:
         dstate['p'] = 1e-3
-        # gops.set_vec(dstate['p'], 0.0)
     _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
 
     dstatet = dstate.copy()

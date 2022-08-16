@@ -88,8 +88,8 @@ def set_coupled_model_substate(model, xsub):
     Set the coupled model state
     """
     _state = model.state0.copy()
-    for key in xsub.labels[0]:
-        gops.set_vec(_state[key], xsub[key])
+    _labels = list(xsub.labels[0])
+    _state[_labels] = xsub
         # _state[key][:] = xsub[key].array
     # Set both initial and final states to ensure that the fluid pressure
     # is set for the final state; for explicit models only the initial fluid
