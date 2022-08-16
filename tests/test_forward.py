@@ -77,7 +77,8 @@ class ForwardConfig(unittest.TestCase):
         props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
         props['rho'] = 1.0
 
-        props['zeta_min'][0] = 1e-8
+        props['zeta_min'] = 1e-8
+        props['zeta_sep'] = 1e-8
 
         # Set the initial state
         xy = model.solid.forms['fspace.vector'].tabulate_dof_coordinates()
@@ -129,6 +130,9 @@ class ForwardConfig(unittest.TestCase):
         props['kcontact'][()] = 1e11
         props['ycontact'][()] = props['ymid'][0] - y_gap*1/2
         props['rho'] = 1.0
+
+        props['zeta_min'] = 1e-8
+        props['zeta_sep'] = 1e-8
 
         # Set the initial state
         xy = model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
