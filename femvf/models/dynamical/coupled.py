@@ -217,20 +217,20 @@ class FSIDynamicalSystem(DynamicalSystem):
 
         dslres_dslprops = bmat.convert_subtype_to_petsc(self.solid.assem_dres_dprops())
         _dslres_dflprops = [
-            [subops.zero_mat(slsubvec.size(), propsubvec.size)
+            [subops.zero_mat(slsubvec.size, propsubvec.size)
                 for propsubvec in self.fluid.props]
             for slsubvec in self.solid.state]
         dslres_dflprops = bmat.BlockMatrix(
             _dslres_dflprops,
             labels=(self.solid.state.labels[0], self.fluid.props.labels[0]))
         _dslres_dymid = [
-            [subops.zero_mat(subops.size(slsubvec), subops.size(self.props['ymid']))]
+            [subops.zero_mat(slsubvec.size, self.props['ymid'].size)]
             for slsubvec in self.solid.state]
         dslres_dymid = bmat.BlockMatrix(
             _dslres_dymid, labels=(self.solid.state.labels[0], ('ymid',)))
 
         _dflres_dslprops = [
-            [subops.zero_mat(subops.size(flsubvec), subops.size(propsubvec))
+            [subops.zero_mat(flsubvec.size, propsubvec.size)
                 for propsubvec in self.solid.props]
             for flsubvec in self.fluid.state]
         dflres_dslprops = bmat.BlockMatrix(
@@ -238,7 +238,7 @@ class FSIDynamicalSystem(DynamicalSystem):
             labels=(self.fluid.state.labels[0], self.solid.props.labels[0]))
         dflres_dflprops = bmat.convert_subtype_to_petsc(self.fluid.assem_dres_dprops())
         _dflres_dymid = [
-            [subops.zero_mat(subops.size(flsubvec), subops.size(self.props['ymid']))]
+            [subops.zero_mat(flsubvec.size, self.props['ymid'].size)]
             for flsubvec in self.fluid.state]
         dflres_dymid = bmat.BlockMatrix(
             _dflres_dymid, labels=(self.fluid.state.labels[0], ('ymid',)))

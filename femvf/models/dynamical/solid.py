@@ -272,7 +272,7 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
-        m = self.control['p'].size()
+        m = self.control['p'].size
         dresu_dg = (
             self.cached_form_assemblers['form.bi.ddf1uva_u1_dp1'].assemble()
             + self.cached_form_assemblers['form.bi.ddf1uva_v1_dp1'].assemble()
@@ -288,10 +288,10 @@ class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
         return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['g']))
 
     def assem_dres_dprops(self):
-        nu, nv = self.state['u'].size(), self.state['v'].size()
+        nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
-            [subops.zero_mat(nu, subops.size(prop_subvec)) for prop_subvec in self.props],
-            [subops.zero_mat(nv, subops.size(prop_subvec)) for prop_subvec in self.props]]
+            [subops.zero_mat(nu, prop_subvec.size) for prop_subvec in self.props],
+            [subops.zero_mat(nv, prop_subvec.size) for prop_subvec in self.props]]
 
         j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.ddf1uva_demod'].assemble()

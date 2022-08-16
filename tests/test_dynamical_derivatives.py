@@ -247,7 +247,7 @@ def test_dres_dstate_vs_dres_state(model, model_linear, x0, del_x):
 
     for vec, name in zip([dres_state_a, dres_state_b, err], ["from model", "from linear_state_model", "error"]):
         print(f"\n{name}")
-        for key, subvec in vec.items():
+        for key, subvec in vec.sub_items():
             print(key, subvec.norm())
     breakpoint()
 
@@ -276,7 +276,7 @@ def test_dres_dstatet_vs_dres_statet(model, model_linear, x0, del_xt):
 
     for vec, name in zip([dres_statet_a, dres_statet_b, err], ["from model", "from linear_state_model", "error"]):
         print(f"\n{name}")
-        for key, subvec in vec.items():
+        for key, subvec in vec.sub_items():
             print(key, subvec.norm())
     breakpoint()
 
