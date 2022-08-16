@@ -65,7 +65,7 @@ class FSIModel(base.Model):
         n_slp = self.solid.control['p'].size
         n_slu = self.solid.state0['u'].size
 
-        self.fsimap = FSIMap(
+        self._fsimap = FSIMap(
             self.fluid.state1['p'].size,
             self._solid_area.size(),
             fluid_fsi_dofs, solid_fsi_dofs
@@ -122,12 +122,19 @@ class FSIModel(base.Model):
             [subops.zero_mat(slvec.size, flvec.size) for flvec in self.fluid.state0.blocks]
             for slvec in self.solid.state0.blocks
         ]
-        self.null_dslstate_dflstate = bm.BlockMatrix(mats)
+        self._null_dslstate_dflstate = bm.BlockMatrix(mats)
         mats = [
             [subops.zero_mat(flvec.size, slvec.size) for slvec in self.solid.state0.blocks]
             for flvec in self.fluid.state0.blocks
         ]
-        self.null_dflstate_dslstate = bm.BlockMatrix(mats)
+        self._null_dflstate_dslstate = bm.BlockMatrix(mats)
+
+    @property
+    def fsimap(self):
+        """
+        Return the FSI map object
+        """
+        return self._fsimap
 
     # These have to be defined to exchange data between fluid/solid domains
     # Explicit/implicit coupling methods may define these in differnt ways to
