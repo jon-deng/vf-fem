@@ -39,7 +39,7 @@ class TestWRA(unittest.TestCase):
         state0.set(0.0)
         qin = 1.0
         state0['pref'][:2] = self.model.inputq(qin, state0['pinc'][:2])
-        control = self.model.get_control_vec()
+        control = self.model.control.copy()
         control.set(0.0)
         # control['qin'][:] = 0.0
 

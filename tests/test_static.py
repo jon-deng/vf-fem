@@ -26,7 +26,7 @@ model = load_transient_fsi_model(
     mesh_path, None, SolidType=tsmd.KelvinVoigt, FluidType=tfmd.Bernoulli, coupling='explicit')
 
 ### Specify control
-control = model.get_control_vec()
+control = model.control.copy()
 control['psub'][:] = 2000.0 * 10
 control['psup'][:] = 0.0 * 10
 

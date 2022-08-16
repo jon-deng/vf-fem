@@ -163,7 +163,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the control vector
         p_sub = 500
 
-        control = model.get_control_vec()
+        control = model.control.copy()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         controls = [control]
 
@@ -214,7 +214,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the control vector
         p_sub = 500
 
-        control = model.get_control_vec()
+        control = model.control.copy()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
         controls = [control]
@@ -372,7 +372,7 @@ class TestIntegrate(ForwardConfig):
 
         ## Specify the test change in model parameters
         dini_state = model.state0.copy()
-        dcontrol = model.get_control_vec()
+        dcontrol = model.control.copy()
         dprops = model.get_properties_vec()
         dprops.set(0.0)
         # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])

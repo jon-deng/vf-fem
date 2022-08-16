@@ -405,7 +405,7 @@ def input_and_output_impedance(model, n=2**12):
 
     qinp_impulse = 1.0
     state0['pref'][:2] = model.inputq(qinp_impulse, state0['pinc'][:2])
-    control = model.get_control_vec()
+    control = model.control.copy()
     control.set(0.0)
 
     times = np.arange(0, n)*model.dt

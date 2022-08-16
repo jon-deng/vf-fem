@@ -96,7 +96,7 @@ class TaylorTest(unittest.TestCase):
             dstate.set(0.0)
 
         if dcontrols is None:
-            dcontrols = [self.model.get_control_vec()]
+            dcontrols = [self.model.control.copy()]
             dcontrols[0].set(0.0)
 
         if dprops is None:
@@ -197,7 +197,7 @@ class TestBasicGradient(TaylorTest):
         self.state0['v'][:] = 1e-3
         self.model.solid.bc_base.apply(self.state0['v'])
 
-        control = self.model.get_control_vec()
+        control = self.model.control.copy()
         control['psub'][:] = 800 * PASCAL_TO_CGS
         # control['psup'][:] = 0.0 * PASCAL_TO_CGS
         self.controls = [control]
@@ -318,7 +318,7 @@ class TestBasicGradient(TaylorTest):
         hs = 2.0**(np.arange(7)-5)
         step_size = 1.0e0 * PASCAL_TO_CGS
 
-        dcontrol = self.model.get_control_vec()
+        dcontrol = self.model.control.copy()
         dcontrol['psub'][:] = 1.0*step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])
@@ -355,7 +355,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         # times_meas = np.linspace(t_start, t_final, 3)
         self.times = vec.BlockVector((times_meas,), labels=[('times',)])
 
-        control = self.model.get_control_vec()
+        control = self.model.control.copy()
         uva0 = self.model.solid.state0.copy()
         uva0['v'][:] = 0.0
         self.model.solid.bc_base.apply(uva0['v'])
@@ -483,7 +483,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         hs = 2.0**(np.arange(7)-5)
         step_size = 5.0e0 * PASCAL_TO_CGS
 
-        dcontrol = self.model.get_control_vec()
+        dcontrol = self.model.control.copy()
         dcontrol['psub'][:] = 1.0*step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])

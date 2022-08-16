@@ -18,7 +18,7 @@ def solve_prephonatory_configuration(solid):
     solid.set_ini_state(state)
 
     # Set initial pressure as 0 for the static problem
-    control = solid.get_control_vec()
+    control = solid.control.copy()
     control['p'][:] = 0.0
 
     jac = dfn.derivative(solid.forms['form.un.f1uva'], solid.forms['coeff.state.u1'])

@@ -655,7 +655,7 @@ class FSAIModel(FSIModel):
             solve_jac(res) = res/(1 - jac(qbern(psup(qac))))
             """
             # Linearize the fluid/acoustic models about `qac`
-            ac_control = self.acoustic.get_control_vec()
+            ac_control = self.acoustic.control.copy()
             ac_control['qin'][:] = qac['qin']
             self.acoustic.set_control(ac_control)
             ac_state1, _ = self.acoustic.solve_state1()
@@ -713,7 +713,7 @@ class FSAIModel(FSIModel):
 
         # dacoustic / dfluid
         dfpref_dq = PETSc.Mat().createAIJ((b['pref'].size, b['q'].size), nnz=2)
-        dcontrol = self.acoustic.get_control_vec()
+        dcontrol = self.acoustic.control.copy()
         dcontrol.set(0.0)
         dcontrol['qin'][:] = 1.0
         dfpref_dqin = self.acoustic.apply_dres_dcontrol(dcontrol)['pref'][:2]

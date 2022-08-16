@@ -33,7 +33,7 @@ class TestFSAIModel(unittest.TestCase):
         # Set the control vector
         p_sub = 500
 
-        control = model.get_control_vec()
+        control = model.control.copy()
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         controls = [control]
 
@@ -168,7 +168,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
 
         self.state1 = self.model.state0.copy()
         self.state0 = self.model.state0.copy()
-        self.control = self.model.get_control_vec()
+        self.control = self.model.control.copy()
         self.dt = 1e-4
 
         bc_base = self.model.solid.bc_base
@@ -264,7 +264,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         # Define step vectors to use for state, control, etc.
         dstate0 = self.model.state0.copy()
-        dcontrol = self.model.get_control_vec()
+        dcontrol = self.model.control.copy()
         dprops = self.model.get_properties_vec()
         ddt = 1e-9
 
