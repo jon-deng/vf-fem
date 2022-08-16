@@ -16,6 +16,7 @@ from blockarray import blockvec as bv, blockmat as bm
 from blockarray import linalg
 from blockarray import subops
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
+from nonlineq import iterative_solve
 
 from ..equations.solid import newmark
 from ..fsi import FSIMap
@@ -173,7 +174,7 @@ class FSIModel(base.Model):
         self.solid.set_props(props[:self.solid.props.size])
         self.fluid.set_props(props[self.solid.props.size:-1])
 
-
+# TODO: The `assem_*` type methods are incomplete as I haven't had to use them
 class ExplicitFSIModel(FSIModel):
 
     # The functions below are set to represent an explicit (staggered) coupling
@@ -351,20 +352,9 @@ class ImplicitFSIModel(FSIModel):
         """
         Return the residual vector, F
         """
-        dt = self.solid.dt
-        u1, v1, a1 = self.solid.u1.vector(), self.solid.v1.vector(), self.solid.a1.vector()
-        u0, v0, a0 = self.solid.u0.vector(), self.solid.v0.vector(), self.solid.a0.vector()
-        res = self.get_state_vec()
-
-        res['u'][:] = self.solid.cached_form_assemblers['form.un.f1'].assemble()
-        self.solid.bc_base.apply(res['u'])
-        res['v'][:] = v1 - newmark.newmark_v(u1, u0, v0, a0, dt)
-        res['a'][:] = a1 - newmark.newmark_a(u1, u0, v0, a0, dt)
-
-        qp, *_ = self.fluid.solve_state1(self.fluid.state0)
-        res['q'][:] = self.fluid.state1['q'] - qp['q']
-        res['p'][:] = self.fluid.state1['p'] - qp['p']
-        return res
+        res_sl = self.solid.assem_res()
+        res_fl = self.fluid.assem_res()
+        return bv.concatenate_vec(res_sl, res_fl)
 
     def solve_state1(self, ini_state, newton_solver_prm=None):
         """
@@ -375,45 +365,26 @@ class ImplicitFSIModel(FSIModel):
         if newton_solver_prm is None:
             newton_solver_prm = DEFAULT_NEWTON_SOLVER_PRM
 
-        # Set initial guesses for the states at the next time
-        # uva1 = solid.get_state_vec()
-        uva1 = ini_state[:3].copy()
-        qp1 = ini_state[3:].copy()
+        def iterative_subproblem(x):
+            uva1_0 = x[:3]
+            qp1_0 = x[3:]
 
-        # Calculate the initial residual
-        self._set_fin_solid_state(uva1)
-        self._set_fin_fluid_state(qp1)
-        res0 = self.solid.cached_form_assemblers['form.un.f1'].assemble()
-        self.solid.bc_base.apply(res0)
+            def solve(res):
+                # Solve the solid with the previous iteration's fluid pressures
+                uva1, _ = self.solid.solve_state1(uva1_0, newton_solver_prm)
 
-        # Set tolerances for the fixed point iterations
-        fluid_info = None
-        nit, max_nit = 0, 10
-        abs_tol, rel_tol = newton_solver_prm['absolute_tolerance'], newton_solver_prm['relative_tolerance']
-        abs_err_prev, abs_err, rel_err = 1.0, np.inf, np.inf
-        while abs_err > abs_tol and rel_err > rel_tol and nit < max_nit:
-            # Solve the solid with the previous iteration's fluid pressures
-            uva1, _ = self.solid.solve_state1(uva1, newton_solver_prm)
+                # Compute new fluid pressures for the updated solid position
+                self._set_fin_solid_state(uva1)
+                qp1, fluid_info = self.fluid.solve_state1(qp1_0)
+                self._set_fin_fluid_state(qp1_0)
+                return bv.concatenate_vec((uva1, qp1))
 
-            # Compute new fluid pressures for the updated solid position
-            self._set_fin_solid_state(uva1)
-            qp1, fluid_info = self.fluid.solve_state1(qp1)
-            self._set_fin_fluid_state(qp1)
+            def assem_res():
+                return self.assem_res()
 
-            # Calculate the error in the solid residual with the updated pressures
-            res = self.solid.cached_form_assemblers['form.un.f1'].assemble()
-            self.solid.bc_base.apply(res)
+            return assem_res, solve
 
-            abs_err = res.norm('l2')
-            rel_err = abs_err/abs_err_prev
-
-            nit += 1
-        self.solid.bc_base.apply(res)
-
-        step_info = {'fluid_info': fluid_info,
-                     'num_iter': nit, 'abs_err': abs_err, 'rel_err': rel_err}
-
-        return bv.concatenate_vec([uva1, qp1]), step_info
+        return iterative_solve(ini_state, iterative_subproblem, norm=bv.norm, params=newton_solver_prm)
 
     def solve_dres_dstate1(self, b):
         """
