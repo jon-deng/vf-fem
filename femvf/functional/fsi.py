@@ -39,7 +39,7 @@ class FSIFunctional(SolidFunctional):
         keys = self.props.labels[0]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
-                vecs.append(getattr(self.model, attr).get_properties_vec())
+                vecs.append(getattr(self.model, attr).props.copy())
         return vec.concatenate_vec(vecs)
 
 class TransferWorkbyVelocity(FSIFunctional):
@@ -160,12 +160,12 @@ class TransferWorkbyVelocity(FSIFunctional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties_vec()
+        dsolid = self.model.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties_vec()
+        dfluid = self.model.fluid.props.copy()
         dfluid.set(0.0)
         return dfluid
 
@@ -279,12 +279,12 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         return dqp
 
     def eval_dsolid(self, f):
-        dsolid = self.model.solid.get_properties_vec()
+        dsolid = self.model.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
     def eval_dfluid(self, f):
-        dfluid = self.model.fluid.get_properties_vec()
+        dfluid = self.model.fluid.props.copy()
         dfluid.set(0.0)
         return dfluid
 

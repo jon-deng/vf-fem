@@ -72,7 +72,7 @@ class SolidFunctional(AbstractFunctional):
         vecs = [self.eval_dsl_props(f)]
         for attr in ('fluid', 'acoustic'):
             if hasattr(self.model, attr):
-                vecs.append(getattr(self.model, attr).get_properties_vec())
+                vecs.append(getattr(self.model, attr).props.copy())
         return vec.concatenate_vec(vecs)
 
 class PeriodicError(SolidFunctional):
@@ -140,7 +140,7 @@ class PeriodicError(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
@@ -188,7 +188,7 @@ class ComponentPeriodicError(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
@@ -269,7 +269,7 @@ class PeriodicEnergyError(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
 
         alphau = self.constants['alpha']
@@ -322,7 +322,7 @@ class FinalDisplacementNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
@@ -365,7 +365,7 @@ class FinalVelocityNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
@@ -409,7 +409,7 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 
@@ -486,7 +486,7 @@ class ElasticEnergyDifference(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
 
         self.model.set_solid_props(f.get_solid_props(0))
@@ -582,7 +582,7 @@ class KV3DDampingWork(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
 
         N_START = N_START = self.constants['n_start']
@@ -690,7 +690,7 @@ class KVDampingWork(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
 
         N_START = N_START = self.constants['n_start']
@@ -782,7 +782,7 @@ class RayleighDampingWork(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
 
         dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.solid.dt
@@ -869,7 +869,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
         return duva
 
     def eval_dsl_props(self, f):
-        dsolid = self.solid.get_properties_vec()
+        dsolid = self.solid.props.copy()
         dsolid.set(0.0)
         return dsolid
 

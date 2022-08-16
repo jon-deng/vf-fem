@@ -373,7 +373,7 @@ class TestIntegrate(ForwardConfig):
         ## Specify the test change in model parameters
         dini_state = model.state0.copy()
         dcontrol = model.control.copy()
-        dprops = model.get_properties_vec()
+        dprops = model.props.copy()
         dprops.set(0.0)
         # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
         dtimes = vec.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])

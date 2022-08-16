@@ -100,7 +100,7 @@ class TaylorTest(unittest.TestCase):
             dcontrols[0].set(0.0)
 
         if dprops is None:
-            dprops = self.model.get_properties_vec()
+            dprops = self.model.props.copy()
             dprops.set(0.0)
 
         if dtimes is None:

@@ -34,10 +34,10 @@ class AcousticFunctional(AbstractFunctional):
         return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
-        dsolid = self.model.solid.get_properties_vec()
+        dsolid = self.model.solid.props.copy()
         dsolid.set(0.0)
 
-        dfluid = self.model.fluid.get_properties_vec()
+        dfluid = self.model.fluid.props.copy()
         dfluid.set(0.0)
 
         vecs = [dsolid, dfluid, self.eval_dac_props(f)]
@@ -86,7 +86,7 @@ class RmsRadiatedPressure(AcousticFunctional):
         return dac
 
     def eval_dac_props(self, f):
-        dfluid = self.acoustic.get_properties_vec()
+        dfluid = self.acoustic.props.copy()
         dfluid.set(0.0)
         return dfluid
 
@@ -159,7 +159,7 @@ class AcousticPower(AcousticFunctional):
         return dac
 
     def eval_dac_props(self, f):
-        dfluid = self.model.acoustic.get_properties_vec()
+        dfluid = self.model.acoustic.props.copy()
         dfluid.set(0.0)
         return dfluid
 

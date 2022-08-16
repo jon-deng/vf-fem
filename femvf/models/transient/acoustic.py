@@ -160,7 +160,7 @@ class WRAnalog(Acoustic1D):
         return -vec.BlockVector(bvecs, labels=self.state1.labels)
 
     def apply_dres_dp_adj(self, x):
-        b = self.get_properties_vec()
+        b = self.props.copy()
         b.set(0.0)
         return b
 

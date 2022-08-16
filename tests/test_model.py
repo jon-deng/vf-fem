@@ -265,7 +265,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         # Define step vectors to use for state, control, etc.
         dstate0 = self.model.state0.copy()
         dcontrol = self.model.control.copy()
-        dprops = self.model.get_properties_vec()
+        dprops = self.model.props.copy()
         ddt = 1e-9
 
         bc_base = self.model.solid.bc_base

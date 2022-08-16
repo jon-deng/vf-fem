@@ -402,7 +402,7 @@ class Scalar(AbstractFunctional):
         return self.model.state0.copy()
 
     def eval_dprops(self, f):
-        dprops = self.model.get_properties_vec()
+        dprops = self.model.props.copy()
         dprops.set(0.0)
         return dprops
 

@@ -33,7 +33,7 @@ if __name__ == '__main__':
     mesh_path = '../meshes/M5-3layers-cl0_50.xml'
     solid = models.load.load_solid_model(mesh_path, models.solid.Approximate3DKelvinVoigt)
 
-    props = solid.get_properties_vec()
+    props = solid.props.copy()
     props['ycontact'][:] = solid.mesh.coordinates()[:, 1].max() + 60.0#- 0.1
     props['emod'][:] = 10e3 * 10 # factor converts [Pa] to the [cgs] equivalent
     props['nu'][:] = 0.45
