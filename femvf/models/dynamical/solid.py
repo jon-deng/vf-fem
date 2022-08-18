@@ -176,11 +176,11 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
 
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
-        dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
+        dresu_dut = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
         dresu_dvt = self.cached_form_assemblers['form.bi.df1uva_da1'].assemble()
 
         dresv_dut = dfn.PETScMatrix(-1*subops.ident_mat(n))
-        dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))
+        dresv_dvt = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
 
         mats = [
             [dresu_dut, dresu_dvt],
