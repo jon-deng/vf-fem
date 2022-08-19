@@ -305,7 +305,7 @@ class StressVonMisesSpatialStats(StressVonMisesAverage):
         model.set_control(control)
         model.set_props(props)
 
-        field = self.project(self.vec)
+        field = self.project()
         avg = dfn.assemble(self.expr_avg) / self.total_dx
 
         return np.min(field[:]), np.max(field[:]), avg
