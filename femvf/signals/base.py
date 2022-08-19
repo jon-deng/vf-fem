@@ -24,23 +24,6 @@ def transform_to_make_signals(make_signal):
         return proc_signals
     return make_signals
 
-
-class Derived():
-    """
-    Returns measures derived from post-processed data at single instants
-
-    Parameters
-    ----------
-    func : Callable with signature `func(state, control, props)`
-    """
-
-    def __init__(self, func):
-        self._func = func
-
-    @property
-    def func(self):
-        return self._func
-
 class StateMeasure():
     """
     Returns data from a model state
@@ -67,6 +50,45 @@ class StateMeasure():
 
     def __call__(self, state, control, props):
         raise NotImplementedError("This function must be implemented by child classes")
+
+class DerivedStateMeasure():
+    """
+    Returns measures derived from post-processed data at single instants
+
+    Parameters
+    ----------
+    func : Callable with signature `func(state, control, props)`
+    """
+
+    def __init__(self, func):
+        self._func = func
+
+    @property
+    def func(self):
+        return self._func
+
+    @property
+    def model(self):
+        return self._model
+
+    def __call__(self, state, control, props):
+        raise NotImplementedError("This function must be implemented by child classes")
+
+class Derived():
+    """
+    Returns measures derived from post-processed data at single instants
+
+    Parameters
+    ----------
+    func : Callable with signature `func(state, control, props)`
+    """
+
+    def __init__(self, func):
+        self._func = func
+
+    @property
+    def func(self):
+        return self._func
 
 class TimeSeries(Derived):
     """

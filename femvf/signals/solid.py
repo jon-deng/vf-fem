@@ -11,7 +11,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from .base import transform_to_make_signals, StateMeasure
+from .base import StateMeasure, DerivedStateMeasure
 
 class MinGlottalWidth(StateMeasure):
 
@@ -74,6 +74,13 @@ class ContactStatistics(StateMeasure):
         self.expr_contact_area = contact_indicator*self.dx
         self.expr_total_p_contact = pcontact*self.dx
         self.coeff_tcontact = tcontact
+
+        self.dtype = np.dtype([
+            ('max', float),
+            ('min', float),
+            ('avg', float),
+            ('total', float)
+        ])
 
     def __call__(self, state, control, props):
         self.model.set_fin_state(state)
@@ -279,6 +286,33 @@ class ViscousDissipationField(Field):
 
         return np.array(self.project()[:])
 
+### Field statistics post-processing function
+class FieldStats(DerivedStateMeasure):
+    def __init__(self, field: Field):
+        super().__init__(field)
+
+    def __init_measure_context__(self):
+        dx = self.func.dx
+        expr = self.func.expression
+
+        self.expr_total = expr*dx
+        self.expr_vol = 1*self.dx
+
+        self.dtype = np.dtype([
+            ('max', float),
+            ('min', float),
+            ('avg', float),
+            ('total', float)
+        ])
+
+    def __call__(self, state, control, props):
+        field_vec = self.func(state, control, props)
+        total = dfn.assemble(self.expr_total)
+        vol = dfn.assemble(self.expr_vol)
+        return np.array(
+            (field_vec.max(), field_vec.min(), total/vol, total),
+            dtype=self.dtype
+        )
 
 class StressVonMisesAverage(StressVonMisesField):
     def __init_measure_context__(self, *args, **kwargs):
