@@ -81,7 +81,7 @@ class BaseFluid1DDynamicalSystem(DynamicalSystem):
 
         self._res = jax.jit(res)
         # self._res = res
-        self._dres = lambda state, control, props, tangents: jax.jvp(res, (state, control, props), tangents)[1]
+        self._dres = lambda state, control, props, tangents: jax.jvp(self._res, (state, control, props), tangents)[1]
 
         self.state = bla.BlockVector(list(state.values()), labels=[list(state.keys())])
         self.dstate = self.state.copy()
