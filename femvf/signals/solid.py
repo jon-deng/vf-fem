@@ -315,8 +315,8 @@ class FieldStats(DerivedStateMeasure):
         )
 
 class StressVonMisesAverage(StressVonMisesField):
-    def __init_measure_context__(self, *args, **kwargs):
-        super().__init_measure_context__(self, *args, **kwargs)
+    def __init_measure_context__(self, dx=None, fspace=None):
+        super().__init_measure_context__(dx=dx, fspace=fspace)
 
         self.expr_avg = self.expression*self.dx
         self.total_dx = dfn.assemble(1*self.dx)
@@ -330,8 +330,8 @@ class StressVonMisesAverage(StressVonMisesField):
         return dfn.assemble(self.expr_avg) / self.total_dx
 
 class StressVonMisesSpatialStats(StressVonMisesAverage):
-    def __init_measure_context__(self, *args, **kwargs):
-        super().__init_measure_context__(self, *args, **kwargs)
+    def __init_measure_context__(self, dx=None, fspace=None):
+        super().__init_measure_context__(dx=dx, fspace=fspace)
 
     def __call__(self, state, control, props):
         model = self.model
