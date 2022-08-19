@@ -296,7 +296,7 @@ class FieldStats(DerivedStateMeasure):
         expr = self.func.expression
 
         self.expr_total = expr*dx
-        self.expr_vol = 1*self.dx
+        self.expr_vol = 1*dx
 
         self.dtype = np.dtype([
             ('max', float),
