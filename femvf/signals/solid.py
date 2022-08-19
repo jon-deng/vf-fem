@@ -286,6 +286,24 @@ class ViscousDissipationField(Field):
 
         return np.array(self.project()[:])
 
+class ContactAreaDensityField(Field):
+    def __init_measure_context__(self, dx=None, fspace=None):
+        super().__init_measure_context__(dx, fspace)
+
+        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
+        contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
+
+        self.expression = contact_indicator
+        self.project = make_project(self.expression, self.fspace, self.dx)
+
+    def __call__(self, state, control, props):
+        self.model.set_props(props)
+        self.model.set_control(control)
+        self.model.set_fin_state(state)
+
+        return np.array(self.project()[:])
+
 ### Field statistics post-processing function
 class FieldStats(DerivedStateMeasure):
     def __init__(self, field: Field):
