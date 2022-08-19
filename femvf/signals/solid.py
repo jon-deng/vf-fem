@@ -263,6 +263,22 @@ class ContactPressureField(Field):
 
         return np.array(self.project()[:])
 
+class ViscousDissipationField(Field):
+    def __init_measure_context__(self, dx=None, fspace=None):
+        super().__init_measure_context__(dx, fspace)
+
+        kv_stress = self.model.solid.forms['expr.kv_stress']
+        kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
+        self.expression = ufl.inner(kv_stress, kv_strain_rate)*self.dx
+        self.project = make_project(self.expression, self.fspace, self.dx)
+
+    def __call__(self, state, control, props):
+        self.model.set_props(props)
+        self.model.set_control(control)
+        self.model.set_fin_state(state)
+
+        return np.array(self.project()[:])
+
 
 class StressVonMisesAverage(StressVonMisesField):
     def __init_measure_context__(self, *args, **kwargs):
