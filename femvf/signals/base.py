@@ -51,7 +51,7 @@ class StateMeasure():
     def __call__(self, state, control, props):
         raise NotImplementedError("This function must be implemented by child classes")
 
-class DerivedStateMeasure():
+class DerivedStateMeasure(StateMeasure):
     """
     Returns measures derived from post-processed data at single instants
 
@@ -62,6 +62,7 @@ class DerivedStateMeasure():
 
     def __init__(self, func):
         self._func = func
+        super().__init__(func.model)
 
     @property
     def func(self):
