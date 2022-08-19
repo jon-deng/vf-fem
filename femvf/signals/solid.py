@@ -41,7 +41,7 @@ class VertexGlottalWidth(StateMeasure):
         # Get the y-displacement DOF
         self.idx_dof = vert_to_vdof[2*idx_vertex+1]
 
-        self.XREF = self.model.solid.scalar_fspace.tabulate_dof_coordinates()
+        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
     def __call__(self, state, control, props):
         xcur = self.XREF.reshape(-1) + state['u'][:]
