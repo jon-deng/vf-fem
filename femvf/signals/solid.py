@@ -276,7 +276,7 @@ class ViscousDissipationField(Field):
 
         kv_stress = self.model.solid.forms['expr.kv_stress']
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
-        self.expression = ufl.inner(kv_stress, kv_strain_rate)*self.dx
+        self.expression = ufl.inner(kv_stress, kv_strain_rate)
         self.project = make_project(self.expression, self.fspace, self.dx)
 
     def __call__(self, state, control, props):
