@@ -4,7 +4,7 @@ A package for simulating vocal folds.
 
 # Make load_fsi_model available at the package level because it's commonly used
 from . import models
-from .load import load_transient_fsi_model, load_transient_fsai_model
+# from .load import load_transient_fsi_model, load_transient_fsai_model
 
 # Make common modules available
 from . import forward
