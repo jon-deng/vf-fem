@@ -7,11 +7,14 @@ Module to work with state values from a forward pass stored in an hdf5 file.
 # so you may have to fix bugs that are associated with this if you want to use time-varying
 # fluid/solid parameters
 
+from typing import Union, Tuple, Optional, Mapping
 from collections import OrderedDict
 
 import h5py
 import dolfin as dfn
 import numpy as np
+
+from .models.transient.base import BaseTransientModel
 
 def get_from_cache(cache_name):
     """
@@ -43,7 +46,7 @@ def get_from_cache(cache_name):
 
 class StateFile:
     r"""
-    Represents a state file.
+    An HDF5 file containing the history of states in a transient model simulation
 
     # TODO: Add mesh information and vertex/cell/face region information etc...
 
@@ -70,22 +73,41 @@ class StateFile:
 
     Parameters
     ----------
-    fname : str
-        Path to the hdf5 file.
-    group : str
-        Group path where states are stored in the hdf5 file.
+    fname :
+        Path to the HDF5 file or an `h5py.Group` instance
+    mode :
+        Mode to open the HDF5 file in (applicable if `fname` is a path)
+    NCHUNK : int
+        Number of chunks along the time dimension used to store data
+    kwargs :
+        Keyword arguments for `h5py.File` (applicable if `fname` is a path)
     """
 
-    def __init__(self, model, fname, group='/', mode='r', NCHUNK=100,
-                 **kwargs):
+    file: h5py.Group
+
+    def __init__(
+            self,
+            model: BaseTransientModel,
+            fname: Union[str, h5py.Group],
+            mode: str='r',
+            NCHUNK: int=100,
+            **kwargs
+        ):
         self.model = model
-        self.file = h5py.File(fname, mode=mode, **kwargs)
+        if isinstance(fname, str):
+            self.file = h5py.File(fname, mode=mode, **kwargs)
+        elif isinstance(fname, h5py.Group):
+            self.file = fname
+        else:
+            raise TypeError(
+                f"`fname` must be `str` or `h5py.Group` not {type(fname)}"
+            )
         self.NCHUNK = NCHUNK
 
         # Create the root group and initilizae the data layout
-        if (mode == 'w' or mode == 'a') and group not in self.file:
-            self.file.require_group(group)
-        self.root_group_name = group
+        # group = self.file.name
+        # if (mode == 'w' or mode == 'a') and group not in self.file:
+        #     self.file.require_group(group)
         self.init_layout()
 
         # TODO: This is probably buggy
@@ -95,13 +117,13 @@ class StateFile:
             # h5py is supposed to do this caching but I found that each dataset read call in h5py
             # has a lot of overhead so I made this cache instead
             for name in model.state0.keys():
-                self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.root_group[f'state/{name}'])
+                self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.file[f'state/{name}'])
 
             for name in model.control.keys():
                 # breakpoint()
-                self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.root_group[f'control/{name}'])
+                self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.file[f'control/{name}'])
 
-    ## Implement an h5 group interface to the underlying root group
+    ## Functions mimicking the `h5py.File` interface
     def __enter__(self):
         return self
 
@@ -109,13 +131,13 @@ class StateFile:
         self.file.close()
 
     def keys(self):
-        return self.root_group.keys()
+        return self.file.keys()
 
     def __getitem__(self, name):
-        return self.root_group[name]
+        return self.file[name]
 
     def __setitem__(self, name, value):
-        self.root_group[name] = value
+        self.file[name] = value
 
     def __len__(self):
         return self.size
@@ -126,6 +148,7 @@ class StateFile:
         """
         self.file.close()
 
+    ## Convenience functions
     @property
     def size(self):
         """
@@ -134,8 +157,8 @@ class StateFile:
         Note the 'size' of the dataset is based on the number of time indices
         that have been written.
         """
-        if 'time' in self.root_group:
-            return self.root_group['time'].shape[0]
+        if 'time' in self.file:
+            return self.file['time'].shape[0]
         else:
             return 0
 
@@ -149,44 +172,22 @@ class StateFile:
     @property
     def num_controls(self):
         num = 1
-        control_group = self.root_group['control']
+        control_group = self.file['control']
         for key in self.model.control.keys():
             num = max(control_group[key].shape[0], num)
 
         return num
-
-    ## Statefile properties related to the root group where things are stored
-    @property
-    def root_group_name(self):
-        """
-        Return the group path the states are stored under
-        """
-        return self._root_group_name
-
-    @root_group_name.setter
-    def root_group_name(self, name):
-        """
-        Set the root group path and creates the group if it doesn't exist
-        """
-        self._root_group_name = name
-
-    @property
-    def root_group(self):
-        """
-        Return the `h5py.Group` object where states are stored
-        """
-        return self.file[self.root_group_name]
 
     ## Functions for initializing layout when writing
     def init_layout(self):
         r"""
         Initializes the layout of the state file.
         """
-        self.root_group.require_dataset('time', (self.size,), maxshape=(None,), chunks=(self.NCHUNK,),
+        self.file.require_dataset('time', (self.size,), maxshape=(None,), chunks=(self.NCHUNK,),
                                         dtype=np.float64, exact=False)
 
-        if 'meas_indices' not in self.root_group:
-            self.root_group.create_dataset('meas_indices', (0,), maxshape=(None,),
+        if 'meas_indices' not in self.file:
+            self.file.create_dataset('meas_indices', (0,), maxshape=(None,),
                                            chunks=(self.NCHUNK,), dtype=np.intp)
         self.init_mesh()
         self.init_dofmap()
@@ -209,9 +210,9 @@ class StateFile:
                                   for cell in dfn.cells(solid.mesh)])
         vector_dofmap = np.array([vector_dofmap_processor.cell_dofs(cell.index())
                                   for cell in dfn.cells(solid.mesh)])
-        self.root_group.require_dataset(
+        self.file.require_dataset(
             'dofmap/vector', vector_dofmap.shape, data=vector_dofmap, dtype=np.intp)
-        self.root_group.require_dataset(
+        self.file.require_dataset(
             'dofmap/scalar', scalar_dofmap.shape, data=scalar_dofmap, dtype=np.intp)
 
     def init_mesh(self):
@@ -221,19 +222,19 @@ class StateFile:
         solid = self.model.solid
         coords = solid.mesh.coordinates()
         cells = solid.mesh.cells()
-        self.root_group.require_dataset(
+        self.file.require_dataset(
             'mesh/solid/coordinates', coords.shape, data=coords, dtype=np.float64)
-        self.root_group.require_dataset(
+        self.file.require_dataset(
             'mesh/solid/connectivity', cells.shape, data=cells, dtype=np.intp)
 
         # TODO: Write facet/cell labels, mapping string identifiers to the integer mesh functions
-        # self.root_group.require_dataset('mesh/solid/facet_func', data=np.inf,
+        # self.file.require_dataset('mesh/solid/facet_func', data=np.inf,
         #                                 dtype=np.intp)
-        # self.root_group.require_dataset('mesh/solid/cell_func', data=np.inf,
+        # self.file.require_dataset('mesh/solid/cell_func', data=np.inf,
         #                                 dtype=np.intp)
 
     def init_state(self):
-        state_group = self.root_group.require_group('state')
+        state_group = self.file.require_group('state')
         for name, vec in self.model.state0.items():
             NDOF = len(vec)
             state_group.require_dataset(
@@ -242,7 +243,7 @@ class StateFile:
             )
 
     def init_control(self):
-        control_group = self.root_group.require_group('control')
+        control_group = self.file.require_group('control')
 
         for name, vec in self.model.control.items():
             NDOF = len(vec)
@@ -250,7 +251,7 @@ class StateFile:
                                          chunks=(self.NCHUNK, NDOF), dtype=np.float64)
 
     def init_properties(self):
-        properties_group = self.root_group.require_group('properties')
+        properties_group = self.file.require_group('properties')
 
         for name, value in self.model.props.items():
             size = None
@@ -261,7 +262,7 @@ class StateFile:
             properties_group.require_dataset(name, (size,), dtype=np.float64)
 
     def init_solver_info(self):
-        solver_info_group = self.root_group.require_group('solver_info')
+        solver_info_group = self.file.require_group('solver_info')
         for key in ['num_iter', 'rel_err', 'abs_err']:
             solver_info_group.require_dataset(
                 key, (self.size,), dtype=np.float64, maxshape=(None,),
@@ -276,14 +277,14 @@ class StateFile:
         Parameters
         ----------
         """
-        state_group = self.root_group['state']
+        state_group = self.file['state']
         for name, value in state.items():
             dset = state_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1, :] = value
 
     def append_control(self, control):
-        control_group = self.root_group['control']
+        control_group = self.file['control']
         for name, value in control.items():
             dset = control_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
@@ -296,7 +297,7 @@ class StateFile:
         Parameters
         ----------
         """
-        properties_group = self.root_group['properties']
+        properties_group = self.file['properties']
 
         for name, value in properties.items():
             dset = properties_group[name]
@@ -312,7 +313,7 @@ class StateFile:
         time : float
             Time to append
         """
-        dset = self.root_group['time']
+        dset = self.file['time']
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
 
@@ -324,12 +325,12 @@ class StateFile:
         ----------
         index : int
         """
-        dset = self.root_group['meas_indices']
+        dset = self.file['meas_indices']
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = index
 
     def append_solver_info(self, solver_info):
-        solver_info_group = self.root_group['solver_info']
+        solver_info_group = self.file['solver_info']
         for key, dset in solver_info_group.items():
             dset.resize(dset.shape[0]+1, axis=0)
             if key in solver_info:
@@ -342,19 +343,19 @@ class StateFile:
         """
         Returns the time at state n.
         """
-        return self.root_group['time'][n]
+        return self.file['time'][n]
 
     def get_times(self):
         """
         Returns the time vector.
         """
-        return self.root_group['time'][:]
+        return self.file['time'][:]
 
     def get_meas_indices(self):
         """
         Returns the measured indices.
         """
-        return self.root_group['meas_indices'][:]
+        return self.file['meas_indices'][:]
 
     def get_state(self, n):
         """
@@ -389,7 +390,7 @@ class StateFile:
             A set of functions to set vector values for.
         """
         control = self.model.control.copy()
-        num_controls = self.root_group[f'control/{control.keys()[0]}'].size
+        num_controls = self.file[f'control/{control.keys()[0]}'].size
         if n > num_controls-1:
             n = num_controls-1
 
@@ -406,7 +407,7 @@ class StateFile:
         properties = self.model.props.copy()
 
         for name, vec in zip(properties.keys(), properties.blocks):
-            dset = self.root_group[f'properties/{name}']
+            dset = self.file[f'properties/{name}']
             try:
                 vec[:] = dset[:]
             except IndexError as e:
@@ -414,7 +415,7 @@ class StateFile:
         return properties
 
     def get_solver_info(self, n):
-        solver_info_group = self.root_group['solver_info']
+        solver_info_group = self.file['solver_info']
         solver_info = {key: solver_info_group[key][n] for key in solver_info_group.keys()}
         return solver_info
 
@@ -431,7 +432,7 @@ class StateFile:
             A set of vectors to assign.
         """
         for label, value in zip(state.keys(), state.vecs):
-            self.root_group[label][n] = value
+            self.file[label][n] = value
 
 class DatasetChunkCache:
     """
