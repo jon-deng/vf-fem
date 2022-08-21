@@ -3,16 +3,31 @@ Forward model
 
 Uses CGS (cm-g-s) units unless otherwise stated
 """
+from typing import List, Optional, Mapping, Any, Tuple
 from tqdm import tqdm
 
 import numpy as np
+from blockarray import blockvec as bv
+
+from .models.transient.base import Model
+from . import statefile as sf
 
 # TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile
+Options = Mapping[str, Any]
+Info = Options
 def integrate(
-    model, f, ini_state, controls, props, times,
-    idx_meas=None, newton_solver_prm=None, write=True, use_tqdm=False
-    ):
+        model: Model,
+        f: sf.StateFile,
+        ini_state: bv.BlockVector,
+        controls: List[bv.BlockVector],
+        props: bv.BlockVector,
+        times: bv.BlockVector,
+        idx_meas: Optional[np.ndarray]=None,
+        newton_solver_prm: Optional[Mapping[str, Any]]=None,
+        write: bool=True,
+        use_tqdm: bool=False
+    ) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
     """
     Integrate the model over each time in `times` for the specified parameters
 
@@ -55,8 +70,10 @@ def integrate(
     # Initialize datasets and save the initial state to the h5 file
     if write:
         f.init_layout()
-        append_step_result(f, ini_state, controls[0], times_vec[0],
-                           {'num_iter': 0, 'abs_err': 0, 'rel_err': 0})
+        append_step_result(
+            f, ini_state, controls[0], times_vec[0],
+            {'num_iter': 0, 'abs_err': 0, 'rel_err': 0}
+        )
         f.append_properties(props)
         if 0 in idx_meas:
             f.append_meas_index(0)
@@ -67,13 +84,23 @@ def integrate(
     fin_state, step_info = integrate_steps(
         model, f, ini_state, controls, props, times_vec,
         idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write,
-        use_tqdm=use_tqdm)
+        use_tqdm=use_tqdm
+    )
 
     return fin_state, step_info
 
 def integrate_extend(
-    model, f, controls, times,
-    idx_meas=None, newton_solver_prm=None, write=True):
+        model: Model,
+        f: sf.StateFile,
+        controls: bv.BlockVector,
+        times: bv.BlockVector,
+        idx_meas: np.ndarray=None,
+        newton_solver_prm: Optional[Options]=None,
+        write: bool=True
+    ) -> Tuple[bv.BlockVector, Info]:
+    """
+    See `integrate`
+    """
     props = f.get_props()
     _controls = controls[1:] if len(controls) > 1 else controls
 
@@ -84,14 +111,24 @@ def integrate_extend(
 
     fin_state, step_info = integrate_steps(
         model, f, ini_state, _controls, props, times.vecs[0],
-        idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write)
+        idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write
+    )
     return fin_state, step_info
 
 def integrate_steps(
-    model, f, ini_state, controls, props, times,
-    idx_meas=None, newton_solver_prm=None, write=True, use_tqdm=False):
+        model: Model,
+        f: sf.StateFile,
+        ini_state: bv.BlockVector,
+        controls: List[bv.BlockVector],
+        props: bv.BlockVector,
+        times: bv.BlockVector,
+        idx_meas: Optional[np.ndarray]=None,
+        newton_solver_prm: Optional[Mapping[str, Any]]=None,
+        write: bool=True,
+        use_tqdm: bool=False
+    ) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
     """
-
+    See `integrate`
     """
     if idx_meas is None:
         idx_meas = np.array([])
@@ -107,7 +144,9 @@ def integrate_steps(
         control1 = controls[min(n, len(controls)-1)]
         dt = times[n] - times[n-1]
 
-        state1, step_info = integrate_step(model, state0, control1, props, dt)
+        state1, step_info = integrate_step(
+            model, state0, control1, props, dt, options=newton_solver_prm
+        )
         # if n%100 == 0:
         #     print(step_info['num_iter'])
         # Write the solution outputs to the h5 file
@@ -121,9 +160,20 @@ def integrate_steps(
 
     return state0, step_info
 
-def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
+def integrate_linear(
+        model: Model,
+        f: sf.StateFile,
+        dini_state: bv.BlockVector,
+        dcontrols: List[bv.BlockVector],
+        dprops: bv.BlockVector,
+        dtimes: bv.BlockVector
+    ) -> bv.BlockVector:
     """
-    Integrate the linearized forward equations and return the final linearized state
+    Integrate linearized forward equations
+
+    The integration is done about a sequence of states obtained from integrating
+    the model forward in time. This sequence of states is stored in the `f`
+    instance.
 
     Returns
     -------
@@ -155,7 +205,15 @@ def integrate_linear(model, f, dini_state, dcontrols, dprops, dtimes):
     return dfin_state_n
 
 
-def integrate_step(model, ini_state, control, props, dt, set_props=False, options=None):
+def integrate_step(
+        model: Model,
+        ini_state: bv.BlockVector,
+        control: bv.BlockVector,
+        props: bv.BlockVector,
+        dt: float,
+        set_props: bool=False,
+        options: Options=None
+    ) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
     """
     Integrate a model over a single time step
     """
@@ -168,7 +226,16 @@ def integrate_step(model, ini_state, control, props, dt, set_props=False, option
     fin_state, step_info = model.solve_state1(ini_state, options=options)
     return fin_state, step_info
 
-def append_step_result(f, state, control, time, step_info):
+def append_step_result(
+        f: sf.StateFile,
+        state: bv.BlockVector,
+        control: bv.BlockVector,
+        time: float,
+        step_info: Info
+    ):
+    """
+    Append the result of an integration step to a statefile
+    """
     f.append_state(state)
     f.append_control(control)
     f.append_time(time)
