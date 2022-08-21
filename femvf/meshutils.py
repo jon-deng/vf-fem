@@ -2,6 +2,7 @@
 Functionality for dealing with meshes
 """
 
+from typing import List, Tuple, Mapping, Any
 from os import path
 import warnings
 
@@ -9,51 +10,33 @@ import meshio as mio
 import numpy as np
 import dolfin as dfn
 
-# Load a mesh from the FEniCS .xdmf format via meshio
-def split_meshio_cells(mesh):
+## Functions for loading `dfn.Mesh` objects from other mesh formats
+MeshFunctions = List[dfn.MeshFunction]
+MeshFunctionMaps = List[Mapping[str, int]]
+def load_fenics_gmsh(
+        mesh_path: str, overwrite_xdmf: bool=False
+    ) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
     """
-    Splits a `meshio.Mesh` into separate meshes with one cell block each
-
-    Parameters
-    ----------
-    mesh: meshio.Mesh
-    """
-    meshes = [
-        mio.Mesh(
-            mesh.points,
-            [cellblock],
-            cell_data={
-                key: [arrays[n]]
-                for key, arrays in mesh.cell_data.items()
-            }
-        )
-        for n, cellblock in enumerate(mesh.cells)
-    ]
-    return meshes
-
-def dim_from_type(cell_type):
-    """
-    Return the topoligical dimension of a cellblock type
-    """
-    if cell_type in {'point', 'vertex', 'node'}:
-        return 0
-    elif cell_type in {'line'}:
-        return 1
-    elif cell_type in {'triangle'}:
-        return 2
-    elif cell_type in {'tetrahedron', 'tetra'}:
-        return 3
-    else:
-        raise ValueError(f"Unknown cell type {cell_type}")
-
-def load_fenics_gmsh(mesh_path, overwrite_xdmf=False):
-    """
-    Loads a fenics mesh from .msh file
+    Return a `dfn.mesh` and mesh function info from a gmsh '.msh' file
 
     Parameters
     ----------
     mesh_path: str
         Path of the .msh file
+    overwrite_xdmf: bool
+        Whether to overwrite created '.xdmf' files. Note that '.xdmf' files are
+        created by this function to interface with FEniCS.
+
+    Returns
+    -------
+    dfn.Mesh
+        The mesh
+    MeshFunctions
+        A list of `dfn.MeshFunction` defined in gmsh (corresponding to
+        physical groups)
+    MeshFunctionMaps
+        A list of mappings from labelled mesh regions (physical groups) to
+        corresponding integer values in the mesh function.
     """
     mesh_dir, mesh_fname = path.split(mesh_path)
     mesh_name, mesh_ext = path.splitext(mesh_fname)
@@ -75,18 +58,22 @@ def load_fenics_gmsh(mesh_path, overwrite_xdmf=False):
     # First load some basic information about the mesh and check compatibility
     # with fenics
     cell_types = [cell.type for cell in mio_mesh.cells]
-    cell_dims = [dim_from_type(cell_type) for cell_type in cell_types]
+    cell_dims = [_dim_from_type(cell_type) for cell_type in cell_types]
 
     max_dim = max(cell_dims)
     for dim in range(max_dim+1):
         if cell_dims.count(max_dim) > 1:
+            # TODO: This limitation happens because FEniCS requires 1 '.xdmf'
+            # file per mesh of given dimension
+            # You could get around this limitation by combining cell blocks
+            # with the same dimension to a single '.xdmf' file
             raise ValueError(
                 f"The mesh contains multiple cell types of dimension {dim}"
                 " which is not supported!"
             )
 
     # Split multiple cell blocks in mio_mesh to separate meshes
-    split_meshes = split_meshio_cells(mio_mesh)
+    split_meshes = _split_meshio_cells(mio_mesh)
     split_mesh_names = [
         f'{mesh_name}_{n}_{cell_block_type}'
         for n, cell_block_type in enumerate(cell_types)
@@ -140,26 +127,75 @@ def load_fenics_gmsh(mesh_path, overwrite_xdmf=False):
 
     return dfn_mesh, tuple(mfs), tuple(entities_label_to_id)
 
+def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
+    """
+    Return each cell block of a `mio.Mesh` instance as a separate mesh
+
+    Parameters
+    ----------
+    mesh: mio.Mesh
+        The input mesh with multiple cellblocks
+
+    Returns
+    -------
+    List[mio.Mesh]
+        A list of `mio.Mesh` instances corresponding to each cell block
+    """
+    meshes = [
+        mio.Mesh(
+            mesh.points,
+            [cellblock],
+            cell_data={
+                key: [arrays[n]]
+                for key, arrays in mesh.cell_data.items()
+            }
+        )
+        for n, cellblock in enumerate(mesh.cells)
+    ]
+    return meshes
+
+def _dim_from_type(cell_type: str) -> int:
+    """
+    Return the topoligical dimension of a cellblock type
+
+    This function applies for cellblock types as used in `meshio`.
+    """
+    if cell_type in {'point', 'vertex', 'node'}:
+        return 0
+    elif cell_type in {'line'}:
+        return 1
+    elif cell_type in {'triangle'}:
+        return 2
+    elif cell_type in {'tetrahedron', 'tetra'}:
+        return 3
+    else:
+        raise ValueError(f"Unknown cell type {cell_type}")
+
 # Load a mesh from the FEniCS .xml format
 # This format is no longer updated/promoted by FEniCS
-def load_fenics_xmlmesh(mesh_path):
+def load_fenics_xml(
+        mesh_path: str
+    ) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
     """
-    Return mesh and facet/cell info
+    Return a `dfn.mesh` and mesh function info from a FEniCS '.xml' file
+
+    Note that the '.xml' format is not actively supported by FEniCS as of 2020.
 
     Parameters
     ----------
     mesh_path : str
         Path to the mesh .xml file
-    facet_labels, cell_labels : dict(str: int)
-        Dictionaries providing integer identifiers for given labels
 
     Returns
     -------
-    mesh : dfn.Mesh
-        The mesh object
-    facet_function, cell_function : dfn.MeshFunction
-        A mesh function marking facets with integers. Marked elements correspond to the label->int
-        mapping given in facet_labels/cell_labels.
+    dfn.Mesh
+        The mesh
+    MeshFunctions
+        A list of `dfn.MeshFunction` defined in gmsh (corresponding to
+        physical groups)
+    MeshFunctionMaps
+        A list of mappings from labelled mesh regions (physical groups) to
+        corresponding integer values in the mesh function.
     """
     base_path, ext = path.splitext(mesh_path)
     facet_function_path = base_path +  '_facet_region.xml'
@@ -173,12 +209,14 @@ def load_fenics_xmlmesh(mesh_path):
     facet_function = dfn.MeshFunction('size_t', mesh, facet_function_path)
     cell_function = dfn.MeshFunction('size_t', mesh, cell_function_path)
 
-    vertexlabel_to_id, facetlabel_to_id, celllabel_to_id = parse_msh2_physical_groups(msh_function_path)
+    vertexlabel_to_id, facetlabel_to_id, celllabel_to_id = _parse_msh2_physical_groups(msh_function_path)
 
     return mesh, (None, facet_function, cell_function), (vertexlabel_to_id, facetlabel_to_id, celllabel_to_id)
 
-def parse_msh2_physical_groups(mesh_path):
+def _parse_msh2_physical_groups(mesh_path: str) -> MeshFunctionMaps:
     """
+    Return mappings from physical group labels to integer ids
+
     Parameters
     ----------
     mesh_path : str
@@ -186,9 +224,7 @@ def parse_msh2_physical_groups(mesh_path):
 
     Returns
     -------
-    vertex_label_to_id
-    facet_label_to_id
-    cell_label_to_id
+    vertex_label_to_id, facet_label_to_id, cell_label_to_id
         Mappings from a string to numeric identifier for the physical group
     """
     with open(mesh_path, 'r') as f:
@@ -222,6 +258,8 @@ def parse_msh2_physical_groups(mesh_path):
     return vertexlabel_to_id, facetlabel_to_id, celllabel_to_id
 
 
+## Functions for sorting medial surface coordinates in a stream-wise manner
+# This is needed for getting 1D fluid model coordinates
 def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     """
     Returns a list of x, y coordinates of the surface corresponding to edges numbered 'n'.
@@ -233,41 +271,57 @@ def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     """
     assert isinstance(f_edges, (list, tuple))
     edges = [n_edge for n_edge, f_edge in enumerate(edge_function.array()) if f_edge in set(f_edges)]
-    vertices = vertices_from_edges(edges, mesh)
+    vertices = vertices_from_edges(mesh, edges)
 
     surface_coordinates = mesh.coordinates()[vertices]
 
+    # TODO: You can get the vertices in order by using the topology of the edges
+    # i.e. determine how the vertices are ordered by connections between edges
     idx_sort = sort_vertices_by_nearest_neighbours(surface_coordinates)
     surface_coordinates = surface_coordinates[idx_sort]
 
     return surface_coordinates[:, 0], surface_coordinates[:, 1]
 
-def vertices_from_edges(edge_indices, mesh):
+def vertices_from_edges(mesh, edge_indices):
     """
     Return vertices associates with a set of edges
     """
-    edge_to_vertex = np.array([[vertex.index() for vertex in dfn.vertices(edge)]
-                                for edge in dfn.edges(mesh)])
+    edge_to_vertex = np.array([
+        [vertex.index() for vertex in dfn.vertices(edge)]
+        for edge in dfn.edges(mesh)
+    ])
 
     vertices = np.unique(edge_to_vertex[edge_indices].reshape(-1))
     return vertices
 
-def sort_vertices_by_nearest_neighbours(vertex_coordinates, origin=None):
+def sort_vertices_by_nearest_neighbours(
+        vertex_coordinates: np.ndarray,
+        origin: np.ndarray=None
+    ) -> np.ndarray:
     """
-    Return an index list sorting the vertices based on its nearest neighbours
+    Return a permutation that sorts point in succesive order starting from an origin
 
-    For the case of a collection of vertices along the surface of a mesh, this should sort them
-    along an increasing or decreasing surface coordinate.
+    For the case of a collection of vertices along the surface of a mesh, this
+    should sort them along an increasing or decreasing surface coordinate.
 
-    This is mainly used to sort the inferior-superior direction is oriented along the positive x axis.
+    This is mainly used to sort the inferior-superior direction is oriented
+    along the positive x axis.
 
     Parameters
     ----------
     vertex_coordinates : (..., m) array_like
-        An array of surface coordinates, with (x, y, ...) locations stored in the last dimension.
+        An array of surface coordinates, with (x, y, ...) locations stored in
+        the last dimension. 'm' is the dimension of the mesh (for example, 3).
     origin : (m,) array_like
         The origin point used to determine which vertex should be first
+
+    Returns
+    -------
+    np.ndarray
+        The permutation array that sorts the points
     """
+    # TODO: This function was really meant to extract the list of vertices along
+    # a 1D edge chain
     origin = np.zeros(vertex_coordinates.shape[-1]) if origin is None else origin
     # Determine the very first coordinate
     idx_sort = [np.argmin(np.linalg.norm(vertex_coordinates-origin, axis=-1))]
@@ -282,60 +336,135 @@ def sort_vertices_by_nearest_neighbours(vertex_coordinates, origin=None):
 
     return np.array(idx_sort)
 
-def verts_from_cell_function(mesh, cell_func, id):
-    verts = []
-    for n_cell, cell_verts in enumerate(mesh.cells()):
-        if cell_func[n_cell] == id:
-            verts += cell_verts.tolist()
-
-    return np.unique(verts)
-
-def verts_from_facet_function(mesh, facet_func, id):
-    verts = []
-    for facet in dfn.facets(mesh):
-        if facet_func[facet.index()] == id:
-            verts += [vert.index() for vert in dfn.vertices(facet)]
-
-    return np.unique(verts)
-
-def dofs_from_cell_function(mesh, cell_func, cell_func_value, dofmap):
-    dofs = []
-    for cell in dfn.cells(mesh):
-        if cell_func[cell.index()] == cell_func_value:
-            dofs += dofmap.cell_dofs(cell.index()).tolist()
-
-    return np.unique(dofs)
-
-def dofs_from_mesh_func(mesh, mesh_func, mesh_func_value, dofmap):
+## Functions for getting vertices from mesh regions
+def verts_from_mesh_func(
+        mesh: dfn.Mesh,
+        mesh_func: dfn.MeshFunction,
+        mesh_func_value: int
+    ) -> np.ndarray:
     """
-    Return all DOFs where an integer mesh function equals a value
+    Return all vertices associated with a mesh region
+
+    The mesh region is specified through a meshfunction and value.
+
+    Parameters
+    ----------
+    mesh: dfn.Mesh
+    mesh_func: dfn.MeshFunction
+        The mesh function use to specify the mesh region
+    mesh_func_value: int
+        The mesh function value corresponding to the desired region
+
+    Returns
+    -------
+    np.ndarray
+        An array of vertex indices associated with the closure of the
+        specfied mesh region
+    """
+    verts = []
+    for mesh_entity in dfn.entities(mesh, mesh_func.dim()):
+        if mesh_func[mesh_entity.index()] == mesh_func_value:
+            # Append on all vertices (dimension 0) attached to the given mesh
+            # entity
+            verts += mesh_entity.entities(0).tolist()
+
+    return np.unique(verts)
+
+# TODO: Could add functions mimicking the `dofs_from_mesh_func` set of functions
+# below, if you end up using this a lot
+
+## Functions for getting DOFs from mesh regions
+def dofs_from_mesh_func(
+        mesh: dfn.Mesh,
+        mesh_func: dfn.MeshFunction,
+        mesh_func_value: int,
+        dofmap: dfn.DofMap
+    ) -> np.ndarray:
+    """
+    Return all DOFs associated with a mesh region
+
+    The mesh region is specified through a meshfunction and value.
+
+    Parameters
+    ----------
+    mesh: dfn.Mesh
+    mesh_func: dfn.MeshFunction
+        The mesh function use to specify the mesh region
+    mesh_func_value: int
+        The mesh function value corresponding to the desired region
+    dofmap:
+        The Dofmap from the desired function space
+
+    Returns
+    -------
+    np.ndarray
+        An array of DOFs associated with the closure of the specfied mesh region
+        and function space (through `dofmap`)
     """
     mesh_ent_indices = [
         mesh_ent.index()
         for mesh_ent in dfn.cpp.mesh.entities(mesh, mesh_func.dim())
-        if mesh_func[mesh_ent.index()] == mesh_func_value]
+        if mesh_func[mesh_ent.index()] == mesh_func_value
+    ]
 
     dofs = dofmap.entity_closure_dofs(mesh, mesh_func.dim(), mesh_ent_indices)
 
-    return np.array(list(set(dofs)))
+    return np.unique(dofs)
 
-def process_meshlabel_to_dofs(mesh, mesh_func, func_space, label_to_meshfunc):
+def process_meshlabel_to_dofs(
+        mesh: dfn.Mesh,
+        mesh_func: dfn.MeshFunction,
+        label_to_meshfunc: Mapping[str, int],
+        dofmap: dfn.DofMap
+    ) -> Mapping[str, np.ndarray]:
     """
-    Return a map from mesh region label(s) to DOFs associated with the region(s)
+    Return a mapping from mesh region labels to associated DOFs
+
+    Parameters
+    ----------
+    mesh: dfn.Mesh
+    mesh_func: dfn.MeshFunction
+        The mesh function use to specify the mesh region
+    label_to_meshfunc: Mapping[str, int]
+        A mapping from labels to integer ids corresponding to mesh regions
+    dofmap:
+        The Dofmap from the desired function space
+
+    Returns
+    -------
+    np.ndarray
+        An array of DOFs associated with the closure of the specfied mesh region
+        and function space (through `dofmap`)
     """
-    dofmap = func_space.dofmap()
     label_to_dofs = {
-        region_label: dofs_from_mesh_func(mesh, mesh_func, region_value, dofmap)
-        for region_label, region_value in label_to_meshfunc.items()}
+        label: dofs_from_mesh_func(mesh, mesh_func, value, dofmap)
+        for label, value in label_to_meshfunc.items()
+    }
 
     return label_to_dofs
 
-def process_celllabel_to_dofs_from_forms(forms, func_space):
+def process_celllabel_to_dofs_from_forms(
+        forms: Mapping[str, Any], dofmap: dfn.DofMap
+    ) -> Mapping[str, np.ndarray]:
     """
-    Return a map from cell regions to associated dofs
+    Return a mapping from mesh region labels to associated DOFs
+
+    Parameters
+    ----------
+    forms:
+        A mapping (see `femvf.models.equations.solid.solidforms` for examples)
+    dofmap:
+        The Dofmap from the desired function space
+
+    Returns
+    -------
+    np.ndarray
+        An array of DOFs associated with the closure of the specfied mesh region
+        and function space (through `dofmap`)
     """
     mesh = forms['mesh.mesh']
     cell_func = forms['mesh.cell_function']
     cell_label_to_id = forms['mesh.cell_label_to_id']
     return process_meshlabel_to_dofs(
-        mesh, cell_func, func_space, cell_label_to_id)
+        mesh, cell_func, cell_label_to_id, dofmap
+    )
