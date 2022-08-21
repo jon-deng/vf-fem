@@ -163,6 +163,8 @@ def static_coupled_configuration_picard(
             qp, _ = fluid.solve_state1(x_n[['q', 'p']])
             return bv.concatenate_vec([u, qp.copy()])
 
+        return assem_res, solve
+
     # Set the initial state
     _x_n = model.state0.copy()[labels]
     _x_n[:] = 0

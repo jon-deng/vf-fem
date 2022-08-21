@@ -23,7 +23,7 @@ mesh_dir = '../meshes'
 mesh_name = 'M5-3layers'
 mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
 model = load_transient_fsi_model(
-    mesh_path, None, SolidType=tsmd.KelvinVoigt, FluidType=tfmd.Bernoulli, coupling='explicit')
+    mesh_path, None, SolidType=tsmd.KelvinVoigt, FluidType=tfmd.BernoulliAreaRatioSep, coupling='explicit')
 
 ### Specify control
 control = model.control.copy()
@@ -37,13 +37,14 @@ mesh = model.solid.forms['mesh.mesh']
 cell_func = model.solid.forms['mesh.cell_function']
 func_space = model.solid.forms['fspace.scalar']
 cell_label_to_id = model.solid.forms['mesh.cell_label_to_id']
-region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
+region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, cell_label_to_id, func_space.dofmap())
 dofs_cover = region_to_dofs['cover']
 dofs_body = region_to_dofs['body']
 
 # Set the layer moduli
 ECOV = 5e3*10
 EBODY = 15e3*10
+props['emod'] = ECOV
 props['emod'][dofs_cover] = ECOV
 props['emod'][dofs_body] = EBODY
 props['rho'][:] = 1.0
@@ -64,14 +65,15 @@ ZETA = 1e-4
 R_SEP = 1.0
 props['r_sep'][:] = R_SEP
 props['area_lb'][:] = 2*y_contact_offset
-props['zeta_lb'][:] = 1e-6
-props['zeta_min'][:] = ZETA
-props['zeta_sep'][:] = ZETA
-props['zeta_inv'][:] = ZETA
+# props['zeta_lb'][:] = 1e-6
+# props['zeta_min'][:] = ZETA
+# props['zeta_sep'][:] = ZETA
+# props['zeta_inv'][:] = ZETA
 
 ### Set the control and properties for the model
 model.set_control(control)
 model.set_props(props)
+breakpoint()
 
 def test_static_solid_configuration():
     """
