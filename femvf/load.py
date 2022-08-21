@@ -239,7 +239,7 @@ def process_fsi(
     fsi_facet_ids = [solid.forms['mesh.facet_label_to_id'][name] for name in fsi_facet_labels]
     fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.forms['mesh.facet_function'].array())
                                 if fedge in set(fsi_facet_ids)])
-    fsi_verts = meshutils.vertices_from_edges(fsi_edges, solid.forms['mesh.mesh'])
+    fsi_verts = meshutils.vertices_from_edges(solid.forms['mesh.mesh'], fsi_edges)
     fsi_coordinates = solid.forms['mesh.mesh'].coordinates()[fsi_verts]
 
     # Sort the fsi vertices from inferior to superior
