@@ -175,6 +175,17 @@ def integrate_linear(
     the model forward in time. This sequence of states is stored in the `f`
     instance.
 
+    Parameters
+    ----------
+    model :
+        The transient model to integrate
+    f :
+        A statefile containing a history of states to linearize about
+    dini_state, dcontrols, dprops :
+        The linear perturbation in initial state, controls, and properties
+    dtimes :
+        The linear perturbation in times
+
     Returns
     -------
     dfin_state : vec.BlockVector
@@ -216,6 +227,8 @@ def integrate_step(
     ) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
     """
     Integrate a model over a single time step
+
+    See `integrate` for more details
     """
     model.dt = dt
     model.set_ini_state(ini_state)
