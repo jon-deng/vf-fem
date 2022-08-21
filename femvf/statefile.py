@@ -7,42 +7,15 @@ Module to work with state values from a forward pass stored in an hdf5 file.
 # so you may have to fix bugs that are associated with this if you want to use time-varying
 # fluid/solid parameters
 
-from typing import Union, Tuple, Optional, Mapping
+from typing import Union, Tuple, Optional, Mapping, Any
 from collections import OrderedDict
 
 import h5py
 import dolfin as dfn
 import numpy as np
+from blockarray import blockvec as bv
 
 from .models.transient.base import BaseTransientModel
-
-def get_from_cache(cache_name):
-    """
-    Return a decorator that gives a functions caching behaviour to the specified cache
-
-    Parameters
-    ----------
-    cache_key : str
-        key to the cache in the `StateFile` objects `cache` attribute that the function should use
-        for storing cached values into
-    """
-    def decorator(func):
-        """
-        Parameters
-        ----------
-        func : callable(key) -> value
-        """
-        def wrapper(self, key):
-            cache = self.cache[cache_name]
-            if cache.get(key) is None:
-                val = func(self, key)
-                cache.put(key, val)
-
-            return cache.get(key)
-
-        return wrapper
-
-    return decorator
 
 class StateFile:
     r"""
@@ -85,6 +58,12 @@ class StateFile:
 
     file: h5py.Group
 
+    # NOTE: Should you refactor the init to use more basic variables instead of
+    # a `BaseTransientModel` object?
+    # - when a `StateFile` is being created (mode='w' or 'a') you need a
+    # mesh + prototoype state, control, props vectors (for the shape information)
+    # - when a `StateFile` is being read (mode='r' or 'a') you don't need
+    # any of those, although it is convenient to have them
     def __init__(
             self,
             model: BaseTransientModel,
@@ -195,7 +174,7 @@ class StateFile:
 
         self.init_state()
         self.init_control()
-        self.init_properties()
+        self.init_props()
 
         self.init_solver_info()
 
@@ -225,42 +204,42 @@ class StateFile:
 
     def init_state(self):
         state_group = self.file.require_group('state')
-        for name, vec in self.model.state0.items():
-            NDOF = len(vec)
+        bvec = self.model.state0
+        for name, ndof in zip(bvec.labels[0], bvec.bshape[0]):
             state_group.require_dataset(
-                name, (self.size, NDOF), maxshape=(None, NDOF),
-                chunks=(self.NCHUNK, NDOF), dtype=np.float64
+                name, (self.size, ndof),
+                maxshape=(None, ndof), chunks=(self.NCHUNK, ndof),
+                dtype=np.float64
             )
 
     def init_control(self):
         control_group = self.file.require_group('control')
 
-        for name, vec in self.model.control.items():
-            NDOF = len(vec)
-            control_group.require_dataset(name, (self.size, NDOF), maxshape=(None, NDOF),
-                                         chunks=(self.NCHUNK, NDOF), dtype=np.float64)
+        bvec = self.model.control
+        for name, ndof in zip(bvec.labels[0], bvec.bshape[0]):
+            control_group.require_dataset(
+                name, (self.size, ndof),
+                maxshape=(None, ndof), chunks=(self.NCHUNK, ndof),
+                dtype=np.float64
+            )
 
-    def init_properties(self):
+    def init_props(self):
         properties_group = self.file.require_group('properties')
 
-        for name, value in self.model.props.items():
-            size = None
-            try:
-                size = len(value)
-            except TypeError:
-                size = value.size
-            properties_group.require_dataset(name, (size,), dtype=np.float64)
+        bvec = self.model.props
+        for name, ndof in zip(bvec.labels[0], bvec.bshape[0]):
+            properties_group.require_dataset(name, (ndof,), dtype=np.float64)
 
     def init_solver_info(self):
         solver_info_group = self.file.require_group('solver_info')
         for key in ['num_iter', 'rel_err', 'abs_err']:
             solver_info_group.require_dataset(
-                key, (self.size,), dtype=np.float64, maxshape=(None,),
-                chunks=(self.NCHUNK,)
+                key, (self.size,),
+                dtype=np.float64, maxshape=(None,), chunks=(self.NCHUNK,)
             )
 
     ## Functions for writing by appending
-    def append_state(self, state):
+    def append_state(self, state: bv.BlockVector):
         """
         Append state to the file.
 
@@ -273,14 +252,14 @@ class StateFile:
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1, :] = value
 
-    def append_control(self, control):
+    def append_control(self, control: bv.BlockVector):
         control_group = self.file['control']
         for name, value in control.items():
             dset = control_group[name]
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value
 
-    def append_properties(self, properties):
+    def append_props(self, properties: bv.BlockVector):
         """
         Append properties vector to the file.
 
@@ -294,7 +273,7 @@ class StateFile:
             # dset.resize(dset.shape[0]+1, axis=0)
             dset[:] = value
 
-    def append_time(self, time):
+    def append_time(self, time: float):
         """
         Append times to the file.
 
@@ -307,7 +286,7 @@ class StateFile:
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = time
 
-    def append_meas_index(self, index):
+    def append_meas_index(self, index: int):
         """
         Append measured indices to the file.
 
@@ -319,7 +298,7 @@ class StateFile:
         dset.resize(dset.shape[0]+1, axis=0)
         dset[-1] = index
 
-    def append_solver_info(self, solver_info):
+    def append_solver_info(self, solver_info: Mapping[str, Any]):
         solver_info_group = self.file['solver_info']
         for key, dset in solver_info_group.items():
             dset.resize(dset.shape[0]+1, axis=0)
@@ -329,25 +308,25 @@ class StateFile:
                 dset[-1] = np.nan
 
     ## Functions for reading specific indices
-    def get_time(self, n):
+    def get_time(self, n: int) -> float:
         """
         Returns the time at state n.
         """
         return self.file['time'][n]
 
-    def get_times(self):
+    def get_times(self) -> np.ndarray:
         """
         Returns the time vector.
         """
         return self.file['time'][:]
 
-    def get_meas_indices(self):
+    def get_meas_indices(self) -> np.ndarray:
         """
         Returns the measured indices.
         """
         return self.file['meas_indices'][:]
 
-    def get_state(self, n):
+    def get_state(self, n: int) -> bv.BlockVector[np.ndarray]:
         """
         Return form coefficient vectors for states (u, v, a) at index n.
 
@@ -368,7 +347,7 @@ class StateFile:
 
         return state
 
-    def get_control(self, n):
+    def get_control(self, n: int) -> bv.BlockVector[np.ndarray]:
         """
         Return form coefficient vectors for states (u, v, a) at index n.
 
@@ -393,7 +372,7 @@ class StateFile:
 
         return control
 
-    def get_props(self):
+    def get_props(self) -> bv.BlockVector[np.ndarray]:
         properties = self.model.props.copy()
 
         for name, vec in zip(properties.keys(), properties.blocks):
@@ -404,13 +383,13 @@ class StateFile:
                 vec[()] = dset[()]
         return properties
 
-    def get_solver_info(self, n):
+    def get_solver_info(self, n) -> Mapping[str, np.ndarray]:
         solver_info_group = self.file['solver_info']
         solver_info = {key: solver_info_group[key][n] for key in solver_info_group.keys()}
         return solver_info
 
     ## Functions for writing/modifying specific indices
-    def set_state(self, n, state):
+    def set_state(self, n: int, state: bv.BlockVector):
         """
         Set form coefficient vectors for states `uva=(u, v, a)` at index n.
 
@@ -424,9 +403,12 @@ class StateFile:
         for label, value in zip(state.keys(), state.vecs):
             self.file[label][n] = value
 
+# TODO: Test whether this cache improves performance or not; you made this when
+# you didn't know how exactly to test `h5py` performace
+# also `h5py` is supposed to cache datasets by chunks already anyway
 class DatasetChunkCache:
     """
-    Cache of chunked datasets
+    Cache for chunked datasets to improve read performance
 
     The dataset must contain full chunks along the last dimensions
 
@@ -434,7 +416,7 @@ class DatasetChunkCache:
     already loaded in a chunk will use the data from the cached chunk instead of reading again.
     """
 
-    def __init__(self, dset, num_chunks=1):
+    def __init__(self, dset: h5py.Dataset, num_chunks: int=1):
         # Don't allow scalar datasets
         assert len(dset.shape) > 0
 
@@ -444,13 +426,29 @@ class DatasetChunkCache:
         self.dset = dset
 
         self.chunk_size = dset.chunks[0]
-        self.M = dset.shape[0]
 
         self.num_chunks = num_chunks
 
         self.cache = OrderedDict()
 
-    def get(self, m):
+    @property
+    def size(self):
+        return self.dset.shape[0]
+
+    def _convert_neg_to_pos_index(self, m: int):
+        if m < 0:
+            return self.size + m
+        else:
+            return m
+
+    def _dec_handle_neg_index(func):
+        def wrapped(self, m: int):
+            m = self._convert_neg_to_pos_index(m)
+            return func(self, m)
+        return wrapped
+
+    @_dec_handle_neg_index
+    def get(self, m: int):
         """
         Parameters
         ----------
@@ -467,7 +465,8 @@ class DatasetChunkCache:
         m_local = m - m_chunk*self.chunk_size
         return self.cache[m_chunk][m_local, ...].copy()
 
-    def load(self, m):
+    @_dec_handle_neg_index
+    def load(self, m: int):
         """
         Loads the chunk containing index m
 

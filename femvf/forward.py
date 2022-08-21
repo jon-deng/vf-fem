@@ -74,7 +74,7 @@ def integrate(
             f, ini_state, controls[0], times_vec[0],
             {'num_iter': 0, 'abs_err': 0, 'rel_err': 0}
         )
-        f.append_properties(props)
+        f.append_props(props)
         if 0 in idx_meas:
             f.append_meas_index(0)
 
