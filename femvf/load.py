@@ -46,7 +46,7 @@ def load_solid_model(
 
         if ext.lower() == '.xml':
             # The solid mesh is an xml file
-            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_xmlmesh(solid_mesh)
+            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_xml(solid_mesh)
         elif ext.lower() == '.msh':
             # The solid mesh is an gmsh file
             mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_gmsh(solid_mesh)

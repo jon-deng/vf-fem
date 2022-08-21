@@ -6,7 +6,7 @@ import os
 import dolfin as dfn
 from pprint import pprint
 
-from femvf.meshutils import load_fenics_xmlmesh
+from femvf.meshutils import load_fenics_xml
 from femvf.models import solid as smd
 from femvf.models import solidforms as fsmd
 
@@ -17,7 +17,7 @@ mesh_name = 'M5-3layers'
 mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
 
 mesh, (vertex_func, facet_func, cell_func), (vertex_labels, facet_label_to_id, cell_label_to_id) = \
-    load_fenics_xmlmesh(mesh_path)
+    load_fenics_xml(mesh_path)
 
 def test_base_form_definitions():
     try:

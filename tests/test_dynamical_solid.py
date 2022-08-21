@@ -5,7 +5,7 @@ Test that the Hopf solid models will run
 import os
 import dolfin as dfn
 
-from femvf.meshutils import load_fenics_xmlmesh
+from femvf.meshutils import load_fenics_xml
 from femvf.models.dynamical import solid as dynsol
 
 dfn.set_log_level(30)
@@ -15,7 +15,7 @@ def test_dynamical_kelvin_voigt(mesh_path):
     Test that the Kelvin Voigt model can be loaded
     """
     mesh, (vertex_func, facet_func, cell_func), (vertex_labels, facet_labels, cell_labels) = \
-        load_fenics_xmlmesh(mesh_path)
+        load_fenics_xml(mesh_path)
     # breakpoint()
     fsi_facet_labels = ['pressure']
     fixed_facet_labels = ['fixed']
