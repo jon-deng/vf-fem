@@ -19,91 +19,115 @@ approach is a little trickier as the jacobian dFu/du1 would change since u0 must
 be linked to u1.
 """
 
-from typing import Tuple, Mapping
+from typing import Tuple, Mapping, Any
 
 import dolfin as dfn
-from petsc4py import PETSc
 import numpy as np
+
+from blockarray import blockmat as bm, blockvec as bv
+from nonlineq import newton_solve
 
 from .models.transient import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
-
-from blockarray import subops as gops
-from blockarray.blockvec import BlockVector, concatenate_vec, convert_subtype_to_petsc
-from blockarray.blockmat import BlockMatrix
-from blockarray.subops import zero_mat, ident_mat
-
-from nonlineq import newton_solve
 
 # import warnings
 # warnings.filterwarnings("error")
 
 dfn.set_log_level(50)
 
-def static_solid_configuration(
-        solid: slmodel.Solid,
-        control: BlockVector,
-        props: BlockVector
-    ) -> Tuple[BlockVector, Mapping]:
+Info = Mapping[str, Any]
+
+def _add_static_docstring(func):
+    docs = \
     """
-    Return the static state of a solid model
+    Solve for the static state of a coupled model
 
     Parameters
     ----------
-    solid :
-        The solid model to solve for a static state
+    model :
+        The model
     control :
-        The control parameters of the solid model for the static state
+        The control parameters for the model
     props :
-        The properties of the solid model
+        The properties of the model
+
+    Returns
+    -------
+    bv.BlockVector
+        The static state
+    Info
+        A dictionary of info about the solve
+    """
+    func.__doc__ = func.__doc__ + docs
+    return func
+
+@_add_static_docstring
+def static_solid_configuration(
+        model: slmodel.Solid,
+        control: bv.BlockVector,
+        props: bv.BlockVector
+    ) -> Tuple[bv.BlockVector, Info]:
+    """
+    Return the static state for a solid model
+
     """
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
-    state_n = solid.state0.copy()
+    state_n = model.state0.copy()
     state_n[:] = 0.0
-    solid.set_fin_state(state_n)
-    solid.set_ini_state(state_n)
+    model.set_fin_state(state_n)
+    model.set_ini_state(state_n)
 
-    solid.set_control(control)
-    solid.set_props(props)
+    model.set_control(control)
+    model.set_props(props)
 
     jac = dfn.derivative(
-        solid.forms['form.un.f1uva'],
-        solid.forms['coeff.state.u1']
+        model.forms['form.un.f1uva'],
+        model.forms['coeff.state.u1']
     )
     dfn.solve(
-        solid.forms['form.un.f1uva'] == 0.0,
-        solid.forms['coeff.state.u1'],
-        bcs=[solid.forms['bc.dirichlet']],
+        model.forms['form.un.f1uva'] == 0.0,
+        model.forms['coeff.state.u1'],
+        bcs=[model.forms['bc.dirichlet']],
         J=jac,
         solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
     )
 
-    state_n['u'] = solid.state1['u']
+    state_n['u'] = model.state1['u']
 
     info = {}
     return state_n, info
 
-def set_coupled_model_substate(model, xsub):
+def _set_coupled_model_substate(model: comodel.FSIModel, xsub: bv.BlockVector):
     """
-    Set the coupled model state
+    Set a subset of blocks in `model.state` from a given block vector
+
+    Parameters
+    ----------
+    model:
+        The model
+    xsub:
+        The block vector to set values from. Block with labels in `xsub` are
+        used to set corresponding blocks of `model.state`
     """
     _state = model.state0.copy()
     _labels = list(xsub.labels[0])
     _state[_labels] = xsub
-        # _state[key][:] = xsub[key].array
+
     # Set both initial and final states to ensure that the fluid pressure
     # is set for the final state; for explicit models only the initial fluid
     # state is passed as a force on the final solid residual
     model.set_ini_state(_state)
     model.set_fin_state(_state)
 
+@_add_static_docstring
 def static_coupled_configuration_picard(
         model: comodel.FSIModel,
-        control: BlockVector,
-        props: BlockVector,
-    ) -> Tuple[BlockVector, Mapping]:
+        control: bv.BlockVector,
+        props: bv.BlockVector,
+    ) -> Tuple[bv.BlockVector, Info]:
     """
-    Solve for static equilibrium for a coupled model
+    Solve for the static state of a coupled model
+
     """
     solid = model.solid
     fluid = model.fluid
@@ -116,9 +140,9 @@ def static_coupled_configuration_picard(
 
         x_n = [u, q, p]
         """
-        set_coupled_model_substate(model, x_n)
+        _set_coupled_model_substate(model, x_n)
 
-        # solve for the solid deformation under the guessed fluid load
+        # Solve for the solid deformation under the guessed fluid load
         dfn.solve(
             solid.forms['form.un.f1uva'] == 0.0,
             solid.forms['coeff.state.u1'],
@@ -126,13 +150,14 @@ def static_coupled_configuration_picard(
             J=solid.forms['form.bi.df1uva_du1'],
             solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
         )
-        u = BlockVector([solid.state1['u'].copy()], labels=[['u']]) # the vector corresponding to solid.forms['coeff.state.u1']
+        # the vector corresponding to solid.forms['coeff.state.u1']
+        u = bv.BlockVector([solid.state1['u'].copy()], labels=[['u']])
 
         # update the fluid load for the new solid deformation
         x_n['u'][:] = u[0]
-        set_coupled_model_substate(model, x_n)
+        _set_coupled_model_substate(model, x_n)
         qp, _ = fluid.solve_state1(x_n[['q', 'p']])
-        return concatenate_vec([u, qp.copy()])
+        return bv.concatenate_vec([u, qp.copy()])
 
     # Set the initial state
     x_n = model.state0.copy()[['u', 'q', 'p']]
@@ -152,7 +177,7 @@ def static_coupled_configuration_picard(
         # print("After picard ||x_n||=", x_n['u'].norm('l2'))
 
         # Compute the error in the iteration
-        set_coupled_model_substate(model, x_n)
+        _set_coupled_model_substate(model, x_n)
 
         res = dfn.assemble(solid.forms['form.un.f1uva'])
         solid.forms['bc.dirichlet'].apply(res)
@@ -176,25 +201,24 @@ def static_coupled_configuration_picard(
 
 # TODO: This one has a strange bug where Newton convergence is very slow
 # I'm not sure if the answer it returns is correct or not
+@_add_static_docstring
 def static_coupled_configuration_newton(
         model: comodel.FSIModel,
-        control: BlockVector,
-        props: BlockVector,
+        control: bv.BlockVector,
+        props: bv.BlockVector,
         dt: float=1e6
-    ) -> Tuple[BlockVector, Mapping]:
+    ) -> Tuple[bv.BlockVector, Info]:
     """
     Return the static equilibrium state for a coupled model
-    """
-    solid = model.solid
-    fluid = model.fluid
 
+    """
     def make_linear_subproblem(x_0):
         """
         Linear subproblem to be solved in a Newton solution strategy
         """
         ### Set the state to linearize around
         model.dt = dt
-        set_coupled_model_substate(model, x_0)
+        _set_coupled_model_substate(model, x_0)
 
         ### Form the residual
         def assem_res():
