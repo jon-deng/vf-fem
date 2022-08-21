@@ -97,6 +97,7 @@ def static_solid_configuration(
     info = {}
     return state_n, info
 
+# TODO: Refactor this to simply set appropriate blocks to a vector from value
 def _set_coupled_model_substate(model: comodel.BaseTransientFSIModel, xsub: bv.BlockVector):
     """
     Set a subset of blocks in `model.state` from a given block vector
@@ -106,7 +107,7 @@ def _set_coupled_model_substate(model: comodel.BaseTransientFSIModel, xsub: bv.B
     model:
         The model
     xsub:
-        The block vector to set values from. Block with labels in `xsub` are
+        The block vector to set values from. Blocks with labels in `xsub` are
         used to set corresponding blocks of `model.state`
     """
     _state = model.state0.copy()
@@ -195,6 +196,9 @@ def static_coupled_configuration_newton(
         """
         ### Set the state to linearize around
         model.dt = dt
+        # TODO: This might be the source of the bug since the newton strategy
+        # would require only the final state to be updated; the function
+        # belows updates both initial and final states
         _set_coupled_model_substate(model, x_0)
 
         ### Form the residual
