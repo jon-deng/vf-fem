@@ -25,7 +25,7 @@ import dolfin as dfn
 import numpy as np
 
 from blockarray import blockmat as bm, blockvec as bv
-from nonlineq import newton_solve
+import nonlineq
 
 from .models.transient import solid as slmodel, coupled as comodel
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -131,72 +131,47 @@ def static_coupled_configuration_picard(
     """
     solid = model.solid
     fluid = model.fluid
-    def norm(x):
-        return x.norm('l2')
 
-    def picard(x_n):
-        """
-        Returns a new guess x_n+1
-
-        x_n = [u, q, p]
-        """
+    # This solves the static state only with (displacement, flow rate, pressure)
+    # i.e. this ignores the velocity and acceleration of the solid
+    labels = ['u', 'q', 'p']
+    def iterative_subproblem(x_n):
         _set_coupled_model_substate(model, x_n)
+        def assem_res():
+            return model.assem_res()[labels]
 
-        # Solve for the solid deformation under the guessed fluid load
-        dfn.solve(
-            solid.forms['form.un.f1uva'] == 0.0,
-            solid.forms['coeff.state.u1'],
-            bcs=[solid.forms['bc.dirichlet']],
-            J=solid.forms['form.bi.df1uva_du1'],
-            solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
-        )
-        # the vector corresponding to solid.forms['coeff.state.u1']
-        u = bv.BlockVector([solid.state1['u'].copy()], labels=[['u']])
+        def solve(res):
+            """
+            Returns a new guess x_n+1
 
-        # update the fluid load for the new solid deformation
-        x_n['u'][:] = u[0]
-        _set_coupled_model_substate(model, x_n)
-        qp, _ = fluid.solve_state1(x_n[['q', 'p']])
-        return bv.concatenate_vec([u, qp.copy()])
+            x_n = [u, q, p]
+            """
+            # Solve for the solid deformation under the guessed fluid load
+            dfn.solve(
+                solid.forms['form.un.f1uva'] == 0.0,
+                solid.forms['coeff.state.u1'],
+                bcs=[solid.forms['bc.dirichlet']],
+                J=solid.forms['form.bi.df1uva_du1'],
+                solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
+            )
+            # the vector corresponding to solid.forms['coeff.state.u1']
+            u = bv.BlockVector([solid.state1['u'].copy()], labels=[['u']])
+
+            # update the fluid load for the new solid deformation
+            x_n['u'][:] = u[0]
+            _set_coupled_model_substate(model, x_n)
+            qp, _ = fluid.solve_state1(x_n[['q', 'p']])
+            return bv.concatenate_vec([u, qp.copy()])
 
     # Set the initial state
-    x_n = model.state0.copy()[['u', 'q', 'p']]
+    _x_n = model.state0.copy()[labels]
+    _x_n[:] = 0
+    _x_n, info = nonlineq.iterative_solve(_x_n, iterative_subproblem)
+
+    # Assign the reduced state back into the full state
+    x_n = model.state0.copy()
     x_n[:] = 0
-
-    abs_errs = []
-    rel_errs = []
-
-    n = 0
-    ABS_TOL = 1e-8
-    REL_TOL = 1e-8
-    NMAX = 15
-    while True:
-        # Compute the picard iteration
-        # print("Before picard ||x_n||=", x_n['u'].norm('l2'))
-        x_n = picard(x_n)
-        # print("After picard ||x_n||=", x_n['u'].norm('l2'))
-
-        # Compute the error in the iteration
-        _set_coupled_model_substate(model, x_n)
-
-        res = dfn.assemble(solid.forms['form.un.f1uva'])
-        solid.forms['bc.dirichlet'].apply(res)
-
-        abs_errs.append(norm(res))
-        rel_errs.append(abs_errs[-1]/abs_errs[0])
-
-        if abs_errs[-1] < ABS_TOL or rel_errs[-1] < REL_TOL:
-            break
-        elif n > NMAX:
-            break
-        else:
-            n += 1
-
-    info = {
-        'abs_errs': np.array(abs_errs),
-        'rel_errs': np.array(rel_errs)
-    }
-
+    x_n[labels] = _x_n
     return x_n, info
 
 # TODO: This one has a strange bug where Newton convergence is very slow
@@ -212,7 +187,7 @@ def static_coupled_configuration_newton(
     Return the static equilibrium state for a coupled model
 
     """
-    def make_linear_subproblem(x_0):
+    def newton_subproblem(x_0):
         """
         Linear subproblem to be solved in a Newton solution strategy
         """
@@ -233,6 +208,4 @@ def static_coupled_configuration_newton(
     ### Initial guess
     x_0 = model.state0.copy()
     x_0[:] = 0.0
-
-    x_n, info = newton_solve(x_0, make_linear_subproblem, step_size=1.0)
-    return x_n, info
+    return nonlineq.newton_solve(x_0, newton_subproblem, step_size=1.0)
