@@ -10,7 +10,7 @@ import numpy as jnp
 
 from blockarray import blockvec as vec
 
-class Acoustic1D(base.Model):
+class Acoustic1D(base.BaseTransientModel):
     def __init__(self, num_tube):
         assert num_tube%2 == 0
 

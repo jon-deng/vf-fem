@@ -8,7 +8,7 @@ from petsc4py import PETSc as PETSc
 
 from blockarray import blockmat as bmat, blockvec as bvec, subops, linalg as bla
 
-from .base import DynamicalSystem
+from .base import BaseDynamicalModel
 from .fluid import BaseFluid1DDynamicalSystem
 from .solid import BaseSolidDynamicalSystem
 
@@ -16,7 +16,7 @@ from ..fsi import FSIMap
 
 # pylint: disable=missing-function-docstring
 
-class FSIDynamicalSystem(DynamicalSystem):
+class FSIDynamicalSystem(BaseDynamicalModel):
     """
     Class representing a fluid-solid coupled dynamical system
     """

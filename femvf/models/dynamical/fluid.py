@@ -16,7 +16,7 @@ import jax
 from blockarray import blockvec as bla
 
 
-from .base import DynamicalSystem
+from .base import BaseDynamicalModel
 from ..equations.fluid import bernoulli
 from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
@@ -74,7 +74,7 @@ def create_dynamical_residual_class(Parent, res_type):
 
     return Residual
 
-class BaseFluid1DDynamicalSystem(DynamicalSystem):
+class BaseFluid1DDynamicalSystem(BaseDynamicalModel):
 
     def __init__(self, s, res, state, control, props):
         self.s = s

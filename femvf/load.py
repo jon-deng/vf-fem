@@ -121,7 +121,7 @@ def load_dynamical_fsi_model(
         fsi_facet_labels: Optional[Labels]=('pressure',),
         fixed_facet_labels: Optional[Labels]=('fixed',),
         separation_vertex_label: str='separation'
-    ) -> dcmd.DynamicalSystem:
+    ) -> dcmd.BaseDynamicalModel:
     """
     Load a transient coupled (fsi) model
 

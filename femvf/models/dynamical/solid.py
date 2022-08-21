@@ -31,7 +31,7 @@ import dolfin as dfn
 
 from blockarray import blockvec as bvec, blockmat as bmat, subops
 
-from .base import DynamicalSystem
+from .base import BaseDynamicalModel
 from ..transient.solid import properties_bvec_from_forms
 from ..equations.solid import solidforms
 from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
@@ -39,7 +39,7 @@ from ..assemblyutils import CachedFormAssembler
 
 # pylint: disable=abstract-method
 
-class BaseSolidDynamicalSystem(DynamicalSystem):
+class BaseSolidDynamicalSystem(BaseDynamicalModel):
     PROPERTY_DEFAULTS = {}
     def __init__(
             self,

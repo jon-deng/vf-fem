@@ -9,7 +9,7 @@ from tqdm import tqdm
 import numpy as np
 from blockarray import blockvec as bv
 
-from .models.transient.base import Model
+from .models.transient.base import BaseTransientModel
 from . import statefile as sf
 
 # TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
@@ -17,7 +17,7 @@ from . import statefile as sf
 Options = Mapping[str, Any]
 Info = Options
 def integrate(
-        model: Model,
+        model: BaseTransientModel,
         f: sf.StateFile,
         ini_state: bv.BlockVector,
         controls: List[bv.BlockVector],
@@ -90,7 +90,7 @@ def integrate(
     return fin_state, step_info
 
 def integrate_extend(
-        model: Model,
+        model: BaseTransientModel,
         f: sf.StateFile,
         controls: bv.BlockVector,
         times: bv.BlockVector,
@@ -116,7 +116,7 @@ def integrate_extend(
     return fin_state, step_info
 
 def integrate_steps(
-        model: Model,
+        model: BaseTransientModel,
         f: sf.StateFile,
         ini_state: bv.BlockVector,
         controls: List[bv.BlockVector],
@@ -161,7 +161,7 @@ def integrate_steps(
     return state0, step_info
 
 def integrate_linear(
-        model: Model,
+        model: BaseTransientModel,
         f: sf.StateFile,
         dini_state: bv.BlockVector,
         dcontrols: List[bv.BlockVector],
@@ -206,7 +206,7 @@ def integrate_linear(
 
 
 def integrate_step(
-        model: Model,
+        model: BaseTransientModel,
         ini_state: bv.BlockVector,
         control: bv.BlockVector,
         props: bv.BlockVector,

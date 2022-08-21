@@ -22,7 +22,7 @@ from ..equations.solid import newmark
 from ..fsi import FSIMap
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 
-class FSIModel(base.Model):
+class FSIModel(base.BaseTransientModel):
     """
     Represents a coupled system of a solid and a fluid model
 

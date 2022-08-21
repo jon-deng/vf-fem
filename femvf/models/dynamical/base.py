@@ -14,7 +14,7 @@ Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
 BlockVec = bv.BlockVector[Vector]
 BlockMat = bm.BlockMatrix[Matrix]
 
-class DynamicalSystem:
+class BaseDynamicalModel:
 
     # def __init__()
 

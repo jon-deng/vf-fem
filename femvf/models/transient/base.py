@@ -14,7 +14,7 @@ Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
 BlockVec = bv.BlockVector[Vector]
 BlockMat = bm.BlockMatrix[Matrix]
 
-class Model:
+class BaseTransientModel:
     """
     This object represents the equations defining a system over one time step.
 

@@ -56,7 +56,7 @@ def properties_bvec_from_forms(forms, defaults=None):
     return BlockVector(vecs, labels=[labels])
 
 
-class Solid(base.Model):
+class Solid(base.BaseTransientModel):
     """
     Class representing the discretized governing equations of a solid
     """

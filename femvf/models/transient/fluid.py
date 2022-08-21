@@ -17,7 +17,7 @@ from ..equations.fluid import bernoulli
 
 ## 1D Bernoulli approximation codes
 
-class QuasiSteady1DFluid(base.Model):
+class QuasiSteady1DFluid(base.BaseTransientModel):
 
     def __init__(self, s, res, state, control, props):
         self.s = s

@@ -9,8 +9,8 @@ from jax import numpy as jnp
 import jax
 import dolfin as dfn
 import ufl
-from femvf.models.transient.base import Model as TranModel
-from femvf.models.dynamical.base import DynamicalSystem as DynModel
+from femvf.models.transient.base import BaseTransientModel as TranModel
+from femvf.models.dynamical.base import BaseDynamicalModel as DynModel
 from femvf import meshutils
 from petsc4py import PETSc
 
