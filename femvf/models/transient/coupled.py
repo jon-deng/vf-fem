@@ -228,7 +228,7 @@ class ExplicitFSIModel(FSIModel):
         """
         res_sl = self.solid.assem_res()
         res_fl = self.fluid.assem_res()
-        return bv.concatenate_vec(res_sl, res_fl)
+        return bv.concatenate_vec((res_sl, res_fl))
 
     def assem_dres_dstate0(self):
         # TODO: Make this correct
