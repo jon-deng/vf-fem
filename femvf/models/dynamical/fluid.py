@@ -74,7 +74,7 @@ def create_dynamical_residual_class(Parent, res_type):
 
     return Residual
 
-class BaseFluid1DDynamicalSystem(BaseDynamicalModel):
+class BaseDynamical1DFluid(BaseDynamicalModel):
 
     def __init__(self, s, res, state, control, props):
         self.s = s
@@ -134,7 +134,7 @@ class BaseFluid1DDynamicalSystem(BaseDynamicalModel):
         self.dcontrol[:] = dcontrol
 
 
-class BaseBernoulliSmoothMinSep(BaseFluid1DDynamicalSystem):
+class BaseBernoulliSmoothMinSep(BaseDynamical1DFluid):
 
     def __init__(self, s):
         _, (_state, _control, _props), res = bernoulli.BernoulliSmoothMinSep(s)
@@ -151,7 +151,7 @@ LinearizedBernoulliSmoothMinSep = create_dynamical_residual_class(
 )
 
 
-class BaseBernoulliFixedSep(BaseFluid1DDynamicalSystem):
+class BaseBernoulliFixedSep(BaseDynamical1DFluid):
 
     def __init__(self, s, idx_sep=0):
         _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep)
@@ -167,7 +167,7 @@ LinearizedBernoulliFixedSep = create_dynamical_residual_class(
     res_type='linearized'
 )
 
-class BaseBernoulliAreaRatioSep(BaseFluid1DDynamicalSystem):
+class BaseBernoulliAreaRatioSep(BaseDynamical1DFluid):
 
     def __init__(self, s):
         _, (_state, _control, _props), res = bernoulli.BernoulliAreaRatioSep(s)

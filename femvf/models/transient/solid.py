@@ -56,7 +56,7 @@ def properties_bvec_from_forms(forms, defaults=None):
     return BlockVector(vecs, labels=[labels])
 
 
-class Solid(base.BaseTransientModel):
+class BaseTransientSolid(base.BaseTransientModel):
     """
     Class representing the discretized governing equations of a solid
     """
@@ -356,7 +356,7 @@ class Solid(base.BaseTransientModel):
         return x
 
 
-class NodalContactSolid(Solid):
+class NodalContactSolid(BaseTransientSolid):
     """
     This class modifies the default behaviour of the solid to implement contact pressures
     interpolated with the displacement function space. This involves manual modification of the

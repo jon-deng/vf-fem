@@ -63,7 +63,7 @@ def _add_static_docstring(func):
 
 @_add_static_docstring
 def static_solid_configuration(
-        model: slmodel.Solid,
+        model: slmodel.BaseTransientSolid,
         control: bv.BlockVector,
         props: bv.BlockVector
     ) -> Tuple[bv.BlockVector, Info]:
@@ -97,7 +97,7 @@ def static_solid_configuration(
     info = {}
     return state_n, info
 
-def _set_coupled_model_substate(model: comodel.FSIModel, xsub: bv.BlockVector):
+def _set_coupled_model_substate(model: comodel.BaseTransientFSIModel, xsub: bv.BlockVector):
     """
     Set a subset of blocks in `model.state` from a given block vector
 
@@ -121,7 +121,7 @@ def _set_coupled_model_substate(model: comodel.FSIModel, xsub: bv.BlockVector):
 
 @_add_static_docstring
 def static_coupled_configuration_picard(
-        model: comodel.FSIModel,
+        model: comodel.BaseTransientFSIModel,
         control: bv.BlockVector,
         props: bv.BlockVector,
     ) -> Tuple[bv.BlockVector, Info]:
@@ -180,7 +180,7 @@ def static_coupled_configuration_picard(
 # I'm not sure if the answer it returns is correct or not
 @_add_static_docstring
 def static_coupled_configuration_newton(
-        model: comodel.FSIModel,
+        model: comodel.BaseTransientFSIModel,
         control: bv.BlockVector,
         props: bv.BlockVector,
         dt: float=1e6

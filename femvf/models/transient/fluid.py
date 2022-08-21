@@ -17,7 +17,7 @@ from ..equations.fluid import bernoulli
 
 ## 1D Bernoulli approximation codes
 
-class QuasiSteady1DFluid(base.BaseTransientModel):
+class BaseTransientQuasiSteady1DFluid(base.BaseTransientModel):
 
     def __init__(self, s, res, state, control, props):
         self.s = s
@@ -91,7 +91,7 @@ class QuasiSteady1DFluid(base.BaseTransientModel):
         info = {}
         return self.state1 - self.assem_res(), info
 
-class BernoulliSmoothMinSep(QuasiSteady1DFluid):
+class BernoulliSmoothMinSep(BaseTransientQuasiSteady1DFluid):
     """
     Bernoulli fluid model with separation at the minimum
     """
@@ -100,7 +100,7 @@ class BernoulliSmoothMinSep(QuasiSteady1DFluid):
         _, (_state, _control, _props), res = bernoulli.BernoulliSmoothMinSep(s)
         super().__init__(s, res, _state, _control, _props)
 
-class BernoulliFixedSep(QuasiSteady1DFluid):
+class BernoulliFixedSep(BaseTransientQuasiSteady1DFluid):
     """
     Bernoulli fluid model with separation at the minimum
     """
@@ -109,7 +109,7 @@ class BernoulliFixedSep(QuasiSteady1DFluid):
         _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep=idx_sep)
         super().__init__(s, res, _state, _control, _props)
 
-class BernoulliAreaRatioSep(QuasiSteady1DFluid):
+class BernoulliAreaRatioSep(BaseTransientQuasiSteady1DFluid):
     """
     Bernoulli fluid model with separation at the minimum
     """

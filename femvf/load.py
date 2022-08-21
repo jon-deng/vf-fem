@@ -11,10 +11,10 @@ from . import meshutils
 from .models.transient import solid as tsmd, fluid as tfmd, acoustic as tamd, coupled as tcmd
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[tsmd.Solid, dsmd.BaseSolidDynamicalSystem]
-FluidModel = Union[tfmd.QuasiSteady1DFluid, dfmd.BaseFluid1DDynamicalSystem]
-SolidClass = Union[Type[tsmd.Solid], Type[dsmd.BaseSolidDynamicalSystem]]
-FluidClass = Union[Type[tfmd.QuasiSteady1DFluid], Type[dfmd.BaseFluid1DDynamicalSystem]]
+SolidModel = Union[tsmd.BaseTransientSolid, dsmd.BaseDynamicalSolid]
+FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid]
+SolidClass = Union[Type[tsmd.BaseTransientSolid], Type[dsmd.BaseDynamicalSolid]]
+FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.BaseDynamical1DFluid]]
 
 Labels = List[str]
 
@@ -67,7 +67,7 @@ def load_transient_fsi_model(
         fixed_facet_labels: Optional[Labels]=('fixed',),
         separation_vertex_label: str='separation',
         coupling: str='explicit'
-    ) -> tcmd.FSIModel:
+    ) -> tcmd.BaseTransientFSIModel:
     """
     Load a transient coupled (fsi) model
 
@@ -155,7 +155,7 @@ def load_dynamical_fsi_model(
     dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
-    return dcmd.FSIDynamicalSystem(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+    return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 def load_transient_fsai_model(
         solid_mesh: str,
@@ -251,7 +251,7 @@ def process_fsi(
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
             FluidType,
-            (tfmd.QuasiSteady1DFluid, dfmd.BaseFluid1DDynamicalSystem)
+            (tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid)
         ):
         mesh = solid.forms['mesh.mesh']
         facet_func = solid.forms['mesh.facet_function']

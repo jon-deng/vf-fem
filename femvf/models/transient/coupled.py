@@ -22,7 +22,7 @@ from ..equations.solid import newmark
 from ..fsi import FSIMap
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 
-class FSIModel(base.BaseTransientModel):
+class BaseTransientFSIModel(base.BaseTransientModel):
     """
     Represents a coupled system of a solid and a fluid model
 
@@ -42,7 +42,7 @@ class FSIModel(base.BaseTransientModel):
         increasing streamwise direction since the fluid mesh numbering is ordered like that too.
     fsi_coordinates
     """
-    def __init__(self, solid: tsmd.Solid, fluid: tfmd.QuasiSteady1DFluid, solid_fsi_dofs, fluid_fsi_dofs):
+    def __init__(self, solid: tsmd.BaseTransientSolid, fluid: tfmd.BaseTransientQuasiSteady1DFluid, solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid
         self.fluid = fluid
 
@@ -182,7 +182,7 @@ class FSIModel(base.BaseTransientModel):
         self.fluid.set_props(props[self.solid.props.size:-1])
 
 # TODO: The `assem_*` type methods are incomplete as I haven't had to use them
-class ExplicitFSIModel(FSIModel):
+class ExplicitFSIModel(BaseTransientFSIModel):
 
     # The functions below are set to represent an explicit (staggered) coupling
     # This means for a timestep:
@@ -327,7 +327,7 @@ class ExplicitFSIModel(FSIModel):
 
         return b
 
-class ImplicitFSIModel(FSIModel):
+class ImplicitFSIModel(BaseTransientFSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
     def _set_ini_fluid_state(self, qp0):
         self.fluid.set_ini_state(qp0)
@@ -488,7 +488,7 @@ class ImplicitFSIModel(FSIModel):
 
         return bv.concatenate_vec([adj_uva, adj_qp])
 
-class FSAIModel(FSIModel):
+class FSAIModel(BaseTransientFSIModel):
     """
     Represents a fluid-structure-acoustic interaction system
     """

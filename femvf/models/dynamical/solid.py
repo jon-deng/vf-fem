@@ -39,7 +39,7 @@ from ..assemblyutils import CachedFormAssembler
 
 # pylint: disable=abstract-method
 
-class BaseSolidDynamicalSystem(BaseDynamicalModel):
+class BaseDynamicalSolid(BaseDynamicalModel):
     PROPERTY_DEFAULTS = {}
     def __init__(
             self,
@@ -145,7 +145,7 @@ class BaseSolidDynamicalSystem(BaseDynamicalModel):
         return xref
 
 
-class SolidDynamicalSystem(BaseSolidDynamicalSystem):
+class SolidDynamicalSystem(BaseDynamicalSolid):
     """
     Represents a dynamical system residual
 
@@ -210,7 +210,7 @@ class SolidDynamicalSystem(BaseSolidDynamicalSystem):
         return bmat.BlockMatrix(
             mats, labels=(self.state.labels[0], self.props.labels[0]))
 
-class LinearizedSolidDynamicalSystem(BaseSolidDynamicalSystem):
+class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
     """
     Represents a linearized dynamical system residual
 
