@@ -187,33 +187,17 @@ class StateFile:
                                         dtype=np.float64, exact=False)
 
         if 'meas_indices' not in self.file:
-            self.file.create_dataset('meas_indices', (0,), maxshape=(None,),
-                                           chunks=(self.NCHUNK,), dtype=np.intp)
+            self.file.create_dataset(
+                'meas_indices', (0,),
+                maxshape=(None,), chunks=(self.NCHUNK,), dtype=np.intp
+            )
         self.init_mesh()
-        self.init_dofmap()
 
         self.init_state()
         self.init_control()
         self.init_properties()
 
         self.init_solver_info()
-
-    def init_dofmap(self):
-        """
-        Writes the dofmaps for scalar and vector data
-        """
-        solid = self.model.solid
-        scalar_dofmap_processor = solid.forms['fspace.scalar'].dofmap()
-        vector_dofmap_processor = solid.forms['fspace.vector'].dofmap()
-
-        scalar_dofmap = np.array([scalar_dofmap_processor.cell_dofs(cell.index())
-                                  for cell in dfn.cells(solid.mesh)])
-        vector_dofmap = np.array([vector_dofmap_processor.cell_dofs(cell.index())
-                                  for cell in dfn.cells(solid.mesh)])
-        self.file.require_dataset(
-            'dofmap/vector', vector_dofmap.shape, data=vector_dofmap, dtype=np.intp)
-        self.file.require_dataset(
-            'dofmap/scalar', scalar_dofmap.shape, data=scalar_dofmap, dtype=np.intp)
 
     def init_mesh(self):
         """
@@ -223,15 +207,21 @@ class StateFile:
         coords = solid.mesh.coordinates()
         cells = solid.mesh.cells()
         self.file.require_dataset(
-            'mesh/solid/coordinates', coords.shape, data=coords, dtype=np.float64)
+            'mesh/solid/coordinates', coords.shape,
+            data=coords, dtype=np.float64
+        )
         self.file.require_dataset(
-            'mesh/solid/connectivity', cells.shape, data=cells, dtype=np.intp)
+            'mesh/solid/connectivity', cells.shape,
+            data=cells, dtype=np.intp
+        )
 
-        # TODO: Write facet/cell labels, mapping string identifiers to the integer mesh functions
-        # self.file.require_dataset('mesh/solid/facet_func', data=np.inf,
-        #                                 dtype=np.intp)
-        # self.file.require_dataset('mesh/solid/cell_func', data=np.inf,
-        #                                 dtype=np.intp)
+        # TODO: Write mesh function information + label: int region indentifiers
+        # self.file.require_dataset(
+        #     'mesh/solid/facet_func', data=np.inf, dtype=np.intp
+        # )
+        # self.file.require_dataset(
+        #     'mesh/solid/cell_func', data=np.inf, dtype=np.intp
+        # )
 
     def init_state(self):
         state_group = self.file.require_group('state')
