@@ -95,21 +95,6 @@ class ContactStatistics(StateMeasure):
         avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
         return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
 
-class ViscousDissipationRate(StateMeasure):
-
-    def __init_measure_context__(self, *args, **kwargs):
-        self.dx = kwargs.get('measure', self.model.solid.forms['measure.dx'])
-
-        kv_stress = self.model.solid.forms['expr.kv_stress']
-        kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
-        self.expr_total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*self.dx
-
-    def __call__(self, state, control, props):
-        self.model.set_props(props)
-        self.model.set_fin_state(state)
-        self.model.set_control(control)
-        return dfn.assemble(self.expr_total_dissipation_rate)
-
 ### Field type post-processing functions
 
 class Field(StateMeasure):
@@ -303,6 +288,40 @@ class ContactAreaDensityField(Field):
         self.model.set_fin_state(state)
 
         return np.array(self.project()[:])
+
+### Field integral type
+class FieldIntegral(StateMeasure):
+    def __init_measure_context__(
+            self,
+            dx: Optional[dfn.Measure]=None
+        ):
+        """
+        Parameters
+        ----------
+        dx : dfn.Measure
+            A measure to project the field expression over
+        fspace : dfn.FunctionSpace
+            A function space to project the field expression onto
+        """
+        if dx is None:
+            self.dx = self.model.solid.forms['measure.dx']
+        else:
+            self.dx = dx
+
+class ViscousDissipationRate(FieldIntegral):
+
+    def __init_measure_context__(self, dx=None):
+        super().__init_measure_context__(dx)
+
+        kv_stress = self.model.solid.forms['expr.kv_stress']
+        kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
+        self.expr_total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*self.dx
+
+    def __call__(self, state, control, props):
+        self.model.set_props(props)
+        self.model.set_fin_state(state)
+        self.model.set_control(control)
+        return dfn.assemble(self.expr_total_dissipation_rate)
 
 ### Field statistics post-processing function
 class FieldStats(DerivedStateMeasure):
