@@ -6,52 +6,40 @@ from typing import Optional, Iterable
 
 import numpy as np
 
-import femvf.statefile as sf
+from femvf import statefile as sf
+from femvf.models.transient.base import BaseTransientModel
 
-def transform_to_make_signals(make_signal):
-    def make_signals(model, *args, **kwargs):
-
-        def proc_signals(f):
-            proc_signal = make_signal(model, *args, **kwargs)
-
-            props = f.get_props()
-            model.set_props(props)
-
-            signals = [
-                proc_signal(f.get_state(ii), f.get_control(ii), props)
-                for ii in range(f.size)]
-            return np.array(signals)
-        return proc_signals
-    return make_signals
-
-class StateMeasure():
+class BaseStateMeasure():
     """
-    Returns data from a model state
+    A post-processing function that returns an output from (state, control, props)
 
     Parameters
     ----------
-    model :
+    model : BaseTransientModel
+        The transient model to post-process
+    kwargs :
+        Optional keyword arguments for controlling the post-processed measure
+        calculation
     """
-
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model: BaseTransientModel, **kwargs):
         self._model = model
 
-        self.__init_measure_context__(*args, **kwargs)
-
-    def __init_measure_context__(self, *args, **kwargs):
-        """
-        Define any context variables needed to compute the post-processed thing
-        """
-        raise NotImplementedError("This function must be implemented by child classes")
+    def __call__(self, state, control, props):
+        model = self.model
+        model.set_props(props)
+        model.set_fin_state(state)
+        model.set_control(control)
+        return self.assem()
 
     @property
     def model(self):
         return self._model
 
-    def __call__(self, state, control, props):
-        raise NotImplementedError("This function must be implemented by child classes")
+    def assem(self):
+        raise NotImplementedError("Method must be implemented by subclasses")
 
-class DerivedStateMeasure(StateMeasure):
+
+class DerivedStateMeasure(BaseStateMeasure):
     """
     Returns measures derived from post-processed data at single instants
 

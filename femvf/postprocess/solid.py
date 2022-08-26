@@ -11,23 +11,22 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from models.equations.solid.solidforms import form_pullback_area_normal
+from femvf.models.transient.base import BaseTransientModel
+from .base import BaseStateMeasure, DerivedStateMeasure
 
-from .base import StateMeasure, DerivedStateMeasure
+class MinGlottalWidth(BaseStateMeasure):
 
-class MinGlottalWidth(StateMeasure):
-
-    def __init_measure_context__(self, *args, **kwargs):
+    def _init_expression(self):
         self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
-    def __call__(self, state, control, props):
-        xcur = self.XREF.reshape(-1) + state.sub['u'][:]
-        widths = 2*(props['ymid'] - xcur[1::2])
+    def assem(self):
+        xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
+        widths = 2*(self.model.props['ymid'] - xcur[1::2])
         gw = np.min(widths)
         return gw
 
-class VertexGlottalWidth(StateMeasure):
-    def __init_measure_context__(self, vertex_name=None):
+class VertexGlottalWidth(BaseStateMeasure):
+    def _init_expression(self):
         # Get the DOF/vertex number corresponding to `vertex_name`
         if vertex_name is None:
             raise ValueError("`vertex_name` must be supplied")
@@ -47,17 +46,16 @@ class VertexGlottalWidth(StateMeasure):
 
         self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
-    def __call__(self, state, control, props):
-        xcur = self.XREF.reshape(-1) + state['u'][:]
-        return 2*(props['ymid'][0] - xcur[self.idx_dof])
+    def assem(self):
+        xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
+        return 2*(self.model.props['ymid'][0] - xcur[self.idx_dof])
 
-class MaxContactPressure(StateMeasure):
+class MaxContactPressure(BaseStateMeasure):
 
-    def __init_measure_context__(self, *args, **kwargs):
+    def _init_expression(self):
         self.coeff_tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
 
-    def __call__(self, state, control, props):
-        self.model.set_fin_state(state)
+    def assem(self):
         fsidofs = self.model.solid.vert_to_sdof[self.model.fsi_verts]
 
         tcontact = self.coeff_tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
@@ -65,10 +63,10 @@ class MaxContactPressure(StateMeasure):
         return pcontact[fsidofs].max()
 
 ### Field type post-processing functions
-
-class Field(StateMeasure):
-    def __init_measure_context__(
+class BaseFieldMeasure(BaseStateMeasure):
+    def __init__(
             self,
+            model: BaseTransientModel,
             dx: Optional[dfn.Measure]=None,
             fspace: Optional[dfn.FunctionSpace]=None
         ):
@@ -80,6 +78,7 @@ class Field(StateMeasure):
         fspace : dfn.FunctionSpace
             A function space to project the field expression onto
         """
+        super().__init__(model)
         if fspace is None:
             self.fspace = dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
         else:
@@ -90,31 +89,30 @@ class Field(StateMeasure):
         else:
             self.dx = dx
 
-class StressI1Field(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
+        self.expression = self._init_expression(self)
+        self.project = make_project(self.expression, self.fspace, self.dx)
 
+    def _init_expression(self):
+        raise NotImplementedError("Method must be implemented by subclasses")
+
+    def assem(self):
+        raise NotImplementedError("Method must be implemented by subclasses")
+
+class StressI1Field(BaseFieldMeasure):
+    def _init_expression(self):
         model = self.model
         kv_stress = model.solid.forms['expr.kv_stress']
         el_stress = model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
         # This is the first invariant (I1)
-        self.expression = ufl.tr(S)
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return ufl.tr(S)
 
-    def __call__(self, state, control, props):
-        model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class StressI2Field(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+class StressI2Field(BaseFieldMeasure):
+    def _init_expression(self):
         model = self.model
 
         kv_stress = model.solid.forms['expr.kv_stress']
@@ -122,21 +120,13 @@ class StressI2Field(Field):
         S = el_stress + kv_stress
 
         # This is the second invariant (I2)
-        self.expression = 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
 
-    def __call__(self, state, control, props):
-        model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class StressI3Field(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+class StressI3Field(BaseFieldMeasure):
+    def _init_expression(self):
         model = self.model
 
         kv_stress = model.solid.forms['expr.kv_stress']
@@ -144,141 +134,110 @@ class StressI3Field(Field):
         S = el_stress + kv_stress
 
         # This is the third invariant (I3)
-        self.expression = ufl.det(S)
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return ufl.det(S)
 
-    def __call__(self, state, control, props):
-        model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class StressHydrostaticField(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
+class StressHydrostaticField(BaseFieldMeasure):
+    def _init_expression(self):
 
         kv_stress = self.model.solid.forms['expr.kv_stress']
         el_stress = self.model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
-        self.expression = -1/3*ufl.tr(S)
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return -1/3*ufl.tr(S)
 
-    def __call__(self, state, control, props):
-        self.model.set_props(props)
-        self.model.set_control(control)
-        self.model.set_fin_state(state)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class StressVonMisesField(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+class StressVonMisesField(BaseFieldMeasure):
+    def _init_expression(self):
         kv_stress = self.model.solid.forms['expr.kv_stress']
         el_stress = self.model.solid.forms['expr.stress_elastic']
         S = el_stress + kv_stress
 
         S_dev = S - 1/3*ufl.tr(S)*ufl.Identity(3)
         j2 = 0.5*ufl.tr(S_dev*S_dev)
-        self.expression = (3*j2)**(1/2)
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return (3*j2)**(1/2)
 
-    def __call__(self, state, control, props):
-        model = self.model
-        model.set_props(props)
-        model.set_control(control)
-        model.set_fin_state(state)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class ElasticStressField(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+class ElasticStressField(BaseFieldMeasure):
+    def _init_expression(self):
         forms = self.model.solid.forms
-        self.expression = forms['expr.stress_elastic']
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return forms['expr.stress_elastic']
 
-    def __call__(self, state, control, props):
-        self.model.set_state(state)
-        self.model.set_control(control)
+    def assem(self):
         return np.array(self.project()[:])
 
-class ContactPressureField(Field):
+class ContactPressureField(BaseFieldMeasure):
 
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+    def _init_expression(self):
         tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
         # `tcontact*tcontact` should be the square of contact pressure
-        self.expression = ufl.inner(tcontact, tcontact)**0.5
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return ufl.inner(tcontact, tcontact)**0.5
 
-    def __call__(self, state, control, props):
-        self.model.set_props(props)
-        self.model.set_control(control)
-        self.model.set_fin_state(state)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class ViscousDissipationField(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+class ViscousDissipationField(BaseFieldMeasure):
+    def _init_expression(self):
         kv_stress = self.model.solid.forms['expr.kv_stress']
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
-        self.expression = ufl.inner(kv_stress, kv_strain_rate)
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return ufl.inner(kv_stress, kv_strain_rate)
 
-    def __call__(self, state, control, props):
-        self.model.set_props(props)
-        self.model.set_control(control)
-        self.model.set_fin_state(state)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class ContactAreaDensityField(Field):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+class ContactAreaDensityField(BaseFieldMeasure):
+    def _init_expression(self):
         tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
         pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
         contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
 
-        self.expression = contact_indicator
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return contact_indicator
 
-    def __call__(self, state, control, props):
-        self.model.set_props(props)
-        self.model.set_control(control)
-        self.model.set_fin_state(state)
-
+    def assem(self):
         return np.array(self.project()[:])
 
-class FluidTractionPowerDensity(Field):
+class FluidTractionPowerDensity(BaseFieldMeasure):
     """
     Power area density due to fluid tractions
     """
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx, fspace)
-
+    def _init_expression(self):
         forms = self.model.solid.forms
         fluid_traction = forms['expr.fluid_traction']
         velocity = forms['coeff.state.v1']
-        self.expression = fluid_traction * velocity
-        self.project = make_project(self.expression, self.fspace, self.dx)
+        return fluid_traction * velocity
 
-    def __call__(self, state, control, props):
-        self.model.set_fin_state(state)
-        self.model.set_control(control)
+    def assem(self):
         return np.array(self.project()[:])
 
 ### Field integral type
-class FieldIntegral(StateMeasure):
-    def __init_measure_context__(
+class BaseFieldIntegralMeasure(BaseStateMeasure):
+    def __init__(
+            self,
+            model: BaseTransientModel,
+            dx: Optional[dfn.Measure]=None
+        ):
+        """
+        Parameters
+        ----------
+        dx : dfn.Measure
+            A measure to project the field expression over
+        """
+        super().__init__(model)
+
+        if dx is None:
+            self.dx = self.model.solid.forms['measure.dx']
+        else:
+            self.dx = dx
+
+        self.expression = self._init_expression(self)
+
+    def _init_expression(
             self,
             dx: Optional[dfn.Measure]=None
         ):
@@ -295,26 +254,20 @@ class FieldIntegral(StateMeasure):
         else:
             self.dx = dx
 
-class ViscousDissipationRate(FieldIntegral):
+class ViscousDissipationRate(BaseFieldIntegralMeasure):
 
-    def __init_measure_context__(self, dx=None):
-        super().__init_measure_context__(dx)
-
+    def _init_expression(self):
         kv_stress = self.model.solid.forms['expr.kv_stress']
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
-        self.expr_total_dissipation_rate = ufl.inner(kv_stress, kv_strain_rate)*self.dx
+        return ufl.inner(kv_stress, kv_strain_rate)*self.dx
 
-    def __call__(self, state, control, props):
-        self.model.set_props(props)
-        self.model.set_fin_state(state)
-        self.model.set_control(control)
-        return dfn.assemble(self.expr_total_dissipation_rate)
+    def assem(self):
+        return dfn.assemble(self.expression)
 
-class ContactStatistics(FieldIntegral):
+### Custom post-processing functions that don't fit nicely into any type
+class ContactStatistics(BaseFieldIntegralMeasure):
 
-    def __init_measure_context__(self, dx=None):
-        super().__init_measure_context__(dx)
-
+    def _init_expression(self):
         tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
         pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
         contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
@@ -330,9 +283,7 @@ class ContactStatistics(FieldIntegral):
             ('total', float)
         ])
 
-    def __call__(self, state, control, props):
-        self.model.set_fin_state(state)
-
+    def assem(self):
         tcontact_vec = np.array(self.coeff_tcontact.vector()[:]).reshape(-1, 2) # [FSI_DOFS]
         pcontact = np.linalg.norm(tcontact_vec, axis=-1)
 
@@ -345,10 +296,10 @@ class ContactStatistics(FieldIntegral):
 
 ### Field statistics post-processing function
 class FieldStats(DerivedStateMeasure):
-    def __init__(self, field: Field):
+    def __init__(self, field: BaseFieldMeasure):
         super().__init__(field)
 
-    def __init_measure_context__(self):
+    def _init_expression(self):
         dx = self.func.dx
         expr = self.func.expression
 
@@ -362,8 +313,8 @@ class FieldStats(DerivedStateMeasure):
             ('total', float)
         ])
 
-    def __call__(self, state, control, props):
-        field_vec = self.func(state, control, props)
+    def assem(self):
+        field_vec = self.func.assem()
         total = dfn.assemble(self.expr_total)
         vol = dfn.assemble(self.expr_vol)
         return np.array(
@@ -372,30 +323,20 @@ class FieldStats(DerivedStateMeasure):
         )
 
 class StressVonMisesAverage(StressVonMisesField):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx=dx, fspace=fspace)
+    def _init_expression(self):
+
 
         self.expr_avg = self.expression*self.dx
         self.total_dx = dfn.assemble(1*self.dx)
 
-    def __call__(self, state, control, props):
-        model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
-
+    def assem(self):
         return dfn.assemble(self.expr_avg) / self.total_dx
 
 class StressVonMisesSpatialStats(StressVonMisesAverage):
-    def __init_measure_context__(self, dx=None, fspace=None):
-        super().__init_measure_context__(dx=dx, fspace=fspace)
+    def _init_expression(self):
 
-    def __call__(self, state, control, props):
-        model = self.model
-        model.set_fin_state(state)
-        model.set_control(control)
-        model.set_props(props)
 
+    def assem(self):
         field = self.project()
         avg = dfn.assemble(self.expr_avg) / self.total_dx
 
