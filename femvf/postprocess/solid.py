@@ -62,39 +62,6 @@ class MaxContactPressure(StateMeasure):
         pcontact = np.linalg.norm(tcontact, axis=-1)
         return pcontact[fsidofs].max()
 
-class ContactStatistics(StateMeasure):
-
-    def __init_measure_context__(self, *args, **kwargs):
-        self.dx = kwargs.get('measure', self.model.solid.forms['measure.ds_traction'])
-
-        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
-        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
-        contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
-
-        self.expr_contact_area = contact_indicator*self.dx
-        self.expr_total_p_contact = pcontact*self.dx
-        self.coeff_tcontact = tcontact
-
-        self.dtype = np.dtype([
-            ('max', float),
-            ('min', float),
-            ('avg', float),
-            ('total', float)
-        ])
-
-    def __call__(self, state, control, props):
-        self.model.set_fin_state(state)
-
-        tcontact_vec = np.array(self.coeff_tcontact.vector()[:]).reshape(-1, 2) # [FSI_DOFS]
-        pcontact = np.linalg.norm(tcontact_vec, axis=-1)
-
-        idx_max = np.argmax(pcontact)
-        total_pcontact = dfn.assemble(self.expr_total_p_contact)
-        area_contact = dfn.assemble(self.expr_contact_area)
-        max_pcontact = pcontact[idx_max]
-        avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
-        return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
-
 ### Field type post-processing functions
 
 class Field(StateMeasure):
@@ -323,6 +290,39 @@ class ViscousDissipationRate(FieldIntegral):
         self.model.set_control(control)
         return dfn.assemble(self.expr_total_dissipation_rate)
 
+class ContactStatistics(FieldIntegral):
+
+    def __init_measure_context__(self, dx=None):
+        super().__init_measure_context__(dx)
+
+        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
+        contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
+
+        self.expr_contact_area = contact_indicator*self.dx
+        self.expr_total_p_contact = pcontact*self.dx
+        self.coeff_tcontact = tcontact
+
+        self.dtype = np.dtype([
+            ('max', float),
+            ('min', float),
+            ('avg', float),
+            ('total', float)
+        ])
+
+    def __call__(self, state, control, props):
+        self.model.set_fin_state(state)
+
+        tcontact_vec = np.array(self.coeff_tcontact.vector()[:]).reshape(-1, 2) # [FSI_DOFS]
+        pcontact = np.linalg.norm(tcontact_vec, axis=-1)
+
+        idx_max = np.argmax(pcontact)
+        total_pcontact = dfn.assemble(self.expr_total_p_contact)
+        area_contact = dfn.assemble(self.expr_contact_area)
+        max_pcontact = pcontact[idx_max]
+        avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
+        return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
+
 ### Field statistics post-processing function
 class FieldStats(DerivedStateMeasure):
     def __init__(self, field: Field):
@@ -393,7 +393,7 @@ def make_scalar_form(model, form):
 
     return scalar_form
 
-def make_project(expr, fspace, measure, vec=None):
+def make_project(expr, fspace, dx, vec=None):
     """
     Project an expression onto the function space w.r.t the measure
 
@@ -403,16 +403,16 @@ def make_project(expr, fspace, measure, vec=None):
         An ufl expression
     fspace :
         The function space that `expr` will be projected on
-    measure : ufl.Measure
+    dx : ufl.Measure
         The measure that the projection will be applied over
     vec : dfn.GenericVector
         A vector to project the function into
     """
     trial = dfn.TrialFunction(fspace)
     test = dfn.TestFunction(fspace)
-    A = dfn.assemble(trial*test*measure, keep_diagonal=True, tensor=dfn.PETScMatrix())
+    A = dfn.assemble(trial*test*dx, keep_diagonal=True, tensor=dfn.PETScMatrix())
     A.ident_zeros()
-    lhs_expr = expr*test*measure
+    lhs_expr = expr*test*dx
 
     bvec = dfn.PETScVector()
     if vec is None:
