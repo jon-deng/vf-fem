@@ -11,8 +11,6 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from models.equations.solid.solidforms import form_pullback_area_normal
-
 from .base import StateMeasure, DerivedStateMeasure
 
 class MinGlottalWidth(StateMeasure):
