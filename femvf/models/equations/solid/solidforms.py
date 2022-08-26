@@ -475,6 +475,8 @@ def add_surface_pressure_form(forms):
 
     forms['form.un.f1uva'] -= ufl.inner(reference_traction, vector_test) * ds
     forms['coeff.fsi.p1'] = p
+
+    forms['expr.fluid_traction'] = reference_traction
     return forms
 
 def add_manual_contact_traction_form(forms):

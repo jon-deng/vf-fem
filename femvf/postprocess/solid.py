@@ -11,6 +11,8 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
+from models.equations.solid.solidforms import form_pullback_area_normal
+
 from .base import StateMeasure, DerivedStateMeasure
 
 class MinGlottalWidth(StateMeasure):
@@ -254,6 +256,24 @@ class ContactAreaDensityField(Field):
         self.model.set_control(control)
         self.model.set_fin_state(state)
 
+        return np.array(self.project()[:])
+
+class FluidTractionPowerDensity(Field):
+    """
+    Power area density due to fluid tractions
+    """
+    def __init_measure_context__(self, dx=None, fspace=None):
+        super().__init_measure_context__(dx, fspace)
+
+        forms = self.model.solid.forms
+        fluid_traction = forms['expr.fluid_traction']
+        velocity = forms['coeff.state.v1']
+        self.expression = fluid_traction * velocity
+        self.project = make_project(self.expression, self.fspace, self.dx)
+
+    def __call__(self, state, control, props):
+        self.model.set_fin_state(state)
+        self.model.set_control(control)
         return np.array(self.project()[:])
 
 ### Field integral type
