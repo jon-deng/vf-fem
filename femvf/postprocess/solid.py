@@ -12,57 +12,11 @@ import dolfin as dfn
 import ufl
 
 from femvf.models.transient.base import BaseTransientModel
-from .base import BaseStateMeasure, DerivedStateMeasure
+from .base import BaseStateMeasure, BaseDerivedStateMeasure
 
-class MinGlottalWidth(BaseStateMeasure):
-
-    def _init_expression(self):
-        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
-
-    def assem(self):
-        xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
-        widths = 2*(self.model.props['ymid'] - xcur[1::2])
-        gw = np.min(widths)
-        return gw
-
-class VertexGlottalWidth(BaseStateMeasure):
-    def _init_expression(self):
-        # Get the DOF/vertex number corresponding to `vertex_name`
-        if vertex_name is None:
-            raise ValueError("`vertex_name` must be supplied")
-        vertlabel_to_id = self.model.solid.forms['mesh.vertex_label_to_id']
-        vert_mf = self.model.solid.forms['mesh.vertex_function']
-        idx_vertex = vert_mf.where_equal(vertlabel_to_id[vertex_name])
-        if len(idx_vertex) == 0:
-            raise ValueError(f"No vertex named `{vertex_name}` found")
-        elif len(idx_vertex) > 1:
-            raise ValueError(f"Multiple vertices names `{vertex_name}` found")
-        else:
-            idx_vertex = idx_vertex[0]
-
-        vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.forms['fspace.vector'])
-        # Get the y-displacement DOF
-        self.idx_dof = vert_to_vdof[2*idx_vertex+1]
-
-        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
-
-    def assem(self):
-        xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
-        return 2*(self.model.props['ymid'][0] - xcur[self.idx_dof])
-
-class MaxContactPressure(BaseStateMeasure):
-
-    def _init_expression(self):
-        self.coeff_tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
-
-    def assem(self):
-        fsidofs = self.model.solid.vert_to_sdof[self.model.fsi_verts]
-
-        tcontact = self.coeff_tcontact.vector()[:].reshape(-1, 2) # [FSI_DOFS]
-        pcontact = np.linalg.norm(tcontact, axis=-1)
-        return pcontact[fsidofs].max()
 
 ### Field type post-processing functions
+
 class BaseFieldMeasure(BaseStateMeasure):
     def __init__(
             self,
@@ -215,7 +169,9 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
     def assem(self):
         return np.array(self.project()[:])
 
+
 ### Field integral type
+
 class BaseFieldIntegralMeasure(BaseStateMeasure):
     def __init__(
             self,
@@ -264,54 +220,69 @@ class ViscousDissipationRate(BaseFieldIntegralMeasure):
     def assem(self):
         return dfn.assemble(self.expression)
 
+
 ### Custom post-processing functions that don't fit nicely into any type
-class ContactStatistics(BaseFieldIntegralMeasure):
 
-    def _init_expression(self):
-        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
-        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
-        contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
+class MinGlottalWidth(BaseStateMeasure):
 
-        self.expr_contact_area = contact_indicator*self.dx
-        self.expr_total_p_contact = pcontact*self.dx
-        self.coeff_tcontact = tcontact
-
-        self.dtype = np.dtype([
-            ('max', float),
-            ('min', float),
-            ('avg', float),
-            ('total', float)
-        ])
+    def __init__(self, model):
+        super().__init__(model)
+        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
     def assem(self):
-        tcontact_vec = np.array(self.coeff_tcontact.vector()[:]).reshape(-1, 2) # [FSI_DOFS]
-        pcontact = np.linalg.norm(tcontact_vec, axis=-1)
+        xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
+        widths = 2*(self.model.props['ymid'] - xcur[1::2])
+        gw = np.min(widths)
+        return gw
 
-        idx_max = np.argmax(pcontact)
-        total_pcontact = dfn.assemble(self.expr_total_p_contact)
-        area_contact = dfn.assemble(self.expr_contact_area)
-        max_pcontact = pcontact[idx_max]
-        avg_pcontact = 0.0 if area_contact == 0.0 else total_pcontact/area_contact
-        return (max_pcontact, avg_pcontact, total_pcontact, area_contact)
+class VertexGlottalWidth(BaseStateMeasure):
+    def __init__(self, model, vertex_name=None):
+        super().__init__(model)
 
-### Field statistics post-processing function
-class FieldStats(DerivedStateMeasure):
+        # Get the DOF/vertex number corresponding to `vertex_name`
+        if vertex_name is None:
+            raise ValueError("`vertex_name` must be supplied")
+        vertlabel_to_id = self.model.solid.forms['mesh.vertex_label_to_id']
+        vert_mf = self.model.solid.forms['mesh.vertex_function']
+        idx_vertex = vert_mf.where_equal(vertlabel_to_id[vertex_name])
+        if len(idx_vertex) == 0:
+            raise ValueError(f"No vertex named `{vertex_name}` found")
+        elif len(idx_vertex) > 1:
+            raise ValueError(f"Multiple vertices names `{vertex_name}` found")
+        else:
+            idx_vertex = idx_vertex[0]
+
+        vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.forms['fspace.vector'])
+        # Get the y-displacement DOF
+        self.idx_dof = vert_to_vdof[2*idx_vertex+1]
+
+        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
+
+    def assem(self):
+        xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
+        return 2*(self.model.props['ymid'][0] - xcur[self.idx_dof])
+
+### Field statistics post-processing functions
+
+class FieldStats(BaseDerivedStateMeasure):
     def __init__(self, field: BaseFieldMeasure):
         super().__init__(field)
+
+        self.expr_total, self.expr_vol, self.dtype = self._init_expression()
 
     def _init_expression(self):
         dx = self.func.dx
         expr = self.func.expression
 
-        self.expr_total = expr*dx
-        self.expr_vol = 1*dx
-
-        self.dtype = np.dtype([
+        expr_total = expr*dx
+        expr_vol = 1*dx
+        dtype = np.dtype([
             ('max', float),
             ('min', float),
             ('avg', float),
             ('total', float)
         ])
+        return expr_total, expr_vol, dtype
 
     def assem(self):
         field_vec = self.func.assem()
@@ -322,37 +293,6 @@ class FieldStats(DerivedStateMeasure):
             dtype=self.dtype
         )
 
-class StressVonMisesAverage(StressVonMisesField):
-    def _init_expression(self):
-
-
-        self.expr_avg = self.expression*self.dx
-        self.total_dx = dfn.assemble(1*self.dx)
-
-    def assem(self):
-        return dfn.assemble(self.expr_avg) / self.total_dx
-
-class StressVonMisesSpatialStats(StressVonMisesAverage):
-    def _init_expression(self):
-
-
-    def assem(self):
-        field = self.project()
-        avg = dfn.assemble(self.expr_avg) / self.total_dx
-
-        return np.min(field[:]), np.max(field[:]), avg
-
-
-def make_scalar_form(model, form):
-    """
-    Return a function that computes a scalar form for different coefficients
-    """
-    def scalar_form(state, control, props):
-        model.set_fin_state(state)
-        model.set_control(control)
-        return dfn.assemble(form)
-
-    return scalar_form
 
 def make_project(expr, fspace, dx, vec=None):
     """

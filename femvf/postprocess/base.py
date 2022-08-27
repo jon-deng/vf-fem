@@ -39,7 +39,7 @@ class BaseStateMeasure():
         raise NotImplementedError("Method must be implemented by subclasses")
 
 
-class DerivedStateMeasure(BaseStateMeasure):
+class BaseDerivedStateMeasure(BaseStateMeasure):
     """
     Returns measures derived from post-processed data at single instants
 
@@ -48,17 +48,13 @@ class DerivedStateMeasure(BaseStateMeasure):
     func : Callable with signature `func(state, control, props)`
     """
 
-    def __init__(self, func):
+    def __init__(self, func: BaseStateMeasure):
         self._func = func
         super().__init__(func.model)
 
     @property
     def func(self):
         return self._func
-
-    @property
-    def model(self):
-        return self._model
 
     def __call__(self, state, control, props):
         raise NotImplementedError("This function must be implemented by child classes")
