@@ -1,7 +1,6 @@
 """
 Functionality for creating model objects from meshes, etc.
 """
-from lib2to3.pgen2.token import OP
 from os import path
 from typing import Union, Optional, List, Type, Any, Tuple
 import numpy as np
