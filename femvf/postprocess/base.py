@@ -1,5 +1,11 @@
 """
-Contains base classes for different functionals
+Post-processing functionality
+
+There are two main post-processing functions/classes
+`BaseStateMeasure` : These take a tuple `(state, control, props)` and return
+    the post-processed measure.
+`BaseStateHistoryMeasure` : These take a history of states through a statefile
+    `(f)` and return the post-processed measure.
 """
 
 from typing import Optional, Iterable
@@ -13,14 +19,14 @@ from femvf.models.transient.base import BaseTransientModel
 
 class BaseStateMeasure():
     """
-    A post-processing function that returns an output from (state, control, props)
+    Post-process an output from known `(state, control, props)`
 
     Parameters
     ----------
     model : BaseTransientModel
         The transient model to post-process
     kwargs :
-        Optional keyword arguments for controlling the post-processed measure
+        Optional keyword arguments for controlling the post-processing
         calculation
     """
     def __init__(self, model: BaseTransientModel, **kwargs):
@@ -72,6 +78,17 @@ class BaseDerivedStateMeasure(BaseStateMeasure):
 
 
 class BaseStateHistoryMeasure():
+    """
+    Post-process an output from state history `(f)`
+
+    Parameters
+    ----------
+    model : BaseTransientModel
+        The transient model to post-process
+    kwargs :
+        Optional keyword arguments for controlling the post-processing
+        calculation
+    """
 
     def __init__(self, model: BaseTransientModel, **kwargs):
         self._model = model
@@ -88,11 +105,15 @@ class BaseStateHistoryMeasure():
 
 class BaseDerivedStateHistoryMeasure(BaseStateHistoryMeasure):
     """
-    Returns measures derived from post-processed data at single instants
+    Post-process an output from state history `(f)`
+
+    The post-processing function is derived from `BaseStateMeasure` type
+    function.
 
     Parameters
     ----------
-    func : Callable with signature `func(state, control, props)`
+    func : BaseStateMeasure
+        The state post-processing function
     """
 
     def __init__(self, func: BaseStateMeasure):
@@ -106,13 +127,15 @@ class BaseDerivedStateHistoryMeasure(BaseStateHistoryMeasure):
     def assem(self, f: sf.StateFile, **kwargs):
         raise NotImplementedError("Method must be implemented by subclasses")
 
+
 class TimeSeries(BaseDerivedStateHistoryMeasure):
     """
-    Returns time series data
+    Return a time series of a state measure
 
     Parameters
     ----------
-    func : Callable with signature `func(state, control, props)`
+    func : BaseStateMeasure
+        The state post-processing function
     """
 
     def assem(self, f: sf.StateFile, ns: Optional[Iterable]=None):
@@ -127,7 +150,12 @@ class TimeSeries(BaseDerivedStateHistoryMeasure):
 
 class TimeSeriesStats(BaseDerivedStateHistoryMeasure):
     """
-    Returns time series statistics
+    Return statistics over the time series of a state measure
+
+    Parameters
+    ----------
+    func : BaseStateMeasure
+        The state post-processing function
     """
 
     def __init__(self, func):
