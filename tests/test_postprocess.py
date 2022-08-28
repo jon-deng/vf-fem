@@ -4,30 +4,26 @@ Test `femvf.postprocess`
 
 import pytest
 
+from femvf import statefile as sf
 from femvf.load import load_transient_fsi_model
 from femvf.postprocess import (solid, base)
 from femvf.models.transient import (solid as tsmd, fluid as tfmd)
 
-class TestStateMeasure:
+@pytest.fixture
+def setup_model():
     """
-    Test `BaseStateMeasure` subclasses
+    Return a model (subclass of `BaseTransientModel`)
     """
+    model = load_transient_fsi_model(
+        '../meshes/M5-3layers.msh', None,
+        SolidType=tsmd.KelvinVoigtWEpithelium,
+        FluidType=tfmd.BernoulliAreaRatioSep,
+        fsi_facet_labels=['pressure'],
+        fixed_facet_labels=['fixed']
+    )
+    return model
 
-    @pytest.fixture
-    def setup_model(self):
-        """
-        Return a model (subclass of `BaseTransientModel`)
-        """
-        model = load_transient_fsi_model(
-            '../meshes/M5-3layers.msh', None,
-            SolidType=tsmd.KelvinVoigtWEpithelium,
-            FluidType=tfmd.BernoulliAreaRatioSep,
-            fsi_facet_labels=['pressure'],
-            fixed_facet_labels=['fixed']
-        )
-        return model
-
-    _StateMeasures = [
+_StateMeasures = [
         solid.StressI1Field,
         solid.StressI2Field,
         solid.StressI3Field,
@@ -38,27 +34,31 @@ class TestStateMeasure:
         solid.ContactAreaDensityField,
         solid.FluidTractionPowerDensity,
     ]
-    @pytest.fixture(params=_StateMeasures)
-    def setup_state_measure(self, setup_model, request):
-        """
-        Return a `BaseStateMeasure` subclass
-        """
-        model = setup_model
-        StateMeasure = request.param
-        return StateMeasure(model)
+@pytest.fixture(params=_StateMeasures)
+def setup_state_measure(setup_model, request):
+    """
+    Return a `BaseStateMeasure` subclass
+    """
+    model = setup_model
+    StateMeasure = request.param
+    return StateMeasure(model)
 
-    @staticmethod
-    def args_from_model(model):
-        """
-        Return a `(state, control, props)` tuple
-        """
-        state = model.state1.copy()
+def args_from_model(model):
+    """
+    Return a `(state, control, props)` tuple
+    """
+    state = model.state1.copy()
 
-        control = model.control.copy()
+    control = model.control.copy()
 
-        props = model.props.copy()
+    props = model.props.copy()
 
-        return state, control, props
+    return state, control, props
+
+class TestStateMeasure:
+    """
+    Test `BaseStateMeasure` subclasses
+    """
 
     def test_state_measure(self, setup_state_measure):
         """
@@ -67,9 +67,44 @@ class TestStateMeasure:
         This doesn't check for correctness of the measure yet.
         """
         state_measure = setup_state_measure
-        state, control, props = self.args_from_model(state_measure.model)
+        state, control, props = args_from_model(state_measure.model)
 
         # Run the state measure for a given `(state, control, props)` tuple
         # and check that no errors are raised
         state_measure(state, control, props)
         assert True
+
+class TestStateHistoryMeasure:
+    """
+    Test `BaseStateHistoryMeasure` subclasses
+    """
+
+    @pytest.fixture
+    def setup_time_series_measure(self, setup_state_measure):
+        """
+        Return a `TimeSeries` measure instance
+        """
+        state_measure = setup_state_measure
+        return base.TimeSeries(state_measure)
+
+
+    def test_time_series_measure(
+            self, setup_time_series_measure, tmp_path
+        ):
+        """
+        Test if `TimeSeries` measures run
+        """
+        fpath = tmp_path / "test.h5"
+        time_series_measure = setup_time_series_measure
+        model = time_series_measure.model
+        with sf.StateFile(model, str(fpath), mode='a') as f:
+            # Add simple state history to the `StateFile` instance
+            state, control, props = args_from_model(model)
+            f.append_state(state)
+            f.append_control(control)
+            f.append_props(props)
+
+            # Test if the `TimeSeries` measure runs w/o error
+            time_series_measure(f)
+            assert True
+
