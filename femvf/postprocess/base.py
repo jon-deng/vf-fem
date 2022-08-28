@@ -38,7 +38,6 @@ class BaseStateMeasure():
     def assem(self):
         raise NotImplementedError("Method must be implemented by subclasses")
 
-
 class BaseDerivedStateMeasure(BaseStateMeasure):
     """
     Returns measures derived from post-processed data at single instants
@@ -59,7 +58,23 @@ class BaseDerivedStateMeasure(BaseStateMeasure):
     def __call__(self, state, control, props):
         raise NotImplementedError("This function must be implemented by child classes")
 
-class Derived():
+
+class BaseStateHistoryMeasure():
+
+    def __init__(self, model: BaseTransientModel, **kwargs):
+        self._model = model
+
+    def __call__(self, f: sf.StateFile, **kwargs):
+        return self.assem(f, **kwargs)
+
+    @property
+    def model(self):
+        return self._model
+
+    def assem(self, f: sf.StateFile, **kwargs):
+        raise NotImplementedError("Method must be implemented by subclasses")
+
+class BaseDerivedStateHistoryMeasure(BaseStateHistoryMeasure):
     """
     Returns measures derived from post-processed data at single instants
 
@@ -68,14 +83,18 @@ class Derived():
     func : Callable with signature `func(state, control, props)`
     """
 
-    def __init__(self, func):
+    def __init__(self, func: BaseStateMeasure):
+        super().__init__(func.model)
         self._func = func
 
     @property
     def func(self):
         return self._func
 
-class TimeSeries(Derived):
+    def assem(self, f: sf.StateFile, **kwargs):
+        raise NotImplementedError("Method must be implemented by subclasses")
+
+class TimeSeries(BaseDerivedStateHistoryMeasure):
     """
     Returns time series data
 
@@ -84,7 +103,7 @@ class TimeSeries(Derived):
     func : Callable with signature `func(state, control, props)`
     """
 
-    def __call__(self, f: sf.StateFile, ns: Optional[Iterable]=None):
+    def assem(self, f: sf.StateFile, ns: Optional[Iterable]=None):
         props = f.get_props()
         self.func.model.set_props(props)
 
@@ -94,7 +113,7 @@ class TimeSeries(Derived):
         ]
         return np.array(signals)
 
-class TimeSeriesStats(Derived):
+class TimeSeriesStats(BaseDerivedStateHistoryMeasure):
     """
     Returns time series statistics
     """
@@ -106,6 +125,9 @@ class TimeSeriesStats(Derived):
     @property
     def ts(self):
         return self._ts
+
+    def assem(self, f: sf.StateFile, ns: Optional[Iterable]=None):
+        return self.mean(f, ns=ns)
 
     def mean(self, f: sf.StateFile, ns: Optional[Iterable]=None):
         props = f.get_props()

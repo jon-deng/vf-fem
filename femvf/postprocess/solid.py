@@ -43,7 +43,7 @@ class BaseFieldMeasure(BaseStateMeasure):
         else:
             self.dx = dx
 
-        self.expression = self._init_expression(self)
+        self.expression = self._init_expression()
         self.project = make_project(self.expression, self.fspace, self.dx)
 
     def _init_expression(self):
@@ -191,12 +191,9 @@ class BaseFieldIntegralMeasure(BaseStateMeasure):
         else:
             self.dx = dx
 
-        self.expression = self._init_expression(self)
+        self.expression = self._init_expression()
 
-    def _init_expression(
-            self,
-            dx: Optional[dfn.Measure]=None
-        ):
+    def _init_expression(self):
         """
         Parameters
         ----------
@@ -205,10 +202,7 @@ class BaseFieldIntegralMeasure(BaseStateMeasure):
         fspace : dfn.FunctionSpace
             A function space to project the field expression onto
         """
-        if dx is None:
-            self.dx = self.model.solid.forms['measure.dx']
-        else:
-            self.dx = dx
+        raise NotImplementedError("Child classes must implement this method")
 
 class ViscousDissipationRate(BaseFieldIntegralMeasure):
 
