@@ -49,7 +49,7 @@ class BaseFieldMeasure(BaseStateMeasure):
     def _init_expression(self):
         raise NotImplementedError("Method must be implemented by subclasses")
 
-    def assem(self):
+    def assem(self, state, control, props):
         raise NotImplementedError("Method must be implemented by subclasses")
 
 class StressI1Field(BaseFieldMeasure):
@@ -62,7 +62,7 @@ class StressI1Field(BaseFieldMeasure):
         # This is the first invariant (I1)
         return ufl.tr(S)
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class StressI2Field(BaseFieldMeasure):
@@ -76,7 +76,7 @@ class StressI2Field(BaseFieldMeasure):
         # This is the second invariant (I2)
         return 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class StressI3Field(BaseFieldMeasure):
@@ -90,7 +90,7 @@ class StressI3Field(BaseFieldMeasure):
         # This is the third invariant (I3)
         return ufl.det(S)
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class StressHydrostaticField(BaseFieldMeasure):
@@ -102,7 +102,7 @@ class StressHydrostaticField(BaseFieldMeasure):
 
         return -1/3*ufl.tr(S)
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class StressVonMisesField(BaseFieldMeasure):
@@ -115,7 +115,7 @@ class StressVonMisesField(BaseFieldMeasure):
         j2 = 0.5*ufl.tr(S_dev*S_dev)
         return (3*j2)**(1/2)
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class ElasticStressField(BaseFieldMeasure):
@@ -123,7 +123,7 @@ class ElasticStressField(BaseFieldMeasure):
         forms = self.model.solid.forms
         return forms['expr.stress_elastic']
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class ContactPressureField(BaseFieldMeasure):
@@ -133,7 +133,7 @@ class ContactPressureField(BaseFieldMeasure):
         # `tcontact*tcontact` should be the square of contact pressure
         return ufl.inner(tcontact, tcontact)**0.5
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class ViscousDissipationField(BaseFieldMeasure):
@@ -142,7 +142,7 @@ class ViscousDissipationField(BaseFieldMeasure):
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
         return ufl.inner(kv_stress, kv_strain_rate)
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class ContactAreaDensityField(BaseFieldMeasure):
@@ -153,7 +153,7 @@ class ContactAreaDensityField(BaseFieldMeasure):
 
         return contact_indicator
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 class FluidTractionPowerDensity(BaseFieldMeasure):
@@ -166,7 +166,7 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
         velocity = forms['coeff.state.v1']
         return fluid_traction * velocity
 
-    def assem(self):
+    def assem(self, state, control, props):
         return np.array(self.project()[:])
 
 
@@ -211,7 +211,7 @@ class ViscousDissipationRate(BaseFieldIntegralMeasure):
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
         return ufl.inner(kv_stress, kv_strain_rate)*self.dx
 
-    def assem(self):
+    def assem(self, state, control, props):
         return dfn.assemble(self.expression)
 
 
@@ -223,7 +223,7 @@ class MinGlottalWidth(BaseStateMeasure):
         super().__init__(model)
         self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
-    def assem(self):
+    def assem(self, state, control, props):
         xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
         widths = 2*(self.model.props['ymid'] - xcur[1::2])
         gw = np.min(widths)
@@ -252,7 +252,7 @@ class VertexGlottalWidth(BaseStateMeasure):
 
         self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
-    def assem(self):
+    def assem(self, state, control, props):
         xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
         return 2*(self.model.props['ymid'][0] - xcur[self.idx_dof])
 
@@ -278,7 +278,7 @@ class FieldStats(BaseDerivedStateMeasure):
         ])
         return expr_total, expr_vol, dtype
 
-    def assem(self):
+    def assem(self, state, control, props):
         field_vec = self.func.assem()
         total = dfn.assemble(self.expr_total)
         vol = dfn.assemble(self.expr_vol)

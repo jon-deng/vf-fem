@@ -6,6 +6,8 @@ from typing import Optional, Iterable
 
 import numpy as np
 
+from blockarray import blockvec as bv
+
 from femvf import statefile as sf
 from femvf.models.transient.base import BaseTransientModel
 
@@ -24,18 +26,28 @@ class BaseStateMeasure():
     def __init__(self, model: BaseTransientModel, **kwargs):
         self._model = model
 
-    def __call__(self, state, control, props):
+    def __call__(
+            self,
+            state: bv.BlockVector,
+            control: bv.BlockVector,
+            props: bv.BlockVector
+        ):
         model = self.model
         model.set_props(props)
         model.set_fin_state(state)
         model.set_control(control)
-        return self.assem()
+        return self.assem(state, control, props)
 
     @property
     def model(self):
         return self._model
 
-    def assem(self):
+    def assem(
+            self,
+            state: bv.BlockVector,
+            control: bv.BlockVector,
+            props: bv.BlockVector
+        ):
         raise NotImplementedError("Method must be implemented by subclasses")
 
 class BaseDerivedStateMeasure(BaseStateMeasure):
