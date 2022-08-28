@@ -45,7 +45,8 @@ class BaseFieldMeasure(BaseStateMeasure):
             self,
             model: BaseTransientModel,
             dx: Optional[dfn.Measure]=None,
-            fspace: Optional[dfn.FunctionSpace]=None
+            fspace: Optional[dfn.FunctionSpace]=None,
+            **kwargs
         ):
         super().__init__(model)
         if fspace is None:
@@ -183,6 +184,14 @@ class ContactPressureField(BaseFieldMeasure):
 
     """
 
+    def __init__(self, model, dx=None, fspace=None, **kwargs):
+        # The default `dx` measure should be a surface measure rather than
+        # volume measure as used in `BaseFieldMeasure`
+        if dx is None:
+            dx = model.forms['measure.ds_traction']
+
+        super().__init__(model, dx, fspace, **kwargs)
+
     def _init_expression(self):
         tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
         # `tcontact*tcontact` should be the square of contact pressure
@@ -229,6 +238,14 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
     Return the power density due to fluid traction
 
     """
+    def __init__(self, model, dx=None, fspace=None, **kwargs):
+        # The default `dx` measure should be a surface measure rather than
+        # volume measure as used in `BaseFieldMeasure`
+        if dx is None:
+            dx = model.solid.forms['measure.ds_traction']
+
+        super().__init__(model, dx, fspace, **kwargs)
+
     def _init_expression(self):
         forms = self.model.solid.forms
         fluid_traction = forms['expr.fluid_traction']
