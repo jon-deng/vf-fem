@@ -233,7 +233,7 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
         forms = self.model.solid.forms
         fluid_traction = forms['expr.fluid_traction']
         velocity = forms['coeff.state.v1']
-        return fluid_traction * velocity
+        return ufl.inner(fluid_traction, velocity)
 
     def assem(self, state, control, props):
         return np.array(self.project()[:])
