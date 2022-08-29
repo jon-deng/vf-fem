@@ -352,7 +352,7 @@ class FieldStats(BaseDerivedStateMeasure):
         return expr_total, expr_vol, dtype
 
     def assem(self, state, control, props):
-        field_vec = self.func.assem()
+        field_vec = self.func(state, control, props)
         total = dfn.assemble(self.expr_total)
         vol = dfn.assemble(self.expr_vol)
         return np.array(

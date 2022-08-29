@@ -73,7 +73,7 @@ class BaseDerivedStateMeasure(BaseStateMeasure):
     def func(self):
         return self._func
 
-    def __call__(self, state, control, props):
+    def assem(self, state, control, props):
         raise NotImplementedError("This function must be implemented by child classes")
 
 
