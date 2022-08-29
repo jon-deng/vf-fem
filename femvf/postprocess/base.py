@@ -124,9 +124,6 @@ class BaseDerivedStateHistoryMeasure(BaseStateHistoryMeasure):
     def func(self):
         return self._func
 
-    def assem(self, f: sf.StateFile, **kwargs):
-        raise NotImplementedError("Method must be implemented by subclasses")
-
 
 class TimeSeries(BaseDerivedStateHistoryMeasure):
     """
@@ -138,13 +135,19 @@ class TimeSeries(BaseDerivedStateHistoryMeasure):
         The state post-processing function
     """
 
+    def __call__(self, f: sf.StateFile, ns: Optional[Iterable]=None):
+        return self.assem(f, ns=ns)
+
     def assem(self, f: sf.StateFile, ns: Optional[Iterable]=None):
+        if ns is None:
+            ns = range(f.size)
+
         props = f.get_props()
         self.func.model.set_props(props)
 
         signals = [
             self.func(f.get_state(ii), f.get_control(ii), props)
-            for ii in range(f.size)
+            for ii in ns
         ]
         return np.array(signals)
 
@@ -173,10 +176,10 @@ class TimeSeriesStats(BaseDerivedStateHistoryMeasure):
         props = f.get_props()
         self.func.model.set_props(props)
 
-        return np.mean(self.ts(f, ns), axis=0)
+        return np.mean(self.ts(f, ns=ns), axis=0)
 
     def std(self, f: sf.StateFile, ns: Optional[Iterable]=None):
         props = f.get_props()
         self.func.model.set_props(props)
 
-        return np.std(self.ts(f, ns), axis=0)
+        return np.std(self.ts(f, ns=ns), axis=0)
