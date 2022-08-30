@@ -3,6 +3,7 @@ Contains definitions of different solid model forms
 """
 
 import operator
+import warnings
 from functools import reduce
 from typing import Tuple, Mapping
 
@@ -104,18 +105,36 @@ def form_pullback_area_normal(u, n):
 
     return deformation_cofactor*n
 
+def form_positive_gap(gap):
+    """
+    Return the positive gap
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            'ignore',
+            category=RuntimeWarning,
+            message='invalid value encountered in add'
+        )
+        positive_gap = (gap + abs(gap)) / 2
+    positive_gap = np.where(
+        gap == -np.inf,
+        0.0,
+        positive_gap
+    )
+    return positive_gap
+
 def form_cubic_penalty_pressure(gap, kcoll):
     """
     Return the cubic penalty pressure
     """
-    positive_gap = (gap + abs(gap)) / 2
+    positive_gap = form_positive_gap(gap)
     return kcoll*positive_gap**3
 
 def dform_cubic_penalty_pressure(gap, kcoll):
     """
     Return derivatives of the cubic penalty pressure
     """
-    positive_gap = (gap + abs(gap)) / 2
+    positive_gap = form_positive_gap(gap)
     dpositive_gap = np.sign(gap)
     return kcoll*3*positive_gap**2 * dpositive_gap, positive_gap**3
 
