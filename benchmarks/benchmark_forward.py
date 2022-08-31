@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--profile', action='store_true', default=False)
     args = parser.parse_args()
 
-    model = setup_model('../meshes/M5_CB_GA0.msh')
+    model = setup_model('../meshes/M5-3layers.msh')
 
     state0 = model.state0.copy()
     state0[:] = 0
