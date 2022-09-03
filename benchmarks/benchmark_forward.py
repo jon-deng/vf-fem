@@ -14,6 +14,7 @@ from femvf.forward import integrate
 from femvf import statefile as sf
 
 from setup import setup_model, setup_transient_args
+from benchmarkutils import setup_argument_parser, benchmark
 
 def run_forward(model, state, control, props, times):
     """
@@ -23,8 +24,7 @@ def run_forward(model, state, control, props, times):
         return integrate(model, f, state, [control], props, times, write=False)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--profile', action='store_true', default=False)
+    parser = setup_argument_parser()
     args = parser.parse_args()
 
     model = setup_model('../meshes/M5-3layers.msh')
@@ -34,13 +34,7 @@ if __name__ == '__main__':
     times = BlockVector((_times,), (1,))
 
     statement = 'run_forward(model, state0, control, props, times)'
-    if args.profile:
-        cProfile.run(
-            statement,
-            './benchmark_forward.profile'
-        )
-    else:
-        time = timeit.timeit(statement, globals=globals(), number=1)
-        print(f"Runtime: {time:.2e} s")
-
-
+    benchmark(
+        statement, './benchmark_forward.profile',
+        profile=args.profile, globals=globals()
+    )
