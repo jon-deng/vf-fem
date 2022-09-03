@@ -12,22 +12,8 @@ from blockarray.blockvec import BlockVector
 
 from femvf.forward import integrate
 from femvf import statefile as sf
-from femvf.load import load_transient_fsi_model
-from femvf.models.transient import (fluid as tfmd, solid as tsmd)
 
-def setup_model(mesh_path):
-    """
-    Load the model to integrate
-    """
-    model = load_transient_fsi_model(
-        mesh_path, None,
-        SolidType=tsmd.KelvinVoigtWEpithelium,
-        FluidType=tfmd.BernoulliAreaRatioSep,
-        fsi_facet_labels=['pressure'],
-        fixed_facet_labels=['fixed'],
-        coupling='explicit'
-    )
-    return model
+from setup import setup_model, setup_transient_args
 
 def run_forward(model, state, control, props, times):
     """
@@ -42,22 +28,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     model = setup_model('../meshes/M5-3layers.msh')
-
-    state0 = model.state0.copy()
-    state0[:] = 0
-
-    control = model.control.copy()
-    control[:] = 0
-    control['psub'] = 8e3
-
-    props = model.props.copy()
-    ymax = model.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
-    props['emod'] = 5e4
-    props['rho'] = 1
-    props['eta'] = 3
-    props['nu'] = 0.45
-    props['ycontact'] = ymax+0.05
-    props['kcontact'] = 1e8
+    state0, control, props = setup_transient_args(model)
 
     _times = 1e-4*np.arange(100)
     times = BlockVector((_times,), (1,))
