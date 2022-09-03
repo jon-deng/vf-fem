@@ -34,14 +34,18 @@ class BaseStateMeasure():
 
     def __call__(
             self,
-            state: bv.BlockVector,
-            control: bv.BlockVector,
-            props: bv.BlockVector
+            state: Optional[bv.BlockVector]=None,
+            control: Optional[bv.BlockVector]=None,
+            props: Optional[bv.BlockVector]=None
         ):
         model = self.model
-        model.set_props(props)
-        model.set_fin_state(state)
-        model.set_control(control)
+
+        for vec, setter in zip(
+                (props, control, state),
+                (model.set_props, model.set_control, model.set_fin_state)
+            ):
+            if vec is not None:
+                setter(vec)
         return self.assem(state, control, props)
 
     @property
@@ -146,7 +150,7 @@ class TimeSeries(BaseDerivedStateHistoryMeasure):
         self.func.model.set_props(props)
 
         signals = [
-            self.func(f.get_state(ii), f.get_control(ii), props)
+            self.func(f.get_state(ii), f.get_control(ii), props=None)
             for ii in ns
         ]
         return np.array(signals)
