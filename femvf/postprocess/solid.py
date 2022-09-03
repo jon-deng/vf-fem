@@ -8,8 +8,10 @@ import numpy as np
 # import matplotlib.pyplot as plt
 # import scipy.signal as sig
 
+from petsc4py import PETSc
 import dolfin as dfn
 import ufl
+from blockarray.subops import solve_petsc_lu
 
 from femvf.models.transient.base import BaseTransientModel
 from .base import BaseStateMeasure, BaseDerivedStateMeasure
@@ -444,6 +446,15 @@ def make_project(
     test = dfn.TestFunction(fspace)
     A = dfn.assemble(trial*test*dx, keep_diagonal=True, tensor=dfn.PETScMatrix())
     A.ident_zeros()
+
+    ksp = PETSc.KSP().create()
+    ksp.setType(ksp.Type.PREONLY)
+    ksp.setOperators(A.mat())
+    ksp.setUp()
+
+    pc = ksp.getPC()
+    pc.setType(pc.Type.LU)
+
     lhs_expr = expr*test*dx
 
     bvec = dfn.PETScVector()
@@ -451,11 +462,17 @@ def make_project(
         x = dfn.Function(fspace).vector()
     else:
         x = vec
+
     def project():
         """
         Project an expression onto the function space over the supplied measure
         """
         b = dfn.assemble(lhs_expr, tensor=bvec)
-        dfn.solve(A, x, b, 'lu')
+
+        x_petsc = x.vec()
+        b_petsc = b.vec()
+        solve_petsc_lu(A.mat(), b_petsc, x_petsc, ksp=ksp)
+
+        # dfn.solve(A, x, b, 'lu')
         return x
     return project
