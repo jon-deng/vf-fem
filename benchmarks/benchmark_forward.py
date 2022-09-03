@@ -2,9 +2,6 @@
 Benchmark/profile time integration of the forward model
 """
 
-import argparse
-import cProfile
-import timeit
 
 import numpy as np
 
