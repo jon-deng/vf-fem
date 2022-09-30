@@ -13,6 +13,19 @@ import ufl
 
 from . import newmark
 
+def _depack_property_ufl_coeff(form_property):
+    """
+    Return the 'ufl.Coefficient' component from a stored 'coeff.prop.' value
+
+    This mainly handles the shape parameter which is stored as a tuple
+    of a function and an associated `ufl.Coefficient`.
+    """
+    if isinstance(form_property, tuple):
+        return form_property[1]
+    else:
+        return form_property
+
+
 def form_lin_iso_cauchy_stress(strain, emod, nu):
     """
     Returns the Cauchy stress for a small-strain displacement field
@@ -186,12 +199,16 @@ def gen_residual_bilinear_property_forms(forms):
     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
     """
     df1_dsolid = {}
-    property_labels = [form_name.split('.')[-1] for form_name in forms.keys()
-                       if 'coeff.prop' in form_name]
+    property_labels = [
+        form_name.split('.')[-1] for form_name in forms.keys()
+        if 'coeff.prop' in form_name
+    ]
     for prop_name in property_labels:
+        prop_coeff = _depack_property_ufl_coeff(forms[f'coeff.prop.{prop_name}'])
         try:
             df1_dsolid[prop_name] = dfn.adjoint(
-                dfn.derivative(forms['form.un.f1'], forms[f'coeff.prop.{prop_name}']))
+                dfn.derivative(forms['form.un.f1'], prop_coeff)
+            )
         except RuntimeError:
             df1_dsolid[prop_name] = None
 
@@ -230,11 +247,15 @@ def gen_jac_property_forms(unary_form_name, forms):
     """
     property_labels = [
         form_name.split('.')[-1] for form_name in forms.keys()
-        if 'coeff.prop' in form_name]
+        if 'coeff.prop' in form_name
+    ]
     for prop_name in property_labels:
+        prop_coeff = _depack_property_ufl_coeff(forms[f'coeff.prop.{prop_name}'])
         try:
-            df_dprop = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.prop.{prop_name}'])
-        except:
+            df_dprop = dfn.derivative(
+                forms[f'form.un.{unary_form_name}'], prop_coeff
+            )
+        except RuntimeError:
             df_dprop = None
 
         forms[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
