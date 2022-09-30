@@ -643,7 +643,7 @@ def add_shape_form(forms):
     """
     Adds a shape parameter
     """
-    u_mesh = dfn.Function(forms['fspace.vector'])
+    umesh = dfn.Function(forms['fspace.vector'])
 
     # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
     # `ufl.SpatialCoordinate(mesh)`
@@ -651,7 +651,7 @@ def add_shape_form(forms):
     # here
     # The code has to manually account for 'coeff.prop' cases that have both a
     # function/vector and ufl coefficient instance
-    forms['coeff.prop.u_mesh'] = (u_mesh, ufl.SpatialCoordinate(forms['mesh.mesh']))
+    forms['coeff.prop.umesh'] = (umesh, ufl.SpatialCoordinate(forms['mesh.mesh']))
     forms['mesh.REF_COORDINATES'] = forms['mesh.mesh'].coordinates().copy()
     return forms
 

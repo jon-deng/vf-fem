@@ -207,8 +207,8 @@ class BaseTransientSolid(base.BaseTransientModel):
                 coefficient.vector()[:] = value
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates
-        if 'coeff.prop.u_mesh' in self.forms:
-            u_mesh_coeff = depack_form_coefficient_function(self.forms['coeff.prop.u_mesh'])
+        if 'coeff.prop.umesh' in self.forms:
+            u_mesh_coeff = depack_form_coefficient_function(self.forms['coeff.prop.umesh'])
 
             mesh = self.forms['mesh.mesh']
             fspace = self.forms['fspace.vector']

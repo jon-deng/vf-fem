@@ -32,7 +32,7 @@ import dolfin as dfn
 from blockarray import blockvec as bvec, blockmat as bmat, subops
 
 from .base import BaseDynamicalModel
-from ..transient.solid import properties_bvec_from_forms
+from ..transient.solid import properties_bvec_from_forms, depack_form_coefficient_function
 from ..equations.solid import solidforms
 from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 from ..assemblyutils import CachedFormAssembler
@@ -118,7 +118,7 @@ class BaseDynamicalSolid(BaseDynamicalModel):
     def set_props(self, props):
         for key in props.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = self.forms['coeff.prop.'+key]
+            coefficient = depack_form_coefficient_function(self.forms['coeff.prop.'+key])
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
@@ -290,14 +290,19 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
-            [subops.zero_mat(nu, prop_subvec.size) for prop_subvec in self.props],
-            [subops.zero_mat(nv, prop_subvec.size) for prop_subvec in self.props]]
+            [subops.zero_mat(nu, subvec.size) for subvec in self.props],
+            [subops.zero_mat(nv, subvec.size) for subvec in self.props]
+        ]
 
         j_emod = self.props.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.ddf1uva_demod'].assemble()
 
+        j_shape = self.props.labels[0].index('umesh')
+        mats[0][j_shape] = self.cached_form_assemblers['form.bi.ddf1uva_dumesh'].assemble()
+
         return bmat.BlockMatrix(
-            mats, labels=self.state.labels+self.props.labels)
+            mats, labels=self.state.labels+self.props.labels
+        )
 
 
 class KelvinVoigt(SolidDynamicalSystem):
