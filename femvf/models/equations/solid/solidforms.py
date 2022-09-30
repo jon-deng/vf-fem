@@ -638,6 +638,23 @@ def add_ap_force_form(forms):
     forms['coeff.prop.muscle_stress'] = muscle_stress
     return forms
 
+# Add shape effect forms
+def add_shape_form(forms):
+    """
+    Adds a shape parameter
+    """
+    u_mesh = dfn.Function(forms['fspace.vector'])
+
+    # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
+    # `ufl.SpatialCoordinate(mesh)`
+    # This doesn't have an associated function/vector of values so both are included
+    # here
+    # The code has to manually account for 'coeff.prop' cases that have both a
+    # function/vector and ufl coefficient instance
+    forms['coeff.prop.u_mesh'] = (u_mesh, ufl.SpatialCoordinate(forms['mesh.mesh']))
+    return forms
+
+## Form models
 def Rayleigh(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return \
@@ -647,8 +664,9 @@ def Rayleigh(
         add_rayleigh_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
 
 def KelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
@@ -659,8 +677,9 @@ def KelvinVoigt(
         add_kv_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
 
 def KelvinVoigtWEpithelium(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
@@ -672,8 +691,9 @@ def KelvinVoigtWEpithelium(
         add_kv_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
 
 def IncompSwellingKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
@@ -684,8 +704,9 @@ def IncompSwellingKelvinVoigt(
         add_kv_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_with_incomp_swelling_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
 
 def SwellingKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
@@ -696,8 +717,9 @@ def SwellingKelvinVoigt(
         add_kv_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_with_swelling_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
 
 def SwellingKelvinVoigtWEpithelium(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
@@ -709,8 +731,9 @@ def SwellingKelvinVoigtWEpithelium(
         add_kv_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_with_swelling_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
 
 def Approximate3DKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
@@ -722,5 +745,6 @@ def Approximate3DKelvinVoigt(
         add_kv_viscous_form(
         add_inertial_form(
         add_isotropic_elastic_form(
+        add_shape_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
