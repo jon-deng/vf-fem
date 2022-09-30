@@ -652,6 +652,7 @@ def add_shape_form(forms):
     # The code has to manually account for 'coeff.prop' cases that have both a
     # function/vector and ufl coefficient instance
     forms['coeff.prop.u_mesh'] = (u_mesh, ufl.SpatialCoordinate(forms['mesh.mesh']))
+    forms['mesh.INI_COORDINATES'] = forms['mesh.mesh'].coordinates().copy()
     return forms
 
 ## Form models
