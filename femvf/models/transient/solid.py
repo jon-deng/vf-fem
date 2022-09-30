@@ -30,30 +30,47 @@ from ..equations.solid import newmark
 from ..equations.solid import solidforms
 from ..assemblyutils import CachedFormAssembler
 
+def depack_form_coefficient_function(form_coefficient):
+    """
+    Return the coefficient `Function` instance from a `forms` dict value
+
+    This function mainly handles tuple coefficents which occurs
+    for the shape parameter
+    """
+    #
+    if isinstance(coefficient, tuple):
+        # Tuple coefficients consist of a `(function, ufl_object)` tuple
+        coefficient, _ = coefficient
+    else:
+        pass
+    return coefficient
+
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
-    labels = [form_name.split('.')[-1] for form_name in forms.keys()
-        if 'coeff.prop' in form_name]
+    prop_labels = [
+        form_name.split('.')[-1] for form_name in forms.keys()
+        if 'coeff.prop' in form_name
+    ]
     vecs = []
-    for label in labels:
-        coefficient = forms['coeff.prop.'+label]
+    for prop_label in prop_labels:
+        coefficient = depack_form_coefficient_function(forms['coeff.prop.'+prop_label])
 
         # Generally the size of the vector comes directly from the property;
         # i.e. constants are size 1, scalar fields have size matching number of dofs, etc.
         # The time step `dt` is a special case since it is size 1 but is specificied as a field as
         # a workaround in order to take derivatives
-        if isinstance(coefficient, dfn.function.constant.Constant) or label == 'dt':
+        if isinstance(coefficient, dfn.function.constant.Constant) or prop_label == 'dt':
             vec = np.ones(coefficient.values().size)
             vec[:] = coefficient.values()
         else:
             vec = coefficient.vector().copy()
 
-        if label in defaults:
-            vec[:] = defaults[label]
+        if prop_label in defaults:
+            vec[:] = defaults[prop_label]
 
         vecs.append(vec)
 
-    return BlockVector(vecs, labels=[labels])
+    return BlockVector(vecs, labels=[prop_labels])
 
 
 class BaseTransientSolid(base.BaseTransientModel):
@@ -180,7 +197,7 @@ class BaseTransientSolid(base.BaseTransientModel):
         """
         for key, value in props.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = self.forms['coeff.prop.'+key]
+            coefficient = depack_form_coefficient_function(self.forms['coeff.prop.'+key])
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
@@ -188,6 +205,17 @@ class BaseTransientSolid(base.BaseTransientModel):
                 coefficient.assign(dfn.Constant(np.squeeze(value)))
             else:
                 coefficient.vector()[:] = value
+
+        # If a shape parameter exists, it needs special handling to update the mesh coordinates
+        if 'coeff.prop.u_mesh' in self.forms:
+            u_mesh_coeff = depack_form_coefficient_function(self.forms['coeff.prop.u_mesh'])
+
+            mesh = self.forms['mesh.mesh']
+            mesh_coord0 = self.forms['mesh.REF_COORDINATES']
+            VERT_TO_VDOF = dfn.vertex_to_dof_map(mesh)
+            dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(mesh_coord0.shape)
+            mesh_coord = mesh_coord0 + dmesh_coords
+            mesh.coordinates()[:] = mesh_coord
 
     ## Residual and sensitivity functions
     def assem_res(self):
