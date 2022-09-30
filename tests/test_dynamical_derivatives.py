@@ -1,16 +1,17 @@
 """
-This module tests correctness of the dynamical model's derivatives
+Test correctness of dynamical model derivatives
 
-Correctness is tested by comparing finite difference derivatives against
-implemented derivatives.
+Correctness is tested by comparing finite differences against
+implemented derivatives along specified perturbations.
 """
 
 from os import path
+
+import pytest
 import numpy as np
 import dolfin as dfn
 
-from blockarray import linalg as bla, blockmat as bmat
-from blockarray import subops as gops
+from blockarray import linalg as bla
 from femvf.models.dynamical import solid as slmodel, fluid as flmodel
 from femvf import load
 
@@ -25,7 +26,8 @@ def _set_dirichlet_bvec(dirichlet_bc, bvec):
             dirichlet_bc.apply(dfn.PETScVector(bvec.sub[label]))
     return bvec
 
-def setup_coupled_models():
+@pytest.fixture()
+def setup_dynamical_models():
     """
     Setup the dynamical model objects
     """
@@ -40,19 +42,28 @@ def setup_coupled_models():
     FluidType = flmodel.BernoulliSmoothMinSep
     model_coupled = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
+    )
 
     SolidType = slmodel.LinearizedKelvinVoigt
     FluidType = flmodel.LinearizedBernoulliSmoothMinSep
     model_coupled_linear = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
+    )
 
     return model_coupled, model_coupled_linear
 
-def setup_coupled_parameter_base(model):
+@pytest.fixture()
+def model(setup_dynamical_models):
     """
-    Return base parameters to compute derivatives at
+    Return dynamical model residual
+    """
+    return setup_dynamical_models[0]
+
+def linearization(model):
+    """
+    Return linearization point
     """
     ## Set model properties/control/linearization directions
     model_solid = model.solid
@@ -68,8 +79,7 @@ def setup_coupled_parameter_base(model):
     ycontact = ymid - 0.1*ygap
     props0['ycontact'] = ycontact
 
-    for _model in [model, model_linear]:
-        _model.ymid = ymid
+    model.ymid = ymid
 
     props0['zeta_sep'] = 1e-4
     props0['zeta_min'] = 1e-4
@@ -109,9 +119,9 @@ def setup_coupled_parameter_base(model):
 
     return state0, statet0, control0, props0, del_state, del_statet
 
-def setup_coupled_parameter_perturbation(model):
+def perturbation(model):
     """
-    Return parameters pertrubations to compute directional derivatives along
+    Return parameter perturbations
     """
     model_solid = model.solid
 
@@ -156,15 +166,6 @@ def setup_coupled_parameter_perturbation(model):
     dcontrol = model.control.copy()
     dcontrol[:] = 1e0
     return dstate, dstatet, dcontrol, dprops
-
-
-def _reset_parameter_base(model, state0, statet0, control0, props0, del_state, del_statet):
-    model.set_state(state0)
-    model.set_statet(statet0)
-    model.set_control(control0)
-    model.set_props(props0)
-    model.set_dstate(del_state)
-    model.set_dstatet(del_statet)
 
 def _set_and_assemble(x, set_x, assem):
     set_x(x)
@@ -292,32 +293,32 @@ def test_dres_dstatet_vs_dres_statet(model, model_linear, x0, del_xt):
             print(key, subvec.norm())
     breakpoint()
 
-if __name__ == '__main__':
-    model, model_linear = setup_coupled_models()
-    for _model in [model, model_linear]:
-        state0, statet0, control0, props0, del_state, del_statet = setup_coupled_parameter_base(_model)
-        base_parameters = (state0, statet0, control0, props0, del_state, del_statet)
-        _reset_parameter_base(_model, *base_parameters)
+# if __name__ == '__main__':
+#     model, model_linear = setup_dynamical_models()
+#     for _model in [model, model_linear]:
+#         state0, statet0, control0, props0, del_state, del_statet = setup_linearization(_model)
+#         base_parameters = (state0, statet0, control0, props0, del_state, del_statet)
+#         _reset_parameter_base(_model, *base_parameters)
 
-        dstate, dstatet, dcontrol, dprops = setup_coupled_parameter_perturbation(_model)
+#         dstate, dstatet, dcontrol, dprops = setup_perturbation(_model)
 
-    # breakpoint()
-    for model_name, _model in zip(["Residual", "Linearized residual"], [model, model_linear]):
-        print(model_name)
-        print("-- Test dres/dstate --")
-        test_assem_dres_dstate(_model, state0, dstate)
+#     # breakpoint()
+#     for model_name, _model in zip(["Residual", "Linearized residual"], [model, model_linear]):
+#         print(model_name)
+#         print("-- Test dres/dstate --")
+#         test_assem_dres_dstate(_model, state0, dstate)
 
-        print("\n-- Test dres/dstatet --")
-        test_assem_dres_dstatet(_model, statet0, dstatet)
+#         print("\n-- Test dres/dstatet --")
+#         test_assem_dres_dstatet(_model, statet0, dstatet)
 
-        print("\n-- Test dres/dcontrol --")
-        test_assem_dres_dcontrol(_model, control0, dcontrol)
+#         print("\n-- Test dres/dcontrol --")
+#         test_assem_dres_dcontrol(_model, control0, dcontrol)
 
-        print("\n-- Test dres/dprops --")
-        test_assem_dres_dprops(model, props0, dprops)
+#         print("\n-- Test dres/dprops --")
+#         test_assem_dres_dprops(model, props0, dprops)
 
-    print("\n-- Test dres/dstate vs dres_state --")
-    test_dres_dstate_vs_dres_state(model, model_linear, state0, del_state)
+#     print("\n-- Test dres/dstate vs dres_state --")
+#     test_dres_dstate_vs_dres_state(model, model_linear, state0, del_state)
 
-    print("\n-- Test dres/dstatet vs dres_statet --")
-    test_dres_dstatet_vs_dres_statet(model, model_linear, state0, del_statet)
+#     print("\n-- Test dres/dstatet vs dres_statet --")
+#     test_dres_dstatet_vs_dres_statet(model, model_linear, state0, del_statet)
