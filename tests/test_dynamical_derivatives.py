@@ -143,6 +143,15 @@ def setup_coupled_parameter_perturbation(model):
     dprops[:] = 0
     dprops['emod'] = 1.0
 
+    # Use a uniaxial y stretching motion
+    fspace = model_solid.forms['fspace.vector']
+    VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
+    coords = model_solid.forms['mesh.REF_COORDINATES']
+    umesh = coords.copy()
+    umesh[:, 0] = 0
+    umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
+    dprops['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
+    dprops['umesh'] = 0
 
     dcontrol = model.control.copy()
     dcontrol[:] = 1e0
