@@ -38,11 +38,11 @@ def depack_form_coefficient_function(form_coefficient):
     for the shape parameter
     """
     #
-    if isinstance(coefficient, tuple):
+    if isinstance(form_coefficient, tuple):
         # Tuple coefficients consist of a `(function, ufl_object)` tuple
-        coefficient, _ = coefficient
+        coefficient, _ = form_coefficient
     else:
-        pass
+        coefficient = form_coefficient
     return coefficient
 
 def properties_bvec_from_forms(forms, defaults=None):
@@ -211,8 +211,9 @@ class BaseTransientSolid(base.BaseTransientModel):
             u_mesh_coeff = depack_form_coefficient_function(self.forms['coeff.prop.u_mesh'])
 
             mesh = self.forms['mesh.mesh']
+            fspace = self.forms['fspace.vector']
             mesh_coord0 = self.forms['mesh.REF_COORDINATES']
-            VERT_TO_VDOF = dfn.vertex_to_dof_map(mesh)
+            VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
             dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(mesh_coord0.shape)
             mesh_coord = mesh_coord0 + dmesh_coords
             mesh.coordinates()[:] = mesh_coord
