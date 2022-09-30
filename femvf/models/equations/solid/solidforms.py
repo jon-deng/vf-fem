@@ -13,7 +13,7 @@ import ufl
 
 from . import newmark
 
-def form_lin_iso_cauchy_stress(strain, emod, nu, plane_approximation=None):
+def form_lin_iso_cauchy_stress(strain, emod, nu):
     """
     Returns the Cauchy stress for a small-strain displacement field
 
@@ -30,7 +30,7 @@ def form_lin_iso_cauchy_stress(strain, emod, nu, plane_approximation=None):
     lame_mu = emod/2/(1+nu)
     return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0])
 
-def form_inf_strain(u, plane_approximation=None):
+def form_inf_strain(u):
     """
     Returns the strain tensor for a displacement field.
 
@@ -40,17 +40,12 @@ def form_inf_strain(u, plane_approximation=None):
         Trial displacement field
     """
     if u.geometric_dimension() == 2:
-        if plane_approximation == 'plane_strain' or plane_approximation is None:
-            spp = 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
-            return ufl.as_tensor(
-                [[spp[0, 0], spp[0, 1], 0],
-                 [spp[1, 0], spp[1, 1], 0],
-                 [        0,         0, 0]]
-            )
-        elif plane_approximation == 'plane_stress':
-            raise NotImplementedError("Didn't make this case yet")
-        else:
-            raise ValueError("`plane_approximation` must be one of ['plane_strain', 'plane_stress']")
+        spp = 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
+        return ufl.as_tensor(
+            [[spp[0, 0], spp[0, 1], 0],
+            [spp[1, 0], spp[1, 1], 0],
+            [        0,         0, 0]]
+        )
     else:
         return 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
 
