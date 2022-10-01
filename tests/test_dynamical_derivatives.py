@@ -172,7 +172,7 @@ def perturbation(model):
     umesh[:, 0] = 0
     umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
     dprops['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
-    dprops['umesh'] = 0
+    # dprops['umesh'] = 0
 
     dcontrol = model.control.copy()
     dcontrol[:] = 1e0
