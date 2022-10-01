@@ -29,7 +29,7 @@ from typing import Tuple, Mapping
 import numpy as np
 import dolfin as dfn
 
-from blockarray import blockvec as bvec, blockmat as bmat, subops
+from blockarray import blockvec as bv, blockmat as bm, subops
 
 from .base import BaseDynamicalModel
 from ..transient.solid import properties_bvec_from_forms, depack_form_coefficient_function
@@ -60,27 +60,33 @@ class BaseDynamicalSolid(BaseDynamicalModel):
 
         self.u = self.forms['coeff.state.u1']
         self.v = self.forms['coeff.state.v1']
-        self.state = bvec.BlockVector((self.u.vector(), self.v.vector()), labels=[('u', 'v')])
+        self.state = bv.BlockVector((self.u.vector(), self.v.vector()), labels=[('u', 'v')])
+        self.state = bv.convert_subtype_to_petsc(self.state)
 
         self.ut = dfn.Function(self.forms['coeff.state.u1'].function_space())
         self.vt = self.forms['coeff.state.a1']
-        self.statet = bvec.BlockVector((self.ut.vector(), self.vt.vector()), labels=[('u', 'v')])
+        self.statet = bv.BlockVector((self.ut.vector(), self.vt.vector()), labels=[('u', 'v')])
+        self.statet = bv.convert_subtype_to_petsc(self.statet)
 
-        self.control = bvec.BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
+        self.control = bv.BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
+        self.control = bv.convert_subtype_to_petsc(self.control)
 
         self.du = self.forms['coeff.dstate.u1']
         self.dv = self.forms['coeff.dstate.v1']
-        self.dstate = bvec.BlockVector((self.du.vector(), self.dv.vector()), labels=[('u', 'v')])
+        self.dstate = bv.BlockVector((self.du.vector(), self.dv.vector()), labels=[('u', 'v')])
+        self.dstate = bv.convert_subtype_to_petsc(self.dstate)
 
         self.dut = dfn.Function(self.forms['coeff.dstate.u1'].function_space())
         self.dvt = self.forms['coeff.dstate.a1']
-        self.dstatet = bvec.BlockVector((self.dut.vector(), self.dvt.vector()), labels=[('u', 'v')])
+        self.dstatet = bv.BlockVector((self.dut.vector(), self.dvt.vector()), labels=[('u', 'v')])
+        self.dstatet = bv.convert_subtype_to_petsc(self.dstatet)
 
         # self.p = self.forms['coeff.dfsi.p1']
-        self.dcontrol = bvec.BlockVector((self.forms['coeff.dfsi.p1'].vector(),), labels=[('p',)])
-
+        self.dcontrol = bv.BlockVector((self.forms['coeff.dfsi.p1'].vector(),), labels=[('p',)])
+        self.dcontrol = bv.convert_subtype_to_petsc(self.dcontrol)
 
         self.props = self.get_properties_vec(set_default=True)
+        self.props = bv.convert_subtype_to_petsc(self.props)
         self.set_props(self.props)
 
         self.cached_form_assemblers = {
@@ -145,6 +151,18 @@ class BaseDynamicalSolid(BaseDynamicalModel):
         return xref
 
 
+def cast_output_bmat_to_petsc(func):
+    def wrapped_func(*args, **kwargs):
+        mat = func(*args, **kwargs)
+        return bm.convert_subtype_to_petsc(mat)
+    return wrapped_func
+
+def cast_output_bvec_to_petsc(func):
+    def wrapped_func(*args, **kwargs):
+        vec = func(*args, **kwargs)
+        return bv.convert_subtype_to_petsc(vec)
+    return wrapped_func
+
 class SolidDynamicalSystem(BaseDynamicalSolid):
     """
     Represents a dynamical system residual
@@ -156,11 +174,13 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
     # def form_definitions(self, *args):
     #     return super().form_definitions(*args)
 
+    @cast_output_bvec_to_petsc
     def assem_res(self):
         resu = self.cached_form_assemblers['form.un.f1uva'].assemble()
         resv = self.v.vector() - self.ut.vector()
-        return bvec.BlockVector([resu, resv], labels=[['u',  'v']])
+        return bv.BlockVector([resu, resv], labels=[['u',  'v']])
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dstate(self):
         dresu_du = self.cached_form_assemblers['form.bi.df1uva_du1'].assemble()
         dresu_dv = self.cached_form_assemblers['form.bi.df1uva_dv1'].assemble()
@@ -172,8 +192,9 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
+        return bm.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
@@ -185,8 +206,9 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
+        return bm.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
         dresu_dcontrol = self.cached_form_assemblers['form.bi.df1uva_dp1'].assemble()
@@ -196,8 +218,9 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
         mats = [
             [dresu_dcontrol],
             [dresv_dcontrol]]
-        return bvec.BlockMatrix(mats, labels=self.state.labels+self.control.labels)
+        return bm.BlockMatrix(mats, labels=self.state.labels+self.control.labels)
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
@@ -210,7 +233,7 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
         j_shape = self.props.labels[0].index('umesh')
         mats[0][j_shape] = self.cached_form_assemblers['form.bi.ddf1uva_dumesh'].assemble()
 
-        return bmat.BlockMatrix(
+        return bm.BlockMatrix(
             mats, labels=(self.state.labels[0], self.props.labels[0]))
 
 class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
@@ -222,6 +245,7 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
     where 'x=[u, v]', 'F=[Fu, Fv]=[Fu, v-ut]'
     """
 
+    @cast_output_bvec_to_petsc
     def assem_res(self):
         resu = (
             self.cached_form_assemblers['form.un.df1uva_u1'].assemble()
@@ -230,8 +254,9 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
             + self.cached_form_assemblers['form.un.df1uva_a1'].assemble()
         )
         resv = self.dv.vector() - self.dut.vector()
-        return bvec.BlockVector([resu, resv], labels=[['u',  'v']])
+        return bv.BlockVector([resu, resv], labels=[['u',  'v']])
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dstate(self):
         dresu_du = (
             self.cached_form_assemblers['form.bi.ddf1uva_u1_du1'].assemble()
@@ -253,8 +278,9 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
         mats = [
             [dresu_du, dresu_dv],
             [dresv_du, dresv_dv]]
-        return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
+        return bm.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -271,8 +297,9 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
         mats = [
             [dresu_dut, dresu_dvt],
             [dresv_dut, dresv_dvt]]
-        return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
+        return bm.BlockMatrix(mats, labels=(['u', 'v'], ['u', 'v']))
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
         m = self.control['p'].size
@@ -288,8 +315,9 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
         mats = [
             [dresu_dg],
             [dresv_dg]]
-        return bvec.BlockMatrix(mats, labels=(['u', 'v'], ['g']))
+        return bm.BlockMatrix(mats, labels=(['u', 'v'], ['g']))
 
+    @cast_output_bmat_to_petsc
     def assem_dres_dprops(self):
         nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
@@ -303,7 +331,7 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
         j_shape = self.props.labels[0].index('umesh')
         mats[0][j_shape] = self.cached_form_assemblers['form.bi.ddf1uva_dumesh'].assemble()
 
-        return bmat.BlockMatrix(
+        return bm.BlockMatrix(
             mats, labels=self.state.labels+self.props.labels
         )
 
