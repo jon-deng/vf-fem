@@ -133,6 +133,17 @@ class BaseDynamicalSolid(BaseDynamicalModel):
             else:
                 coefficient.vector()[:] = props[key]
 
+        # If a shape parameter exists, it needs special handling to update the mesh coordinates
+        if 'coeff.prop.umesh' in self.forms:
+            u_mesh_coeff = depack_form_coefficient_function(self.forms['coeff.prop.umesh'])
+
+            mesh = self.forms['mesh.mesh']
+            fspace = self.forms['fspace.vector']
+            mesh_coord0 = self.forms['mesh.REF_COORDINATES']
+            VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
+            dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(mesh_coord0.shape)
+            mesh_coord = mesh_coord0 + dmesh_coords
+            mesh.coordinates()[:] = mesh_coord
 
     def set_dstate(self, dstate):
         self.dstate[:] = dstate
