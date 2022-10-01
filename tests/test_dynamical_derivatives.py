@@ -11,21 +11,25 @@ import pytest
 import numpy as np
 import dolfin as dfn
 
-from blockarray import linalg as bla
+from blockarray import linalg as bla, blockvec as bv
 from femvf.models.dynamical import (
     solid as dynsl, fluid as dynfl, coupled as dynco, base as dynbase
 )
 from femvf import load
 
+from petsc4py import PETSc
 # pylint: disable=redefined-outer-name
 
 # warnings.filterwarnings('error', 'RuntimeWarning')
 # np.seterr(invalid='raise')
 
-def _set_dirichlet_bvec(dirichlet_bc, bvec):
+def _set_dirichlet_bvec(dirichlet_bc, bvec: bv.BlockVector):
     for label in ['u', 'v']:
         if label in bvec:
-            dirichlet_bc.apply(dfn.PETScVector(bvec.sub[label]))
+            subvec = bvec.sub[label]
+            if isinstance(subvec, PETSc.Vec):
+                subvec = dfn.PETScVector(subvec)
+            dirichlet_bc.apply(subvec)
     return bvec
 
 @pytest.fixture(
@@ -86,46 +90,65 @@ def linearization(model):
     """
     Return linearization point
     """
-    ## Set model properties/control/linearization directions
+    # Determine whether the model has fluid/solid components
+    if isinstance(model, dynco.BaseDynamicalFSIModel):
+        model_solid = model.solid
+        model_fluid = model.fluid
+        model_coupl = model
+    elif isinstance(model, dynsl.BaseDynamicalSolid):
+        model_solid = model
+        model_fluid = None
+        model_coupl = None
+    elif isinstance(model, dynfl.BaseDynamical1DFluid):
+        model_solid = None
+        model_fluid = model
+        model_coupl = None
 
-    # (linearization directions for linearized residuals)
+    ## Model properties
     props0 = model.props.copy()
-    props0['emod'] = 5e3*10
-    props0['rho'] = 1.0
+    if model_solid is not None:
+        props0['emod'] = 5e3*10
+        props0['rho'] = 1.0
 
-    # if isinstance(model, dynco.BaseDynamicalFSIModel):
-    ymax = np.max(model.solid.XREF[1::2])
-    ygap = 0.01 # gap between VF and symmetry plane
-    ymid = ymax + ygap
-    ycontact = ymid - 0.1*ygap
-    props0['ycontact'] = ycontact
+    if model_coupl is not None:
+        ymax = np.max(model_coupl.solid.XREF[1::2])
+        ygap = 0.01 # gap between VF and symmetry plane
+        ymid = ymax + ygap
+        ycontact = ymid - 0.1*ygap
+        props0['ycontact'] = ycontact
 
-    model.ymid = ymid
+        model_coupl.ymid = ymid
 
-    props0['zeta_sep'] = 1e-4
-    props0['zeta_min'] = 1e-4
-    props0['rho_air'] = 1.2e-3
-    model.set_props(props0)
+    if model_fluid is not None:
+        props0['zeta_sep'] = 1e-4
+        props0['zeta_min'] = 1e-4
+        props0['rho_air'] = 1.2e-3
 
+    ## Model controls
     control0 = model.control.copy()
     control0[:] = 1.0
-    if 'psub' in control0:
-        control0['psub'] = 800*10
-    if 'psup' in control0:
-        control0['psup'] = 0
-    model.set_control(control0)
 
+    if model_fluid is not None:
+        if 'psub' in control0:
+            control0['psub'] = 800*10
+        if 'psup' in control0:
+            control0['psup'] = 0
+
+    ## Model state
     state0 = model.state.copy()
-    # Make the initial displacement a pure shear motion
-    xref = model.solid.forms['coeff.ref.x'].vector().copy()
-    xx = xref[:-1:2]
-    yy = xref[1::2]
-    state0['u'][:-1:2] = 0.01*(yy/yy.max())
-    state0['u'][1::2] = 0.0 * yy
-    model.set_state(state0)
 
+    if model_solid is not None:
+        # Make the initial displacement a pure shear motion
+        xref = model_solid.forms['coeff.ref.x'].vector().copy()
+        xx = xref[:-1:2]
+        yy = xref[1::2]
+        _u = np.zeros(state0['u'].shape)
+        _u[:-1:2] = 0.01*(yy/yy.max())
+        _u[1::2] = 0.0 * yy
+        state0['u']= _u
+
+    ## Model state time-derivative
     statet0 = state0.copy()
-    model.set_statet(statet0)
 
     return state0, statet0, control0, props0
 
@@ -134,10 +157,24 @@ def perturbation(model):
     """
     Return parameter perturbations
     """
-    model_solid = model.solid
+    # Determine whether the model has fluid/solid components
+    if isinstance(model, dynco.BaseDynamicalFSIModel):
+        model_solid = model.solid
+        model_fluid = model.fluid
+        model_coupl = model
+    elif isinstance(model, dynsl.BaseDynamicalSolid):
+        model_solid = model
+        model_fluid = None
+        model_coupl = None
+    elif isinstance(model, dynfl.BaseDynamical1DFluid):
+        model_solid = None
+        model_fluid = model
+        model_coupl = None
 
+    ## State perturbation
     dstate = model.state.copy()
-    if 'u' in dstate and 'v' in dstate:
+
+    if model_solid is not None:
         dxu = model_solid.state['u'].copy()
         dxu[:] = 1e-3*np.arange(dxu[:].size)
         dxu[:] = 1e-8
@@ -149,33 +186,43 @@ def perturbation(model):
         dxv[:] = 1e-8
         # model_solid.forms['bc.dirichlet'].apply(dxv)
         dstate['v'] = dxv
-    if 'q' in dstate:
-        dstate['q'] = 1e-3
-    if 'p' in dstate:
-        dstate['p'] = 1e-3
-    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
 
+        _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
+
+    if model_fluid is not None:
+        if 'q' in dstate:
+            dstate['q'] = 1e-3
+        if 'p' in dstate:
+            dstate['p'] = 1e-3
+
+    ## State time-derivative perturbation
     dstatet = dstate.copy()
+
     dstatet[:] = 1e-6
-    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
+    if model_solid is not None:
+        _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
 
-    props0 = model.props.copy()
-    dprops = props0.copy()
+    ## Properties perturbation
+    dprops = model.props.copy()
     dprops[:] = 0
-    dprops['emod'] = 1.0
 
-    # Use a uniaxial y stretching motion
-    fspace = model_solid.forms['fspace.vector']
-    VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
-    coords = model_solid.forms['mesh.REF_COORDINATES']
-    umesh = coords.copy()
-    umesh[:, 0] = 0
-    umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
-    dprops['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
-    # dprops['umesh'] = 0
+    if model_solid is not None:
+        dprops['emod'] = 1.0
 
+        # Use a uniaxial y stretching motion
+        fspace = model_solid.forms['fspace.vector']
+        VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
+        coords = model_solid.forms['mesh.REF_COORDINATES']
+        umesh = coords.copy()
+        umesh[:, 0] = 0
+        umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
+        dprops['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
+        # dprops['umesh'] = 0
+
+    ## Controls perturbation
     dcontrol = model.control.copy()
     dcontrol[:] = 1e0
+
     return dstate, dstatet, dcontrol, dprops
 
 @pytest.fixture()
