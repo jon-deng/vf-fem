@@ -231,7 +231,7 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.df1uva_demod'].assemble()
 
         j_shape = self.props.labels[0].index('umesh')
-        mats[0][j_shape] = self.cached_form_assemblers['form.bi.ddf1uva_dumesh'].assemble()
+        mats[0][j_shape] = self.cached_form_assemblers['form.bi.df1uva_dumesh'].assemble()
 
         return bm.BlockMatrix(
             mats, labels=(self.state.labels[0], self.props.labels[0]))
