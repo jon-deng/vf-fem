@@ -147,6 +147,10 @@ def linearization(model):
         _u[1::2] = 0.0 * yy
         state0['u']= _u
 
+    if model_fluid is not None:
+        state0['q'] = 1
+        state0['p'] = 1e4
+
     ## Model state time-derivative
     statet0 = state0.copy()
 
