@@ -13,7 +13,7 @@ import dolfin as dfn
 
 from blockarray import linalg as bla
 from femvf.models.dynamical import (
-    solid as dynsl, fluid as dynfl, base as dynbase
+    solid as dynsl, fluid as dynfl, coupled as dynco, base as dynbase
 )
 from femvf import load
 
@@ -28,8 +28,12 @@ def _set_dirichlet_bvec(dirichlet_bc, bvec):
             dirichlet_bc.apply(dfn.PETScVector(bvec.sub[label]))
     return bvec
 
-@pytest.fixture()
-def setup_dynamical_models():
+@pytest.fixture(
+    params=[
+        'coupled'
+    ]
+)
+def setup_dynamical_models(request):
     """
     Setup the dynamical model objects
     """
@@ -54,7 +58,14 @@ def setup_dynamical_models():
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
     )
 
-    return model_coupled, model_coupled_linear
+    if request.param == 'coupled':
+        return model_coupled, model_coupled_linear
+    elif request.param == 'solid':
+        return model_coupled.solid, model_coupled_linear.solid
+    elif request.param == 'fluid':
+        return model_coupled.fluid, model_coupled_linear.fluid
+    else:
+        raise ValueError()
 
 @pytest.fixture()
 def model(setup_dynamical_models):
@@ -76,14 +87,14 @@ def linearization(model):
     Return linearization point
     """
     ## Set model properties/control/linearization directions
-    model_solid = model.solid
 
     # (linearization directions for linearized residuals)
     props0 = model.props.copy()
     props0['emod'] = 5e3*10
     props0['rho'] = 1.0
 
-    ymax = np.max(model_solid.XREF[1::2])
+    # if isinstance(model, dynco.BaseDynamicalFSIModel):
+    ymax = np.max(model.solid.XREF[1::2])
     ygap = 0.01 # gap between VF and symmetry plane
     ymid = ymax + ygap
     ycontact = ymid - 0.1*ygap
@@ -103,17 +114,6 @@ def linearization(model):
     if 'psup' in control0:
         control0['psup'] = 0
     model.set_control(control0)
-
-    del_state = model.state.copy()
-    del_state[:] = 0.0
-    del_state['u'] = 1.0
-    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_state)
-    model.set_dstate(del_state)
-
-    del_statet = model.state.copy()
-    del_statet[:] = 1.0e4
-    _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], del_statet)
-    model.set_dstatet(del_statet)
 
     state0 = model.state.copy()
     # Make the initial displacement a pure shear motion
