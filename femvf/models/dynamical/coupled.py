@@ -109,9 +109,15 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         for model, sub_state in zip(self.models, sub_states):
             model.set_state(sub_state)
 
+        self._transfer_solid_to_fluid()
+
+    def _transfer_solid_to_fluid(self):
+        """
+        Update fluid controls from the solid state
+        """
         ## The below are needed to communicate FSI interactions
         # Set solid_area
-        self.solid_area[:] = 2*(self.props['ymid'][0] - (self.solid_xref + self.solid.state.sub['u'])[1::2])
+        self.solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF + self.solid.state.sub['u'])[1::2])
 
         # map solid_area to fluid area
         fluid_control = self.fluid.control.copy()
@@ -178,6 +184,10 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         sub_props = bvec.split_bvec(props, block_sizes)
         for model, sub_prop in zip(self.models, sub_props):
             model.set_props(sub_prop)
+
+        # NOTE: You have to update the fluid control on a property due to shape
+        # changes
+        self._transfer_solid_to_fluid()
 
     def assem_res(self):
         return bvec.concatenate_vec([bvec.convert_subtype_to_petsc(model.assem_res()) for model in self.models])
