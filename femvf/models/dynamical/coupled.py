@@ -90,9 +90,25 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         dslarea_dslu.assemble()
         dflarea_dslarea = self._dfluid_dsolid_scalar
         dflarea_dslu = subops.mult_mat_mat(dflarea_dslarea, dslarea_dslu)
-        mats[0][0] = dflarea_dslu
+        # NOTE: It's hardcoded/assumed that the 'area' control is at index 0 in
+        # `self.fluid.control`
+        row_flarea = self.fluid.control.labels[0].index('area')
+        col_slu = self.solid.state.labels[0].index('u')
+        mats[row_flarea][col_slu] = dflarea_dslu
         self.dflcontrol_dslstate = bv.BlockMatrix(
             mats, labels=self.fluid.control.labels+self.solid.state.labels
+        )
+
+        dflarea_dumesh = dflarea_dslu.copy()
+        mats = [
+            [subops.zero_mat(nrow, ncol) for ncol in self.solid.props.bshape[0]]
+            for nrow in self.fluid.control.bshape[0]
+        ]
+        row_flarea = self.fluid.control.labels[0].index('area')
+        col_slu = self.solid.props.labels[0].index('umesh')
+        mats[row_flarea][col_slu] = dflarea_dumesh
+        self.dflcontrol_dslprops = bv.BlockMatrix(
+            mats, labels=self.fluid.control.labels+self.solid.props.labels
         )
 
         # Make null BlockMats relating fluid/solid states
@@ -249,7 +265,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         dslres_dymid = bm.BlockMatrix(
             submats,
             shape=self.solid.state.shape+(1,),
-            labels=self.solid.state.labels+('ymid',)
+            labels=self.solid.state.labels+(('ymid',),)
         )
 
         ## Fluid residual sensitivities
@@ -258,10 +274,9 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             for flsubvec in self.fluid.state
             for propsubvec in self.solid.props
         ]
-        dflres_dslprops = bm.BlockMatrix(
-            submats,
-            shape=self.fluid.state.f_shape+self.solid.props.f_shape,
-            labels=self.fluid.state.labels+self.solid.props.labels
+        dflres_dslprops = bla.mult_mat_mat(
+            bm.convert_subtype_to_petsc(self.fluid.assem_dres_dcontrol()),
+            self.dflcontrol_dslprops
         )
 
         dflres_dflprops = bm.convert_subtype_to_petsc(
@@ -275,7 +290,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         dflres_dymid = bm.BlockMatrix(
             submats,
             shape=self.fluid.state.f_shape+(1,),
-            labels=self.fluid.state.labels+('ymid',)
+            labels=self.fluid.state.labels+(('ymid',),)
         )
 
         bmats = [
