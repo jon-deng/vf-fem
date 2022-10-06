@@ -122,7 +122,7 @@ class BaseParameterization:
         """
         raise NotImplementedError()
 
-class JaxParameterization(BaseParameterization):
+class BaseJaxParameterization(BaseParameterization):
     """
     Map an alternative parameterization to a model's `props` parameters
 
@@ -186,14 +186,14 @@ class JaxParameterization(BaseParameterization):
         y_dict = jax.jvp(self.map, x_dict, dx_dict)
         return dict_to_bvec(y_dict, self.y.labels)
 
-class Identity(JaxParameterization):
+class Identity(BaseJaxParameterization):
 
     def make_map(self):
         def map(x):
             return x
         return self.y, map
 
-class LayerModuli(JaxParameterization):
+class LayerModuli(BaseJaxParameterization):
 
     def make_map(self):
         ## Get the mapping from labelled cell regions to DOFs
