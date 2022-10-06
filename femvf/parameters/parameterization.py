@@ -17,14 +17,16 @@ from petsc4py import PETSc
 from blockarray import blockvec as bv
 from blockarray import typing
 
-class Parameterization:
+class BaseParameterization:
     """
-    Map an alternative parameterization to a model's `props` parameters
+    Map a parameterization to a model's `.props` parameter set
 
     Parameters
     ----------
     model :
         The model to convert parameters to
+    out_default :
+        A vector of constants/defaults for `model.props`
     kwargs : optional
         Additional keyword arguments needed to specify the parameterization.
         These will vary depending on the specific parameterization.
@@ -32,10 +34,9 @@ class Parameterization:
     Attributes
     ----------
     model : femvf.model.ForwardModel
-    constants : tuple
-        A dictionary of labeled constants to values
-    bvector : np.ndarray
-        The BlockVector representation of the parameterization
+    x, y : bv.BlockVector
+        Prototype `BlockVectors` of the input (parameterization) and output
+        (`model.props`) attribute, respectively
     """
 
     def __init__(
@@ -49,6 +50,94 @@ class Parameterization:
 
         self._y_vec = out_default
         assert out_default.labels == model.props.labels
+
+    @property
+    def x(self):
+        """
+        Return a prototype input vector for the parameterization
+        """
+        raise NotImplementedError()
+        # return self._x_vec
+
+    @property
+    def y(self):
+        """
+        Return a prototype/default output vector for the parameterization
+        """
+        return self._y_vec
+
+    def apply(self, x: bv.BlockVector) -> bv.BlockVector:
+        """
+        Map the parameterization `x` to a `model.props` vector
+
+        Parameters
+        ----------
+        x : bv.BlockVector
+            The input parameterization
+
+        Returns
+        -------
+        y : bv.BlockVector
+            The output `model.props` vector
+        """
+        raise NotImplementedError()
+
+    def apply_vjp(
+            self,
+            x: bv.BlockVector,
+            dx: bv.BlockVector
+        ) -> bv.BlockVector:
+        """
+        Map a differential primal vector `dx` to a `dy` (`model.props`)
+
+        Parameters
+        ----------
+        dx : bv.BlockVector
+            The input parameterization
+
+        Returns
+        -------
+        dy : bv.BlockVector
+            The output primal vector in `model.props` space
+        """
+        raise NotImplementedError()
+
+    def apply_jvp(
+            self,
+            x: bv.BlockVector,
+            dx: bv.BlockVector
+        ) -> bv.BlockVector:
+        """
+        Map a dual vector `hy` (in `model.props` space) to a dual vector `hx`
+
+        Parameters
+        ----------
+        hy : bv.BlockVector
+            The input dual vector in `model.props` space
+
+        Returns
+        -------
+        hx : bv.BlockVector
+            The output dual vector in `x` space
+        """
+        raise NotImplementedError()
+
+class JaxParameterization(BaseParameterization):
+    """
+    Map an alternative parameterization to a model's `props` parameters
+
+    The map here must be automatically defined through a `make_map` function
+    which uses `jax` to create output vector
+    """
+
+    def __init__(
+            self,
+            model: Union[DynModel, TranModel],
+            out_default: bv.BlockVector,
+            *args,
+            **kwargs
+        ):
+        super().__init__(model, out_default, *args, **kwargs)
 
         self._x_vec, self.map = self.make_map()
         # self._x_labels = self._x_vec.labels
@@ -68,6 +157,9 @@ class Parameterization:
         return self._y_vec
 
     def make_map(self):
+        """
+        Return a prototype input vector and `jax` function that performs the map
+        """
         raise NotImplementedError()
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
@@ -94,14 +186,14 @@ class Parameterization:
         y_dict = jax.jvp(self.map, x_dict, dx_dict)
         return dict_to_bvec(y_dict, self.y.labels)
 
-class Identity(Parameterization):
+class Identity(JaxParameterization):
 
     def make_map(self):
         def map(x):
             return x
         return self.y, map
 
-class LayerModuli(Parameterization):
+class LayerModuli(JaxParameterization):
 
     def make_map(self):
         ## Get the mapping from labelled cell regions to DOFs
