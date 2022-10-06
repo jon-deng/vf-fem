@@ -48,7 +48,7 @@ class BaseParameterization:
         ):
         self.model = model
 
-        self._y_vec = out_default
+        self._y_vec = bv.convert_subtype_to_numpy(out_default)
         assert out_default.labels == model.props.labels
 
     @property
@@ -139,7 +139,8 @@ class BaseJaxParameterization(BaseParameterization):
         ):
         super().__init__(model, out_default, *args, **kwargs)
 
-        self._x_vec, self.map = self.make_map()
+        _x_vec, self.map = self.make_map()
+        self._x_vec = bv.convert_subtype_to_numpy(_x_vec)
         # self._x_labels = self._x_vec.labels
 
     @property
@@ -175,7 +176,8 @@ class BaseJaxParameterization(BaseParameterization):
         """
         x_dict = bvec_to_dict(x)
         hy_dict = bvec_to_dict(hy)
-        hx_dict = jax.vjp(self.map, (x_dict,), (hy_dict,))
+        _, vjp_fun = jax.vjp(self.map, x_dict)
+        hx_dict = vjp_fun(hy_dict)[0]
         return dict_to_bvec(hx_dict, self.x.labels)
 
     def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
@@ -183,8 +185,8 @@ class BaseJaxParameterization(BaseParameterization):
         """
         x_dict = bvec_to_dict(x)
         dx_dict = bvec_to_dict(dx)
-        y_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
-        return dict_to_bvec(y_dict, self.y.labels)
+        _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
+        return dict_to_bvec(dy_dict, self.y.labels)
 
 class Identity(BaseJaxParameterization):
 
@@ -222,7 +224,7 @@ class LayerModuli(BaseJaxParameterization):
         return in_vec, map
 
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
-    return {label: subvec for label, subvec in x.items()}
+    return {label: subvec for label, subvec in x.sub_items()}
 
 def dict_to_bvec(
         y: Mapping[str, np.ndarray],
