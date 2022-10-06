@@ -21,7 +21,7 @@ from .taylor import taylor_convergence
 
 class TestParameterization:
 
-    @pytest.fixture
+    @pytest.fixture()
     def model(self) -> Union[BaseDynamicalModel, BaseTransientModel]:
         """
         Return the model to test
@@ -35,12 +35,14 @@ class TestParameterization:
         )
         return model
 
+    @pytest.fixture()
     def params(self, model):
         """
         Return the parameterization to test
         """
         return parameterization.LayerModuli(model, model.props)
 
+    @pytest.fixture()
     def x(self, params):
         """
         Return the linearization point for the parameterization
@@ -49,6 +51,7 @@ class TestParameterization:
         ret_x[:] = 1
         return ret_x
 
+    @pytest.fixture()
     def dx(self, params):
         """
         Return the perturbation direction for the parameterization
@@ -57,6 +60,7 @@ class TestParameterization:
         ret_dx[:] = 1e-2
         return ret_dx
 
+    @pytest.fixture()
     def hy(self, params):
         """
         Return a dual vector for the model properties
