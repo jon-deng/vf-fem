@@ -85,6 +85,26 @@ class BaseParameterization:
     def apply_vjp(
             self,
             x: bv.BlockVector,
+            hy: bv.BlockVector
+        ) -> bv.BlockVector:
+        """
+        Map a dual vector `hy` (in `model.props` space) to a dual vector `hx`
+
+        Parameters
+        ----------
+        hy : bv.BlockVector
+            The input dual vector in `model.props` space
+
+        Returns
+        -------
+        hx : bv.BlockVector
+            The output dual vector in `x` space
+        """
+        raise NotImplementedError()
+
+    def apply_jvp(
+            self,
+            x: bv.BlockVector,
             dx: bv.BlockVector
         ) -> bv.BlockVector:
         """
@@ -99,26 +119,6 @@ class BaseParameterization:
         -------
         dy : bv.BlockVector
             The output primal vector in `model.props` space
-        """
-        raise NotImplementedError()
-
-    def apply_jvp(
-            self,
-            x: bv.BlockVector,
-            dx: bv.BlockVector
-        ) -> bv.BlockVector:
-        """
-        Map a dual vector `hy` (in `model.props` space) to a dual vector `hx`
-
-        Parameters
-        ----------
-        hy : bv.BlockVector
-            The input dual vector in `model.props` space
-
-        Returns
-        -------
-        hx : bv.BlockVector
-            The output dual vector in `x` space
         """
         raise NotImplementedError()
 
@@ -170,13 +170,13 @@ class BaseJaxParameterization(BaseParameterization):
         y_dict = self.map(x_dict)
         return dict_to_bvec(y_dict, self.y.labels)
 
-    def apply_vjp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
+    def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
         """
         """
         x_dict = bvec_to_dict(x)
-        dx_dict = bvec_to_dict(dx)
-        y_dict = jax.vjp(self.map, x_dict, dx_dict)
-        return dict_to_bvec(y_dict, self.y.labels)
+        hy_dict = bvec_to_dict(hy)
+        hx_dict = jax.vjp(self.map, x_dict, hy_dict)
+        return dict_to_bvec(hx_dict, self.x.labels)
 
     def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
         """
