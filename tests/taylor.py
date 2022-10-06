@@ -6,7 +6,7 @@ import numpy as np
 
 # import blockarray.linalg as bla
 
-def taylor_convergence(x0, dx, res, jac, norm=None):
+def taylor_convergence(x0, dx, f, jac, norm=None):
     """
     Test the Taylor convergence of a linearization
     """
@@ -15,8 +15,8 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
 
     # Start with the largest step and move to original
     alphas = 2**np.arange(4)[::-1]
-    res_ns = [res(x0+alpha*dx) for alpha in alphas]
-    res_0 = res(x0)
+    res_ns = [f(x0+alpha*dx) for alpha in alphas]
+    res_0 = f(x0)
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = jac(x0, dx)
