@@ -175,7 +175,7 @@ class BaseJaxParameterization(BaseParameterization):
         """
         x_dict = bvec_to_dict(x)
         hy_dict = bvec_to_dict(hy)
-        hx_dict = jax.vjp(self.map, x_dict, hy_dict)
+        hx_dict = jax.vjp(self.map, (x_dict,), (hy_dict,))
         return dict_to_bvec(hx_dict, self.x.labels)
 
     def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
@@ -183,7 +183,7 @@ class BaseJaxParameterization(BaseParameterization):
         """
         x_dict = bvec_to_dict(x)
         dx_dict = bvec_to_dict(dx)
-        y_dict = jax.jvp(self.map, x_dict, dx_dict)
+        y_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
         return dict_to_bvec(y_dict, self.y.labels)
 
 class Identity(BaseJaxParameterization):
