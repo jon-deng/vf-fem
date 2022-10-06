@@ -2,6 +2,7 @@
 Contains definitions of parametrizations. These objects should provide a mapping from their specific parameters to standardized parameters of the forward model, as well as the derivative of the map.
 """
 
+from multiprocessing.sharedctypes import Value
 from typing import Mapping, Union, Optional, Tuple
 
 import numpy as np
@@ -11,6 +12,7 @@ import dolfin as dfn
 import ufl
 from femvf.models.transient.base import BaseTransientModel as TranModel
 from femvf.models.dynamical.base import BaseDynamicalModel as DynModel
+from femvf.models.assemblyutils import CachedFormAssembler
 from femvf import meshutils
 from petsc4py import PETSc
 
@@ -121,6 +123,77 @@ class BaseParameterization:
             The output primal vector in `model.props` space
         """
         raise NotImplementedError()
+
+class TractionShape(BaseParameterization):
+    def __init__(
+            self,
+            model: Union[DynModel, TranModel],
+            out_default: bv.BlockVector,
+            *args,
+            **kwargs
+        ):
+
+        super().__init__(model, out_default)
+
+        # The input vector simply renames the mesh displacement vector
+        _x_vec = bv.convert_subtype_to_numpy(model.props.copy())
+        x_subvecs = _x_vec.sub_blocks
+        x_labels = list(_x_vec.labels[0])
+        try:
+            ii = x_labels.index('umesh')
+        except ValueError as err:
+            raise ValueError("model properties does not contain a shape") from err
+
+        x_labels[ii] = 'tmesh'
+        self._x_vec = bv.BlockVector(x_subvecs, labels=(tuple(x_labels),))
+
+        ## Define the stiffness matrix that maps medial surface tractions to mesh displacements
+        fspace = model.solid.forms['fspace.vector']
+        bc_dir = model.solid.forms['bc.dirichlet']
+        dx = model.solid.forms['measure.dx']
+        ds = model.solid.forms['measure.ds_traction']
+
+        tmesh = dfn.Function(fspace)
+        trial = dfn.TrialFunction(fspace)
+        test = dfn.TestFunction(fspace)
+
+        lmbda, mu = dfn.Constant(1.0), dfn.Constant(1.0)
+        strain = 1/2*(ufl.grad(trial) + ufl.grad(trial).T)
+        test_strain = 1/2*(ufl.grad(test) + ufl.grad(test).T)
+        form_bi = ufl.inner(
+            2*mu*strain + lmbda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0]),
+            test_strain
+        ) * dx
+
+        mat_k = dfn.assemble(form_bi, tensor=dfn.PETScMatrix())
+
+        form_rhs = ufl.inner(tmesh, test)*ds
+        assem_rhs = CachedFormAssembler(form_rhs)
+
+        bc_dir.apply(mat_k)
+        bc_dir.zero_columns(mat_k, assem_rhs())
+
+        self.mat = mat_k
+        self.assem_rhs = assem_rhs
+        self.umesh = dfn.Function(fspace)
+        self.tmesh = tmesh
+
+    def apply(self, x: bv.BlockVector) -> bv.BlockVector:
+        """
+        Return the corresponding `self.model.props` vector
+        """
+        x_dict = bvec_to_dict(x)
+        y_dict = x_dict.copy()
+
+        # Assemble the RHS for the given medial surface traction
+        self.tmesh.vector()[:] = x_dict['tmesh']
+        rhs = self.assem_rhs()
+
+        # Solve for the mesh displacement
+        dfn.solve(self.mat, self.umesh.vector(), rhs)
+        y_dict['umesh'][:] = self.umesh.vector()[:]
+        return dict_to_bvec(y_dict, self.y.labels)
+
 
 class BaseJaxParameterization(BaseParameterization):
     """
