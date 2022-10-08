@@ -58,8 +58,8 @@ class BaseParameterization:
         """
         Return a prototype input vector for the parameterization
         """
-        raise NotImplementedError()
-        # return self._x_vec
+        # raise NotImplementedError()
+        return self._x_vec
 
     @property
     def y(self):
@@ -147,7 +147,10 @@ class TractionShape(BaseParameterization):
         x_labels[ii] = 'tmesh'
         self._x_vec = bv.BlockVector(x_subvecs, labels=(tuple(x_labels),))
 
-        ## Define the stiffness matrix that maps medial surface tractions to mesh displacements
+        ## Define the stiffness matrix and traction sensitivity matrices that
+        # The two maps are
+        # dF/du : sensitivity of residual to mesh displacement
+        # dF/dt : sensitivity of residual to medial surface tractions
         fspace = model.solid.forms['fspace.vector']
         bc_dir = model.solid.forms['bc.dirichlet']
         dx = model.solid.forms['measure.dx']
@@ -160,39 +163,88 @@ class TractionShape(BaseParameterization):
         lmbda, mu = dfn.Constant(1.0), dfn.Constant(1.0)
         strain = 1/2*(ufl.grad(trial) + ufl.grad(trial).T)
         test_strain = 1/2*(ufl.grad(test) + ufl.grad(test).T)
-        form_bi = ufl.inner(
+        form_dF_du = ufl.inner(
             2*mu*strain + lmbda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0]),
             test_strain
         ) * dx
+        mat_dF_du = dfn.assemble(
+            form_dF_du,
+            tensor=dfn.PETScMatrix(),
+            keep_diagonal=True
+        )
 
-        mat_k = dfn.assemble(form_bi, tensor=dfn.PETScMatrix())
+        form_dF_dt = ufl.inner(trial, test)*ds
+        mat_dF_dt = dfn.assemble(
+            form_dF_dt,
+            tensor=dfn.PETScMatrix(),
+            keep_diagonal=True
+        )
 
-        form_rhs = ufl.inner(tmesh, test)*ds
-        assem_rhs = CachedFormAssembler(form_rhs)
+        for mat in (mat_dF_du, mat_dF_dt):
+            bc_dir.apply(mat)
+            bc_dir.zero_columns(mat, tmesh.vector(), diagonal_value=1.0)
 
-        bc_dir.apply(mat_k)
-        bc_dir.zero_columns(mat_k, assem_rhs())
-
-        self.mat = mat_k
-        self.assem_rhs = assem_rhs
+        self.mat_dF_du = mat_dF_du
+        self.mat_dF_dt = mat_dF_dt
         self.umesh = dfn.Function(fspace)
         self.tmesh = tmesh
+
+    def _set_y_defaults_from_x(self, x: bv.BlockVector, y: bv.BlockVector):
+        x_dict = bvec_to_dict(x)
+        y_dict = bvec_to_dict(y)
+
+        for key, val in x_dict.items():
+            if key in y_dict:
+                y_dict[key][:] = val
+
+        return x_dict, y_dict
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
         Return the corresponding `self.model.props` vector
         """
-        x_dict = bvec_to_dict(x)
-        y_dict = x_dict.copy()
+        self.x[:] = x
+        x_dict, y_dict = self._set_y_defaults_from_x(self.x, self.y)
 
         # Assemble the RHS for the given medial surface traction
         self.tmesh.vector()[:] = x_dict['tmesh']
-        rhs = self.assem_rhs()
+        rhs = self.mat_dF_dt * self.tmesh.vector()
 
         # Solve for the mesh displacement
-        dfn.solve(self.mat, self.umesh.vector(), rhs)
+        dfn.solve(self.mat_dF_du, self.umesh.vector(), rhs, 'lu')
         y_dict['umesh'][:] = self.umesh.vector()[:]
         return dict_to_bvec(y_dict, self.y.labels)
+
+    def apply_vjp(self, x, hy):
+        """
+        Return the corresponding `self.model.props` vector
+        """
+        self.y[:] = hy
+        hy_dict, hx_dict = self._set_y_defaults_from_x(self.y, self.x)
+
+        # Assemble the RHS for the given medial surface traction
+        self.umesh.vector()[:] = hy_dict['umesh']
+
+        # Solve for the mesh displacement
+        dfn.solve(self.mat_dF_du, self.tmesh.vector(), self.umesh.vector(), 'lu')
+        hx_dict['tmesh'][:] = self.mat_dF_dt*self.tmesh.vector()
+        return dict_to_bvec(hx_dict, self.x.labels)
+
+    def apply_jvp(self, x, dx) -> bv.BlockVector:
+        """
+        Return the corresponding `self.model.props` vector
+        """
+        self.x[:] = dx
+        dx_dict, dy_dict = self._set_y_defaults_from_x(self.x, self.y)
+
+        # Assemble the RHS for the given medial surface traction
+        self.tmesh.vector()[:] = dx_dict['tmesh']
+        rhs = self.mat_dF_dt * self.tmesh.vector()
+
+        # Solve for the mesh displacement
+        dfn.solve(self.mat_dF_du, self.umesh.vector(), rhs, 'lu')
+        dy_dict['umesh'][:] = self.umesh.vector()[:]
+        return dict_to_bvec(dy_dict, self.y.labels)
 
 
 class BaseJaxParameterization(BaseParameterization):

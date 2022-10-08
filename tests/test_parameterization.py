@@ -7,6 +7,7 @@ from typing import Union
 import pytest
 
 import numpy as np
+import dolfin as dfn
 
 from femvf.models.transient.base import BaseTransientModel
 from femvf.models.dynamical.base import BaseDynamicalModel
@@ -18,6 +19,8 @@ from femvf.parameters import parameterization
 from blockarray import (blockvec as bv, linalg as blinalg)
 
 from .taylor import taylor_convergence
+
+dfn.set_log_level(50)
 
 class TestParameterization:
 
@@ -35,12 +38,18 @@ class TestParameterization:
         )
         return model
 
-    @pytest.fixture()
-    def params(self, model):
+    @pytest.fixture(
+        params=[
+            # parameterization.Identity,
+            parameterization.TractionShape
+        ]
+    )
+    def params(self, model, request):
         """
         Return the parameterization to test
         """
-        return parameterization.Identity(model, model.props)
+        Param = request.param
+        return Param(model, model.props)
 
     @pytest.fixture()
     def x(self, params):
@@ -80,7 +89,7 @@ class TestParameterization:
         Test `params.apply_jvp`
         """
         def f(x):
-            return params.apply(x)
+            return params.apply(x).copy()
 
         def jac(x, dx):
             return params.apply_jvp(x, dx)
