@@ -57,7 +57,7 @@ class TestParameterization:
         Return the linearization point for the parameterization
         """
         ret_x = params.x.copy()
-        ret_x[:] = 1
+        ret_x[:] = 5
         return ret_x
 
     @pytest.fixture()
@@ -82,7 +82,9 @@ class TestParameterization:
         """
         Test `params.apply`
         """
-        params.apply(x)
+        x.print_summary()
+        y = params.apply(x)
+        y.print_summary()
 
     def test_apply_jvp(self, params, x, dx):
         """

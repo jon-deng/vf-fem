@@ -16,7 +16,7 @@ from femvf.models.assemblyutils import CachedFormAssembler
 from femvf import meshutils
 from petsc4py import PETSc
 
-from blockarray import blockvec as bv
+from blockarray import blockvec as bv, blockarray as ba
 from blockarray import typing
 
 class BaseParameterization:
@@ -50,7 +50,11 @@ class BaseParameterization:
         ):
         self.model = model
 
-        self._y_vec = bv.convert_subtype_to_numpy(out_default)
+        _y_vec = ba.zeros(model.props.bshape)
+        self._y_vec = bv.BlockVector(
+            _y_vec.sub_blocks, labels=model.props.labels
+        )
+        self._y_vec[:] = out_default
         assert out_default.labels == model.props.labels
 
     @property
@@ -136,9 +140,9 @@ class TractionShape(BaseParameterization):
         super().__init__(model, out_default)
 
         # The input vector simply renames the mesh displacement vector
-        _x_vec = bv.convert_subtype_to_numpy(model.props.copy())
+        _x_vec = ba.zeros(model.props.f_bshape)
         x_subvecs = _x_vec.sub_blocks
-        x_labels = list(_x_vec.labels[0])
+        x_labels = list(model.props.labels[0])
         try:
             ii = x_labels.index('umesh')
         except ValueError as err:
@@ -265,7 +269,9 @@ class BaseJaxParameterization(BaseParameterization):
         super().__init__(model, out_default, *args, **kwargs)
 
         _x_vec, self.map = self.make_map()
-        self._x_vec = bv.convert_subtype_to_numpy(_x_vec)
+        x_subvecs = ba.zeros(_x_vec.f_bshape).sub_blocks
+        x_labels = _x_vec.labels
+        self._x_vec = bv.BlockVector(x_subvecs, labels=x_labels)
         # self._x_labels = self._x_vec.labels
 
     @property
