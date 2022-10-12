@@ -40,7 +40,7 @@ class TestParameterization:
 
     @pytest.fixture(
         params=[
-            # parameterization.Identity,
+            parameterization.Identity,
             parameterization.TractionShape
         ]
     )

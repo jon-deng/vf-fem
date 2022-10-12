@@ -2,7 +2,6 @@
 Contains definitions of parametrizations. These objects should provide a mapping from their specific parameters to standardized parameters of the forward model, as well as the derivative of the map.
 """
 
-from multiprocessing.sharedctypes import Value
 from typing import Mapping, Union, Optional, Tuple
 
 import numpy as np
@@ -40,22 +39,6 @@ class BaseParameterization:
         Prototype `BlockVectors` of the input (parameterization) and output
         (`model.props`) attribute, respectively
     """
-
-    def __init__(
-            self,
-            model: Union[DynModel, TranModel],
-            out_default: bv.BlockVector,
-            *args,
-            **kwargs
-        ):
-        self.model = model
-
-        _y_vec = ba.zeros(model.props.bshape)
-        self._y_vec = bv.BlockVector(
-            _y_vec.sub_blocks, labels=model.props.labels
-        )
-        self._y_vec[:] = out_default
-        assert out_default.labels == model.props.labels
 
     @property
     def x(self):
@@ -128,15 +111,31 @@ class BaseParameterization:
         """
         raise NotImplementedError()
 
-class TractionShape(BaseParameterization):
+
+class BaseDolfinParameterization(BaseParameterization):
+    def __init__(
+            self,
+            model: Union[DynModel, TranModel],
+            out_default: bv.BlockVector
+        ):
+        self.model = model
+
+        _y_vec = ba.zeros(model.props.bshape)
+        self._y_vec = bv.BlockVector(
+            _y_vec.sub_blocks, labels=model.props.labels
+        )
+        self._y_vec[:] = out_default
+        assert out_default.labels == model.props.labels
+
+        # NOTE: Subclasses have to supply a `self._x_vec` attribute
+
+class TractionShape(BaseDolfinParameterization):
     def __init__(
             self,
             model: Union[DynModel, TranModel],
             out_default: bv.BlockVector,
-            *args,
-            **kwargs
+            lame_lambda=1.0, lame_mu=1.0
         ):
-
         super().__init__(model, out_default)
 
         # The input vector simply renames the mesh displacement vector
@@ -164,7 +163,7 @@ class TractionShape(BaseParameterization):
         trial = dfn.TrialFunction(fspace)
         test = dfn.TestFunction(fspace)
 
-        lmbda, mu = dfn.Constant(1.0), dfn.Constant(1.0)
+        lmbda, mu = dfn.Constant(lame_lambda), dfn.Constant(lame_mu)
         strain = 1/2*(ufl.grad(trial) + ufl.grad(trial).T)
         test_strain = 1/2*(ufl.grad(test) + ufl.grad(test).T)
         form_dF_du = ufl.inner(
@@ -262,33 +261,22 @@ class BaseJaxParameterization(BaseParameterization):
     def __init__(
             self,
             model: Union[DynModel, TranModel],
-            out_default: bv.BlockVector,
-            *args,
-            **kwargs
+            out_default: bv.BlockVector
         ):
-        super().__init__(model, out_default, *args, **kwargs)
-
-        _x_vec, self.map = self.make_map()
+        _x_vec, self.map = self.make_map(model)
         x_subvecs = ba.zeros(_x_vec.f_bshape).sub_blocks
         x_labels = _x_vec.labels
         self._x_vec = bv.BlockVector(x_subvecs, labels=x_labels)
         # self._x_labels = self._x_vec.labels
 
-    @property
-    def x(self):
-        """
-        Return a prototype input vector for the parameterization
-        """
-        return self._x_vec
+        _y_vec = ba.zeros(model.props.bshape)
+        self._y_vec = bv.BlockVector(
+            _y_vec.sub_blocks, labels=model.props.labels
+        )
+        self._y_vec[:] = out_default
 
-    @property
-    def y(self):
-        """
-        Return a prototype/default output vector for the parameterization
-        """
-        return self._y_vec
-
-    def make_map(self):
+    @staticmethod
+    def make_map(model):
         """
         Return a prototype input vector and `jax` function that performs the map
         """
@@ -321,22 +309,26 @@ class BaseJaxParameterization(BaseParameterization):
 
 class Identity(BaseJaxParameterization):
 
-    def make_map(self):
+    @staticmethod
+    def make_map(model):
         def map(x):
             return x
-        return self.y, map
+
+        y = model.props
+        return y, map
 
 class LayerModuli(BaseJaxParameterization):
 
-    def make_map(self):
+    @staticmethod
+    def make_map(model):
         ## Get the mapping from labelled cell regions to DOFs
-        E = self.model.solid.forms['coeff.prop.emod']
+        E = model.solid.forms['coeff.prop.emod']
         cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(
-            self.model.solid.forms,
+            model.solid.forms,
             E.function_space()
         )
 
-        _y_dict = bvec_to_dict(self.y)
+        _y_dict = bvec_to_dict(model.props)
         def map(x):
             y_dict = _y_dict.copy()
             new_emod = jnp.array(y_dict['emod'], copy=True)
