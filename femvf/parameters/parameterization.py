@@ -158,10 +158,11 @@ class TractionShape(BaseDolfinParameterization):
         test = dfn.TestFunction(fspace)
 
         lmbda, mu = dfn.Constant(lame_lambda), dfn.Constant(lame_mu)
-        strain = 1/2*(ufl.grad(trial) + ufl.grad(trial).T)
+        trial_strain = 1/2*(ufl.grad(trial) + ufl.grad(trial).T)
         test_strain = 1/2*(ufl.grad(test) + ufl.grad(test).T)
+        dim = trial_strain.ufl_shape[0]
         form_dF_du = ufl.inner(
-            2*mu*strain + lmbda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0]),
+            2*mu*trial_strain + lmbda*ufl.tr(trial_strain)*ufl.Identity(dim),
             test_strain
         ) * dx
         mat_dF_du = dfn.assemble(
@@ -177,9 +178,10 @@ class TractionShape(BaseDolfinParameterization):
             keep_diagonal=True
         )
 
-        for mat in (mat_dF_du, mat_dF_dt):
-            bc_dir.apply(mat)
-            bc_dir.zero_columns(mat, tmesh.vector(), diagonal_value=1.0)
+        bc_dir.apply(mat_dF_du)
+        bc_dir.zero_columns(mat_dF_du, tmesh.vector(), diagonal_value=1.0)
+        bc_dir.apply(mat_dF_dt)
+        bc_dir.zero_columns(mat_dF_dt, tmesh.vector(), diagonal_value=0.0)
 
         self.mat_dF_du = mat_dF_du
         self.mat_dF_dt = mat_dF_dt
