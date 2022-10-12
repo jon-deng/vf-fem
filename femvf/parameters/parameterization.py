@@ -342,10 +342,7 @@ class LayerModuli(BaseJaxParameterization):
 class ConstantSubset(BaseJaxParameterization):
 
     @staticmethod
-    def make_map(model, **kwargs):
-        assert 'const_vals' in kwargs
-        const_vals = kwargs.pop('const_vals', {})
-
+    def make_map(model, const_vals={}):
         def map(x):
             y = x
             for key, val in const_vals.items():
