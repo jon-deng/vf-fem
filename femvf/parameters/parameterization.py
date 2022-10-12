@@ -26,8 +26,6 @@ class BaseParameterization:
     ----------
     model :
         The model to convert parameters to
-    out_default :
-        A vector of constants/defaults for `model.props`
     kwargs : optional
         Additional keyword arguments needed to specify the parameterization.
         These will vary depending on the specific parameterization.
@@ -115,8 +113,7 @@ class BaseParameterization:
 class BaseDolfinParameterization(BaseParameterization):
     def __init__(
             self,
-            model: Union[DynModel, TranModel],
-            out_default: bv.BlockVector
+            model: Union[DynModel, TranModel]
         ):
         self.model = model
 
@@ -124,8 +121,6 @@ class BaseDolfinParameterization(BaseParameterization):
         self._y_vec = bv.BlockVector(
             _y_vec.sub_blocks, labels=model.props.labels
         )
-        self._y_vec[:] = out_default
-        assert out_default.labels == model.props.labels
 
         # NOTE: Subclasses have to supply a `self._x_vec` attribute
 
@@ -133,10 +128,9 @@ class TractionShape(BaseDolfinParameterization):
     def __init__(
             self,
             model: Union[DynModel, TranModel],
-            out_default: bv.BlockVector,
             lame_lambda=1.0, lame_mu=1.0
         ):
-        super().__init__(model, out_default)
+        super().__init__(model)
 
         # The input vector simply renames the mesh displacement vector
         _x_vec = ba.zeros(model.props.f_bshape)
@@ -261,9 +255,9 @@ class BaseJaxParameterization(BaseParameterization):
     def __init__(
             self,
             model: Union[DynModel, TranModel],
-            out_default: bv.BlockVector
+            **kwargs
         ):
-        _x_vec, self.map = self.make_map(model)
+        _x_vec, self.map = self.make_map(model, **kwargs)
         x_subvecs = ba.zeros(_x_vec.f_bshape).sub_blocks
         x_labels = _x_vec.labels
         self._x_vec = bv.BlockVector(x_subvecs, labels=x_labels)
@@ -273,10 +267,9 @@ class BaseJaxParameterization(BaseParameterization):
         self._y_vec = bv.BlockVector(
             _y_vec.sub_blocks, labels=model.props.labels
         )
-        self._y_vec[:] = out_default
 
     @staticmethod
-    def make_map(model):
+    def make_map(model, **kwargs):
         """
         Return a prototype input vector and `jax` function that performs the map
         """
@@ -310,7 +303,7 @@ class BaseJaxParameterization(BaseParameterization):
 class Identity(BaseJaxParameterization):
 
     @staticmethod
-    def make_map(model):
+    def make_map(model, **kwargs):
         def map(x):
             return x
 
@@ -320,7 +313,7 @@ class Identity(BaseJaxParameterization):
 class LayerModuli(BaseJaxParameterization):
 
     @staticmethod
-    def make_map(model):
+    def make_map(model, **kwargs):
         ## Get the mapping from labelled cell regions to DOFs
         E = model.solid.forms['coeff.prop.emod']
         cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(
@@ -345,6 +338,22 @@ class LayerModuli(BaseJaxParameterization):
         in_vec = bv.BlockVector(subvecs, labels=labels)
 
         return in_vec, map
+
+class ConstantSubset(BaseJaxParameterization):
+
+    @staticmethod
+    def make_map(model, **kwargs):
+        assert 'const_vals' in kwargs
+        const_vals = kwargs.pop('const_vals', {})
+
+        def map(x):
+            y = x
+            for key, val in const_vals.items():
+                y[key] = val*np.ones(x[key].shape)
+            return x
+
+        y = model.props
+        return y, map
 
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}

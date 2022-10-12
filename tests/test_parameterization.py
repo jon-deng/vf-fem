@@ -41,7 +41,8 @@ class TestParameterization:
     @pytest.fixture(
         params=[
             parameterization.Identity,
-            parameterization.TractionShape
+            parameterization.TractionShape,
+            parameterization.ConstantSubset
         ]
     )
     def params(self, model, request):
@@ -49,7 +50,10 @@ class TestParameterization:
         Return the parameterization to test
         """
         Param = request.param
-        return Param(model, model.props)
+        kwargs = {}
+        if issubclass(Param, parameterization.ConstantSubset):
+            kwargs = {'const_vals': {'umesh': 0}}
+        return Param(model, **kwargs)
 
     @pytest.fixture()
     def x(self, params):
