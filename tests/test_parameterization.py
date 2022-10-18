@@ -40,8 +40,8 @@ class TestParameterization:
 
     @pytest.fixture(
         params=[
-            parameterization.Identity,
-            parameterization.TractionShape,
+            # parameterization.Identity,
+            # parameterization.TractionShape,
             parameterization.ConstantSubset
         ]
     )
@@ -52,7 +52,10 @@ class TestParameterization:
         Param = request.param
         kwargs = {}
         if issubclass(Param, parameterization.ConstantSubset):
-            kwargs = {'const_vals': {'umesh': 0}}
+            kwargs = {
+                'const_vals': {'umesh': 0},
+                'scale': {'emod': 1e-3}
+            }
         return Param(model, **kwargs)
 
     @pytest.fixture()

@@ -355,13 +355,23 @@ class ConstantSubset(BaseJaxParameterization):
 
     @staticmethod
     def make_map(model, const_vals=None, scale=None):
-        if scale is None:
-            scale = {key: 1 for key in model.props.labels[0]}
+        """
+        Return the x->y mapping function and prototype x vector
+        """
+        x = model.props
+
+        _scale = {key: 1.0 for key in x.labels[0]}
+        if scale is not None:
+            _scale.update(scale)
+        scale = _scale
 
         if const_vals is None:
             const_vals = {}
 
         def map(x):
+            """
+            Return the x->y mapping
+            """
             y = {}
             for key in x:
                 if key in const_vals:
@@ -369,9 +379,7 @@ class ConstantSubset(BaseJaxParameterization):
                 else:
                     y[key] = scale[key]*x[key]
             return y
-
-        y = model.props
-        return y, map
+        return x, map
 
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
