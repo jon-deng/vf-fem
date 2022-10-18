@@ -1,5 +1,8 @@
 """
-Contains definitions of parametrizations. These objects should provide a mapping from their specific parameters to standardized parameters of the forward model, as well as the derivative of the map.
+Contains definitions of parametrizations.
+
+These objects should mappings from a given parameter set to the standard
+properties of the forward model.
 """
 
 from typing import Mapping, Union, Optional, Tuple
@@ -342,14 +345,30 @@ class LayerModuli(BaseJaxParameterization):
         return in_vec, map
 
 class ConstantSubset(BaseJaxParameterization):
+    def __init__(
+            self,
+            model: Union[DynModel, TranModel],
+            const_vals=None,
+            scale=None
+        ):
+        super().__init__(model, const_vals=const_vals, scale=scale)
 
     @staticmethod
-    def make_map(model, const_vals={}):
+    def make_map(model, const_vals=None, scale=None):
+        if scale is None:
+            scale = {key: 1 for key in model.props.labels[0]}
+
+        if const_vals is None:
+            const_vals = {}
+
         def map(x):
-            y = x
-            for key, val in const_vals.items():
-                y[key] = val*np.ones(x[key].shape)
-            return x
+            y = {}
+            for key in x:
+                if key in const_vals:
+                    y[key] = const_vals[key]
+                else:
+                    y[key] = scale[key]*x[key]
+            return y
 
         y = model.props
         return y, map
