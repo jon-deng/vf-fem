@@ -365,7 +365,7 @@ class ConstantSubset(BaseJaxParameterization):
             y = {}
             for key in x:
                 if key in const_vals:
-                    y[key] = const_vals[key]
+                    y[key] = const_vals[key]*np.ones(x[key].shape)
                 else:
                     y[key] = scale[key]*x[key]
             return y
