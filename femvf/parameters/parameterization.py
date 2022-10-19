@@ -292,7 +292,9 @@ class BaseJaxParameterization(BaseParameterization):
         """
         """
         x_dict = bvec_to_dict(x)
-        hy_dict = bvec_to_dict(hy)
+        _hy = self.y.copy()
+        _hy[:] = hy
+        hy_dict = bvec_to_dict(_hy)
         _, vjp_fun = jax.vjp(self.map, x_dict)
         hx_dict = vjp_fun(hy_dict)[0]
         return dict_to_bvec(hx_dict, self.x.labels)
