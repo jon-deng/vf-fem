@@ -257,6 +257,49 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
     def assem(self, state, control, props):
         return np.array(self.project()[:])
 
+@doc_field_measure_params
+class XMomentum(BaseFieldMeasure):
+    """
+    Return x-momentum
+    """
+    def __init__(self, model, dx=None, fspace=None, **kwargs):
+        # The default `dx` measure should be a surface measure rather than
+        # volume measure as used in `BaseFieldMeasure`
+        if dx is None:
+            dx = model.solid.forms['measure.ds_traction']
+
+        super().__init__(model, dx, fspace, **kwargs)
+
+    def _init_expression(self):
+        forms = self.model.solid.forms
+        rho = forms['coeff.prop.rho']
+        velocity = forms['coeff.state.v1']
+        return ufl.inner(rho, velocity[0])
+
+    def assem(self, state, control, props):
+        return np.array(self.project()[:])
+
+@doc_field_measure_params
+class YMomentum(BaseFieldMeasure):
+    """
+    Return y-momentum
+    """
+    def __init__(self, model, dx=None, fspace=None, **kwargs):
+        # The default `dx` measure should be a surface measure rather than
+        # volume measure as used in `BaseFieldMeasure`
+        if dx is None:
+            dx = model.solid.forms['measure.dx']
+
+        super().__init__(model, dx, fspace, **kwargs)
+
+    def _init_expression(self):
+        forms = self.model.solid.forms
+        rho = forms['coeff.prop.rho']
+        velocity = forms['coeff.state.v1']
+        return ufl.inner(rho, velocity[1])
+
+    def assem(self, state, control, props):
+        return np.array(self.project()[:])
 
 ### Field integral type
 def doc_field_integral_measure_params(G: 'BaseFieldIntegralMeasure'):
