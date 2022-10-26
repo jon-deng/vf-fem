@@ -536,6 +536,13 @@ class SwellingKelvinVoigtWEpithelium(NodalContactSolid):
             solidforms.SwellingKelvinVoigtWEpithelium(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
+class SwellingKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
+    @staticmethod
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
+        return \
+            solidforms.SwellingKelvinVoigtWEpitheliumNoShape(
+                mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
+
 class Approximate3DKelvinVoigt(NodalContactSolid):
     PROPERTY_DEFAULTS = {
         'emod': 10e3 * PASCAL_TO_CGS,
