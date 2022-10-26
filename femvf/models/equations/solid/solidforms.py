@@ -757,6 +757,19 @@ def SwellingKelvinVoigtWEpithelium(
         base_form_definitions(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
 
+def SwellingKelvinVoigtWEpitheliumNoShape(
+    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+    return \
+        add_newmark_time_disc_form(
+        add_isotropic_membrane(
+        add_manual_contact_traction_form(
+        add_surface_pressure_form(
+        add_kv_viscous_form(
+        add_inertial_form(
+        add_isotropic_elastic_with_swelling_form(
+        base_form_definitions(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+
 def Approximate3DKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
     return \
