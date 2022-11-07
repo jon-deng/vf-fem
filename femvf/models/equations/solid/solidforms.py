@@ -45,22 +45,43 @@ def form_lin_iso_cauchy_stress(strain, emod, nu):
 
 def form_inf_strain(u):
     """
-    Returns the strain tensor for a displacement field.
+    Returns the strain tensor
 
     Parameters
     ----------
     u : dfn.TrialFunction, ufl.Argument
         Trial displacement field
     """
+    spp = 1/2 * (ufl.grad(u) + ufl.grad(u).T)
     if u.geometric_dimension() == 2:
-        spp = 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
         return ufl.as_tensor(
             [[spp[0, 0], spp[0, 1], 0],
             [spp[1, 0], spp[1, 1], 0],
             [        0,         0, 0]]
         )
     else:
-        return 1/2 * (ufl.nabla_grad(u) + ufl.nabla_grad(u).T)
+        return spp
+
+def form_lin_green_strain(u0, u):
+    """
+    Returns the linearized Green-Lagrange strain tensor
+
+    Parameters
+    ----------
+    u0 : dfn.TrialFunction, ufl.Argument
+        Displacement to linearize about
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    spp = 1/2*(ufl.grad(u0).T*ufl.grad(u) + ufl.grad(u0)*ufl.grad(u).T)
+    if u0.geometric_dimension() == 2:
+        return ufl.as_tensor(
+            [[spp[0, 0], spp[0, 1], 0],
+            [spp[1, 0], spp[1, 1], 0],
+            [        0,         0, 0]]
+        )
+    else:
+        return spp
 
 def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
     """
@@ -469,7 +490,7 @@ def add_isotropic_elastic_with_swelling_form(forms):
     strain_test = forms['test.strain']
     u = forms['coeff.state.u1']
 
-    lin_green_strain_test = ufl.grad(u).T * ufl.grad(forms['test.vector'])
+    lin_green_strain_test = form_lin_green_strain(u, forms['test.vector'])
 
     inf_strain = form_inf_strain(u)
     emod = dfn.Function(forms['fspace.scalar_dg0'])
