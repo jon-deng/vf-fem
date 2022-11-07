@@ -73,7 +73,7 @@ def form_lin_green_strain(u0, u):
     u : dfn.TrialFunction, ufl.Argument
         Trial displacement field
     """
-    spp = 1/2*(ufl.grad(u0).T*ufl.grad(u) + ufl.grad(u0)*ufl.grad(u).T)
+    spp = 1/2*(ufl.grad(u).T*ufl.grad(u0) + ufl.grad(u0).T*ufl.grad(u))
     if u0.geometric_dimension() == 2:
         return ufl.as_tensor(
             [[spp[0, 0], spp[0, 1], 0],
