@@ -65,15 +65,19 @@ def _add_static_docstring(func):
 def static_solid_configuration(
         model: slmodel.BaseTransientSolid,
         control: bv.BlockVector,
-        props: bv.BlockVector
+        props: bv.BlockVector,
+        state=None
     ) -> Tuple[bv.BlockVector, Info]:
     """
     Return the static state for a solid model
 
     """
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
-    state_n = model.state0.copy()
-    state_n[:] = 0.0
+    if state is None:
+        state_n = model.state0.copy()
+        state_n[:] = 0.0
+    else:
+        state_n = state
     model.set_fin_state(state_n)
     model.set_ini_state(state_n)
 
