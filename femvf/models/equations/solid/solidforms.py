@@ -468,6 +468,8 @@ def add_isotropic_elastic_with_swelling_form(forms):
     dx = forms['measure.dx']
     strain_test = forms['test.strain']
 
+    lin_green_strain_test = ufl.grad(u).T * ufl.grad(forms['test.vector'])
+
     u = forms['coeff.state.u1']
     inf_strain = form_inf_strain(u)
     emod = dfn.Function(forms['fspace.scalar_dg0'])
@@ -479,12 +481,14 @@ def add_isotropic_elastic_with_swelling_form(forms):
 
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     lame_mu = emod/2/(1+nu)
-    stress_elastic = (
-        (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-        - (lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(inf_strain.ufl_shape[0])
-    )
+    stress_0 = -(lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(inf_strain.ufl_shape[0])
+    delta_stress = (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+    stress_elastic = stress_0 + delta_stress
 
-    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
+    forms['form.un.f1uva'] += (
+        ufl.inner(stress_elastic, strain_test) * dx
+        + ufl.inner(stress_0, lin_green_strain_test) * dx
+    )
     forms['coeff.prop.emod'] = emod
     forms['coeff.prop.nu'] = nu
     forms['coeff.prop.v_swelling'] = v_swelling
