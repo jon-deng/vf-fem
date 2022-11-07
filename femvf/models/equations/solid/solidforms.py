@@ -574,7 +574,7 @@ def add_isotropic_elastic_with_swelling_form(forms):
     forms['coeff.prop.nu'] = nu
     forms['coeff.prop.v_swelling'] = v_swelling
     forms['coeff.prop.m_swelling'] = m_swelling
-    forms['expr.stress_elastic'] = stress_elastic
+    forms['expr.stress_elastic'] = stress_total
 
     # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     # lame_mu = emod/2/(1+nu)
@@ -615,7 +615,7 @@ def add_manual_contact_traction_form(forms):
     return forms
 
 # Surface membrane forms
-def add_isotropic_membrane(forms):
+def add_isotropic_membrane(forms, large_def=False):
     # Define the 8th order projector to get the planar strain component
     ds_traction = forms['measure.ds_traction']
     _n = forms['geom.facet_normal']
@@ -627,7 +627,13 @@ def add_isotropic_membrane(forms):
     i, j, k, l = ufl.indices(4)
 
     vector_test = forms['test.vector']
-    strain_test = form_strain_inf(vector_test)
+    u = forms['coeff.state.u1']
+    if large_def:
+        strain = form_strain_green_lagrange(u)
+        strain_test = form_strain_lin_green_lagrange(u, forms['test.vector'])
+    else:
+        strain = forms['expr.kin.inf_strain']
+        strain_test = form_strain_inf(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
     emod = dfn.Function(forms['fspace.scalar_dg0'])
@@ -635,12 +641,12 @@ def add_isotropic_membrane(forms):
     nu = dfn.Constant(0.45)
     mu = emod/2/(1+nu)
     lmbda = emod*nu/(1+nu)/(1-2*nu)
-    inf_strain = forms['expr.kin.inf_strain']
-    inf_strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * inf_strain[j, k], (i, l))
+
+    strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * strain[j, k], (i, l))
 
     # account for ambiguous 0/0 when emod=0
     lmbda_pp = ufl.conditional(ufl.eq(emod, 0), 0, 2*mu*lmbda/(lmbda+2*mu))
-    stress_pp = 2*mu*inf_strain_pp + lmbda_pp*ufl.tr(inf_strain_pp)*(ident-nn)
+    stress_pp = 2*mu*strain_pp + lmbda_pp*ufl.tr(strain_pp)*(ident-nn)
 
     res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
 
@@ -850,7 +856,7 @@ def SwellingKelvinVoigtWEpitheliumNoShape(
         add_inertial_form(
         add_isotropic_elastic_with_swelling_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))), large_def=True))
 
 def Approximate3DKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
