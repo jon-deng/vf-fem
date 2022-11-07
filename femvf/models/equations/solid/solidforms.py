@@ -43,7 +43,51 @@ def form_lin_iso_cauchy_stress(strain, emod, nu):
     lame_mu = emod/2/(1+nu)
     return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0])
 
-def form_inf_strain(u):
+
+def form_def_grad(u):
+    """
+    Returns the deformation gradient
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    spp = ufl.grad(u)
+    if u.geometric_dimension() == 2:
+        return ufl.as_tensor(
+            [[spp[0, 0], spp[0, 1], 0],
+            [spp[1, 0], spp[1, 1], 0],
+            [        0,         0, 0]]
+        ) + ufl.Identity(3)
+    else:
+        return spp + ufl.Identity(3)
+
+def form_def_cauchy_green(u):
+    """
+    Returns the right cauchy-green deformation tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    def_grad = form_def_grad(u)
+    return def_grad.T*def_grad
+
+def form_strain_green_lagrange(u):
+    """
+    Returns the strain tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    C = form_def_cauchy_green(u)
+    return 1/2*(C - ufl.Identity(3))
+
+def form_strain_inf(u):
     """
     Returns the strain tensor
 
@@ -62,9 +106,23 @@ def form_inf_strain(u):
     else:
         return spp
 
-def form_lin_green_strain(u0, u):
+def form_strain_lin_green_lagrange(u, du):
     """
     Returns the linearized Green-Lagrange strain tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Displacement to linearize about
+    du : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    E = form_strain_green_lagrange(u)
+    return ufl.derivative(E, u, du)
+
+def form_lin2_green_strain(u0, u):
+    """
+    Returns the double linearized Green-Lagrange strain tensor
 
     Parameters
     ----------
@@ -82,6 +140,7 @@ def form_lin_green_strain(u0, u):
         )
     else:
         return spp
+
 
 def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
     """
@@ -368,7 +427,7 @@ def base_form_definitions(
     vector_test = dfn.TestFunction(vector_fspace)
     scalar_trial = dfn.TrialFunction(scalar_fspace)
     scalar_test = dfn.TestFunction(scalar_fspace)
-    strain_test = form_inf_strain(vector_test)
+    strain_test = form_strain_inf(vector_test)
 
     # Dirichlet BCs
     bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
@@ -412,8 +471,8 @@ def base_form_definitions(
         'coeff.state.a1': a1,
         'coeff.ref.x': xref,
 
-        'expr.kin.inf_strain': form_inf_strain(u1),
-        'expr.kin.inf_strain_rate': form_inf_strain(v1),
+        'expr.kin.inf_strain': form_strain_inf(u1),
+        'expr.kin.inf_strain_rate': form_strain_inf(v1),
 
         'form.un.f1uva': 0.0,
 
@@ -446,10 +505,10 @@ def add_inertial_form(forms):
 def add_isotropic_elastic_form(forms):
     dx = forms['measure.dx']
     vector_test = forms['test.vector']
-    strain_test = form_inf_strain(vector_test)
+    strain_test = form_strain_inf(vector_test)
 
     u = forms['coeff.state.u1']
-    inf_strain = form_inf_strain(u)
+    inf_strain = form_strain_inf(u)
     emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = dfn.Constant(0.45)
     stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
@@ -471,7 +530,7 @@ def add_isotropic_elastic_with_incomp_swelling_form(forms):
     emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = 0.5
     u = forms['coeff.state.u1']
-    inf_strain = form_inf_strain(u)
+    inf_strain = form_strain_inf(u)
     v_swelling = dfn.Function(forms['fspace.scalar_dg0'])
     k_swelling = dfn.Constant(1.0)
     v_swelling.vector()[:] = 1.0
@@ -490,9 +549,10 @@ def add_isotropic_elastic_with_swelling_form(forms):
     strain_test = forms['test.strain']
     u = forms['coeff.state.u1']
 
-    lin_green_strain_test = form_lin_green_strain(u, forms['test.vector'])
+    green_strain_test = form_strain_lin_green_lagrange(u, forms['test.vector'])
+    green_strain = form_strain_green_lagrange(u)
 
-    inf_strain = form_inf_strain(u)
+    inf_strain = form_strain_inf(u)
     emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = dfn.Constant(0.45)
     v_swelling = dfn.Function(forms['fspace.scalar_dg0'])
@@ -503,12 +563,12 @@ def add_isotropic_elastic_with_swelling_form(forms):
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     lame_mu = emod/2/(1+nu)
     stress_initial = -(lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(inf_strain.ufl_shape[0])
-    stress_elastic = (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+    # stress_elastic = (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+    stress_elastic = (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(green_strain, emod, nu)
     stress_total = stress_initial + stress_elastic
 
     forms['form.un.f1uva'] += (
-        ufl.inner(stress_total, strain_test) * dx
-        + ufl.inner(stress_initial, lin_green_strain_test) * dx
+        ufl.inner(stress_total, green_strain_test) * dx
     )
     forms['coeff.prop.emod'] = emod
     forms['coeff.prop.nu'] = nu
@@ -567,7 +627,7 @@ def add_isotropic_membrane(forms):
     i, j, k, l = ufl.indices(4)
 
     vector_test = forms['test.vector']
-    strain_test = form_inf_strain(vector_test)
+    strain_test = form_strain_inf(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
     emod = dfn.Function(forms['fspace.scalar_dg0'])
@@ -601,7 +661,7 @@ def add_incompressible_epithelium_membrane(forms):
     i, j, k, l = ufl.indices(4)
 
     vector_test = forms['test.vector']
-    strain_test = form_inf_strain(vector_test)
+    strain_test = form_strain_inf(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
     emod_membrane = dfn.Function(forms['fspace.scalar_dg0'])
@@ -647,7 +707,7 @@ def add_kv_viscous_form(forms):
     v = forms['coeff.state.v1']
 
     eta = dfn.Function(forms['fspace.scalar_dg0'])
-    inf_strain_rate = form_inf_strain(v)
+    inf_strain_rate = form_strain_inf(v)
     stress_visco = eta*inf_strain_rate
 
     forms['form.un.f1uva'] += ufl.inner(stress_visco, strain_test) * dx
