@@ -574,7 +574,10 @@ def add_isotropic_elastic_with_swelling_form(forms):
     forms['coeff.prop.nu'] = nu
     forms['coeff.prop.v_swelling'] = v_swelling
     forms['coeff.prop.m_swelling'] = m_swelling
-    forms['expr.stress_elastic'] = stress_total
+    # Make this the cauchy stress
+    F = form_def_grad(u)
+    J = ufl.det(F)
+    forms['expr.stress_elastic'] = (1/J)*F*stress_total*F.T
 
     # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     # lame_mu = emod/2/(1+nu)
