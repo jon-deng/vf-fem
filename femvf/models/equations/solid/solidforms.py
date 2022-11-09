@@ -859,7 +859,7 @@ def SwellingKelvinVoigtWEpitheliumNoShape(
         add_inertial_form(
         add_isotropic_elastic_with_swelling_form(
         base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))), large_def=True))
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))), large_def=False))
 
 def Approximate3DKelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
