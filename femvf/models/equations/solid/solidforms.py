@@ -545,39 +545,38 @@ def add_isotropic_elastic_with_incomp_swelling_form(forms):
     return forms
 
 def add_isotropic_elastic_with_swelling_form(forms):
+    """
+    Add an effect for isotropic elasticity with a swelling field
+    """
     dx = forms['measure.dx']
-    strain_test = forms['test.strain']
     u = forms['coeff.state.u1']
 
-    green_strain_test = form_strain_lin_green_lagrange(u, forms['test.vector'])
-    green_strain = form_strain_green_lagrange(u)
+    DE = form_strain_lin_green_lagrange(u, forms['test.vector'])
+    E = form_strain_green_lagrange(u)
 
-    inf_strain = form_strain_inf(u)
     emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = dfn.Constant(0.45)
-    v_swelling = dfn.Function(forms['fspace.scalar_dg0'])
-    v_swelling.vector()[:] = 1.0
-    m_swelling = dfn.Function(forms['fspace.scalar_dg0'])
-    m_swelling.vector()[:] = 0.0
+    v = dfn.Function(forms['fspace.scalar_dg0'])
+    v.vector()[:] = 1.0
+    m = dfn.Function(forms['fspace.scalar_dg0'])
+    m.vector()[:] = 0.0
 
-    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-    lame_mu = emod/2/(1+nu)
-    stress_initial = -(lame_lambda+2/3*lame_mu)*(v_swelling-1)*ufl.Identity(inf_strain.ufl_shape[0])
-    # stress_elastic = (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-    stress_elastic = (m_swelling*(v_swelling-1) + 1)*form_lin_iso_cauchy_stress(green_strain, emod, nu)
-    stress_total = stress_initial + stress_elastic
+    E_v = v**(-2/3)*E + 1/2*(v**(-2/3)-1)*ufl.Identity(3)
+    # Here write the factor $m(v)*v^(-2/3)$ as $m(v)*v^(-4/3) * v^(2/3)$
+    # Then approximate the function $\hat{m} = m(v)*v^(-4/3)$ with a linear
+    # approximation with slope `m`
+    mhat = (m*(v-1) + 1)
+    S = mhat*v**(2/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
 
-    forms['form.un.f1uva'] += (
-        ufl.inner(stress_total, green_strain_test) * dx
-    )
+    forms['form.un.f1uva'] += ufl.inner(S, DE) * dx
     forms['coeff.prop.emod'] = emod
     forms['coeff.prop.nu'] = nu
-    forms['coeff.prop.v_swelling'] = v_swelling
-    forms['coeff.prop.m_swelling'] = m_swelling
+    forms['coeff.prop.v_swelling'] = v
+    forms['coeff.prop.m_swelling'] = m
     # Make this the cauchy stress
     F = form_def_grad(u)
     J = ufl.det(F)
-    forms['expr.stress_elastic'] = (1/J)*F*stress_total*F.T
+    forms['expr.stress_elastic'] = (1/J)*F*S*F.T
 
     # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     # lame_mu = emod/2/(1+nu)
