@@ -99,14 +99,16 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             mats, labels=self.fluid.control.labels+self.solid.state.labels
         )
 
-        dflarea_dumesh = dflarea_dslu.copy()
+        # Sensitivity of fluid area wrt, mesh displacement (if present)
         mats = [
             [subops.zero_mat(nrow, ncol) for ncol in self.solid.props.bshape[0]]
             for nrow in self.fluid.control.bshape[0]
         ]
-        row_flarea = self.fluid.control.labels[0].index('area')
-        col_slu = self.solid.props.labels[0].index('umesh')
-        mats[row_flarea][col_slu] = dflarea_dumesh
+        if 'umesh' in self.solid.props:
+            dflarea_dumesh = dflarea_dslu.copy()
+            row_flarea = self.fluid.control.labels[0].index('area')
+            col_slu = self.solid.props.labels[0].index('umesh')
+            mats[row_flarea][col_slu] = dflarea_dumesh
         self.dflcontrol_dslprops = bv.BlockMatrix(
             mats, labels=self.fluid.control.labels+self.solid.props.labels
         )
