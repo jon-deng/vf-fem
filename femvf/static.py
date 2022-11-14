@@ -66,7 +66,8 @@ def static_solid_configuration(
         model: slmodel.BaseTransientSolid,
         control: bv.BlockVector,
         props: bv.BlockVector,
-        state=None
+        state=None,
+        linear_solver: str='manual'
     ) -> Tuple[bv.BlockVector, Info]:
     """
     Return the static state for a solid model
@@ -78,27 +79,57 @@ def static_solid_configuration(
         state_n[:] = 0.0
     else:
         state_n = state
+
     model.set_fin_state(state_n)
     model.set_ini_state(state_n)
-
     model.set_control(control)
     model.set_props(props)
 
-    jac = dfn.derivative(
-        model.forms['form.un.f1uva'],
-        model.forms['coeff.state.u1']
-    )
-    dfn.solve(
-        model.forms['form.un.f1uva'] == 0.0,
-        model.forms['coeff.state.u1'],
-        bcs=[model.forms['bc.dirichlet']],
-        J=jac,
-        solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
-    )
+    if linear_solver == 'manual':
+        def iterative_subproblem(x_n):
+            model.solid.forms['coeff.state.u1'].vector()[:] = x_n
+            dx = model.solid.forms['coeff.state.u1'].vector()
 
-    state_n['u'] = model.state1['u']
+            jac = dfn.derivative(
+                model.forms['form.un.f1uva'],
+                model.forms['coeff.state.u1']
+            )
 
-    info = {}
+            def assem_res():
+                res = dfn.assemble(model.forms['form.un.f1uva'])
+                model.forms['bc.dirichlet'].apply(res)
+                return res
+
+            def solve_res(res):
+                A = dfn.assemble(jac)
+                model.forms['bc.dirichlet'].apply(A)
+                dfn.solve(A, dx, res)
+                return dx
+
+            return assem_res, solve_res
+
+        def norm(res_n):
+            return res_n.norm('l2')
+
+        u, info = nonlineq.newton_solve(state_n.sub['u'], iterative_subproblem, norm=norm)
+        state_n['u'] = u
+    elif linear_solver == 'automatic':
+        jac = dfn.derivative(
+            model.forms['form.un.f1uva'],
+            model.forms['coeff.state.u1']
+        )
+        dfn.solve(
+            model.forms['form.un.f1uva'] == 0.0,
+            model.forms['coeff.state.u1'],
+            bcs=[model.forms['bc.dirichlet']],
+            J=jac,
+            solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
+        )
+        state_n['u'] = model.state1['u']
+        info = {}
+    else:
+        raise ValueError(f"Unknown `linear_solver`: '{linear_solver}'")
+
     return state_n, info
 
 # TODO: Refactor this to simply set appropriate blocks to a vector from value
