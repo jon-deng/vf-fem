@@ -562,11 +562,11 @@ def add_isotropic_elastic_with_swelling_form(forms):
     m.vector()[:] = 0.0
 
     E_v = v**(-2/3)*E + 1/2*(v**(-2/3)-1)*ufl.Identity(3)
-    # Here write the factor $m(v)*v^(-2/3)$ as $m(v)*v^(-4/3) * v^(2/3)$
-    # Then approximate the function $\hat{m} = m(v)*v^(-4/3)$ with a linear
+    # Here write the factor $m(v)*v^(-2/3)$ as $m(v)*v^(-1) * v^(1/3)$
+    # Then approximate the function $\hat{m} = m(v)*v^(-1)$ with a linear
     # approximation with slope `m`
     mhat = (m*(v-1) + 1)
-    S = mhat*v**(2/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
+    S = mhat*v**(1/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
 
     forms['form.un.f1uva'] += ufl.inner(S, DE) * dx
     forms['coeff.prop.emod'] = emod
