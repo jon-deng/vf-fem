@@ -66,9 +66,9 @@ def create_dynamical_residual_class(Parent, res_type):
             submats, shape = flatten_nested_dict(submats, labels)
             return bla.BlockMatrix(submats, shape, labels)
 
-        def assem_dres_dprops(self):
+        def assem_dres_dprop(self):
             submats = jax.jacfwd(self.__res, argnums=2)(*self.__res_args)
-            labels = self.state.labels + self.props.labels
+            labels = self.state.labels + self.prop.labels
             submats, shape = flatten_nested_dict(submats, labels)
             return bla.BlockMatrix(submats, shape, labels)
 
@@ -76,7 +76,7 @@ def create_dynamical_residual_class(Parent, res_type):
 
 class BaseDynamical1DFluid(BaseDynamicalModel):
 
-    def __init__(self, s, res, state, control, props):
+    def __init__(self, s, res, state, control, prop):
         self.s = s
 
         self._res = jax.jit(res)
@@ -92,24 +92,24 @@ class BaseDynamical1DFluid(BaseDynamicalModel):
         self.control = bla.BlockVector(list(control.values()), labels=[list(control.keys())])
         self.dcontrol = self.control.copy()
 
-        self.props = bla.BlockVector(list(props.values()), labels=[list(props.keys())])
-        self.dprops = self.props.copy()
+        self.prop = bla.BlockVector(list(prop.values()), labels=[list(prop.keys())])
+        self.dprop = self.prop.copy()
 
         self.primals = (
             blockvec_to_dict(self.state),
             blockvec_to_dict(self.control),
-            blockvec_to_dict(self.props)
+            blockvec_to_dict(self.prop)
         )
         self.tangents = (
             blockvec_to_dict(self.dstate),
             blockvec_to_dict(self.dcontrol),
-            blockvec_to_dict(self.dprops)
+            blockvec_to_dict(self.dprop)
         )
 
         self.dstate[:] = 0.0
         self.dstatet[:] = 0.0
         self.dcontrol[:] = 0.0
-        self.dprops[:] = 0.0
+        self.dprop[:] = 0.0
 
     def set_state(self, state):
         self.state[:] = state
@@ -120,8 +120,8 @@ class BaseDynamical1DFluid(BaseDynamicalModel):
     def set_control(self, control):
         self.control[:] = control
 
-    def set_props(self, props):
-        self.props[:] = props
+    def set_prop(self, prop):
+        self.prop[:] = prop
 
 
     def set_dstate(self, dstate):

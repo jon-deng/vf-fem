@@ -85,9 +85,9 @@ class BaseDynamicalSolid(BaseDynamicalModel):
         self.dcontrol = bv.BlockVector((self.forms['coeff.dfsi.p1'].vector(),), labels=[('p',)])
         self.dcontrol = bv.convert_subtype_to_petsc(self.dcontrol)
 
-        self.props = self.get_properties_vec(set_default=True)
-        self.props = bv.convert_subtype_to_petsc(self.props)
-        self.set_props(self.props)
+        self.prop = self.get_properties_vec(set_default=True)
+        self.prop = bv.convert_subtype_to_petsc(self.prop)
+        self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
             key: CachedFormAssembler(self.forms[key]) for key in self.forms
@@ -121,17 +121,17 @@ class BaseDynamicalSolid(BaseDynamicalModel):
     def set_control(self, control):
         self.control[:] = control
 
-    def set_props(self, props):
-        for key in props.labels[0]:
+    def set_prop(self, prop):
+        for key in prop.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = depack_form_coefficient_function(self.forms['coeff.prop.'+key])
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
             if isinstance(coefficient, dfn.function.constant.Constant):
-                coefficient.assign(dfn.Constant(np.squeeze(props[key])))
+                coefficient.assign(dfn.Constant(np.squeeze(prop[key])))
             else:
-                coefficient.vector()[:] = props[key]
+                coefficient.vector()[:] = prop[key]
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates
         if 'coeff.prop.umesh' in self.forms:
@@ -232,20 +232,20 @@ class SolidDynamicalSystem(BaseDynamicalSolid):
         return bm.BlockMatrix(mats, labels=self.state.labels+self.control.labels)
 
     @cast_output_bmat_to_petsc
-    def assem_dres_dprops(self):
+    def assem_dres_dprop(self):
         nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
-            [subops.zero_mat(nu, prop_subvec.size) for prop_subvec in self.props],
-            [subops.zero_mat(nv, prop_subvec.size) for prop_subvec in self.props]]
+            [subops.zero_mat(nu, prop_subvec.size) for prop_subvec in self.prop],
+            [subops.zero_mat(nv, prop_subvec.size) for prop_subvec in self.prop]]
 
-        j_emod = self.props.labels[0].index('emod')
+        j_emod = self.prop.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.df1uva_demod'].assemble()
 
-        j_shape = self.props.labels[0].index('umesh')
+        j_shape = self.prop.labels[0].index('umesh')
         mats[0][j_shape] = self.cached_form_assemblers['form.bi.df1uva_dumesh'].assemble()
 
         return bm.BlockMatrix(
-            mats, labels=(self.state.labels[0], self.props.labels[0]))
+            mats, labels=(self.state.labels[0], self.prop.labels[0]))
 
 class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
     """
@@ -329,21 +329,21 @@ class LinearizedSolidDynamicalSystem(BaseDynamicalSolid):
         return bm.BlockMatrix(mats, labels=(['u', 'v'], ['g']))
 
     @cast_output_bmat_to_petsc
-    def assem_dres_dprops(self):
+    def assem_dres_dprop(self):
         nu, nv = self.state['u'].size, self.state['v'].size
         mats = [
-            [subops.zero_mat(nu, subvec.size) for subvec in self.props],
-            [subops.zero_mat(nv, subvec.size) for subvec in self.props]
+            [subops.zero_mat(nu, subvec.size) for subvec in self.prop],
+            [subops.zero_mat(nv, subvec.size) for subvec in self.prop]
         ]
 
-        j_emod = self.props.labels[0].index('emod')
+        j_emod = self.prop.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.ddf1uva_demod'].assemble()
 
-        j_shape = self.props.labels[0].index('umesh')
+        j_shape = self.prop.labels[0].index('umesh')
         mats[0][j_shape] = self.cached_form_assemblers['form.bi.ddf1uva_dumesh'].assemble()
 
         return bm.BlockMatrix(
-            mats, labels=self.state.labels+self.props.labels
+            mats, labels=self.state.labels+self.prop.labels
         )
 
 

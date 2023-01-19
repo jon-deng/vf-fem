@@ -105,7 +105,7 @@ def linearization(model):
         model_coupl = None
 
     ## Model properties
-    props0 = model.props.copy()
+    props0 = model.prop.copy()
     if model_solid is not None:
         props0['emod'] = 5e3*10
         props0['rho'] = 1.0
@@ -207,7 +207,7 @@ def perturbation(model):
         _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
 
     ## Properties perturbation
-    dprops = model.props.copy()
+    dprops = model.prop.copy()
     dprops[:] = 0
 
     if model_solid is not None:
@@ -258,7 +258,7 @@ def set_linearization(model: dynbase.BaseDynamicalModel, linearization):
     model.set_state(state)
     model.set_statet(statet)
     model.set_control(control)
-    model.set_props(props)
+    model.set_prop(props)
 
 def set_and_assemble(x, set_x, assem):
     set_x(x)
@@ -340,8 +340,8 @@ def test_assem_dres_dprops(model, linearization, dprops):
     """
     set_linearization(model, linearization)
     state, statet, control, props = linearization
-    res = lambda state: set_and_assemble(state, model.set_props, model.assem_res)
-    jac = lambda state: set_and_assemble(state, model.set_props, model.assem_dres_dprops)
+    res = lambda state: set_and_assemble(state, model.set_prop, model.assem_res)
+    jac = lambda state: set_and_assemble(state, model.set_prop, model.assem_dres_dprop)
 
     _test_taylor(props, dprops, res, jac)
 

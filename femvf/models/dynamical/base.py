@@ -1,5 +1,9 @@
 """
-Contains a basic nonlinear dynamical system class definition
+Generic nonlinear dynamical system class
+
+The class `BaseDynamicalModel` mainly specifies the attributes/methods that
+specific dynamical system classes must contain but does not contain any
+implementation details.
 """
 
 from typing import TypeVar, Union
@@ -27,7 +31,7 @@ class BaseDynamicalModel:
     def set_control(self, control: BlockVec):
         raise NotImplementedError()
 
-    def set_props(self, props: BlockVec):
+    def set_prop(self, prop: BlockVec):
         raise NotImplementedError()
 
 
@@ -53,5 +57,5 @@ class BaseDynamicalModel:
     def assem_dres_dcontrol(self) -> BlockMat:
         raise NotImplementedError()
 
-    def assem_dres_dprops(self) -> BlockMat:
+    def assem_dres_dprop(self) -> BlockMat:
         raise NotImplementedError()
