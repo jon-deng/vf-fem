@@ -62,7 +62,7 @@ class ForwardConfig(unittest.TestCase):
         y_gap = 0.01
         y_midline = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
-        props = model.props
+        props = model.prop
 
         props['ymid'][0] = y_midline
 
@@ -115,7 +115,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the properties
         y_gap = 0.01
 
-        props = model.props
+        props = model.prop
         # fl_props = model.fluid.get_properties_vec(set_default=True)
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
@@ -222,7 +222,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the properties
         y_gap = 0.01
 
-        props = model.props.copy()
+        props = model.prop.copy()
         props['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
 
         xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
@@ -373,7 +373,7 @@ class TestIntegrate(ForwardConfig):
         ## Specify the test change in model parameters
         dini_state = model.state0.copy()
         dcontrol = model.control.copy()
-        dprops = model.props.copy()
+        dprops = model.prop.copy()
         dprops[:] = 0.0
         # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
         dtimes = vec.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
@@ -414,7 +414,6 @@ class TestIntegrate(ForwardConfig):
 
 def proc_time_and_glottal_width(model, f):
     t = f.get_times()
-    props = f.get_props()
 
     glottal_width_sharp = TimeSeries(solidfunc.MinGlottalWidth(model))
     y = glottal_width_sharp(f)

@@ -42,7 +42,12 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         increasing streamwise direction since the fluid mesh numbering is ordered like that too.
     fsi_coordinates
     """
-    def __init__(self, solid: tsmd.BaseTransientSolid, fluid: tfmd.BaseTransientQuasiSteady1DFluid, solid_fsi_dofs, fluid_fsi_dofs):
+    def __init__(
+            self,
+            solid: tsmd.BaseTransientSolid,
+            fluid: tfmd.BaseTransientQuasiSteady1DFluid,
+            solid_fsi_dofs, fluid_fsi_dofs
+        ):
         self.solid = solid
         self.fluid = fluid
 
@@ -54,7 +59,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.control = self.fluid.control[1:].copy()
 
         _self_properties = bv.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
-        self.props = bv.concatenate_vec([self.solid.props, self.fluid.props, _self_properties])
+        self.prop = bv.concatenate_vec([self.solid.prop, self.fluid.prop, _self_properties])
 
         ## FSI related stuff
         self._solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
@@ -175,11 +180,11 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         for key, value in control.sub_items():
             self.fluid.control[key][:] = value
 
-    def set_props(self, props):
-        self.props[:] = props
+    def set_prop(self, prop):
+        self.prop[:] = prop
 
-        self.solid.set_props(props[:self.solid.props.size])
-        self.fluid.set_props(props[self.solid.props.size:-1])
+        self.solid.set_prop(prop[:self.solid.prop.size])
+        self.fluid.set_prop(prop[self.solid.prop.size:-1])
 
 # TODO: The `assem_*` type methods are incomplete as I haven't had to use them
 class ExplicitFSIModel(BaseTransientFSIModel):
@@ -203,7 +208,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF + self.solid.state1.sub['u'])[1::2])
+        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1.sub['u'])[1::2])
         fl_control = self.fluid.control.copy()
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
         self.fluid.set_control(fl_control)
@@ -347,7 +352,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         self.solid.set_fin_state(uva1)
 
         # For both implicit/explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.props['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
+        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
         fl_control = self.fluid.control
         self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)
@@ -553,7 +558,7 @@ class FSAIModel(BaseTransientFSIModel):
         fl_control['psub'][:] = control['psub']
         self.fluid.set_control(fl_control)
 
-    def set_props(self, props):
+    def set_prop(self, props):
         sl_nblock = len(self.solid.props.size)
         fl_nblock = len(self.fluid.props.size)
         ac_nblock = len(self.acoustic.props.size)

@@ -17,9 +17,9 @@ from blockarray import blockvec as bv
 from femvf import statefile as sf
 from femvf.models.transient.base import BaseTransientModel
 
-class BaseStateMeasure():
+class BaseStateMeasure:
     """
-    Post-process an output from known `(state, control, props)`
+    Post-process an output from known `(state, control, prop)`
 
     Parameters
     ----------
@@ -36,17 +36,17 @@ class BaseStateMeasure():
             self,
             state: Optional[bv.BlockVector]=None,
             control: Optional[bv.BlockVector]=None,
-            props: Optional[bv.BlockVector]=None
+            prop: Optional[bv.BlockVector]=None
         ):
         model = self.model
 
         for vec, setter in zip(
-                (props, control, state),
-                (model.set_props, model.set_control, model.set_fin_state)
+                (prop, control, state),
+                (model.set_prop, model.set_control, model.set_fin_state)
             ):
             if vec is not None:
                 setter(vec)
-        return self.assem(state, control, props)
+        return self.assem(state, control, prop)
 
     @property
     def model(self):
@@ -56,7 +56,7 @@ class BaseStateMeasure():
             self,
             state: bv.BlockVector,
             control: bv.BlockVector,
-            props: bv.BlockVector
+            prop: bv.BlockVector
         ):
         raise NotImplementedError("Method must be implemented by subclasses")
 
@@ -66,7 +66,7 @@ class BaseDerivedStateMeasure(BaseStateMeasure):
 
     Parameters
     ----------
-    func : Callable with signature `func(state, control, props)`
+    func : Callable with signature `func(state, control, prop)`
     """
 
     def __init__(self, func: BaseStateMeasure):
@@ -77,7 +77,7 @@ class BaseDerivedStateMeasure(BaseStateMeasure):
     def func(self):
         return self._func
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         raise NotImplementedError("This function must be implemented by child classes")
 
 
@@ -146,11 +146,11 @@ class TimeSeries(BaseDerivedStateHistoryMeasure):
         if ns is None:
             ns = range(f.size)
 
-        props = f.get_props()
-        self.func.model.set_props(props)
+        prop = f.get_prop()
+        self.func.model.set_prop(prop)
 
         signals = [
-            self.func(f.get_state(ii), f.get_control(ii), props=None)
+            self.func(f.get_state(ii), f.get_control(ii), prop=None)
             for ii in ns
         ]
         return np.array(signals)
@@ -177,13 +177,13 @@ class TimeSeriesStats(BaseDerivedStateHistoryMeasure):
         return self.mean(f, ns=ns)
 
     def mean(self, f: sf.StateFile, ns: Optional[Iterable]=None):
-        props = f.get_props()
-        self.func.model.set_props(props)
+        props = f.get_prop()
+        self.func.model.set_prop(props)
 
         return np.mean(self.ts(f, ns=ns), axis=0)
 
     def std(self, f: sf.StateFile, ns: Optional[Iterable]=None):
-        props = f.get_props()
-        self.func.model.set_props(props)
+        props = f.get_prop()
+        self.func.model.set_prop(props)
 
         return np.std(self.ts(f, ns=ns), axis=0)

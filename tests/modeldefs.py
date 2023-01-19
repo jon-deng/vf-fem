@@ -34,13 +34,13 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     y_coll_offset = 0.01
     zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
 
-    fluid_props = model.fluid.props.copy()
+    fluid_props = model.fluid.prop.copy()
     fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
     fluid_props['zeta_amin'][()] = zeta_amin
     fluid_props['zeta_sep'][()] = zeta_sep
     fluid_props['zeta_ainv'][()] = zeta_ainv
 
-    solid_props = model.solid.props.copy()
+    solid_props = model.solid.prop.copy()
     solid_props['emod'][:] = emod
     solid_props['rayleigh_m'][()] = 0.0
     solid_props['rayleigh_k'][()] = 3e-4
@@ -70,7 +70,7 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     y_coll_offset = 0.0025
     zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
 
-    fluid_props = model.fluid.props.copy()
+    fluid_props = model.fluid.prop.copy()
     fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
     fluid_props['zeta_amin'][()] = zeta_amin
     fluid_props['zeta_sep'][()] = zeta_sep
@@ -78,7 +78,7 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     fluid_props['ygap_lb'][()] = y_coll_offset
     # fluid_props['ygap_lb'][()] = -10000
 
-    solid_props = model.solid.props.copy()
+    solid_props = model.solid.prop.copy()
     solid_props['emod'][:] = emod
     solid_props['eta'][()] = 3.0
     solid_props['kcontact'][()] = k_coll

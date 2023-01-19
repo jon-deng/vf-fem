@@ -83,7 +83,7 @@ def static_solid_configuration(
     model.set_fin_state(state_n)
     model.set_ini_state(state_n)
     model.set_control(control)
-    model.set_props(props)
+    model.set_prop(props)
 
     if linear_solver == 'manual':
         def iterative_subproblem(x_n):

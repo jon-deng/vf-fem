@@ -61,7 +61,7 @@ class StateFile:
     # NOTE: Should you refactor the init to use more basic variables instead of
     # a `BaseTransientModel` object?
     # - when a `StateFile` is being created (mode='w' or 'a') you need a
-    # mesh + prototoype state, control, props vectors (for the shape information)
+    # mesh + prototoype state, control, prop vectors (for the shape information)
     # - when a `StateFile` is being read (mode='r' or 'a') you don't need
     # any of those, although it is convenient to have them
     def __init__(
@@ -72,7 +72,7 @@ class StateFile:
             NCHUNK: int=100,
             **kwargs
         ):
-        self.model = model
+        self.model: BaseTransientModel = model
         if isinstance(fname, str):
             self.file = h5py.File(fname, mode=mode, **kwargs)
         elif isinstance(fname, h5py.Group):
@@ -174,7 +174,7 @@ class StateFile:
 
         self.init_state()
         self.init_control()
-        self.init_props()
+        self.init_prop()
 
         self.init_solver_info()
 
@@ -223,10 +223,10 @@ class StateFile:
                 dtype=np.float64
             )
 
-    def init_props(self):
+    def init_prop(self):
         properties_group = self.file.require_group('properties')
 
-        bvec = self.model.props
+        bvec = self.model.prop
         for name, ndof in zip(bvec.labels[0], bvec.bshape[0]):
             properties_group.require_dataset(name, (ndof,), dtype=np.float64)
 
@@ -259,7 +259,7 @@ class StateFile:
             dset.resize(dset.shape[0]+1, axis=0)
             dset[-1] = value
 
-    def append_props(self, properties: bv.BlockVector):
+    def append_prop(self, properties: bv.BlockVector):
         """
         Append properties vector to the file.
 
@@ -372,8 +372,8 @@ class StateFile:
 
         return control
 
-    def get_props(self) -> bv.BlockVector[np.ndarray]:
-        properties = self.model.props.copy()
+    def get_prop(self) -> bv.BlockVector[np.ndarray]:
+        properties = self.model.prop.copy()
 
         for name, vec in zip(properties.keys(), properties.blocks):
             dset = self.file[f'properties/{name}']

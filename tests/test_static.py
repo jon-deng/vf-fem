@@ -31,7 +31,7 @@ control['psub'][:] = 2000.0 * 10
 control['psup'][:] = 0.0 * 10
 
 ### Specify properties
-props = model.props.copy()
+props = model.prop.copy()
 
 mesh = model.solid.forms['mesh.mesh']
 cell_func = model.solid.forms['mesh.cell_function']
@@ -72,7 +72,7 @@ props['area_lb'][:] = 2*y_contact_offset
 
 ### Set the control and properties for the model
 model.set_control(control)
-model.set_props(props)
+model.set_prop(props)
 breakpoint()
 
 def test_static_solid_configuration():
@@ -85,7 +85,7 @@ def test_static_solid_configuration():
     _p[model.fsimap.dofs_solid[:10]] = 500*10
     dfn.as_backend_type(solid.control['p'])[:] = _p
 
-    x_n, info = static.static_solid_configuration(solid, solid.control, solid.props)
+    x_n, info = static.static_solid_configuration(solid, solid.control, solid.prop)
     print('\n', x_n.norm())
     print(info)
 

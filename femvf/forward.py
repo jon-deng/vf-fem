@@ -21,7 +21,7 @@ def integrate(
         f: sf.StateFile,
         ini_state: bv.BlockVector,
         controls: List[bv.BlockVector],
-        props: bv.BlockVector,
+        prop: bv.BlockVector,
         times: bv.BlockVector,
         idx_meas: Optional[np.ndarray]=None,
         newton_solver_prm: Optional[Mapping[str, Any]]=None,
@@ -40,7 +40,7 @@ def integrate(
     controls : list(BlockVector)
         List of control BlockVector with on entry for each integration time. If there is only one
         control in the list, then the controls are considered to be constant in time.
-    props : BlockVector
+    prop : BlockVector
         Properties vector for the system
     times : BlockVector
         Array of discrete integration times. Each time point is one integration point so the time
@@ -62,8 +62,10 @@ def integrate(
     # Check integration times are specified correctly
     times_vec = times[0]
     if times_vec[-1] < times_vec[0]:
-        raise ValueError("The final time point must be greater or equal to the initial one."
-                         f"The input intial/final times were {times_vec[0]}/{times_vec[-1]}")
+        raise ValueError(
+            "The final time point must be greater or equal to the initial one."
+            f"The input intial/final times were {times_vec[0]}/{times_vec[-1]}"
+        )
     if times_vec.size < 1:
         raise ValueError("There must be at least 1 time integration points.")
 
@@ -74,15 +76,13 @@ def integrate(
             f, ini_state, controls[0], times_vec[0],
             {'num_iter': 0, 'abs_err': 0, 'rel_err': 0}
         )
-        f.append_props(props)
+        f.append_prop(prop)
         if 0 in idx_meas:
             f.append_meas_index(0)
 
     # Integrate the system over the specified times and record final state for each step
-    # model.set_ini_state(ini_state)
-    # model.set_props(props)
     fin_state, step_info = integrate_steps(
-        model, f, ini_state, controls, props, times_vec,
+        model, f, ini_state, controls, prop, times_vec,
         idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write,
         use_tqdm=use_tqdm
     )
@@ -101,7 +101,7 @@ def integrate_extend(
     """
     See `integrate`
     """
-    props = f.get_props()
+    prop = f.get_prop()
     _controls = controls[1:] if len(controls) > 1 else controls
 
     N = f.size
@@ -110,7 +110,7 @@ def integrate_extend(
     times += ini_time
 
     fin_state, step_info = integrate_steps(
-        model, f, ini_state, _controls, props, times.vecs[0],
+        model, f, ini_state, _controls, prop, times.vecs[0],
         idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write
     )
     return fin_state, step_info
@@ -120,7 +120,7 @@ def integrate_steps(
         f: sf.StateFile,
         ini_state: bv.BlockVector,
         controls: List[bv.BlockVector],
-        props: bv.BlockVector,
+        prop: bv.BlockVector,
         times: bv.BlockVector,
         idx_meas: Optional[np.ndarray]=None,
         newton_solver_prm: Optional[Mapping[str, Any]]=None,
@@ -136,7 +136,7 @@ def integrate_steps(
     # Setting the properties is mandatory because they are constant for each
     # time step (only need to set it once at the beginnning)
     state0 = ini_state
-    model.set_props(props)
+    model.set_prop(prop)
     step_info = {}
 
     time_indices = tqdm(range(1, times.size)) if use_tqdm else range(1, times.size)
@@ -145,7 +145,7 @@ def integrate_steps(
         dt = times[n] - times[n-1]
 
         state1, step_info = integrate_step(
-            model, state0, control1, props, dt, options=newton_solver_prm
+            model, state0, control1, prop, dt, options=newton_solver_prm
         )
         # if n%100 == 0:
         #     print(step_info['num_iter'])
@@ -165,7 +165,7 @@ def integrate_linear(
         f: sf.StateFile,
         dini_state: bv.BlockVector,
         dcontrols: List[bv.BlockVector],
-        dprops: bv.BlockVector,
+        dprop: bv.BlockVector,
         dtimes: bv.BlockVector
     ) -> bv.BlockVector:
     """
@@ -181,7 +181,7 @@ def integrate_linear(
         The transient model to integrate
     f :
         A statefile containing a history of states to linearize about
-    dini_state, dcontrols, dprops :
+    dini_state, dcontrols, dprop :
         The linear perturbation in initial state, controls, and properties
     dtimes :
         The linear perturbation in times
@@ -190,7 +190,7 @@ def integrate_linear(
     -------
     dfin_state : vec.BlockVector
     """
-    model.set_props(f.get_props())
+    model.set_prop(f.get_prop())
 
     dfin_state_n = dini_state
     ts = f.get_times()
@@ -209,7 +209,7 @@ def integrate_linear(
         _ddt = dtimes[0][n]-dtimes[0][n-1]
         dres_n = (model.apply_dres_dstate0(_dini_state)
                   + model.apply_dres_dcontrol(_dcontrol)
-                  + model.apply_dres_dp(dprops)
+                  + model.apply_dres_dp(dprop)
                   + model.apply_dres_ddt(_ddt))
         dfin_state_n = model.solve_dres_dstate1(-dres_n)
 
@@ -220,9 +220,9 @@ def integrate_step(
         model: BaseTransientModel,
         ini_state: bv.BlockVector,
         control: bv.BlockVector,
-        props: bv.BlockVector,
+        prop: bv.BlockVector,
         dt: float,
-        set_props: bool=False,
+        set_prop: bool=False,
         options: Options=None
     ) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
     """
@@ -233,8 +233,8 @@ def integrate_step(
     model.dt = dt
     model.set_ini_state(ini_state)
     model.set_control(control)
-    if set_props:
-        model.set_props(props)
+    if set_prop:
+        model.set_prop(prop)
 
     fin_state, step_info = model.solve_state1(ini_state, options=options)
     return fin_state, step_info

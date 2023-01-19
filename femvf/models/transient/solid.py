@@ -1,21 +1,13 @@
 """
-Module for definitions of weak forms.
-
-Units are in CGS
-
-TODO: The form definitions have a lot of repeated code. Many of the form operations are copy-pasted.
-You should think about what forms should be custom made for different solid governing equations
-and what types of forms are always generated the same way, and refactor accordingly.
+Module definining a 'Model' class to represent finite-element (FE) based, transient, model equations
 """
+
 import numpy as np
 import dolfin as dfn
-import ufl
-import warnings as wrn
 import functools
 from typing import Tuple, Mapping
 
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
-from femvf.parameters.properties import property_vecs
 from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
 
 from blockarray.blockmat import BlockMatrix
@@ -105,8 +97,8 @@ class BaseTransientSolid(base.BaseTransientModel):
         self.state0 = BlockVector((u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')])
         self.state1 = BlockVector((u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')])
         self.control = BlockVector((self.forms['coeff.fsi.p1'].vector(),), labels=[('p',)])
-        self.props = properties_bvec_from_forms(self.forms)
-        self.set_props(self.props)
+        self.prop = properties_bvec_from_forms(self.forms)
+        self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
             key: CachedFormAssembler(self.forms[key]) for key in self.forms
@@ -156,7 +148,7 @@ class BaseTransientSolid(base.BaseTransientModel):
     def dt(self, value):
         self._dt_form.vector()[:] = value
 
-    def set_ini_state(self, uva0):
+    def set_ini_state(self, state):
         """
         Sets the initial state variables, (u, v, a)
 
@@ -164,9 +156,9 @@ class BaseTransientSolid(base.BaseTransientModel):
         ----------
         u0, v0, a0 : array_like
         """
-        self.state0[:] = uva0
+        self.state0[:] = state
 
-    def set_fin_state(self, uva1):
+    def set_fin_state(self, state):
         """
         Sets the final state variables.
 
@@ -178,12 +170,12 @@ class BaseTransientSolid(base.BaseTransientModel):
         ----------
         u1, v1, a1 : array_like
         """
-        self.state1[:] = uva1
+        self.state1[:] = state
 
     def set_control(self, p1):
         self.control[:] = p1
 
-    def set_props(self, props):
+    def set_prop(self, prop):
         """
         Sets the properties of the solid
 
@@ -195,7 +187,7 @@ class BaseTransientSolid(base.BaseTransientModel):
         ----------
         props : Property / dict-like
         """
-        for key, value in props.sub_items():
+        for key, value in prop.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = depack_form_coefficient_function(self.forms['coeff.prop.'+key])
 

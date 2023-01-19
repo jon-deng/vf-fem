@@ -19,23 +19,32 @@ from ..equations.fluid import bernoulli
 
 class BaseTransientQuasiSteady1DFluid(base.BaseTransientModel):
 
-    def __init__(self, s, res, state, control, props):
+    def __init__(self, s, res, state, control, prop):
         self.s = s
 
         self._res = jax.jit(res)
-        self._dres = lambda state, control, props, tangents: jax.jvp(res, (state, control, props), tangents)[1]
+        self._dres = (
+            lambda state, control, props, tangents:
+                jax.jvp(res, (state, control, props), tangents)[1]
+        )
 
-        self.state0 = bla.BlockVector(list(state.values()), labels=[list(state.keys())])
+        self.state0 = bla.BlockVector(
+            list(state.values()), labels=[list(state.keys())]
+        )
         self.state1 = self.state0.copy()
 
-        self.control = bla.BlockVector(list(control.values()), labels=[list(control.keys())])
+        self.control = bla.BlockVector(
+            list(control.values()), labels=[list(control.keys())]
+        )
 
-        self.props = bla.BlockVector(list(props.values()), labels=[list(props.keys())])
+        self.prop = bla.BlockVector(
+            list(prop.values()), labels=[list(prop.keys())]
+        )
 
         self.primals = (
             blockvec_to_dict(self.state1),
             blockvec_to_dict(self.control),
-            blockvec_to_dict(self.props)
+            blockvec_to_dict(self.prop)
         )
 
     @property
@@ -69,11 +78,11 @@ class BaseTransientQuasiSteady1DFluid(base.BaseTransientModel):
         """
         self.control[:] = control
 
-    def set_props(self, props):
+    def set_prop(self, prop):
         """
         Set the fluid properties
         """
-        self.props[:] = props
+        self.prop[:] = prop
 
     ## Residual functions
     # TODO: Make remaining residual/solving functions
@@ -97,8 +106,8 @@ class BernoulliSmoothMinSep(BaseTransientQuasiSteady1DFluid):
     """
 
     def __init__(self, s):
-        _, (_state, _control, _props), res = bernoulli.BernoulliSmoothMinSep(s)
-        super().__init__(s, res, _state, _control, _props)
+        _, (_state, _control, _prop), res = bernoulli.BernoulliSmoothMinSep(s)
+        super().__init__(s, res, _state, _control, _prop)
 
 class BernoulliFixedSep(BaseTransientQuasiSteady1DFluid):
     """
@@ -106,8 +115,8 @@ class BernoulliFixedSep(BaseTransientQuasiSteady1DFluid):
     """
 
     def __init__(self, s, idx_sep=0):
-        _, (_state, _control, _props), res = bernoulli.BernoulliFixedSep(s, idx_sep=idx_sep)
-        super().__init__(s, res, _state, _control, _props)
+        _, (_state, _control, _prop), res = bernoulli.BernoulliFixedSep(s, idx_sep=idx_sep)
+        super().__init__(s, res, _state, _control, _prop)
 
 class BernoulliAreaRatioSep(BaseTransientQuasiSteady1DFluid):
     """
@@ -115,5 +124,5 @@ class BernoulliAreaRatioSep(BaseTransientQuasiSteady1DFluid):
     """
 
     def __init__(self, s):
-        _, (_state, _control, _props), res = bernoulli.BernoulliAreaRatioSep(s)
-        super().__init__(s, res, _state, _control, _props)
+        _, (_state, _control, _prop), res = bernoulli.BernoulliAreaRatioSep(s)
+        super().__init__(s, res, _state, _control, _prop)

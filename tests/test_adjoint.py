@@ -346,7 +346,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         ## parameter set
         # self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
         self.model, self.props = load_fsai_rayleigh_model(self.COUPLING)
-        self.model.set_props(self.props)
+        self.model.set_prop(self.props)
 
         t_start, t_final = 0, 0.001
         times_meas = np.linspace(t_start, t_final, 2)

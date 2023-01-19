@@ -62,7 +62,7 @@ class Acoustic1D(base.BaseTransientModel):
     def set_control(self, control):
         self.control[:] = control
 
-    def set_props(self, props):
+    def set_prop(self, props):
         self.props[:] = props
 
     ## Getting empty vectors
@@ -87,8 +87,8 @@ class WRAnalog(Acoustic1D):
     def z(self):
         return self.props['rhoac']*self.props['soundspeed']/self.props['area']
 
-    def set_props(self, props):
-        super().set_props(props)
+    def set_prop(self, props):
+        super().set_prop(props)
 
         # Reset the WRAnalog 'reflect' function when properties of the tract are updated
         # The reflection function behaviour only changes if the properties are changed

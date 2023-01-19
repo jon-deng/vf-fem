@@ -9,7 +9,7 @@ class SeparationPoint(BaseStateMeasure):
     def __init_measure_context__(self, *args, **kwargs):
         pass
 
-    def __call__(self, state, control, props):
+    def __call__(self, state, control, prop):
         model = self.model
         model.set_fin_state(state)
         model.set_control(control)

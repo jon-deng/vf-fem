@@ -103,7 +103,7 @@ class TestStateHistoryMeasure:
             for n in range(10):
                 f.append_state(state)
                 f.append_control(control)
-                f.append_props(props)
+                f.append_prop(props)
 
             # Test if the `TimeSeries` measure runs w/o error
             time_series_measure(f)

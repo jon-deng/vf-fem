@@ -71,7 +71,7 @@ class BaseTransientModel:
         """
         raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    def set_props(self, props: BlockVec):
+    def set_prop(self, prop: BlockVec):
         """
         Set the properties (`self.props`)
 
@@ -80,7 +80,9 @@ class BaseTransientModel:
         props: BlockVec
             The properties to set
         """
-        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
+        raise NotImplementedError(
+            f"Subclass {type(self)} must implement this function"
+        )
 
     ## Residual and sensitivity methods
     def assem_res(self) -> BlockVec:

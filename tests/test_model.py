@@ -199,7 +199,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         self.model.set_fin_state(state1)
         self.model.set_ini_state(state0)
         self.model.set_control(control)
-        self.model.set_props(props)
+        self.model.set_prop(props)
         self.model.dt = dt
 
     def dres_dxx(self, dstate0, dcontrol, dprops, ddt):
@@ -265,7 +265,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         # Define step vectors to use for state, control, etc.
         dstate0 = self.model.state0.copy()
         dcontrol = self.model.control.copy()
-        dprops = self.model.props.copy()
+        dprops = self.model.prop.copy()
         ddt = 1e-9
 
         bc_base = self.model.solid.forms['bc.dirichlet']

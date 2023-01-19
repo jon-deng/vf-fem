@@ -67,7 +67,7 @@ class BaseFieldMeasure(BaseStateMeasure):
     def _init_expression(self):
         raise NotImplementedError("Method must be implemented by subclasses")
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         raise NotImplementedError("Method must be implemented by subclasses")
 
 @doc_field_measure_params
@@ -85,7 +85,7 @@ class StressI1Field(BaseFieldMeasure):
         # This is the first invariant (I1)
         return ufl.tr(S)
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -105,7 +105,7 @@ class StressI2Field(BaseFieldMeasure):
         # This is the second invariant (I2)
         return 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -125,7 +125,7 @@ class StressI3Field(BaseFieldMeasure):
         # This is the third invariant (I3)
         return ufl.det(S)
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -143,7 +143,7 @@ class StressHydrostaticField(BaseFieldMeasure):
 
         return -1/3*ufl.tr(S)
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -162,7 +162,7 @@ class StressVonMisesField(BaseFieldMeasure):
         j2 = 0.5*ufl.tr(S_dev*S_dev)
         return (3*j2)**(1/2)
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -176,7 +176,7 @@ class ElasticStressField(BaseFieldMeasure):
         forms = self.model.solid.forms
         return forms['expr.stress_elastic']
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -199,7 +199,7 @@ class ContactPressureField(BaseFieldMeasure):
         # `tcontact*tcontact` should be the square of contact pressure
         return ufl.inner(tcontact, tcontact)**0.5
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -214,7 +214,7 @@ class ViscousDissipationField(BaseFieldMeasure):
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
         return ufl.inner(kv_stress, kv_strain_rate)
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -231,7 +231,7 @@ class ContactAreaDensityField(BaseFieldMeasure):
 
         return contact_indicator
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -254,7 +254,7 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
         velocity = forms['coeff.state.v1']
         return ufl.inner(fluid_traction, velocity)
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -276,7 +276,7 @@ class XMomentum(BaseFieldMeasure):
         velocity = forms['coeff.state.v1']
         return ufl.inner(rho, velocity[0])
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 @doc_field_measure_params
@@ -298,7 +298,7 @@ class YMomentum(BaseFieldMeasure):
         velocity = forms['coeff.state.v1']
         return ufl.inner(rho, velocity[1])
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
 ### Field integral type
@@ -363,7 +363,7 @@ class ViscousDissipationRate(BaseFieldIntegralMeasure):
         kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
         return ufl.inner(kv_stress, kv_strain_rate)*self.dx
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         return dfn.assemble(self.expression)
 
 ### Field statistics post-processing functions
@@ -396,8 +396,8 @@ class FieldStats(BaseDerivedStateMeasure):
         ])
         return expr_total, expr_vol, dtype
 
-    def assem(self, state, control, props):
-        field_vec = self.func(state, control, props)
+    def assem(self, state, control, prop):
+        field_vec = self.func(state, control, prop)
         total = dfn.assemble(self.expr_total)
         vol = dfn.assemble(self.expr_vol)
         return np.array(
@@ -421,9 +421,9 @@ class MinGlottalWidth(BaseStateMeasure):
         super().__init__(model)
         self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
-        widths = 2*(self.model.props['ymid'] - xcur[1::2])
+        widths = 2*(self.model.prop['ymid'] - xcur[1::2])
         gw = np.min(widths)
         return gw
 
@@ -461,9 +461,9 @@ class VertexGlottalWidth(BaseStateMeasure):
 
         self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
 
-    def assem(self, state, control, props):
+    def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
-        return 2*(self.model.props['ymid'][0] - xcur[self.idx_dof])
+        return 2*(self.model.prop['ymid'][0] - xcur[self.idx_dof])
 
 def make_project(
         expr: ufl.core.expr.Expr,
