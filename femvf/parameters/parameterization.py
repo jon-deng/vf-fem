@@ -23,7 +23,7 @@ from blockarray import typing
 
 class BaseParameterization:
     """
-    Map a parameterization to a model's `.props` parameter set
+    Map a parameterization to a model's `.prop` parameter set
 
     Parameters
     ----------
@@ -38,7 +38,7 @@ class BaseParameterization:
     model : femvf.model.ForwardModel
     x, y : bv.BlockVector
         Prototype `BlockVectors` of the input (parameterization) and output
-        (`model.props`) attribute, respectively
+        (`model.prop`) attribute, respectively
     """
 
     @property
@@ -58,7 +58,7 @@ class BaseParameterization:
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
-        Map the parameterization `x` to a `model.props` vector
+        Map the parameterization `x` to a `model.prop` vector
 
         Parameters
         ----------
@@ -68,7 +68,7 @@ class BaseParameterization:
         Returns
         -------
         y : bv.BlockVector
-            The output `model.props` vector
+            The output `model.prop` vector
         """
         raise NotImplementedError()
 
@@ -78,12 +78,12 @@ class BaseParameterization:
             hy: bv.BlockVector
         ) -> bv.BlockVector:
         """
-        Map a dual vector `hy` (in `model.props` space) to a dual vector `hx`
+        Map a dual vector `hy` (in `model.prop` space) to a dual vector `hx`
 
         Parameters
         ----------
         hy : bv.BlockVector
-            The input dual vector in `model.props` space
+            The input dual vector in `model.prop` space
 
         Returns
         -------
@@ -98,7 +98,7 @@ class BaseParameterization:
             dx: bv.BlockVector
         ) -> bv.BlockVector:
         """
-        Map a differential primal vector `dx` to a `dy` (`model.props`)
+        Map a differential primal vector `dx` to a `dy` (`model.prop`)
 
         Parameters
         ----------
@@ -108,7 +108,7 @@ class BaseParameterization:
         Returns
         -------
         dy : bv.BlockVector
-            The output primal vector in `model.props` space
+            The output primal vector in `model.prop` space
         """
         raise NotImplementedError()
 
@@ -120,9 +120,9 @@ class BaseDolfinParameterization(BaseParameterization):
         ):
         self.model = model
 
-        _y_vec = ba.zeros(model.props.bshape)
+        _y_vec = ba.zeros(model.prop.bshape)
         self._y_vec = bv.BlockVector(
-            _y_vec.sub_blocks, labels=model.props.labels
+            _y_vec.sub_blocks, labels=model.prop.labels
         )
 
         # NOTE: Subclasses have to supply a `self._x_vec` attribute
@@ -136,9 +136,9 @@ class TractionShape(BaseDolfinParameterization):
         super().__init__(model)
 
         # The input vector simply renames the mesh displacement vector
-        _x_vec = ba.zeros(model.props.f_bshape)
+        _x_vec = ba.zeros(model.prop.f_bshape)
         x_subvecs = _x_vec.sub_blocks
-        x_labels = list(model.props.labels[0])
+        x_labels = list(model.prop.labels[0])
         try:
             ii = x_labels.index('umesh')
         except ValueError as err:
@@ -203,7 +203,7 @@ class TractionShape(BaseDolfinParameterization):
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
-        Return the corresponding `self.model.props` vector
+        Return the corresponding `self.model.prop` vector
         """
         self.x[:] = x
         x_dict, y_dict = self._set_y_defaults_from_x(self.x, self.y)
@@ -219,7 +219,7 @@ class TractionShape(BaseDolfinParameterization):
 
     def apply_vjp(self, x, hy):
         """
-        Return the corresponding `self.model.props` vector
+        Return the corresponding `self.model.prop` vector
         """
         self.y[:] = hy
         hy_dict, hx_dict = self._set_y_defaults_from_x(self.y, self.x)
@@ -234,7 +234,7 @@ class TractionShape(BaseDolfinParameterization):
 
     def apply_jvp(self, x, dx) -> bv.BlockVector:
         """
-        Return the corresponding `self.model.props` vector
+        Return the corresponding `self.model.prop` vector
         """
         self.x[:] = dx
         dx_dict, dy_dict = self._set_y_defaults_from_x(self.x, self.y)
@@ -251,7 +251,7 @@ class TractionShape(BaseDolfinParameterization):
 
 class BaseJaxParameterization(BaseParameterization):
     """
-    Map an alternative parameterization to a model's `props` parameters
+    Map an alternative parameterization to a model's `prop` parameters
 
     The map here must be automatically defined through a `make_map` function
     which uses `jax` to create output vector
@@ -268,9 +268,9 @@ class BaseJaxParameterization(BaseParameterization):
         self._x_vec = bv.BlockVector(x_subvecs, labels=x_labels)
         # self._x_labels = self._x_vec.labels
 
-        _y_vec = ba.zeros(model.props.bshape)
+        _y_vec = ba.zeros(model.prop.bshape)
         self._y_vec = bv.BlockVector(
-            _y_vec.sub_blocks, labels=model.props.labels
+            _y_vec.sub_blocks, labels=model.prop.labels
         )
 
     @staticmethod
@@ -282,7 +282,7 @@ class BaseJaxParameterization(BaseParameterization):
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
-        Return the corresponding `self.model.props` vector
+        Return the corresponding `self.model.prop` vector
         """
         x_dict = bvec_to_dict(x)
         y_dict = self.map(x_dict)
@@ -314,7 +314,7 @@ class Identity(BaseJaxParameterization):
         def map(x):
             return x
 
-        y = model.props
+        y = model.prop
         return y, map
 
 class LayerModuli(BaseJaxParameterization):
@@ -328,7 +328,7 @@ class LayerModuli(BaseJaxParameterization):
             E.function_space()
         )
 
-        _y_dict = bvec_to_dict(model.props)
+        _y_dict = bvec_to_dict(model.prop)
         def map(x):
             y_dict = _y_dict.copy()
             new_emod = jnp.array(y_dict['emod'], copy=True)
@@ -360,7 +360,7 @@ class ConstantSubset(BaseJaxParameterization):
         """
         Return the x->y mapping function and prototype x vector
         """
-        x = model.props
+        x = model.prop
 
         _scale = {key: 1.0 for key in x.labels[0]}
         if scale is not None:

@@ -128,7 +128,7 @@ class TestBernoulli:
         """
         np.random.seed(0)
         fluid = self.fluid
-        props = self.fluid_properties.copy()
+        prop = self.fluid_properties.copy()
         p_sub0 = self.p_sub
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
@@ -142,7 +142,7 @@ class TestBernoulli:
         # Calculate perturbed flow states
         ps, qs = [], []
         for h in hs:
-            props['p_sub'][()] = p_sub0 + h*dpsub
+            prop['p_sub'][()] = p_sub0 + h*dpsub
             qp, _ = fluid.fluid_pressure(*surf_state, self.p_sub, self.p_sup, fluid_props)
             ps.append(qp[1])
             qs.append(qp[0])

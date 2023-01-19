@@ -125,7 +125,7 @@ def load_fsai_rayleigh_model(coupling='explicit'):
     ac_props['length'][:] = 12.0
     ac_props['soundspeed'][:] = 340*100
 
-    props = vec.concatenate_vec([sl_props, fl_props, ac_props])
+    prop = vec.concatenate_vec([sl_props, fl_props, ac_props])
 
-    return model, props
+    return model, prop
 

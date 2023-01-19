@@ -24,8 +24,8 @@ class BaseTransientQuasiSteady1DFluid(base.BaseTransientModel):
 
         self._res = jax.jit(res)
         self._dres = (
-            lambda state, control, props, tangents:
-                jax.jvp(res, (state, control, props), tangents)[1]
+            lambda state, control, prop, tangents:
+                jax.jvp(res, (state, control, prop), tangents)[1]
         )
 
         self.state0 = bla.BlockVector(

@@ -12,9 +12,9 @@ from . import statefile as sf
 import numpy as np
 
 
-def line_search(hs, model, 
-                ini_state, controls, props, times,
-                dstate, dcontrols, dprops, dtimes,
+def line_search(hs, model,
+                ini_state, controls, prop, times,
+                dstate, dcontrols, dprop, dtimes,
                 filepath='temp.h5'):
     if path.exists(filepath):
         os.remove(filepath)
@@ -25,14 +25,14 @@ def line_search(hs, model,
 
         controls_n = [control+h*dcontrol for control, dcontrol in zip(controls, dcontrols)]
 
-        props_n = props + h*dprops
+        prop_n = prop + h*dprop
 
         times_n = times + h*dtimes
 
         ## Run simulations at the step
         runtime_start = perf_counter()
         with sf.StateFile(model, filepath, group=f'{n}', mode='a') as f:
-            info = integrate(model, f, state_n, controls_n, props_n, times_n)
+            info = integrate(model, f, state_n, controls_n, prop_n, times_n)
         runtime_end = perf_counter()
 
         print(f"Run duration {runtime_end-runtime_start} s")
@@ -57,7 +57,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
         p_n.vector[:] = p.vector + h*dp.vector
 
         uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
-        
+
         # print(uva_n[0].norm('l2'), uva_n[1].norm('l2'), uva_n[2].norm('l2'))
 
         runtime_start = perf_counter()

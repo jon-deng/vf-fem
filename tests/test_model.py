@@ -66,7 +66,7 @@ class TestFSAIModel(unittest.TestCase):
         ac_props['length'][:] = 12.0
         ac_props['soundspeed'][:] = 340*100
 
-        props = vec.concatenate_vec([sl_props, fl_props, ac_props])
+        prop = vec.concatenate_vec([sl_props, fl_props, ac_props])
 
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
@@ -80,11 +80,11 @@ class TestFSAIModel(unittest.TestCase):
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
 
-        return model, ini_state, controls, props
+        return model, ini_state, controls, prop
 
     def test_apply_dres_dstate1(self):
-        model, ini_state, controls, props = self.config_fsai_model()
-        model.set_props(props)
+        model, ini_state, controls, prop = self.config_fsai_model()
+        model.set_props(prop)
 
         fin_state = ini_state.copy()
 
@@ -118,8 +118,8 @@ class TestFSAIModel(unittest.TestCase):
         breakpoint()
 
     def test_solve_dres_dstate1(self):
-        model, ini_state, controls, props = self.config_fsai_model()
-        model.set_props(props)
+        model, ini_state, controls, prop = self.config_fsai_model()
+        model.set_props(prop)
 
         fin_state = ini_state.copy()
 
@@ -164,7 +164,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         This code must create the model and set the parameters for the time step to be tested
         """
-        self.model, self.props = load_fsi_rayleigh_model(coupling='explicit')
+        self.model, self.prop = load_fsi_rayleigh_model(coupling='explicit')
 
         self.state1 = self.model.state0.copy()
         self.state0 = self.model.state0.copy()
@@ -191,25 +191,25 @@ class TestModelResidualSensitivity(unittest.TestCase):
         self.control['psub'][:] = 800 * PASCAL_TO_CGS
 
     ## Convenience functions to represent the residual being tested
-    def res(self, state1, state0, control, props, dt):
-        self.set_linearization(state1, state0, control, props, dt)
+    def res(self, state1, state0, control, prop, dt):
+        self.set_linearization(state1, state0, control, prop, dt)
         return self.model.assem_res()
 
-    def set_linearization(self, state1, state0, control, props, dt):
+    def set_linearization(self, state1, state0, control, prop, dt):
         self.model.set_fin_state(state1)
         self.model.set_ini_state(state0)
         self.model.set_control(control)
-        self.model.set_prop(props)
+        self.model.set_prop(prop)
         self.model.dt = dt
 
-    def dres_dxx(self, dstate0, dcontrol, dprops, ddt):
+    def dres_dxx(self, dstate0, dcontrol, dprop, ddt):
         """
         Compute the action of the sensitivity
         """
         dres = (
             self.model.apply_dres_dstate0(dstate0)
             + self.model.apply_dres_dcontrol(dcontrol)
-            + self.model.apply_dres_dp(dprops)
+            + self.model.apply_dres_dp(dprop)
             + self.model.apply_dres_ddt(ddt))
         return dres
 
@@ -219,9 +219,9 @@ class TestModelResidualSensitivity(unittest.TestCase):
         """
         dstate0 = self.model.apply_dres_dstate0_adj(dres)
         dcontrol = self.model.apply_dres_dcontrol_adj(dres)
-        dprops = self.model.apply_dres_dp_adj(dres)
+        dprop = self.model.apply_dres_dp_adj(dres)
         ddt = self.model.apply_dres_ddt_adj(dres)
-        return dstate0, dcontrol, dprops, ddt
+        return dstate0, dcontrol, dprop, ddt
 
     ## Test sensitivities of the residual
     def test_solve_dres_dstate1(self):
@@ -241,10 +241,10 @@ class TestModelResidualSensitivity(unittest.TestCase):
         for name in ('u', 'v', 'a'):
             bc_base.apply(dstate1[name])
 
-        args = (self.state0, self.control, self.props, self.dt)
+        args = (self.state0, self.control, self.prop, self.dt)
         dres = self.res(self.state1+dstate1, *args) - self.res(self.state1, *args)
 
-        self.set_linearization(self.state1, self.state0, self.control, self.props, self.dt)
+        self.set_linearization(self.state1, self.state0, self.control, self.prop, self.dt)
         dstate1_jac = self.model.solve_dres_dstate1(dres)
 
         err = dstate1_jac - dstate1
@@ -265,7 +265,7 @@ class TestModelResidualSensitivity(unittest.TestCase):
         # Define step vectors to use for state, control, etc.
         dstate0 = self.model.state0.copy()
         dcontrol = self.model.control.copy()
-        dprops = self.model.prop.copy()
+        dprop = self.model.prop.copy()
         ddt = 1e-9
 
         bc_base = self.model.solid.forms['bc.dirichlet']
@@ -291,13 +291,13 @@ class TestModelResidualSensitivity(unittest.TestCase):
             self.assertAlmostEqual(err.norm(), 0)
 
         ## Test dt steps
-        xxs = (self.state0, self.control, self.props, self.dt)
-        dxxs = (0.0*dstate0, 0.0*dcontrol, 0.0*dprops, ddt)
+        xxs = (self.state0, self.control, self.prop, self.dt)
+        dxxs = (0.0*dstate0, 0.0*dcontrol, 0.0*dprop, ddt)
         _test(xxs, dxxs)
 
         ## Test dstate steps
-        xxs = (self.state0, self.control, self.props, self.dt)
-        dxxs = (dstate0, 0.0*dcontrol, 0.0*dprops, 0*ddt)
+        xxs = (self.state0, self.control, self.prop, self.dt)
+        dxxs = (dstate0, 0.0*dcontrol, 0.0*dprop, 0*ddt)
         _test(xxs, dxxs)
 
     def test_solve_dres_dxx_adj(self):

@@ -21,18 +21,18 @@ class TestWRA(unittest.TestCase):
 
     def test_uniform(self):
         ## Set properties of the uniform tube
-        props = self.model.get_properties_vec(set_default=True)
-        props['soundspeed'][:] = 343*1e2
-        props['proploss'][:] = 1.0
-        props['rhoac'][:] = 1.2e-3
-        props['length'][:] = self.LENGTH
+        prop = self.model.get_properties_vec(set_default=True)
+        prop['soundspeed'][:] = 343*1e2
+        prop['proploss'][:] = 1.0
+        prop['rhoac'][:] = 1.2e-3
+        prop['length'][:] = self.LENGTH
         # self.model.dt = self.LENGTH/self.model.NTUBE
         # Uniform tract
-        props['area'][:] = 4.0
+        prop['area'][:] = 4.0
         # Idealized /a/
-        # props['area'][:22] = 0.5
-        # props['area'][22:] = 3
-        self.model.set_props(props)
+        # prop['area'][:22] = 0.5
+        # prop['area'][22:] = 3
+        self.model.set_props(prop)
 
         # Set the impulse flow input
         state0 = self.model.state0.copy()
@@ -71,9 +71,9 @@ class TestWRA(unittest.TestCase):
 
         ## Theoretical impulse response from uniform tube anlalytical solution
         omega = ft_freq*2*np.pi
-        RHO = props['rhoac']
-        LENGTH, CSOUND = props['length'], props['soundspeed']
-        AMOUTH = props['area'][-1]
+        RHO = prop['rhoac']
+        LENGTH, CSOUND = prop['length'], prop['soundspeed']
+        AMOUTH = prop['area'][-1]
         PISTON_RAD = np.sqrt(AMOUTH/np.pi)
         ZMOUTH = RHO*CSOUND/AMOUTH
 

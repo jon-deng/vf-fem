@@ -48,7 +48,7 @@ def _add_static_docstring(func):
         The model
     control :
         The control parameters for the model
-    props :
+    prop :
         The properties of the model
 
     Returns
@@ -65,7 +65,7 @@ def _add_static_docstring(func):
 def static_solid_configuration(
         model: slmodel.BaseTransientSolid,
         control: bv.BlockVector,
-        props: bv.BlockVector,
+        prop: bv.BlockVector,
         state=None,
         linear_solver: str='manual'
     ) -> Tuple[bv.BlockVector, Info]:
@@ -83,7 +83,7 @@ def static_solid_configuration(
     model.set_fin_state(state_n)
     model.set_ini_state(state_n)
     model.set_control(control)
-    model.set_prop(props)
+    model.set_prop(prop)
 
     if linear_solver == 'manual':
         def iterative_subproblem(x_n):
@@ -159,7 +159,7 @@ def _set_coupled_model_substate(model: comodel.BaseTransientFSIModel, xsub: bv.B
 def static_coupled_configuration_picard(
         model: comodel.BaseTransientFSIModel,
         control: bv.BlockVector,
-        props: bv.BlockVector,
+        prop: bv.BlockVector,
     ) -> Tuple[bv.BlockVector, Info]:
     """
     Solve for the static state of a coupled model
@@ -218,7 +218,7 @@ def static_coupled_configuration_picard(
 def static_coupled_configuration_newton(
         model: comodel.BaseTransientFSIModel,
         control: bv.BlockVector,
-        props: bv.BlockVector,
+        prop: bv.BlockVector,
         dt: float=1e6
     ) -> Tuple[bv.BlockVector, Info]:
     """

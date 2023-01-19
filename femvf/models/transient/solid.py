@@ -185,7 +185,7 @@ class BaseTransientSolid(base.BaseTransientModel):
 
         Parameters
         ----------
-        props : Property / dict-like
+        prop : Property / dict-like
         """
         for key, value in prop.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type

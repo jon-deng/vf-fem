@@ -207,11 +207,11 @@ def perturbation(model):
         _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
 
     ## Properties perturbation
-    dprops = model.prop.copy()
-    dprops[:] = 0
+    dprop = model.prop.copy()
+    dprop[:] = 0
 
     if model_solid is not None:
-        dprops['emod'] = 1.0
+        dprop['emod'] = 1.0
 
         # Use a uniaxial y stretching motion
         fspace = model_solid.forms['fspace.vector']
@@ -220,14 +220,14 @@ def perturbation(model):
         umesh = coords.copy()
         umesh[:, 0] = 0
         umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
-        dprops['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
-        # dprops['umesh'] = 0
+        dprop['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
+        # dprop['umesh'] = 0
 
     ## Controls perturbation
     dcontrol = model.control.copy()
     dcontrol[:] = 1e0
 
-    return dstate, dstatet, dcontrol, dprops
+    return dstate, dstatet, dcontrol, dprop
 
 @pytest.fixture()
 def dstate(perturbation):
@@ -245,7 +245,7 @@ def dcontrol(perturbation):
     return perturbation[2]
 
 @pytest.fixture()
-def dprops(perturbation):
+def dprop(perturbation):
     """Return a properties perturbation"""
     return perturbation[3]
 
@@ -254,11 +254,11 @@ def set_linearization(model: dynbase.BaseDynamicalModel, linearization):
     """
     Set the model linearization point
     """
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
     model.set_state(state)
     model.set_statet(statet)
     model.set_control(control)
-    model.set_prop(props)
+    model.set_prop(prop)
 
 def set_and_assemble(x, set_x, assem):
     set_x(x)
@@ -304,7 +304,7 @@ def test_assem_dres_dstate(model, linearization, dstate):
     Test `model.assem_dres_dstate`
     """
     set_linearization(model, linearization)
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
     res = lambda state: set_and_assemble(state, model.set_state, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_state, model.assem_dres_dstate)
 
@@ -315,7 +315,7 @@ def test_assem_dres_dstatet(model, linearization, dstatet):
     Test `model.assem_dres_dstatet`
     """
     set_linearization(model, linearization)
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
     res = lambda state: set_and_assemble(state, model.set_statet, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_statet, model.assem_dres_dstatet)
 
@@ -326,7 +326,7 @@ def test_assem_dres_dcontrol(model, linearization, dcontrol):
     Test `model.assem_dres_dcontrol`
     """
     set_linearization(model, linearization)
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
     # model_fluid.control['psub'][:] = 1
     # model_fluid.control['psup'][:] = 0
     res = lambda state: set_and_assemble(state, model.set_control, model.assem_res)
@@ -334,16 +334,16 @@ def test_assem_dres_dcontrol(model, linearization, dcontrol):
 
     _test_taylor(control, dcontrol, res, jac)
 
-def test_assem_dres_dprops(model, linearization, dprops):
+def test_assem_dres_dprops(model, linearization, dprop):
     """
     Test `model.assem_dres_dprops`
     """
     set_linearization(model, linearization)
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
     res = lambda state: set_and_assemble(state, model.set_prop, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_prop, model.assem_dres_dprop)
 
-    _test_taylor(props, dprops, res, jac)
+    _test_taylor(prop, dprop, res, jac)
 
 def test_dres_dstate_vs_dres_state(model, model_linear, linearization, dstate):
     """
@@ -358,7 +358,7 @@ def test_dres_dstate_vs_dres_state(model, model_linear, linearization, dstate):
     """
     set_linearization(model, linearization)
     set_linearization(model_linear, linearization)
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
 
     # compute the linearized residual from `model`
     dres_dstate = set_and_assemble(state, model.set_state, model.assem_dres_dstate)
@@ -390,7 +390,7 @@ def test_dres_dstatet_vs_dres_statet(model, model_linear, linearization, dstatet
     """
     set_linearization(model, linearization)
     set_linearization(model_linear, linearization)
-    state, statet, control, props = linearization
+    state, statet, control, prop = linearization
 
     # compute the linearized residual from `model`
     dres_dstatet = set_and_assemble(statet, model.set_state, model.assem_dres_dstatet)

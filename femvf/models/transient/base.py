@@ -73,11 +73,11 @@ class BaseTransientModel:
 
     def set_prop(self, prop: BlockVec):
         """
-        Set the properties (`self.props`)
+        Set the properties (`self.prop`)
 
         Parameters
         ----------
-        props: BlockVec
+        prop: BlockVec
             The properties to set
         """
         raise NotImplementedError(

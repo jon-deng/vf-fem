@@ -2,7 +2,7 @@
 Post-processing functionality
 
 There are two main post-processing functions/classes
-`BaseStateMeasure` : These take a tuple `(state, control, props)` and return
+`BaseStateMeasure` : These take a tuple `(state, control, prop)` and return
     the post-processed measure.
 `BaseStateHistoryMeasure` : These take a history of states through a statefile
     `(f)` and return the post-processed measure.
@@ -177,13 +177,13 @@ class TimeSeriesStats(BaseDerivedStateHistoryMeasure):
         return self.mean(f, ns=ns)
 
     def mean(self, f: sf.StateFile, ns: Optional[Iterable]=None):
-        props = f.get_prop()
-        self.func.model.set_prop(props)
+        prop = f.get_prop()
+        self.func.model.set_prop(prop)
 
         return np.mean(self.ts(f, ns=ns), axis=0)
 
     def std(self, f: sf.StateFile, ns: Optional[Iterable]=None):
-        props = f.get_prop()
-        self.func.model.set_prop(props)
+        prop = f.get_prop()
+        self.func.model.set_prop(prop)
 
         return np.std(self.ts(f, ns=ns), axis=0)

@@ -509,8 +509,8 @@ class FSAIModel(BaseTransientFSIModel):
         control = bv.BlockVector((np.array([1.0]),), labels=[('psub',)])
         self.control = control.copy()
 
-        self.props = bv.concatenate_vec(
-            [solid.props, fluid.props, acoustic.props])
+        self.prop = bv.concatenate_vec(
+            [solid.prop, fluid.prop, acoustic.prop])
 
         self._dt = 1.0
 
@@ -558,14 +558,14 @@ class FSAIModel(BaseTransientFSIModel):
         fl_control['psub'][:] = control['psub']
         self.fluid.set_control(fl_control)
 
-    def set_prop(self, props):
-        sl_nblock = len(self.solid.props.size)
-        fl_nblock = len(self.fluid.props.size)
-        ac_nblock = len(self.acoustic.props.size)
+    def set_prop(self, prop):
+        sl_nblock = len(self.solid.prop.size)
+        fl_nblock = len(self.fluid.prop.size)
+        ac_nblock = len(self.acoustic.prop.size)
 
-        sl_props = props[:sl_nblock]
-        fl_props = props[sl_nblock:sl_nblock+fl_nblock]
-        ac_props = props[sl_nblock+fl_nblock:sl_nblock+fl_nblock+ac_nblock]
+        sl_props = prop[:sl_nblock]
+        fl_props = prop[sl_nblock:sl_nblock+fl_nblock]
+        ac_props = prop[sl_nblock+fl_nblock:sl_nblock+fl_nblock+ac_nblock]
 
         self.solid.set_props(sl_props)
         self.fluid.set_props(fl_props)
@@ -622,7 +622,7 @@ class FSAIModel(BaseTransientFSIModel):
         return ret
 
     def get_properties_vec(self, set_default=True):
-        ret = self.props.copy()
+        ret = self.prop.copy()
         if not set_default:
             ret[:] = 0.0
         return ret
@@ -667,7 +667,7 @@ class FSAIModel(BaseTransientFSIModel):
             self.set_fin_acoustic_state(ac_state1)
             fl_state1, _ = self.fluid.solve_state1(self.fluid.state0)
 
-            dqbern_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)[4]
+            dqbern_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.prop)[4]
             dpsup_dqac = self.acoustic.z[0]
             def res():
                 qbern = fl_state1[0]
@@ -695,7 +695,7 @@ class FSAIModel(BaseTransientFSIModel):
 
         ## Solve the coupled fluid/acoustic system
         # First compute some sensitivities that are needed
-        *_, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.props)
+        *_, dq_dpsup, dp_dpsup = self.fluid.flow_sensitivity(*self.fluid.control.vecs, self.fluid.prop)
 
         # solve the coupled system for pressure and acoustic residuals
         dfq_dq = 1.0

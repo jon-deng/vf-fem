@@ -19,7 +19,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     model = setup_model('../meshes/M5-3layers.msh')
-    state0, control, props = setup_transient_args(model)
+    state0, control, prop = setup_transient_args(model)
 
     _times = 1e-4*np.arange(100)
     times = bv.BlockVector((_times,), (1,))
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     fpath = './out/.benchmark_postprocess.h5'
     if not path.isfile(fpath):
         with sf.StateFile(model, fpath, mode='w') as f:
-            forward.integrate(model, f, state0, [control], props, times, write=True)
+            forward.integrate(model, f, state0, [control], prop, times, write=True)
     else:
         print("Using existing `StateFile` to post-process")
 

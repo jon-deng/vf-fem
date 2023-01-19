@@ -37,7 +37,7 @@ def integrate(model, f, dfin_state):
 
     ## Allocate space for the adjoints of all the parameters
     adj_dt = []
-    adj_props = model.props.copy()
+    adj_props = model.prop.copy()
     adj_props[:] = 0.0
     adj_controls = [model.control.copy() for i in range(f.num_controls)]
 
@@ -115,13 +115,13 @@ def integrate_grad(model, f, functional):
 
     # The result of integrating the adjoint are the partial sensitivity components due only to the
     # model
-    dini_state, dcontrols, dprops, dtimes = integrate(model, f, dfin_state)
+    dini_state, dcontrols, dprop, dtimes = integrate(model, f, dfin_state)
 
     # To form the final gradient term, add partial sensitivity components due to the functional
-    dprops += functional.dprops(f)
+    dprop += functional.dprop(f)
 
     ddts = [functional.ddt(f, n) for n in range(1, f.size)]
     dtimes_functional = vec.BlockVector([np.cumsum([0] + ddts)], labels=[['times']])
     dtimes += dtimes_functional
 
-    return functional_value, dini_state, dcontrols, dprops, dtimes
+    return functional_value, dini_state, dcontrols, dprop, dtimes

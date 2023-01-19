@@ -33,15 +33,15 @@ if __name__ == '__main__':
     mesh_path = '../meshes/M5-3layers-cl0_50.xml'
     solid = models.load.load_solid_model(mesh_path, models.solid.Approximate3DKelvinVoigt)
 
-    props = solid.props.copy()
-    props['ycontact'][:] = solid.mesh.coordinates()[:, 1].max() + 60.0#- 0.1
-    props['emod'][:] = 10e3 * 10 # factor converts [Pa] to the [cgs] equivalent
-    props['nu'][:] = 0.45
-    props['eta'][:] = 5.0
-    props['kcontact'][()] = 1e13
-    props['length'][:] = 1.5
-    # props['muscle_stress'][:] = 0.0
-    solid.set_props(props)
+    prop = solid.prop.copy()
+    prop['ycontact'][:] = solid.mesh.coordinates()[:, 1].max() + 60.0#- 0.1
+    prop['emod'][:] = 10e3 * 10 # factor converts [Pa] to the [cgs] equivalent
+    prop['nu'][:] = 0.45
+    prop['eta'][:] = 5.0
+    prop['kcontact'][()] = 1e13
+    prop['length'][:] = 1.5
+    # prop['muscle_stress'][:] = 0.0
+    solid.set_props(prop)
 
     res = dfn.assemble(solid.forms['form.un.f1uva'])
 

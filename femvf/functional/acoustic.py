@@ -34,10 +34,10 @@ class AcousticFunctional(AbstractFunctional):
         return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
-        dsolid = self.model.solid.props.copy()
+        dsolid = self.model.solid.prop.copy()
         dsolid[:] = 0.0
 
-        dfluid = self.model.fluid.props.copy()
+        dfluid = self.model.fluid.prop.copy()
         dfluid[:] = 0.0
 
         vecs = [dsolid, dfluid, self.eval_dac_props(f)]
@@ -86,7 +86,7 @@ class RmsRadiatedPressure(AcousticFunctional):
         return dac
 
     def eval_dac_props(self, f):
-        dfluid = self.acoustic.props.copy()
+        dfluid = self.acoustic.prop.copy()
         dfluid[:] = 0.0
         return dfluid
 
@@ -100,9 +100,9 @@ class AcousticPower(AcousticFunctional):
     """The norm of the final flow rate"""
     def eval(self, f):
         # dt must be a constant for acoustic simulations
-        props = f.get_props()
-        RHO, CSPEED = props['rho_air'][0], props['soundspeed'][0]
-        AMOUTH = props['area'][-1]
+        prop = f.get_props()
+        RHO, CSPEED = prop['rho_air'][0], prop['soundspeed'][0]
+        AMOUTH = prop['area'][-1]
         ZMOUTH = RHO*CSPEED/AMOUTH
         dt = self.model.dt
         T = (f.size-1)*dt
@@ -127,9 +127,9 @@ class AcousticPower(AcousticFunctional):
         return work/T
 
     def eval_dac_state(self, f, n):
-        props = f.get_props()
-        RHO, CSPEED = props['rho_air'], props['soundspeed']
-        AMOUTH = props['area'][-1]
+        prop = f.get_props()
+        RHO, CSPEED = prop['rho_air'], prop['soundspeed']
+        AMOUTH = prop['area'][-1]
         ZMOUTH = RHO*CSPEED/AMOUTH
         dt = self.model.dt
         T = (f.size-1)*dt
@@ -159,7 +159,7 @@ class AcousticPower(AcousticFunctional):
         return dac
 
     def eval_dac_props(self, f):
-        dfluid = self.model.acoustic.props.copy()
+        dfluid = self.model.acoustic.prop.copy()
         dfluid[:] = 0.0
         return dfluid
 

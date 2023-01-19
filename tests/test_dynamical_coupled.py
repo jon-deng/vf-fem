@@ -38,16 +38,16 @@ def test_pressure_qualitative(model):
     """
     ymax_mesh = model.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
 
-    props = model.props
+    prop = model.prop
     ygap = 0.1 / 10
-    props['ymid'] = ymax_mesh + ygap
+    prop['ymid'] = ymax_mesh + ygap
     print(ymax_mesh)
-    props['rho_air'] = 1e-3
-    # props['r_sep'] = 1.5
-    # props['zeta_min'] = 1e-4
-    # props['zeta_sep'] = 1e-3
-    model.set_props(props)
-    print(model.props['ymid'][:])
+    prop['rho_air'] = 1e-3
+    # prop['r_sep'] = 1.5
+    # prop['zeta_min'] = 1e-4
+    # prop['zeta_sep'] = 1e-3
+    model.set_props(prop)
+    print(model.prop['ymid'][:])
 
     control = model.control
     control['psub'][:] = 800.0 * 10

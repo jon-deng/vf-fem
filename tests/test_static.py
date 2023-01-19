@@ -31,7 +31,7 @@ control['psub'][:] = 2000.0 * 10
 control['psup'][:] = 0.0 * 10
 
 ### Specify properties
-props = model.prop.copy()
+prop = model.prop.copy()
 
 mesh = model.solid.forms['mesh.mesh']
 cell_func = model.solid.forms['mesh.cell_function']
@@ -44,11 +44,11 @@ dofs_body = region_to_dofs['body']
 # Set the layer moduli
 ECOV = 5e3*10
 EBODY = 15e3*10
-props['emod'] = ECOV
-props['emod'][dofs_cover] = ECOV
-props['emod'][dofs_body] = EBODY
-props['rho'][:] = 1.0
-props['nu'][:] = 0.45
+prop['emod'] = ECOV
+prop['emod'][dofs_cover] = ECOV
+prop['emod'][dofs_body] = EBODY
+prop['rho'][:] = 1.0
+prop['nu'][:] = 0.45
 
 # contact and midline properties
 y_max = np.max(model.solid.mesh.coordinates()[..., 1])
@@ -56,23 +56,23 @@ y_gap = 0.01
 y_gap = 0.5
 y_contact_offset = 1/10*y_gap
 
-props['ymid'][:] = y_max + y_gap
-props['ycontact'][:] = y_max + y_gap - y_contact_offset
-props['kcontact'][:] = 1e16
+prop['ymid'][:] = y_max + y_gap
+prop['ycontact'][:] = y_max + y_gap - y_contact_offset
+prop['kcontact'][:] = 1e16
 
 # separation point smoothing properties
 ZETA = 1e-4
 R_SEP = 1.0
-props['r_sep'][:] = R_SEP
-props['area_lb'][:] = 2*y_contact_offset
-# props['zeta_lb'][:] = 1e-6
-# props['zeta_min'][:] = ZETA
-# props['zeta_sep'][:] = ZETA
-# props['zeta_inv'][:] = ZETA
+prop['r_sep'][:] = R_SEP
+prop['area_lb'][:] = 2*y_contact_offset
+# prop['zeta_lb'][:] = 1e-6
+# prop['zeta_min'][:] = ZETA
+# prop['zeta_sep'][:] = ZETA
+# prop['zeta_inv'][:] = ZETA
 
 ### Set the control and properties for the model
 model.set_control(control)
-model.set_prop(props)
+model.set_prop(prop)
 breakpoint()
 
 def test_static_solid_configuration():
@@ -93,7 +93,7 @@ def test_static_configuration_coupled_newton():
     """
     Test `static_coupled_configuration_newton`
     """
-    x_n, info = static.static_coupled_configuration_newton(model, control, props)
+    x_n, info = static.static_coupled_configuration_newton(model, control, prop)
     print(x_n.norm())
     print(info)
 
@@ -101,7 +101,7 @@ def test_static_configuration_coupled_picard():
     """
     Test `static_coupled_configuration_picard`
     """
-    x_n, info = static.static_coupled_configuration_picard(model, control, props)
+    x_n, info = static.static_coupled_configuration_picard(model, control, prop)
     print(x_n.norm())
     print(info)
 

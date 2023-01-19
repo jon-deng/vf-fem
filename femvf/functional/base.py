@@ -95,7 +95,7 @@ class AbstractFunctional:
         return self.eval_dstate(f, n)
 
     @update_cache
-    def dprops(self, f):
+    def dprop(self, f):
         return self.eval_dprops(f)
 
     @update_cache
@@ -278,7 +278,7 @@ class Sum(AbstractFunctional):
         return self._sum_drule(*self.funcs, 'dstate', f, n)
 
     def eval_dprops(self, f):
-        return self._sum_drule(*self.funcs, 'dprops', f)
+        return self._sum_drule(*self.funcs, 'dprop', f)
 
     def eval_ddt(self, f, n):
         return self._sum_drule(*self.funcs, 'ddt', f, n)
@@ -311,7 +311,7 @@ class Product(AbstractFunctional):
         return self._product_drule(*self.funcs, 'dstate', f, n)
 
     def eval_dprops(self, f):
-        return self._product_drule(*self.funcs, 'dprops', f)
+        return self._product_drule(*self.funcs, 'dprop', f)
 
     def eval_ddt(self, f, n):
         return self._product_drule(*self.funcs, 'ddt', f, n)
@@ -342,7 +342,7 @@ class Power(AbstractFunctional):
         return self._power_drule(*self.funcs, 'dstate', f, n)
 
     def eval_dprops(self, f):
-        return self._power_drule(*self.funcs, 'dprops', f)
+        return self._power_drule(*self.funcs, 'dprop', f)
 
     def eval_ddt(self, f, n):
         return self._power_drule(*self.funcs, 'ddt', f, n)
@@ -374,7 +374,7 @@ class ScalarPower(AbstractFunctional):
         return self._scalarpower_drule(*self.funcs, 'dstate', f, n)
 
     def eval_dprops(self, f):
-        return self._scalarpower_drule(*self.funcs, 'dprops', f)
+        return self._scalarpower_drule(*self.funcs, 'dprop', f)
 
     def eval_ddt(self, f, n):
         return self._scalarpower_drule(*self.funcs, 'ddt', f, n)
@@ -402,9 +402,9 @@ class Scalar(AbstractFunctional):
         return self.model.state0.copy()
 
     def eval_dprops(self, f):
-        dprops = self.model.props.copy()
-        dprops[:] = 0.0
-        return dprops
+        dprop = self.model.prop.copy()
+        dprop[:] = 0.0
+        return dprop
 
     def eval_ddt(self, f, n):
         return 0.0

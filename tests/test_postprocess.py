@@ -45,15 +45,15 @@ def setup_state_measure(setup_model, request):
 
 def args_from_model(model):
     """
-    Return a `(state, control, props)` tuple
+    Return a `(state, control, prop)` tuple
     """
     state = model.state1.copy()
 
     control = model.control.copy()
 
-    props = model.props.copy()
+    prop = model.prop.copy()
 
-    return state, control, props
+    return state, control, prop
 
 class TestStateMeasure:
     """
@@ -67,11 +67,11 @@ class TestStateMeasure:
         This doesn't check for correctness of the measure yet.
         """
         state_measure = setup_state_measure
-        state, control, props = args_from_model(state_measure.model)
+        state, control, prop = args_from_model(state_measure.model)
 
-        # Run the state measure for a given `(state, control, props)` tuple
+        # Run the state measure for a given `(state, control, prop)` tuple
         # and check that no errors are raised
-        state_measure(state, control, props)
+        state_measure(state, control, prop)
         assert True
 
 class TestStateHistoryMeasure:
@@ -99,11 +99,11 @@ class TestStateHistoryMeasure:
         model = time_series_measure.model
         with sf.StateFile(model, str(fpath), mode='a') as f:
             # Add simple state history to the `StateFile` instance
-            state, control, props = args_from_model(model)
+            state, control, prop = args_from_model(model)
             for n in range(10):
                 f.append_state(state)
                 f.append_control(control)
-                f.append_prop(props)
+                f.append_prop(prop)
 
             # Test if the `TimeSeries` measure runs w/o error
             time_series_measure(f)

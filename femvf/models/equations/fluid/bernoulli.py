@@ -54,11 +54,11 @@ def BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
         p = f * p + (1-f)*psup
         return q, p
 
-    def res(state, control, props):
+    def res(state, control, prop):
         q, p = state['q'], state['p']
         area, psub, psup = control['area'], control['psub'], control['psup']
 
-        q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'])
+        q_, p_ = bernoulli_qp(area, psub, psup, prop['rho_air'])
         # print(q.shape, p.shape, q_.shape, p_.shape)
         return {'q': q-q_, 'p': p-p_}
 
@@ -113,11 +113,11 @@ def BernoulliSmoothMinSep(s: jnp.ndarray):
         p = f_sep * p
         return q, p
 
-    def res(state, control, props):
+    def res(state, control, prop):
         q, p = state['q'], state['p']
         area, psub, psup = control['area'], control['psub'], control['psup']
 
-        q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'], props['zeta_min'], props['zeta_sep'])
+        q_, p_ = bernoulli_qp(area, psub, psup, prop['rho_air'], prop['zeta_min'], prop['zeta_sep'])
         return {'q': q-q_, 'p': p-p_}
 
     N = s.size
@@ -172,11 +172,11 @@ def BernoulliAreaRatioSep(s: jnp.ndarray):
         p = f_sep * p + (1-f_sep)*psup
         return q, p
 
-    def res(state, control, props):
+    def res(state, control, prop):
         q, p = state['q'], state['p']
         area, psub, psup = control['area'], control['psub'], control['psup']
 
-        q_, p_ = bernoulli_qp(area, psub, psup, props['rho_air'], props['r_sep'], props['area_lb'])
+        q_, p_ = bernoulli_qp(area, psub, psup, prop['rho_air'], prop['r_sep'], prop['area_lb'])
         return {'q': q-q_, 'p': p-p_}
 
     N = s.size

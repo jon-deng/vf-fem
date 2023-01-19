@@ -9,7 +9,7 @@ def make_residuals(model):
     SUB_MODELS = tuple([getattr(model, name) for name in MODEL_ATTR_NAMES
                         if hasattr(model, name)])
 
-    def residuals(ini_state, fin_state, control, dt, props):
+    def residuals(ini_state, fin_state, control, dt, prop):
         model.set_ini_state(ini_state)
         model.set_fin_state(fin_state)
         model.set_control(control)

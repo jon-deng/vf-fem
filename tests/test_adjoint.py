@@ -45,10 +45,10 @@ np.random.seed(123)
 
 def taylor_order(f0, hs, fs,
                  gstate, gcontrols, gprops, gtimes,
-                 dstate, dcontrols, dprops, dtimes):
+                 dstate, dcontrols, dprop, dtimes):
 
     ## Project the gradient along the step direction
-    directions = vec.concatenate_vec([dstate, dprops, dtimes, *dcontrols])
+    directions = vec.concatenate_vec([dstate, dprop, dtimes, *dcontrols])
     gradients = vec.concatenate_vec([gstate, gprops, gtimes, *gcontrols])
 
     grad_step = linalg.dot(directions, gradients)
@@ -72,7 +72,7 @@ class TaylorTest(unittest.TestCase):
             if os.path.isfile(base_path):
                 os.remove(base_path)
             with sf.StateFile(self.model, base_path, mode='w') as f:
-                integrate(self.model, f, self.state0, self.controls, self.props, self.times)
+                integrate(self.model, f, self.state0, self.controls, self.prop, self.times)
 
         print("Computing gradient via adjoint")
         t_start = perf_counter()
@@ -86,7 +86,7 @@ class TaylorTest(unittest.TestCase):
         return f0, grads
 
     def get_taylor_order(self, lsearch_fname, hs,
-                         dstate=None, dcontrols=None, dprops=None, dtimes=None):
+                         dstate=None, dcontrols=None, dprop=None, dtimes=None):
         """
         Runs the taylor order test along the specified direction
         """
@@ -99,9 +99,9 @@ class TaylorTest(unittest.TestCase):
             dcontrols = [self.model.control.copy()]
             dcontrols[0][:] = 0.0
 
-        if dprops is None:
-            dprops = self.model.props.copy()
-            dprops[:] = 0.0
+        if dprop is None:
+            dprop = self.model.prop.copy()
+            dprop[:] = 0.0
 
         if dtimes is None:
             dtimes = self.times.copy()
@@ -112,8 +112,8 @@ class TaylorTest(unittest.TestCase):
             if os.path.exists(lsearch_fname):
                 os.remove(lsearch_fname)
             lsearch_fname = line_search(
-                hs, self.model, self.state0, self.controls, self.props, self.times,
-                dstate, dcontrols, dprops, dtimes, filepath=lsearch_fname)
+                hs, self.model, self.state0, self.controls, self.prop, self.times,
+                dstate, dcontrols, dprop, dtimes, filepath=lsearch_fname)
         else:
             print("Line search simulations already exist. Using existing files.")
 
@@ -125,7 +125,7 @@ class TaylorTest(unittest.TestCase):
         (order_1, order_2), (grad_step, grad_step_fd) = taylor_order(
             self.f0, hs, fs,
             gstate, gcontrols, gprops, gtimes,
-            dstate, dcontrols, dprops, dtimes)
+            dstate, dcontrols, dprop, dtimes)
 
         # self.plot_taylor_convergence(grad_step, hs, gs)
         # self.plot_grad_uva(self.model, grad_uva)
@@ -185,8 +185,8 @@ class TestBasicGradient(TaylorTest):
         self.CASE_NAME = 'singleperiod'
 
         ## Load the model
-        self.model, self.props = load_fsi_kelvinvoigt_model(self.COUPLING)
-        # self.model, self.props = get_starting_fsai_model(self.COUPLING)
+        self.model, self.prop = load_fsi_kelvinvoigt_model(self.COUPLING)
+        # self.model, self.prop = get_starting_fsai_model(self.COUPLING)
 
         ## Set baseline parameters (point the model is linearized around)
         t_start, t_final = 0, 0.01
@@ -213,11 +213,11 @@ class TestBasicGradient(TaylorTest):
         hs = 2.0**(np.arange(2, 9)-10)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
-        dprops = self.props.copy()
-        dprops[:] = 0.0
-        dprops['emod'][:] = 1.0*step_size*10
+        dprop = self.prop.copy()
+        dprop[:] = 0.0
+        dprop['emod'][:] = 1.0*step_size*10
 
-        order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dprop=dprop)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
@@ -344,9 +344,9 @@ class TestBasicGradientSingleStep(TaylorTest):
         self.CASE_NAME = 'singlestep'
 
         ## parameter set
-        # self.model, self.props = get_starting_kelvinvoigt_model(self.COUPLING)
-        self.model, self.props = load_fsai_rayleigh_model(self.COUPLING)
-        self.model.set_prop(self.props)
+        # self.model, self.prop = get_starting_kelvinvoigt_model(self.COUPLING)
+        self.model, self.prop = load_fsai_rayleigh_model(self.COUPLING)
+        self.model.set_prop(self.prop)
 
         t_start, t_final = 0, 0.001
         times_meas = np.linspace(t_start, t_final, 2)
@@ -383,11 +383,11 @@ class TestBasicGradientSingleStep(TaylorTest):
         hs = 2.0**(np.arange(7)-5)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
-        dprops = self.props.copy()
-        dprops[:] = 0.0
-        dprops['emod'][:] = 1.0*step_size/5
+        dprop = self.prop.copy()
+        dprop[:] = 0.0
+        dprop['emod'][:] = 1.0*step_size/5
 
-        order_1, order_2 = self.get_taylor_order(save_path, hs, dprops=dprops)
+        order_1, order_2 = self.get_taylor_order(save_path, hs, dprop=dprop)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
 
