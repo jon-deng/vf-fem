@@ -32,7 +32,7 @@ class TestWRA(unittest.TestCase):
         # Idealized /a/
         # prop['area'][:22] = 0.5
         # prop['area'][22:] = 3
-        self.model.set_props(prop)
+        self.model.set_prop(prop)
 
         # Set the impulse flow input
         state0 = self.model.state0.copy()

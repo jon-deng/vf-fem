@@ -100,7 +100,7 @@ class AcousticPower(AcousticFunctional):
     """The norm of the final flow rate"""
     def eval(self, f):
         # dt must be a constant for acoustic simulations
-        prop = f.get_props()
+        prop = f.get_prop()
         RHO, CSPEED = prop['rho_air'][0], prop['soundspeed'][0]
         AMOUTH = prop['area'][-1]
         ZMOUTH = RHO*CSPEED/AMOUTH
@@ -127,7 +127,7 @@ class AcousticPower(AcousticFunctional):
         return work/T
 
     def eval_dac_state(self, f, n):
-        prop = f.get_props()
+        prop = f.get_prop()
         RHO, CSPEED = prop['rho_air'], prop['soundspeed']
         AMOUTH = prop['area'][-1]
         ZMOUTH = RHO*CSPEED/AMOUTH

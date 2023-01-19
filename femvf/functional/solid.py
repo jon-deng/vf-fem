@@ -542,7 +542,7 @@ class KV3DDampingWork(SolidFunctional):
 
     def eval(self, f):
         solid = self.model.solid
-        self.model.set_props(f.get_props())
+        self.model.set_prop(f.get_prop())
         N_START = self.constants['n_start']
         N_STATE = f.size
 
@@ -650,7 +650,7 @@ class KVDampingWork(SolidFunctional):
 
     def eval(self, f):
         solid = self.model.solid
-        self.model.set_props(f.get_props())
+        self.model.set_prop(f.get_prop())
         N_START = self.constants['n_start']
         N_STATE = f.size
 

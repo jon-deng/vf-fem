@@ -46,7 +46,7 @@ def test_pressure_qualitative(model):
     # prop['r_sep'] = 1.5
     # prop['zeta_min'] = 1e-4
     # prop['zeta_sep'] = 1e-3
-    model.set_props(prop)
+    model.set_prop(prop)
     print(model.prop['ymid'][:])
 
     control = model.control

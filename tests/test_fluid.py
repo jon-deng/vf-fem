@@ -24,7 +24,7 @@ class TestBernoulli:
         """
         fluid = setup_bernoulli()
 
-        fluid.set_props(self.fluid_properties)
+        fluid.set_prop(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
 
@@ -64,7 +64,7 @@ class TestBernoulli:
         """
         np.random.seed(0)
         fluid = self.fluid
-        fluid.set_props(self.fluid_properties)
+        fluid.set_prop(self.fluid_properties)
 
         psub0, psup0 = 8000, 0
         usurf0 = self.surface_coordinates
@@ -177,7 +177,7 @@ class TestBernoulli:
         """
         np.random.seed(0)
         fluid = self.fluid
-        fluid.set_props(self.fluid_properties)
+        fluid.set_prop(self.fluid_properties)
 
         surface_coordinates = self.surface_coordinates
 
@@ -309,7 +309,7 @@ class TestSmoothApproximations(CommonSetup):
         Plots the values of the smoothing factors
         """
         fluid = self.fluid
-        fluid.set_props(self.fluid_properties)
+        fluid.set_prop(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]
@@ -333,7 +333,7 @@ class TestSmoothApproximations(CommonSetup):
         Plots the values of the smoothing factors
         """
         fluid = self.fluid
-        fluid.set_props(self.fluid_properties)
+        fluid.set_prop(self.fluid_properties)
 
         xy_surf, fluid_props = self.surface_coordinates, self.fluid_properties
         y = xy_surf.reshape(-1, 2)[:, 1]

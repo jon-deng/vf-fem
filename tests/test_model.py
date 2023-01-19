@@ -71,7 +71,7 @@ class TestFSAIModel(unittest.TestCase):
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_props(fluid_props)
+        # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
@@ -84,7 +84,7 @@ class TestFSAIModel(unittest.TestCase):
 
     def test_apply_dres_dstate1(self):
         model, ini_state, controls, prop = self.config_fsai_model()
-        model.set_props(prop)
+        model.set_prop(prop)
 
         fin_state = ini_state.copy()
 
@@ -119,7 +119,7 @@ class TestFSAIModel(unittest.TestCase):
 
     def test_solve_dres_dstate1(self):
         model, ini_state, controls, prop = self.config_fsai_model()
-        model.set_props(prop)
+        model.set_prop(prop)
 
         fin_state = ini_state.copy()
 

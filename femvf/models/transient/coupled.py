@@ -567,9 +567,9 @@ class FSAIModel(BaseTransientFSIModel):
         fl_props = prop[sl_nblock:sl_nblock+fl_nblock]
         ac_props = prop[sl_nblock+fl_nblock:sl_nblock+fl_nblock+ac_nblock]
 
-        self.solid.set_props(sl_props)
-        self.fluid.set_props(fl_props)
-        self.acoustic.set_props(ac_props)
+        self.solid.set_prop(sl_props)
+        self.fluid.set_prop(fl_props)
+        self.acoustic.set_prop(ac_props)
 
     ## Coupling methods
     def _set_ini_solid_state(self, sl_state0):

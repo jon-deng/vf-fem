@@ -41,7 +41,7 @@ if __name__ == '__main__':
     prop['kcontact'][()] = 1e13
     prop['length'][:] = 1.5
     # prop['muscle_stress'][:] = 0.0
-    solid.set_props(prop)
+    solid.set_prop(prop)
 
     res = dfn.assemble(solid.forms['form.un.f1uva'])
 

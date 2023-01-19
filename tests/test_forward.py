@@ -86,7 +86,7 @@ class ForwardConfig(unittest.TestCase):
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.forms['fspace.vector']).vector()
 
-        # model.fluid.set_props(fluid_props)
+        # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0
@@ -140,7 +140,7 @@ class ForwardConfig(unittest.TestCase):
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.forms['fspace.vector']).vector()
 
-        # model.fluid.set_props(fluid_props)
+        # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
@@ -196,7 +196,7 @@ class ForwardConfig(unittest.TestCase):
         # Set the initial state
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_props(fluid_props)
+        # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
@@ -242,7 +242,7 @@ class ForwardConfig(unittest.TestCase):
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.vector_fspace).vector()
 
-        # model.fluid.set_props(fluid_props)
+        # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
         ini_state = model.state0.copy()
