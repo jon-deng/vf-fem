@@ -393,6 +393,14 @@ class SwellingKelvinVoigtWEpitheliumNoShape(SolidDynamicalSystem):
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels
         )
 
+class LinearizedSwellingKelvinVoigtWEpitheliumNoShape(LinearizedSolidDynamicalSystem):
+    PROPERTY_DEFAULTS = {}
+    @staticmethod
+    def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
+        return solidforms.SwellingKelvinVoigtWEpitheliumNoShape(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels
+        )
+
 class SwellingLinearizedKelvinVoigtWEpithelium(LinearizedSolidDynamicalSystem):
     PROPERTY_DEFAULTS = {}
     @staticmethod
