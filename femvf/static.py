@@ -27,7 +27,8 @@ import numpy as np
 from blockarray import blockmat as bm, blockvec as bv
 import nonlineq
 
-from .models.transient import solid as slmodel, coupled as comodel
+from .models.dynamical import base as dynbase
+from .models.transient import solid as slmodel, coupled as comodel, base as trabase
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 # import warnings
@@ -73,22 +74,35 @@ def static_solid_configuration(
     Return the static state for a solid model
 
     """
+    if isinstance(model, trabase.BaseTransientModel):
+        is_tra_model = True
+    elif isinstance(model, dynbase.BaseDynamicalModel):
+        is_tra_model = False
+    else:
+        raise ValueError()
+
     # Set the initial guess u=0 and constants (v, a) = (0, 0)
     if state is None:
-        state_n = model.state0.copy()
+        if is_tra_model:
+            state_n = model.state.copy()
+        else:
+            state_n = model.state0.copy()
         state_n[:] = 0.0
     else:
         state_n = state
 
-    model.set_fin_state(state_n)
-    model.set_ini_state(state_n)
+    if is_tra_model:
+        model.set_fin_state(state_n)
+        model.set_ini_state(state_n)
+    else:
+        model.set_state(state_n)
     model.set_control(control)
     model.set_prop(prop)
 
     if linear_solver == 'manual':
         def iterative_subproblem(x_n):
-            model.solid.forms['coeff.state.u1'].vector()[:] = x_n
-            dx = model.solid.forms['coeff.state.u1'].vector()
+            model.forms['coeff.state.u1'].vector()[:] = x_n
+            dx = model.forms['coeff.state.u1'].vector()
 
             jac = dfn.derivative(
                 model.forms['form.un.f1uva'],
@@ -111,7 +125,8 @@ def static_solid_configuration(
         def norm(res_n):
             return res_n.norm('l2')
 
-        u, info = nonlineq.newton_solve(state_n.sub['u'], iterative_subproblem, norm=norm)
+        u_0 = model.forms['coeff.state.u1'].vector().copy()
+        u, info = nonlineq.newton_solve(u_0, iterative_subproblem, norm=norm)
         state_n['u'] = u
     elif linear_solver == 'automatic':
         jac = dfn.derivative(
