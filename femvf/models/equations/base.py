@@ -2,16 +2,11 @@
 This module defines the basic non-linear residual
 """
 
-from typing import Callable, Mapping, Any
+from typing import Mapping, Any, Callable
 
-class SolidResidual:
-    """
-    Represents a symbolic (`UFL`) residual
-    """
+import ufl
 
-    def __init__(self, res, param):
-        self._res = res
-        self._param = param
+class BaseResidual:
 
     _param: Mapping[str, Any]
     _res: Any
@@ -26,30 +21,34 @@ class SolidResidual:
     def __getitem__(self, key):
         return self.param[key]
 
-    def __neg__(self):
-        return ResidualMultiple(self, -1)
+class UFLResidual(BaseResidual):
+    """
+    Represents a symbolic residual using UFL
 
-    def __mul__(self, scalar):
-        return ResidualMultiple(self, scalar)
+    Parameters
+    ----------
+    res:
+        A form in the UFL language
+    param:
+        A mapping from names to form parameters
+    """
 
-    def __rmul__(self, other: 'BaseResidual'):
-        return ResidualSum(self, other)
+    def __init__(self, res, param):
+        self._res = res
+        self._param = param
 
-    def __add__(self, other: 'BaseResidual'):
-        return ResidualSum(self, other)
+class JAXResidual(BaseResidual):
+    """
+    Represents a symbolic residual using JAX
 
-    def __radd__(self, other: 'BaseResidual'):
-        return ResidualSum(self, other)
+    Parameters
+    ----------
+    res : Callable
+        A residual function implemented using JAX
+    param:
+        A mapping from names to form parameters
+    """
 
-
-class ResidualSum(BaseResidual):
-
-    def __init__(self, res1, res2):
-        self._res = res1._res + res2._res
-        self._param = res1.param + res2.param
-
-class ResidualMultiple(BaseResidual):
-
-    def __init__(self, res, scalar):
-        self._res = scalar*res._res
-        self._param = res1.param + res2.param
+    def __init__(self, res, param):
+        self._res = res
+        self._param = param
