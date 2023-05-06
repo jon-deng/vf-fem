@@ -1,9 +1,10 @@
 """
-Forward model
+Integrate models in time
 
 Uses CGS (cm-g-s) units unless otherwise stated
 """
 from typing import List, Optional, Mapping, Any, Tuple
+from numpy.typing import ArrayLike
 from tqdm import tqdm
 
 import numpy as np
@@ -22,14 +23,14 @@ def integrate(
         ini_state: bv.BlockVector,
         controls: List[bv.BlockVector],
         prop: bv.BlockVector,
-        times: bv.BlockVector,
+        times: ArrayLike,
         idx_meas: Optional[np.ndarray]=None,
         newton_solver_prm: Optional[Mapping[str, Any]]=None,
         write: bool=True,
         use_tqdm: bool=False
     ) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
     """
-    Integrate the model over each time in `times` for the specified parameters
+    Integrate the model over a set of time instances
 
     Parameters
     ----------
@@ -38,13 +39,13 @@ def integrate(
     ini_state : BlockVector
         Initial state of the system (for example: displacement, velocity, acceleration)
     controls : list(BlockVector)
-        List of control BlockVector with on entry for each integration time. If there is only one
-        control in the list, then the controls are considered to be constant in time.
+        List of control BlockVector with on entry for each integration time.
+        If there is only one control in the list, then the controls are considered to be constant in time.
     prop : BlockVector
         Properties vector for the system
-    times : BlockVector
-        Array of discrete integration times. Each time point is one integration point so the time
-        between successive time points is a time step.
+    times : ArrayLike
+        Array of discrete integration times with shape `(n,)`.
+        Each time point is one integration point so the time between successive time points is a time step.
     idx_meas : np.ndarray
         Array of integers marking which integration points correspond to something (usu. measurements)
     h5file : str
@@ -59,21 +60,20 @@ def integrate(
     if idx_meas is None:
         idx_meas = np.array([])
 
-    # Check integration times are specified correctly
-    times_vec = times[0]
-    if times_vec[-1] < times_vec[0]:
+    # Check given integration times are valid
+    if len(times) < 1:
+        raise ValueError("There must be at least 1 time integration point.")
+    if times[-1] <= times[0]:
         raise ValueError(
             "The final time point must be greater or equal to the initial one."
-            f"The input intial/final times were {times_vec[0]}/{times_vec[-1]}"
+            f"The input initial/final times were {times[0]}/{times[-1]}"
         )
-    if times_vec.size < 1:
-        raise ValueError("There must be at least 1 time integration points.")
 
     # Initialize datasets and save the initial state to the h5 file
     if write:
         f.init_layout()
         append_step_result(
-            f, ini_state, controls[0], times_vec[0],
+            f, ini_state, controls[0], times[0],
             {'num_iter': 0, 'abs_err': 0, 'rel_err': 0}
         )
         f.append_prop(prop)
@@ -82,7 +82,7 @@ def integrate(
 
     # Integrate the system over the specified times and record final state for each step
     fin_state, step_info = integrate_steps(
-        model, f, ini_state, controls, prop, times_vec,
+        model, f, ini_state, controls, prop, times,
         idx_meas=idx_meas, newton_solver_prm=newton_solver_prm, write=write,
         use_tqdm=use_tqdm
     )
@@ -93,7 +93,7 @@ def integrate_extend(
         model: BaseTransientModel,
         f: sf.StateFile,
         controls: bv.BlockVector,
-        times: bv.BlockVector,
+        times: ArrayLike,
         idx_meas: np.ndarray=None,
         newton_solver_prm: Optional[Options]=None,
         write: bool=True
@@ -121,7 +121,7 @@ def integrate_steps(
         ini_state: bv.BlockVector,
         controls: List[bv.BlockVector],
         prop: bv.BlockVector,
-        times: bv.BlockVector,
+        times: ArrayLike,
         idx_meas: Optional[np.ndarray]=None,
         newton_solver_prm: Optional[Mapping[str, Any]]=None,
         write: bool=True,
@@ -139,19 +139,23 @@ def integrate_steps(
     model.set_prop(prop)
     step_info = {}
 
-    time_indices = tqdm(range(1, times.size)) if use_tqdm else range(1, times.size)
-    for n in time_indices:
+    times_ini = times[:-1]
+    times_fin = times[1:]
+    if use_tqdm:
+        times_data = tqdm(enumerate(zip(times_ini, times_fin)))
+    else:
+        times_data = enumerate(zip(times_ini, times_fin))
+    for n, (time0, time1) in times_data:
         control1 = controls[min(n, len(controls)-1)]
-        dt = times[n] - times[n-1]
+        dt = time1 - time0
 
         state1, step_info = integrate_step(
             model, state0, control1, prop, dt, options=newton_solver_prm
         )
-        # if n%100 == 0:
-        #     print(step_info['num_iter'])
+
         # Write the solution outputs to the h5 file
         if write:
-            append_step_result(f, state1, control1, times[n], step_info)
+            append_step_result(f, state1, control1, time1, step_info)
             if n in idx_meas:
                 f.append_meas_index(n)
 
@@ -166,7 +170,7 @@ def integrate_linear(
         dini_state: bv.BlockVector,
         dcontrols: List[bv.BlockVector],
         dprop: bv.BlockVector,
-        dtimes: bv.BlockVector
+        dtimes: ArrayLike
     ) -> bv.BlockVector:
     """
     Integrate linearized forward equations
@@ -206,11 +210,13 @@ def integrate_linear(
         # note that the input "dx^{n-1}" vector is the previous output "dx"
         _dini_state = dfin_state_n
         _dcontrol = dcontrols[min(n, len(dcontrols)-1)]
-        _ddt = dtimes[0][n]-dtimes[0][n-1]
-        dres_n = (model.apply_dres_dstate0(_dini_state)
-                  + model.apply_dres_dcontrol(_dcontrol)
-                  + model.apply_dres_dp(dprop)
-                  + model.apply_dres_ddt(_ddt))
+        _ddt = dtimes[n]-dtimes[n-1]
+        dres_n = (
+            model.apply_dres_dstate0(_dini_state)
+            + model.apply_dres_dcontrol(_dcontrol)
+            + model.apply_dres_dp(dprop)
+            + model.apply_dres_ddt(_ddt)
+        )
         dfin_state_n = model.solve_dres_dstate1(-dres_n)
 
     return dfin_state_n

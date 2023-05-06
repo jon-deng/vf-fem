@@ -21,8 +21,7 @@ if __name__ == '__main__':
     model = setup_model('../meshes/M5-3layers.msh')
     state0, control, prop = setup_transient_args(model)
 
-    _times = 1e-4*np.arange(100)
-    times = bv.BlockVector((_times,), (1,))
+    times = 1e-4*np.arange(100)
 
     fpath = './out/.benchmark_postprocess.h5'
     if not path.isfile(fpath):

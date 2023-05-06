@@ -27,8 +27,7 @@ if __name__ == '__main__':
     model = setup_model('../meshes/M5-3layers.msh')
     state0, control, prop = setup_transient_args(model)
 
-    _times = 1e-4*np.arange(100)
-    times = BlockVector((_times,), (1,))
+    times = 1e-4*np.arange(100)
 
     statement = 'run_forward(model, state0, control, prop, times)'
     benchmark(

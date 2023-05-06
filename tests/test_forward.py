@@ -13,7 +13,7 @@ import dolfin as dfn
 # import h5py
 
 import femvf.statefile as sf
-from femvf.forward import integrate, integrate_linear, integrate_step
+from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
@@ -261,7 +261,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_approx3D(self):
         model, ini_state, controls, prop = self.config_approx3D_model()
 
-        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = np.linspace(0, 0.01, 100)
 
         save_path = 'out/test_forward_fsi_2.5D.h5'
         if os.path.isfile(save_path):
@@ -273,7 +273,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_fsi_rayleigh(self):
         model, ini_state, controls, prop = self.config_fsi_rayleigh_model()
 
-        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = np.linspace(0, 0.01, 100)
 
         save_path = 'out/test_forward_fsi_rayleigh.h5'
         if os.path.isfile(save_path):
@@ -285,7 +285,7 @@ class TestIntegrate(ForwardConfig):
     def test_integrate_fsi_kelvinvoigt(self):
         model, ini_state, controls, prop = self.config_fsi_kelvinvoigt_model()
 
-        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = np.linspace(0, 0.01, 100)
 
         save_path = 'out/test_forward_fsi_kelvinvoigt.h5'
         if os.path.isfile(save_path):
@@ -296,7 +296,7 @@ class TestIntegrate(ForwardConfig):
 
     def test_integrate_fsai(self):
         model, ini_state, controls, prop = self.config_fsai_model()
-        times = vec.BlockVector((np.linspace(0, 0.01, 100),), labels=[('times',)])
+        times = np.linspace(0, 0.01, 100)
 
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
@@ -312,11 +312,10 @@ class TestIntegrate(ForwardConfig):
 
     def test_integrate_variable_controls(self):
         model, ini_state, _controls, prop = self.config_variable_controls()
-        _times = np.linspace(0, 0.01, 100)
-        times = vec.BlockVector([_times], labels=[['times']])
+        times = np.linspace(0, 0.01, 100)
 
         tau = 0.0005
-        controls = [(1-np.exp(-t/tau))*_controls[0] for t in _times[:30]]
+        controls = [(1-np.exp(-t/tau))*_controls[0] for t in times[:30]]
         # Set the total length of the WRAnalog to match the specified time step
         # dt = times[1]-times[0]
         # C, N = model.acoustic.prop['soundspeed'][0], model.acoustic.prop['area'].size
@@ -368,7 +367,7 @@ class TestIntegrate(ForwardConfig):
         NTIME = 50
         model, ini_state, controls, prop = self.config_fsi_model()
         control = controls[0]
-        times = vec.BlockVector((np.linspace(0, 0.01, NTIME),), labels=[('times',)])
+        times = np.linspace(0, 0.01, NTIME)
 
         ## Specify the test change in model parameters
         dini_state = model.state0.copy()
@@ -376,8 +375,8 @@ class TestIntegrate(ForwardConfig):
         dprop = model.prop.copy()
         dprop[:] = 0.0
         # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
-        dtimes = vec.BlockVector([np.linspace(0.0, 0.0, NTIME)], labels=[['times']])
-        dtimes['times'][-1] = 1e-10
+        dtimes = np.linspace(0.0, 0.0, NTIME)
+        dtimes[-1] = 1e-10
         dini_state[:] = 0.0
         for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
             model.solid.forms['bc.dirichlet'].apply(vec)
