@@ -1,3 +1,0 @@
-"""
-fluid model equations
-"""

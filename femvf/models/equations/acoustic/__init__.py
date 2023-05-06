@@ -1,3 +1,0 @@
-"""
-acoustic model equations
-"""
