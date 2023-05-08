@@ -4,6 +4,7 @@ A basic test to see if forward.integrate will actually run
 
 import os
 import unittest
+import pytest
 from time import perf_counter
 
 import numpy as np
@@ -425,7 +426,7 @@ if __name__ == '__main__':
     test = TestIntegrate()
     test.setUp()
     # test.test_integrate_variable_controls()
-    test.test_integrate_fsi_kelvinvoigt()
+    # test.test_integrate_fsi_kelvinvoigt()
     test.test_integrate_fsi_rayleigh()
     # test.test_integrate_approx3D()
     # test.test_integrate_fsai()

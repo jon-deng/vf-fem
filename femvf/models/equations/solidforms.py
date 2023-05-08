@@ -5,13 +5,88 @@ Contains definitions of different solid model forms
 import operator
 import warnings
 from functools import reduce
-from typing import Tuple, Mapping
+from typing import Tuple, Mapping, Callable, Union
 
 import numpy as np
 import dolfin as dfn
 import ufl
 
 from . import newmark
+
+CoefficientMapping = Mapping[str, dfn.Function]
+FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
+
+def set_fenics_function(function: Union[dfn.Function, dfn.Constant], value):
+    """
+    Set a constant value for a general fenics function
+    """
+    if isinstance(function, dfn.Constant):
+        function.values()[:] = value
+    else:
+        function.vector()[:] = value
+
+class FenicsForm:
+    """
+    Representation of a `dfn.Form` instance with associated coefficients
+
+    Parameters
+    ----------
+    residual: dfn.Form
+    coefficients: Mapping[str, dfn.Function]
+    """
+
+    def __init__(self, residual: dfn.Form, coefficients: CoefficientMapping):
+        self._residual = residual
+        self._coefficients = coefficients
+
+    @property
+    def residual(self):
+        return self._residual
+
+    @property
+    def coefficients(self):
+        return self._coefficients
+
+    ## Dict interface
+    def keys(self):
+        return self.coefficients.keys()
+
+    def values(self):
+        return self.coefficients.values()
+
+    def items(self):
+        return self.coefficients.items()
+
+    def __getitem__(self, key):
+        return self.coefficients[key]
+
+
+    ## Basic math
+    def __add__(self, other: 'FenicsForm'):
+        return add_form(self,  other)
+
+    def __radd__(self, other: 'FenicsForm'):
+        return add_form(self,  other)
+
+
+
+def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
+    """
+    Return a new `FenicsForm` from a sum of other forms
+    """
+    residual = form_a.residual + form_b.residual
+
+    duplicate_coeff_keys = set.intersection(set(form_a.coefficients.keys()), set(form_b.coefficients.keys()))
+    for key in list(duplicate_coeff_keys):
+        coeff_a, coeff_b = form_a.coefficients[key], form_b.coefficients[key]
+        # Replace duplicate coefficient keys by the `form_b` coefficient
+        # only if the duplicate coefficients from `form_b` and `form_a` have the
+        # same function space
+        if coeff_a.function_space() == coeff_b.function_space():
+            residual = ufl.replace(residual, {coeff_a: coeff_b})
+        else:
+            raise ValueError("Summed forms contain duplicate coefficients with different function spaces.")
+    return FenicsForm(residual, {**form_a.coefficients, **form_b.coefficients})
 
 def _depack_property_ufl_coeff(form_property):
     """
@@ -488,488 +563,373 @@ def base_form_definitions(
     return forms
 
 # Inertial effect forms
-def add_inertial_form(forms):
 
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.a1': forms['fspace.vector'],
-        'coeff.prop.rho': forms['fspace.scalar_dg0']
-    }
+class PredefinedFenicsForm(FenicsForm):
 
-    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
-    dx = measure
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.a1'])
+    _make_residual: Callable[[CoefficientMapping, dfn.Measure], dfn.Form]
 
-    a = forms['coeff.state.a1']
-    rho = forms['coeff.prop.rho']
-    inertial_body_force = rho*a
+    def __init__(self, function_spaces, measure: dfn.Measure):
+        coefficients = {
+            key: dfn.Function(function_space)
+            for key, function_space in function_spaces.items()
+        }
+        residual = self._make_residual(coefficients, measure)
+        super().__init__(residual, coefficients)
 
-    forms['form.un.f1uva'] += ufl.inner(inertial_body_force, vector_test) * dx
-    forms['coeff.state.a1'] = a
-    forms['coeff.prop.rho'] = rho
-    forms['expr.force_inertial'] = inertial_body_force
-    return forms
+class InertialForm(PredefinedFenicsForm):
+
+    def _make_residual(self, coefficients, measure):
+        vector_test = dfn.TestFunction(coefficients['coeff.state.a1'].function_space())
+
+        acc = coefficients['coeff.state.a1']
+        density = coefficients['coeff.prop.rho']
+        inertial_body_force = density*acc
+
+        return ufl.inner(inertial_body_force, vector_test) * measure
+        # forms['expr.force_inertial'] = inertial_body_force
 
 # Elastic effect forms
-def add_isotropic_elastic_form(forms):
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.prop.emod': forms['fspace.scalar_dg0']
-        # 'coeff.prop.nu': forms['fspace.scalar_dg0']
-    }
+class IsotropicElasticForm(PredefinedFenicsForm):
 
-    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
-    dx = measure
+    def _make_residual(self, coefficients, measure):
 
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
-    strain_test = form_strain_inf(vector_test)
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
+        strain_test = form_strain_inf(vector_test)
 
-    u = forms['coeff.state.u1']
-    inf_strain = form_strain_inf(u)
-    emod = forms['coeff.prop.emod']
-    nu = dfn.Constant(0.45)
-    stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        u = coefficients['coeff.state.u1']
+        inf_strain = form_strain_inf(u)
+        emod = coefficients['coeff.prop.emod']
+        nu = coefficients['coeff.prop.nu']
+        set_fenics_function(nu, 0.45)
+        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
 
-    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
-    forms['coeff.state.u1'] = u
-    forms['coeff.prop.emod'] = emod
-    forms['coeff.prop.nu'] = nu
+        # coefficients['expr.stress_elastic'] = stress_elastic
+        return ufl.inner(stress_elastic, strain_test) * measure
 
-    forms['expr.stress_elastic'] = stress_elastic
-    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-    stress_zz = lame_lambda*ufl.tr(inf_strain)
-    forms['expr.stress_elastic_zz'] = stress_zz
-    return forms
+class IsotropicIncompressibleElasticSwellingForm(PredefinedFenicsForm):
 
-def add_isotropic_elastic_with_incomp_swelling_form(forms):
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.prop.emod': forms['fspace.scalar_dg0']
-        # 'coeff.prop.nu': forms['fspace.scalar_dg0']
-    }
+    def _make_residual(self, coefficients, measure):
 
-    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
+        strain_test = form_strain_inf(vector_test)
 
-    dx = measure
-    dx = forms['measure.dx']
+        emod = coefficients['coeff.prop.emod']
+        nu = 0.5
+        dis = coefficients['coeff.state.u1']
+        inf_strain = form_strain_inf(dis)
+        v_swelling = coefficients['coeff.prop.v_swelling']
+        set_fenics_function(v_swelling, 1.0)
+        k_swelling = coefficients['coeff.prop.k_swelling']
+        set_fenics_function(k_swelling, 1.0)
+        lame_mu = emod/2/(1+nu)
+        stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(inf_strain.ufl_shape[0])
 
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
-    strain_test = form_strain_inf(vector_test)
+        return ufl.inner(stress_elastic, strain_test) * measure
+        # forms['expr.stress_elastic'] = stress_elastic
+        # return forms
 
-    emod = dfn.Function(forms['fspace.scalar_dg0'])
-    nu = 0.5
-    u = forms['coeff.state.u1']
-    inf_strain = form_strain_inf(u)
-    v_swelling = dfn.Function(forms['fspace.scalar_dg0'])
-    k_swelling = dfn.Constant(1.0)
-    v_swelling.vector()[:] = 1.0
-    lame_mu = emod/2/(1+nu)
-    stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(inf_strain.ufl_shape[0])
+class IsotropicElasticSwellingForm(PredefinedFenicsForm):
 
-    forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
-    forms['expr.stress_elastic'] = stress_elastic
-    return forms
+    def _make_residual(self, coefficients, measure):
+        """
+        Add an effect for isotropic elasticity with a swelling field
+        """
+        dx = measure
 
-def add_isotropic_elastic_with_swelling_form(forms):
-    """
-    Add an effect for isotropic elasticity with a swelling field
-    """
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.prop.emod': forms['fspace.scalar_dg0'],
-        'coeff.prop.v_swelling': forms['fspace.scalar_dg0'],
-        'coeff.prop.m_swelling': forms['fspace.scalar_dg0']
-    }
+        u = coefficients['coeff.state.u1']
 
-    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
-    dx = measure
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
+        DE = form_strain_lin_green_lagrange(u, vector_test)
+        E = form_strain_green_lagrange(u)
 
-    u = forms['coeff.state.u1']
+        emod = coefficients['coeff.prop.emod']
+        nu = dfn.Constant(0.45)
+        v = coefficients['coeff.prop.v_swelling']
+        v.vector()[:] = 1.0
+        m = coefficients['coeff.prop.m_swelling']
+        m.vector()[:] = 0.0
 
-    DE = form_strain_lin_green_lagrange(u, forms['test.vector'])
-    E = form_strain_green_lagrange(u)
+        E_v = v**(-2/3)*E + 1/2*(v**(-2/3)-1)*ufl.Identity(3)
+        # Here write the factor $m(v)*v^(-2/3)$ as $m(v)*v^(-1) * v^(1/3)$
+        # Then approximate the function $\hat{m} = m(v)*v^(-1)$ with a linear
+        # approximation with slope `m`
+        mhat = (m*(v-1) + 1)
+        S = mhat*v**(1/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
 
-    emod = forms['coeff.prop.emod']
-    nu = dfn.Constant(0.45)
-    v = forms['coeff.prop.v_swelling']
-    v.vector()[:] = 1.0
-    m = forms['coeff.prop.m_swelling']
-    m.vector()[:] = 0.0
+        return ufl.inner(S, DE) * dx
+        # # Make this the cauchy stress
+        # F = form_def_grad(u)
+        # J = ufl.det(F)
+        # forms['expr.stress_elastic'] = (1/J)*F*S*F.T
 
-    E_v = v**(-2/3)*E + 1/2*(v**(-2/3)-1)*ufl.Identity(3)
-    # Here write the factor $m(v)*v^(-2/3)$ as $m(v)*v^(-1) * v^(1/3)$
-    # Then approximate the function $\hat{m} = m(v)*v^(-1)$ with a linear
-    # approximation with slope `m`
-    mhat = (m*(v-1) + 1)
-    S = mhat*v**(1/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
-
-    forms['form.un.f1uva'] += ufl.inner(S, DE) * dx
-    # Make this the cauchy stress
-    F = form_def_grad(u)
-    J = ufl.det(F)
-    forms['expr.stress_elastic'] = (1/J)*F*S*F.T
-
-    # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-    # lame_mu = emod/2/(1+nu)
-    return forms
+        # # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
+        # # lame_mu = emod/2/(1+nu)
+        # return forms
 
 # Surface forcing forms
-def add_surface_pressure_form(forms):
+class SurfacePressureForm(PredefinedFenicsForm):
 
-    measure = forms['measure.ds_traction']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.fsi.p1': forms['fspace.scalar']
-    }
+    def _make_residual(self, coefficients, measure):
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+        ds = measure
 
-    ds = measure
+        dis = coefficients['coeff.state.u1']
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
+        mesh = coefficients['coeff.state.u1'].function_space().mesh()
+        facet_normal = ufl.FacetNormal(mesh)
 
-    u = forms['coeff.state.u1']
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
-    facet_normal = forms['geom.facet_normal']
+        p = coefficients['coeff.fsi.p1']
+        reference_traction = -p * form_pullback_area_normal(dis, facet_normal)
 
-    p = forms['coeff.fsi.p1']
-    reference_traction = -p * form_pullback_area_normal(u, facet_normal)
+        # coefficients['expr.fluid_traction'] = reference_traction
+        return ufl.inner(reference_traction, vector_test) * ds
 
-    forms['form.un.f1uva'] -= ufl.inner(reference_traction, vector_test) * ds
-    # forms['coeff.fsi.p1'] = p
+class ManualSurfaceContactTractionForm(PredefinedFenicsForm):
 
-    forms['expr.fluid_traction'] = reference_traction
-    return forms
+    def _make_residual(self, coefficients, measure):
 
-def add_manual_contact_traction_form(forms):
-    measure = forms['measure.ds_traction']
-    function_spaces = {
-        'coeff.state.manual.tcontact': forms['fspace.vector']
-    }
+        vector_test = dfn.TestFunction(coefficients['coeff.state.manual.tcontact'].function_space())
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+        # the contact traction must be manually linked with displacements and penalty parameters!
+        ycontact = coefficients['coeff.prop.ycontact']
+        ncontact = coefficients['coeff.prop.ncontact']
+        kcontact = coefficients['coeff.prop.kcontact']
 
-    ds = forms['measure.ds_traction']
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.manual.tcontact'])
+        ycontact = dfn.Constant(1.0)
+        kcontact = dfn.Constant(1.0)
+        ncontact = dfn.Constant([0.0, 1.0])
+        set_fenics_function(ycontact, np.inf)
+        set_fenics_function(kcontact, 1)
+        set_fenics_function(ncontact, [0, 1])
 
-    # the contact traction must be manually linked with displacements and penalty parameters!
-    ycontact = dfn.Constant(np.inf)
-    kcontact = dfn.Constant(1.0)
-    ncontact = dfn.Constant([0.0, 1.0])
-    tcontact = forms['coeff.state.manual.tcontact']
-    traction_contact = ufl.inner(tcontact, vector_test) * ds
-
-    forms['form.un.f1uva'] -= traction_contact
-    tcontact = forms['coeff.state.manual.tcontact']
-    forms['coeff.prop.ncontact'] = ncontact
-    forms['coeff.prop.kcontact'] = kcontact
-    forms['coeff.prop.ycontact'] = ycontact
-    return forms
+        tcontact = coefficients['coeff.state.manual.tcontact']
+        return ufl.inner(tcontact, vector_test) * measure
 
 # Surface membrane forms
-def add_isotropic_membrane(forms, large_def=False):
-    measure = forms['measure.ds_traction']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.prop.emod_membrane': forms['fspace.scalar_dg0'],
-        'coeff.prop.th_membrane': forms['fspace.scalar_dg0']
-    }
+class IsotropicMembraneForm(PredefinedFenicsForm):
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+     def _make_residual(self, coefficients, measure, large_def=False):
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
-    ds = forms['measure.ds_traction']
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
+        # Define the 8th order projector to get the planar strain component
+        mesh = coefficients['coeff.state.u1'].function_space().mesh()
+        facet_normal = ufl.FacetNormal(mesh)
+        n = ufl.as_tensor([facet_normal[0], facet_normal[1], 0.0])
+        nn = ufl.outer(n, n)
+        ident = ufl.Identity(n.ufl_shape[0])
+        project_pp = ufl.outer(ident-nn, ident-nn)
 
-    # Define the 8th order projector to get the planar strain component
-    ds_traction = ds
-    _n = forms['geom.facet_normal']
-    n = ufl.as_tensor([_n[0], _n[1], 0.0])
-    nn = ufl.outer(n, n)
-    ident = ufl.Identity(n.ufl_shape[0])
-    project_pp = ufl.outer(ident-nn, ident-nn)
+        i, j, k, l = ufl.indices(4)
 
-    i, j, k, l = ufl.indices(4)
+        dis = coefficients['coeff.state.u1']
+        if large_def:
+            strain = form_strain_green_lagrange(dis)
+            strain_test = form_strain_lin_green_lagrange(dis, vector_test)
+        else:
+            strain = form_strain_inf(dis)
+            strain_test = form_strain_inf(vector_test)
+        strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    u = forms['coeff.state.u1']
-    if large_def:
-        strain = form_strain_green_lagrange(u)
-        strain_test = form_strain_lin_green_lagrange(u, vector_test)
-    else:
-        strain = form_strain_inf(u)
+        emod = coefficients['coeff.prop.emod_membrane']
+        th_membrane = coefficients['coeff.prop.th_membrane']
+        nu = coefficients['coeff.prop.nu_membrane']
+        set_fenics_function(nu, 0.45)
+        mu = emod/2/(1+nu)
+        lmbda = emod*nu/(1+nu)/(1-2*nu)
+
+        strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * strain[j, k], (i, l))
+
+        # account for ambiguous 0/0 when emod=0
+        lmbda_pp = ufl.conditional(ufl.eq(emod, 0), 0, 2*mu*lmbda/(lmbda+2*mu))
+        stress_pp = 2*mu*strain_pp + lmbda_pp*ufl.tr(strain_pp)*(ident-nn)
+
+        return ufl.inner(stress_pp, strain_pp_test) * th_membrane*measure
+
+        # forms['form.un.f1uva'] += res
+        # forms['coeff.prop.nu_membrane'] = nu
+        # return forms
+
+class IsotropicIncompressibleMembraneForm(PredefinedFenicsForm):
+    def _make_residual(self, coefficients, measure, large_def=False):
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
+
+        # Define the 8th order projector to get the planar strain component
+        mesh = coefficients['coeff.state.u1'].function_space().mesh()
+        facet_normal = ufl.FacetNormal(mesh)
+        n = ufl.as_tensor([facet_normal[0], facet_normal[1], 0.0])
+        nn = ufl.outer(n, n)
+        ident = ufl.Identity(n.ufl_shape[0])
+        project_pp = ufl.outer(ident-nn, ident-nn)
+        i, j, k, l = ufl.indices(4)
+
         strain_test = form_strain_inf(vector_test)
-    strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
+        strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    emod = forms['coeff.prop.emod_membrane']
-    th_membrane = forms['coeff.prop.th_membrane']
-    nu = dfn.Constant(0.45)
-    mu = emod/2/(1+nu)
-    lmbda = emod*nu/(1+nu)/(1-2*nu)
+        dis = coefficients['coeff.state.u1']
+        if large_def:
+            strain = form_strain_green_lagrange(dis)
+            strain_test = form_strain_lin_green_lagrange(dis, vector_test)
+        else:
+            strain = form_strain_inf(dis)
+            strain_test = form_strain_inf(vector_test)
+        strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * strain[j, k], (i, l))
+        emod_membrane = coefficients['coeff.prop.emod_membrane']
+        th_membrane = coefficients['coeff.prop.th_membrane']
+        nu = 0.5
+        lame_mu = emod_membrane/2/(1+nu)
+        strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * strain[j, k], (i, l))
 
-    # account for ambiguous 0/0 when emod=0
-    lmbda_pp = ufl.conditional(ufl.eq(emod, 0), 0, 2*mu*lmbda/(lmbda+2*mu))
-    stress_pp = 2*mu*strain_pp + lmbda_pp*ufl.tr(strain_pp)*(ident-nn)
+        stress_pp = 2*lame_mu*strain_pp + 2*lame_mu*ufl.tr(strain_pp)*(ident-nn)
 
-    res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
-
-    forms['form.un.f1uva'] += res
-    forms['coeff.prop.nu_membrane'] = nu
-    return forms
-
-def add_incompressible_epithelium_membrane(forms):
-    measure = forms['measure.ds_traction']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.prop.emod_membrane': forms['fspace.scalar_dg0'],
-        'coeff.prop.th_membrane': forms['fspace.scalar_dg0']
-    }
-
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
-
-    ds = forms['measure.ds_traction']
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
-
-    # Define the 8th order projector to get the planar strain component
-    ds_traction = forms['measure.ds_traction']
-    n = forms['geom.facet_normal']
-    nn = ufl.outer(n, n)
-    ident = ufl.Identity(n.geometric_dimension())
-    project_pp = ufl.outer(ident-nn, ident-nn)
-
-    i, j, k, l = ufl.indices(4)
-
-    strain_test = form_strain_inf(vector_test)
-    strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
-
-    emod_membrane = forms['coeff.prop.emod_membrane']
-    th_membrane = forms['coeff.prop.th_membrane']
-    nu = 0.5
-    lame_mu = emod_membrane/2/(1+nu)
-    inf_strain = forms['expr.kin.inf_strain']
-    inf_strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * inf_strain[j, k], (i, l))
-
-    stress_pp = 2*lame_mu*inf_strain_pp + 2*lame_mu*ufl.tr(inf_strain_pp)*(ident-nn)
-
-    res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
-
-    forms['form.un.f1uva'] += res
-    return forms
+        return ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure
 
 # Viscous effect forms
-def add_rayleigh_viscous_form(forms):
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.v1': forms['fspace.vector'],
-        'coeff.prop.emod': forms['fspace.scalar_dg0'],
-        'coeff.prop.rho': forms['fspace.scalar_dg0']
-    }
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+class RayleighDampingForm(PredefinedFenicsForm):
 
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.v1'])
+    def _make_residual(self, coefficients, measure, large_def=False):
 
-    dx = measure
-    strain_test = form_strain_inf(vector_test)
-    v = forms['coeff.state.v1']
+        vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
-    rayleigh_m = dfn.Constant(1.0)
-    rayleigh_k = dfn.Constant(1.0)
+        dx = measure
+        strain_test = form_strain_inf(vector_test)
+        v = coefficients['coeff.state.v1']
 
-    emod = forms['coeff.prop.emod']
-    nu = dfn.Constant(0.45)
-    inf_strain = form_strain_inf(v)
-    stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
-    stress_visco = rayleigh_k*stress_elastic
+        rayleigh_m = coefficients['coeff.prop.rayleigh_m']
+        set_fenics_function(rayleigh_m, 1)
+        rayleigh_k = coefficients['coeff.prop.rayleigh_k']
+        set_fenics_function(rayleigh_k, 1)
 
-    rho = forms['coeff.prop.rho']
-    force_visco = rayleigh_m*rho*v
+        emod = coefficients['coeff.prop.emod']
+        nu = coefficients['coeff.prop.nu']
+        set_fenics_function(nu, 0.45)
+        inf_strain = form_strain_inf(v)
+        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        stress_visco = rayleigh_k*stress_elastic
 
-    damping = (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
+        rho = coefficients['coeff.prop.rho']
+        force_visco = rayleigh_m*rho*v
 
-    forms['form.un.f1uva'] += damping
-    forms['coeff.prop.nu'] = nu
-    forms['coeff.prop.rayleigh_m'] = rayleigh_m
-    forms['coeff.prop.rayleigh_k'] = rayleigh_k
-    return forms
+        return (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
 
-def add_kv_viscous_form(forms):
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.v1': forms['fspace.vector'],
-        'coeff.prop.eta': forms['fspace.scalar_dg0'],
-        'coeff.prop.rho': forms['fspace.scalar_dg0']
-    }
+        # coefficients['form.un.f1uva'] += damping
+        # # coefficients['coeff.prop.nu'] = nu
+        # # coefficients['coeff.prop.rayleigh_m'] = rayleigh_m
+        # # coefficients['coeff.prop.rayleigh_k'] = rayleigh_k
+        # return coefficients
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+class KelvinVoigtForm(PredefinedFenicsForm):
 
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.v1'])
+    def _make_residual(self, coefficients, measure):
 
-    dx = measure
-    strain_test = form_strain_inf(vector_test)
-    v = forms['coeff.state.v1']
+        vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
-    eta = forms['coeff.prop.eta']
-    inf_strain_rate = form_strain_inf(v)
-    stress_visco = eta*inf_strain_rate
+        strain_test = form_strain_inf(vector_test)
+        v = coefficients['coeff.state.v1']
 
-    forms['form.un.f1uva'] += ufl.inner(stress_visco, strain_test) * dx
-    forms['expr.kv_stress'] = stress_visco
-    forms['expr.kv_strain_rate'] = inf_strain_rate
-    return forms
+        eta = coefficients['coeff.prop.eta']
+        inf_strain_rate = form_strain_inf(v)
+        stress_visco = eta*inf_strain_rate
 
-def add_ap_force_form(forms):
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.state.u1': forms['fspace.vector'],
-        'coeff.state.v1': forms['fspace.vector'],
-        'coeff.prop.eta': forms['fspace.scalar_dg0'],
-        'coeff.prop.emod': forms['fspace.scalar_dg0'],
-        'coeff.prop.nu': forms['fspace.scalar_dg0'],
-        'coeff.prop.length': forms['fspace.scalar'],
-        'coeff.prop.u_ant': forms['fspace.vector'],
-        'coeff.prop.u_pos': forms['fspace.vector'],
-        'coeff.prop.muscle_stress': forms['fspace.scalar']
-    }
+        return ufl.inner(stress_visco, strain_test) * measure
+        # forms['expr.kv_stress'] = stress_visco
+        # forms['expr.kv_strain_rate'] = inf_strain_rate
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+class APForceForm(PredefinedFenicsForm):
 
-    vector_test = dfn.TestFunction(function_spaces['coeff.state.v1'])
+    def _make_residual(self, coefficients, measure):
+        vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
-    dx = forms['measure.dx']
-    vector_test = forms['test.vector']
+        u1, v1 = coefficients['coeff.state.u1'], coefficients['coeff.state.v1']
+        kv_eta = coefficients['coeff.prop.eta']
+        emod = coefficients['coeff.prop.emod']
+        nu = coefficients['coeff.prop.nu']
+        lame_mu = emod/2/(1+nu)
 
-    u1, v1 = forms['coeff.state.u1'], forms['coeff.state.v1']
-    kv_eta = forms['coeff.prop.eta']
-    emod = forms['coeff.prop.emod']
-    nu = forms['coeff.prop.nu']
-    lame_mu = emod/2/(1+nu)
+        u_ant = coefficients['coeff.prop.u_ant'] # zero values by default
+        u_pos = coefficients['coeff.prop.u_pos']
+        length = coefficients['coeff.prop.length']
+        muscle_stress = coefficients['coeff.prop.muscle_stress']
 
-    u_ant = forms['coeff.prop.u_ant'] # zero values by default
-    u_pos = forms['coeff.prop.u_pos']
-    length = forms['coeff.prop.length']
-    muscle_stress = forms['coeff.prop.muscle_stress']
+        d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
+        d2v_dz2 = (u_ant - 2*v1 + u_pos) / length**2
+        force_elast_ap = (lame_mu+muscle_stress)*d2u_dz2
+        force_visco_ap = 0.5*kv_eta*d2v_dz2
+        stiffness = ufl.inner(force_elast_ap, vector_test) * measure
+        viscous = ufl.inner(force_visco_ap, vector_test) * measure
 
-    d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
-    d2v_dz2 = (u_ant - 2*v1 + u_pos) / length**2
-    force_elast_ap = (lame_mu+muscle_stress)*d2u_dz2
-    force_visco_ap = 0.5*kv_eta*d2v_dz2
-    stiffness = ufl.inner(force_elast_ap, vector_test) * dx
-    viscous = ufl.inner(force_visco_ap, vector_test) * dx
-
-    forms['form.un.f1uva'] += -stiffness - viscous
-    return forms
+        return -stiffness - viscous
 
 # Add shape effect forms
-def add_shape_form(forms):
+class APForceForm(PredefinedFenicsForm):
     """
     Adds a shape parameter
     """
-    measure = forms['measure.dx']
-    function_spaces = {
-        'coeff.prop.umesh': forms['fspace.vector']
-    }
 
-    # Update any duplicated coefficients
-    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
-    for key, new_coeff in new_forms.items():
-        if key in forms:
-            print(f'Replacing duplicate key {key}')
-            old_coeff: ufl.Coefficient = forms[key]
-            # print('yoyo')
-            assert old_coeff.function_space() == new_coeff.function_space()
-            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
-    forms.update(new_forms)
+    def _make_residual(self, coefficients, measure):
 
-    umesh = forms['coeff.prop.umesh']
+        umesh = coefficients['coeff.prop.umesh']
+        mesh = coefficients['coeff.prop.umesh'].function_space().mesh()
 
-    # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
-    # `ufl.SpatialCoordinate(mesh)`
-    # This doesn't have an associated function/vector of values so both are included
-    # here
-    # The code has to manually account for 'coeff.prop' cases that have both a
-    # function/vector and ufl coefficient instance
-    forms['coeff.prop.umesh'] = (umesh, ufl.SpatialCoordinate(forms['mesh.mesh']))
-    forms['mesh.REF_COORDINATES'] = forms['mesh.mesh'].coordinates().copy()
-    return forms
+        # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
+        # `ufl.SpatialCoordinate(mesh)`
+        # This doesn't have an associated function/vector of values so both are included
+        # here
+        # The code has to manually account for 'coeff.prop' cases that have both a
+        # function/vector and ufl coefficient instance
+        # forms['coeff.prop.umesh'] = (umesh, ufl.SpatialCoordinate(mesh))
+        # forms['mesh.REF_COORDINATES'] = mesh.coordinates().copy()
+        return 0
 
 ## Form models
 def Rayleigh(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        add_newmark_time_disc_form(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_rayleigh_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+        mesh, mesh_functions: list[dfn.MeshFunction], mesh_function_value_labels: list[Mapping[str, int]],
+        fsi_facet_labels, fixed_facet_labels
+    ):
+    vertex_func, facet_func, cell_func = mesh_functions
+    vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_function_value_labels
+    dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+    _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+    traction_ds = reduce(operator.add, _traction_ds)
+
+    # Function space
+    SCALAR_CG1 = dfn.FunctionSpace(mesh, 'CG', 1)
+    VECTOR_CG1 = dfn.VectorFunctionSpace(mesh, 'CG', 1)
+    SCALAR_DG0 = dfn.FunctionSpace(mesh, 'DG', 0)
+
+    form = (
+        InertialForm({'coeff.prop.rho': SCALAR_DG0, 'coeff.state.a1': VECTOR_CG1}, dx)
+        + IsotropicElasticForm({'coeff.state.u1': VECTOR_CG1, 'coeff.prop.emod': SCALAR_DG0, 'coeff.prop.nu': SCALAR_DG0}, dx)
+        + RayleighDampingForm(
+            {
+                'coeff.state.v1': VECTOR_CG1, 'coeff.prop.rho': SCALAR_DG0, 'coeff.prop.emod': SCALAR_DG0, 'coeff.prop.nu': SCALAR_DG0,
+                'coeff.prop.rayleigh_m': SCALAR_DG0, 'coeff.prop.rayleigh_k': SCALAR_DG0
+            }, dx
+        )
+        + SurfacePressureForm({'coeff.state.u1': VECTOR_CG1, 'coeff.fsi.p1': SCALAR_CG1}, dx)
+        + ManualSurfaceContactTractionForm({
+                'coeff.state.manual.tcontact': VECTOR_CG1, 'coeff.state.u1': VECTOR_CG1,
+                'coeff.prop.ycontact': SCALAR_CG1,
+                'coeff.prop.ncontact': SCALAR_CG1,
+                'coeff.prop.kcontact': SCALAR_CG1
+            },
+            traction_ds
+        )
+    )
+    return form
+
+    # return \
+    #     add_newmark_time_disc_form(
+    #     add_manual_contact_traction_form(
+    #     add_surface_pressure_form(
+    #     add_rayleigh_viscous_form(
+    #     add_inertial_form(
+    #     add_isotropic_elastic_form(
+    #     add_shape_form(
+    #     base_form_definitions(
+    #         mesh, mesh_functions, mesh_function_value_labels, fsi_facet_labels, fixed_facet_labels))))))))
 
 def KelvinVoigt(
     mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
