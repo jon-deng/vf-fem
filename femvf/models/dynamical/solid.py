@@ -33,8 +33,8 @@ from blockarray import blockvec as bv, blockmat as bm, subops
 
 from .base import BaseDynamicalModel
 from ..transient.solid import properties_bvec_from_forms, depack_form_coefficient_function
-from ..equations.solid import solidforms
-from ..equations.solid.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
+from ..equations import solidforms
+from ..equations.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
 from ..assemblyutils import CachedFormAssembler
 
 # pylint: disable=abstract-method

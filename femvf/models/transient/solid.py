@@ -17,9 +17,9 @@ from blockarray.subops import diag_mat, zero_mat
 from nonlineq import newton_solve
 
 from . import base
-from ..equations.solid import newmark
+from ..equations import newmark
 
-from ..equations.solid import solidforms
+from ..equations import solidforms
 from ..assemblyutils import CachedFormAssembler
 
 def depack_form_coefficient_function(form_coefficient):

@@ -18,7 +18,7 @@ from blockarray import subops
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from nonlineq import iterative_solve
 
-from ..equations.solid import newmark
+from ..equations import newmark
 from ..fsi import FSIMap
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 

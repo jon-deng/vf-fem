@@ -17,7 +17,7 @@ from blockarray import blockvec as bla
 
 
 from .base import BaseDynamicalModel
-from ..equations.fluid import bernoulli
+from ..equations import bernoulli
 from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
 # pylint: disable=missing-docstring

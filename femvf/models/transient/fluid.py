@@ -13,7 +13,7 @@ from . import base
 
 from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
-from ..equations.fluid import bernoulli
+from ..equations import bernoulli
 
 ## 1D Bernoulli approximation codes
 
