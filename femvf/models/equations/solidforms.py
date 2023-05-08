@@ -489,43 +489,74 @@ def base_form_definitions(
 
 # Inertial effect forms
 def add_inertial_form(forms):
-    dx = forms['measure.dx']
-    vector_test = forms['test.vector']
+
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.a1': forms['fspace.vector'],
+        'coeff.prop.rho': forms['fspace.scalar_dg0']
+    }
+
+    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
+    dx = measure
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.a1'])
 
     a = forms['coeff.state.a1']
-    rho = dfn.Function(forms['fspace.scalar_dg0'])
+    rho = forms['coeff.prop.rho']
     inertial_body_force = rho*a
 
     forms['form.un.f1uva'] += ufl.inner(inertial_body_force, vector_test) * dx
+    forms['coeff.state.a1'] = a
     forms['coeff.prop.rho'] = rho
     forms['expr.force_inertial'] = inertial_body_force
     return forms
 
 # Elastic effect forms
 def add_isotropic_elastic_form(forms):
-    dx = forms['measure.dx']
-    vector_test = forms['test.vector']
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.prop.emod': forms['fspace.scalar_dg0']
+        # 'coeff.prop.nu': forms['fspace.scalar_dg0']
+    }
+
+    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
+    dx = measure
+
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
     strain_test = form_strain_inf(vector_test)
 
     u = forms['coeff.state.u1']
     inf_strain = form_strain_inf(u)
-    emod = dfn.Function(forms['fspace.scalar_dg0'])
+    emod = forms['coeff.prop.emod']
     nu = dfn.Constant(0.45)
     stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
 
     forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
+    forms['coeff.state.u1'] = u
     forms['coeff.prop.emod'] = emod
     forms['coeff.prop.nu'] = nu
-    forms['expr.stress_elastic'] = stress_elastic
 
+    forms['expr.stress_elastic'] = stress_elastic
     lame_lambda = emod*nu/(1+nu)/(1-2*nu)
     stress_zz = lame_lambda*ufl.tr(inf_strain)
     forms['expr.stress_elastic_zz'] = stress_zz
     return forms
 
 def add_isotropic_elastic_with_incomp_swelling_form(forms):
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.prop.emod': forms['fspace.scalar_dg0']
+        # 'coeff.prop.nu': forms['fspace.scalar_dg0']
+    }
+
+    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
+
+    dx = measure
     dx = forms['measure.dx']
-    strain_test = forms['test.strain']
+
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
+    strain_test = form_strain_inf(vector_test)
 
     emod = dfn.Function(forms['fspace.scalar_dg0'])
     nu = 0.5
@@ -538,9 +569,6 @@ def add_isotropic_elastic_with_incomp_swelling_form(forms):
     stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(inf_strain.ufl_shape[0])
 
     forms['form.un.f1uva'] += ufl.inner(stress_elastic, strain_test) * dx
-    forms['coeff.prop.emod'] = emod
-    forms['coeff.prop.v_swelling'] = v_swelling
-    forms['coeff.prop.k_swelling'] = k_swelling
     forms['expr.stress_elastic'] = stress_elastic
     return forms
 
@@ -548,17 +576,27 @@ def add_isotropic_elastic_with_swelling_form(forms):
     """
     Add an effect for isotropic elasticity with a swelling field
     """
-    dx = forms['measure.dx']
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.prop.emod': forms['fspace.scalar_dg0'],
+        'coeff.prop.v_swelling': forms['fspace.scalar_dg0'],
+        'coeff.prop.m_swelling': forms['fspace.scalar_dg0']
+    }
+
+    forms.update({key: dfn.Function(function_space) for key, function_space in function_spaces.items()})
+    dx = measure
+
     u = forms['coeff.state.u1']
 
     DE = form_strain_lin_green_lagrange(u, forms['test.vector'])
     E = form_strain_green_lagrange(u)
 
-    emod = dfn.Function(forms['fspace.scalar_dg0'])
+    emod = forms['coeff.prop.emod']
     nu = dfn.Constant(0.45)
-    v = dfn.Function(forms['fspace.scalar_dg0'])
+    v = forms['coeff.prop.v_swelling']
     v.vector()[:] = 1.0
-    m = dfn.Function(forms['fspace.scalar_dg0'])
+    m = forms['coeff.prop.m_swelling']
     m.vector()[:] = 0.0
 
     E_v = v**(-2/3)*E + 1/2*(v**(-2/3)-1)*ufl.Identity(3)
@@ -569,10 +607,6 @@ def add_isotropic_elastic_with_swelling_form(forms):
     S = mhat*v**(1/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
 
     forms['form.un.f1uva'] += ufl.inner(S, DE) * dx
-    forms['coeff.prop.emod'] = emod
-    forms['coeff.prop.nu'] = nu
-    forms['coeff.prop.v_swelling'] = v
-    forms['coeff.prop.m_swelling'] = m
     # Make this the cauchy stress
     F = form_def_grad(u)
     J = ufl.det(F)
@@ -584,33 +618,68 @@ def add_isotropic_elastic_with_swelling_form(forms):
 
 # Surface forcing forms
 def add_surface_pressure_form(forms):
-    ds = forms['measure.ds_traction']
-    vector_test = forms['test.vector']
+
+    measure = forms['measure.ds_traction']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.fsi.p1': forms['fspace.scalar']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    ds = measure
+
     u = forms['coeff.state.u1']
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
     facet_normal = forms['geom.facet_normal']
 
-    p = dfn.Function(forms['fspace.scalar'])
+    p = forms['coeff.fsi.p1']
     reference_traction = -p * form_pullback_area_normal(u, facet_normal)
 
     forms['form.un.f1uva'] -= ufl.inner(reference_traction, vector_test) * ds
-    forms['coeff.fsi.p1'] = p
+    # forms['coeff.fsi.p1'] = p
 
     forms['expr.fluid_traction'] = reference_traction
     return forms
 
 def add_manual_contact_traction_form(forms):
+    measure = forms['measure.ds_traction']
+    function_spaces = {
+        'coeff.state.manual.tcontact': forms['fspace.vector']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
     ds = forms['measure.ds_traction']
-    vector_test = forms['test.vector']
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.manual.tcontact'])
 
     # the contact traction must be manually linked with displacements and penalty parameters!
     ycontact = dfn.Constant(np.inf)
     kcontact = dfn.Constant(1.0)
     ncontact = dfn.Constant([0.0, 1.0])
-    tcontact = dfn.Function(forms['fspace.vector'])
+    tcontact = forms['coeff.state.manual.tcontact']
     traction_contact = ufl.inner(tcontact, vector_test) * ds
 
     forms['form.un.f1uva'] -= traction_contact
-    forms['coeff.state.manual.tcontact'] = tcontact
+    tcontact = forms['coeff.state.manual.tcontact']
     forms['coeff.prop.ncontact'] = ncontact
     forms['coeff.prop.kcontact'] = kcontact
     forms['coeff.prop.ycontact'] = ycontact
@@ -618,8 +687,29 @@ def add_manual_contact_traction_form(forms):
 
 # Surface membrane forms
 def add_isotropic_membrane(forms, large_def=False):
+    measure = forms['measure.ds_traction']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.prop.emod_membrane': forms['fspace.scalar_dg0'],
+        'coeff.prop.th_membrane': forms['fspace.scalar_dg0']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    ds = forms['measure.ds_traction']
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
+
     # Define the 8th order projector to get the planar strain component
-    ds_traction = forms['measure.ds_traction']
+    ds_traction = ds
     _n = forms['geom.facet_normal']
     n = ufl.as_tensor([_n[0], _n[1], 0.0])
     nn = ufl.outer(n, n)
@@ -628,18 +718,17 @@ def add_isotropic_membrane(forms, large_def=False):
 
     i, j, k, l = ufl.indices(4)
 
-    vector_test = forms['test.vector']
     u = forms['coeff.state.u1']
     if large_def:
         strain = form_strain_green_lagrange(u)
-        strain_test = form_strain_lin_green_lagrange(u, forms['test.vector'])
+        strain_test = form_strain_lin_green_lagrange(u, vector_test)
     else:
-        strain = forms['expr.kin.inf_strain']
+        strain = form_strain_inf(u)
         strain_test = form_strain_inf(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    emod = dfn.Function(forms['fspace.scalar_dg0'])
-    th_membrane = dfn.Function(forms['fspace.scalar'])
+    emod = forms['coeff.prop.emod_membrane']
+    th_membrane = forms['coeff.prop.th_membrane']
     nu = dfn.Constant(0.45)
     mu = emod/2/(1+nu)
     lmbda = emod*nu/(1+nu)/(1-2*nu)
@@ -653,12 +742,31 @@ def add_isotropic_membrane(forms, large_def=False):
     res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
 
     forms['form.un.f1uva'] += res
-    forms['coeff.prop.emod_membrane'] = emod
     forms['coeff.prop.nu_membrane'] = nu
-    forms['coeff.prop.th_membrane'] = th_membrane
     return forms
 
 def add_incompressible_epithelium_membrane(forms):
+    measure = forms['measure.ds_traction']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.prop.emod_membrane': forms['fspace.scalar_dg0'],
+        'coeff.prop.th_membrane': forms['fspace.scalar_dg0']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    ds = forms['measure.ds_traction']
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.u1'])
+
     # Define the 8th order projector to get the planar strain component
     ds_traction = forms['measure.ds_traction']
     n = forms['geom.facet_normal']
@@ -668,12 +776,11 @@ def add_incompressible_epithelium_membrane(forms):
 
     i, j, k, l = ufl.indices(4)
 
-    vector_test = forms['test.vector']
     strain_test = form_strain_inf(vector_test)
     strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
-    emod_membrane = dfn.Function(forms['fspace.scalar_dg0'])
-    th_membrane = dfn.Function(forms['fspace.scalar'])
+    emod_membrane = forms['coeff.prop.emod_membrane']
+    th_membrane = forms['coeff.prop.th_membrane']
     nu = 0.5
     lame_mu = emod_membrane/2/(1+nu)
     inf_strain = forms['expr.kin.inf_strain']
@@ -684,47 +791,115 @@ def add_incompressible_epithelium_membrane(forms):
     res = ufl.inner(stress_pp, strain_pp_test) * th_membrane*ds_traction
 
     forms['form.un.f1uva'] += res
-    forms['coeff.prop.emod_membrane'] = emod_membrane
-    forms['coeff.prop.th_membrane'] = th_membrane
     return forms
 
 # Viscous effect forms
 def add_rayleigh_viscous_form(forms):
-    dx = forms['measure.dx']
-    vector_test = forms['test.vector']
-    strain_test = forms['test.strain']
-    u = forms['coeff.state.u1']
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.v1': forms['fspace.vector'],
+        'coeff.prop.emod': forms['fspace.scalar_dg0'],
+        'coeff.prop.rho': forms['fspace.scalar_dg0']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.v1'])
+
+    dx = measure
+    strain_test = form_strain_inf(vector_test)
     v = forms['coeff.state.v1']
-    a = forms['coeff.state.a1']
 
     rayleigh_m = dfn.Constant(1.0)
     rayleigh_k = dfn.Constant(1.0)
-    stress_visco = rayleigh_k*ufl.replace(forms['expr.stress_elastic'], {u: v})
-    force_visco = rayleigh_m*ufl.replace(forms['expr.force_inertial'], {a: v})
+
+    emod = forms['coeff.prop.emod']
+    nu = dfn.Constant(0.45)
+    inf_strain = form_strain_inf(v)
+    stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+    stress_visco = rayleigh_k*stress_elastic
+
+    rho = forms['coeff.prop.rho']
+    force_visco = rayleigh_m*rho*v
 
     damping = (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
 
     forms['form.un.f1uva'] += damping
+    forms['coeff.prop.nu'] = nu
     forms['coeff.prop.rayleigh_m'] = rayleigh_m
     forms['coeff.prop.rayleigh_k'] = rayleigh_k
     return forms
 
 def add_kv_viscous_form(forms):
-    dx = forms['measure.dx']
-    strain_test = forms['test.strain']
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.v1': forms['fspace.vector'],
+        'coeff.prop.eta': forms['fspace.scalar_dg0'],
+        'coeff.prop.rho': forms['fspace.scalar_dg0']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.v1'])
+
+    dx = measure
+    strain_test = form_strain_inf(vector_test)
     v = forms['coeff.state.v1']
 
-    eta = dfn.Function(forms['fspace.scalar_dg0'])
+    eta = forms['coeff.prop.eta']
     inf_strain_rate = form_strain_inf(v)
     stress_visco = eta*inf_strain_rate
 
     forms['form.un.f1uva'] += ufl.inner(stress_visco, strain_test) * dx
-    forms['coeff.prop.eta'] = eta
     forms['expr.kv_stress'] = stress_visco
     forms['expr.kv_strain_rate'] = inf_strain_rate
     return forms
 
 def add_ap_force_form(forms):
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.state.u1': forms['fspace.vector'],
+        'coeff.state.v1': forms['fspace.vector'],
+        'coeff.prop.eta': forms['fspace.scalar_dg0'],
+        'coeff.prop.emod': forms['fspace.scalar_dg0'],
+        'coeff.prop.nu': forms['fspace.scalar_dg0'],
+        'coeff.prop.length': forms['fspace.scalar'],
+        'coeff.prop.u_ant': forms['fspace.vector'],
+        'coeff.prop.u_pos': forms['fspace.vector'],
+        'coeff.prop.muscle_stress': forms['fspace.scalar']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    vector_test = dfn.TestFunction(function_spaces['coeff.state.v1'])
+
     dx = forms['measure.dx']
     vector_test = forms['test.vector']
 
@@ -733,10 +908,12 @@ def add_ap_force_form(forms):
     emod = forms['coeff.prop.emod']
     nu = forms['coeff.prop.nu']
     lame_mu = emod/2/(1+nu)
-    u_ant = dfn.Function(forms['fspace.vector']) # zero values by default
-    u_pos = dfn.Function(forms['fspace.vector'])
-    length = dfn.Function(forms['fspace.scalar'])
-    muscle_stress = dfn.Function(forms['fspace.scalar'])
+
+    u_ant = forms['coeff.prop.u_ant'] # zero values by default
+    u_pos = forms['coeff.prop.u_pos']
+    length = forms['coeff.prop.length']
+    muscle_stress = forms['coeff.prop.muscle_stress']
+
     d2u_dz2 = (u_ant - 2*u1 + u_pos) / length**2
     d2v_dz2 = (u_ant - 2*v1 + u_pos) / length**2
     force_elast_ap = (lame_mu+muscle_stress)*d2u_dz2
@@ -745,8 +922,6 @@ def add_ap_force_form(forms):
     viscous = ufl.inner(force_visco_ap, vector_test) * dx
 
     forms['form.un.f1uva'] += -stiffness - viscous
-    forms['coeff.prop.length'] = length
-    forms['coeff.prop.muscle_stress'] = muscle_stress
     return forms
 
 # Add shape effect forms
@@ -754,7 +929,23 @@ def add_shape_form(forms):
     """
     Adds a shape parameter
     """
-    umesh = dfn.Function(forms['fspace.vector'])
+    measure = forms['measure.dx']
+    function_spaces = {
+        'coeff.prop.umesh': forms['fspace.vector']
+    }
+
+    # Update any duplicated coefficients
+    new_forms = {key: dfn.Function(function_space) for key, function_space in function_spaces.items()}
+    for key, new_coeff in new_forms.items():
+        if key in forms:
+            print(f'Replacing duplicate key {key}')
+            old_coeff: ufl.Coefficient = forms[key]
+            # print('yoyo')
+            assert old_coeff.function_space() == new_coeff.function_space()
+            forms['form.un.f1uva'] = ufl.replace(forms['form.un.f1uva'], {old_coeff: new_coeff})
+    forms.update(new_forms)
+
+    umesh = forms['coeff.prop.umesh']
 
     # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
     # `ufl.SpatialCoordinate(mesh)`
