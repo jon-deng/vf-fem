@@ -659,7 +659,7 @@ class FenicsResidual:
         self._form = linear_form
 
         self._mesh_functions = mesh_functions
-        self._mesh_functions_label_values = mesh_functions_label_to_value
+        self._mesh_functions_label_to_value = mesh_functions_label_to_value
 
         bc_base = dfn.DirichletBC(
             self.form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
@@ -705,7 +705,7 @@ class FenicsResidual:
 
     def mesh_function_label_to_value(self, mesh_element_type: Union[str, int]) -> Mapping[str, int]:
         idx = self._mesh_element_type_to_idx(mesh_element_type)
-        return self._mesh_functions_label_values[idx]
+        return self._mesh_functions_label_to_value[idx]
 
     @property
     def dirichlet_bcs(self) -> list[dfn.DirichletBC]:
@@ -776,7 +776,7 @@ class Rayleigh(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class KelvinVoigt(PredefinedFenicsResidual):
 
@@ -802,7 +802,7 @@ class KelvinVoigt(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
@@ -829,7 +829,7 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
 
@@ -855,7 +855,7 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class SwellingKelvinVoigt(PredefinedFenicsResidual):
 
@@ -881,7 +881,7 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
@@ -908,7 +908,7 @@ class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
 
@@ -935,7 +935,7 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
 
@@ -963,7 +963,7 @@ class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
             + SurfacePressureForm({}, traction_ds, mesh)
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
-        return modify_newmark_time_discretization(form)
+        return form
 
 ## Form modifiers
 
@@ -996,6 +996,54 @@ def modify_newmark_time_discretization(form: FenicsForm) -> FenicsForm:
     new_functional = ufl.replace(form.form, {v1: v1_nmk, a1: a1_nmk})
 
     return FenicsForm(new_functional, coefficients)
+
+def modify_unary_linearized_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
+    """
+    Generate linearized forms representing linearization of the residual wrt different states
+
+    These forms are needed for solving the Hopf bifurcation problem/conditions
+    """
+    new_coefficients = {}
+
+    # Create coefficients for linearization directions
+    for var_name in ['u1', 'v1', 'a1']:
+        new_coefficients[f'coeff.dstate.{var_name}'] = dfn.Function(
+            form[f'coeff.state.{var_name}'].function_space()
+        )
+    for var_name in ['p1']:
+        new_coefficients[f'coeff.dfsi.{var_name}'] = dfn.Function(
+            form[f'coeff.fsi.{var_name}'].function_space()
+        )
+
+    # Compute the jacobian bilinear forms
+    # unary_form_name = 'f1uva'
+    # for var_name in ['u1', 'v1', 'a1']:
+    #     form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form.form, form[f'coeff.state.{var_name}'])
+    # for var_name in ['p1']:
+    #     form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form.form, form[f'coeff.fsi.{var_name}'])
+
+    # Take the action of the jacobian linear forms along states to get a new linear
+    # dF/dx * delta x, dF/dp * delta p, ...
+    linearized_forms = []
+    for var_name in ['u1', 'v1', 'a1']:
+        # unary_form_name = f'df1uva_{var_name}'
+        df_dx = dfn.derivative(form.form, form[f'coeff.state.{var_name}'])
+        # print(len(df_dx.arguments()))
+        # print(len(forms[f'form.un.f1uva'].arguments()))
+        linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dstate.{var_name}'])
+        linearized_forms.append(linearized_form)
+
+    for var_name in ['p1']:
+        # unary_form_name = f'df1uva_{var_name}'
+        # df_dx = form[f'form.bi.df1uva_d{var_name}']
+        df_dx = dfn.derivative(form.form, form[f'coeff.fsi.{var_name}'])
+        linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dfsi.{var_name}'])
+        linearized_forms.append(linearized_form)
+
+    # Compute the total linearized residual
+    new_form = reduce(operator.add, linearized_forms)
+
+    return FenicsForm(new_form, {**form.coefficients, **new_coefficients})
 
 ## Common functions
 
@@ -1265,7 +1313,7 @@ def gen_residual_bilinear_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
 
     return bi_forms
 
-def gen_residual_bilinear_property_forms(form) -> Mapping[str, dfn.Form]:
+def gen_residual_bilinear_property_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
     """
     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
     """
@@ -1287,35 +1335,42 @@ def gen_residual_bilinear_property_forms(form) -> Mapping[str, dfn.Form]:
 
 # These functions are mainly for generating derived forms that are needed for solving
 # the hopf bifurcation problem
-def gen_hopf_forms(form) -> Mapping[str, dfn.Form]:
-    gen_unary_linearized_forms(form)
+def gen_hopf_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
+    forms = {}
+    # forms.update(modify_unary_linearized_forms(form))
 
-    unary_form_names = ['f1uva', 'df1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
-    for unary_form_name in unary_form_names:
-        gen_jac_state_forms(unary_form_name, form)
-    for unary_form_name in unary_form_names:
-        gen_jac_property_forms(unary_form_name, form)
+    # unary_form_names = ['f1uva', 'df1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
+    # for unary_form_name in unary_form_names:
+    #     forms.update(gen_jac_state_forms(unary_form_name, form))
+    # for unary_form_name in unary_form_names:
+    #     forms.update(gen_jac_property_forms(unary_form_name, form))
 
-def gen_jac_state_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
+    forms.update(gen_jac_state_forms(form.form))
+
+    return forms
+
+def gen_jac_state_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
     """
-    Return the derivatives of a unary form wrt all solid properties
+    Return the derivatives of a unary form wrt all states
     """
+    forms = {}
     state_labels = ['u1', 'v1', 'a1']
     for state_name in state_labels:
-        df_dx = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.state.{state_name}'])
-        form[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
+        df_dx = dfn.derivative(form.form, form[f'coeff.state.{state_name}'])
+        forms[f'form.bi.dres_d{state_name}'] = df_dx
 
     state_labels = ['p1']
     for state_name in state_labels:
-        df_dx = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.fsi.{state_name}'])
-        form[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
+        df_dx = dfn.derivative(form.form, form[f'coeff.fsi.{state_name}'])
+        forms[f'form.bi.dres_d{state_name}'] = df_dx
 
-    return form
+    return forms
 
 def gen_jac_property_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
     """
     Return the derivatives of a unary form wrt all solid properties
     """
+    forms = {}
     property_labels = [
         form_name.split('.')[-1] for form_name in form.keys()
         if 'coeff.prop' in form_name
@@ -1329,45 +1384,8 @@ def gen_jac_property_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
         except RuntimeError:
             df_dprop = None
 
-        form[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
+        forms[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
 
-    return form
+    return forms
 
-def gen_unary_linearized_forms(form) -> Mapping[str, dfn.Form]:
-    """
-    Generate linearized forms representing linearization of the residual wrt different states
 
-    These forms are needed for solving the Hopf bifurcation problem/conditions
-    """
-    # Specify the linearization directions
-    for var_name in ['u1', 'v1', 'a1']:
-        form[f'coeff.dstate.{var_name}'] = dfn.Function(form[f'coeff.state.{var_name}'].function_space())
-    for var_name in ['p1']:
-        form[f'coeff.dfsi.{var_name}'] = dfn.Function(form[f'coeff.fsi.{var_name}'].function_space())
-
-    # Compute the jacobian bilinear forms
-    unary_form_name = 'f1uva'
-    for var_name in ['u1', 'v1', 'a1']:
-        form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.state.{var_name}'])
-    for var_name in ['p1']:
-        form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.fsi.{var_name}'])
-
-    # Take the action of the jacobian linear forms along states to get linearized unary forms
-    # dF/dx * delta x, dF/dp * delta p, ...
-    for var_name in ['u1', 'v1', 'a1']:
-        unary_form_name = f'df1uva_{var_name}'
-        df_dx = form[f'form.bi.df1uva_d{var_name}']
-        # print(len(df_dx.arguments()))
-        # print(len(forms[f'form.un.f1uva'].arguments()))
-        form[f'form.un.{unary_form_name}'] = dfn.action(df_dx, form[f'coeff.dstate.{var_name}'])
-
-    for var_name in ['p1']:
-        unary_form_name = f'df1uva_{var_name}'
-        df_dx = form[f'form.bi.df1uva_d{var_name}']
-        form[f'form.un.{unary_form_name}'] = dfn.action(df_dx, form[f'coeff.dfsi.{var_name}'])
-
-    # Compute the total linearized residual
-    form[f'form.un.df1uva'] = reduce(
-        operator.add,
-        [form[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
-    )

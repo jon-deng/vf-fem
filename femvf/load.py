@@ -10,9 +10,9 @@ from . import meshutils
 from .models.transient import solid as tsmd, fluid as tfmd, acoustic as tamd, coupled as tcmd
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[tsmd.TransientSolid, dsmd.BaseDynamicalSolid]
+SolidModel = Union[tsmd.TransientSolid, dsmd.DynamicalSolid]
 FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid]
-SolidClass = Union[Type[tsmd.TransientSolid], Type[dsmd.BaseDynamicalSolid]]
+SolidClass = Union[Type[tsmd.TransientSolid], Type[dsmd.DynamicalSolid]]
 FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.BaseDynamical1DFluid]]
 
 Labels = list[str]
@@ -158,7 +158,9 @@ def load_dynamical_fsi_model(
         separation_vertex_label=separation_vertex_label
     )
 
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['fspace.scalar'])[fsi_verts]
+    dofs_fsi_solid = dfn.vertex_to_dof_map(
+        solid.residual.form['coeff.fsi.p1'].function_space()
+    )[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)

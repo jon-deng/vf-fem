@@ -10,7 +10,7 @@ from blockarray import blockmat as bm, blockvec as bv, subops, linalg as bla
 
 from .base import BaseDynamicalModel
 from .fluid import BaseDynamical1DFluid
-from .solid import BaseDynamicalSolid
+from .solid import DynamicalSolid, LinearizedSolidDynamicalSystem
 
 from ..fsi import FSIMap
 
@@ -22,7 +22,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
     """
 
     def __init__(self,
-        solid_model: BaseDynamicalSolid,
+        solid_model: DynamicalSolid,
         fluid_model: BaseDynamical1DFluid,
         solid_fsi_dofs, fluid_fsi_dofs):
         self.solid = solid_model
@@ -36,12 +36,14 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             [bv.convert_subtype_to_petsc(model.statet) for model in self.models]
         )
 
-        self.dstate = bv.concatenate_vec(
-            [bv.convert_subtype_to_petsc(model.dstate) for model in self.models]
-        )
-        self.dstatet = bv.concatenate_vec(
-            [bv.convert_subtype_to_petsc(model.dstatet) for model in self.models]
-        )
+        is_linearized = isinstance(solid_model, LinearizedSolidDynamicalSystem)
+        if is_linearized:
+            self.dstate = bv.concatenate_vec(
+                [bv.convert_subtype_to_petsc(model.dstate) for model in self.models]
+            )
+            self.dstatet = bv.concatenate_vec(
+                [bv.convert_subtype_to_petsc(model.dstatet) for model in self.models]
+            )
 
         # This selects only psub and psup from the fluid control
         self.control = bv.convert_subtype_to_petsc(self.fluid.control[1:])
@@ -54,8 +56,9 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
 
         ## -- FSI --
         # Below here is all extra stuff needed to do the coupling between fluid/solid
-        self.solid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
-        self.dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
+        self.solid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
+        if is_linearized:
+            self.dsolid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
         # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
 
         self.solid_xref = self.solid.XREF

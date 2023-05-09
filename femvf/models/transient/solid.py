@@ -369,7 +369,17 @@ class PredefinedTransientSolid(TransientSolid):
             fsi_facet_labels,
             fixed_facet_labels
         )
-        super().__init__(residual)
+
+        new_form = solidforms.modify_newmark_time_discretization(residual.form)
+        new_residual = solidforms.FenicsResidual(
+            new_form,
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
+        super().__init__(new_residual)
 
     def _make_residual(
                 self,

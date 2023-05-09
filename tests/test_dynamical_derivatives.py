@@ -95,7 +95,7 @@ def linearization(model):
         model_solid = model.solid
         model_fluid = model.fluid
         model_coupl = model
-    elif isinstance(model, dynsl.BaseDynamicalSolid):
+    elif isinstance(model, dynsl.DynamicalSolid):
         model_solid = model
         model_fluid = None
         model_coupl = None
@@ -139,7 +139,7 @@ def linearization(model):
 
     if model_solid is not None:
         # Make the initial displacement a pure shear motion
-        xref = model_solid.forms['coeff.ref.x'].vector().copy()
+        xref = model_solid.XREF.copy()
         xx = xref[:-1:2]
         yy = xref[1::2]
         _u = np.zeros(state0['u'].shape)
@@ -166,7 +166,7 @@ def perturbation(model):
         model_solid = model.solid
         model_fluid = model.fluid
         model_coupl = model
-    elif isinstance(model, dynsl.BaseDynamicalSolid):
+    elif isinstance(model, dynsl.DynamicalSolid):
         model_solid = model
         model_fluid = None
         model_coupl = None
@@ -191,7 +191,8 @@ def perturbation(model):
         # model_solid.forms['bc.dirichlet'].apply(dxv)
         dstate['v'] = dxv
 
-        _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstate)
+        for bc in model_solid.residual.dirichlet_bcs:
+            _set_dirichlet_bvec(bc, dstate)
 
     if model_fluid is not None:
         if 'q' in dstate:
@@ -204,7 +205,8 @@ def perturbation(model):
 
     dstatet[:] = 1e-6
     if model_solid is not None:
-        _set_dirichlet_bvec(model_solid.forms['bc.dirichlet'], dstatet)
+        for bc in model_solid.residual.dirichlet_bcs:
+            _set_dirichlet_bvec(bc, dstatet)
 
     ## Properties perturbation
     dprop = model.prop.copy()
@@ -213,15 +215,16 @@ def perturbation(model):
     if model_solid is not None:
         dprop['emod'] = 1.0
 
-        # Use a uniaxial y stretching motion
-        fspace = model_solid.forms['fspace.vector']
-        VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
-        coords = model_solid.forms['mesh.REF_COORDINATES']
-        umesh = coords.copy()
-        umesh[:, 0] = 0
-        umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
-        dprop['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
-        # dprop['umesh'] = 0
+        if 'umesh' in dprop:
+            # Use a uniaxial y stretching motion
+            fspace = model_solid.residual.form['coeff.state.u1'].function_space()
+            VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
+            coords = np.array(model_solid.XREF[:]).copy().reshape(-1, 2)
+            umesh = coords.copy()
+            umesh[:, 0] = 0
+            umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
+            dprop['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
+            # dprop['umesh'] = 0
 
     ## Controls perturbation
     dcontrol = model.control.copy()
