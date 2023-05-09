@@ -10,9 +10,9 @@ from . import meshutils
 from .models.transient import solid as tsmd, fluid as tfmd, acoustic as tamd, coupled as tcmd
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[tsmd.BaseTransientSolid, dsmd.BaseDynamicalSolid]
+SolidModel = Union[tsmd.TransientSolid, dsmd.BaseDynamicalSolid]
 FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid]
-SolidClass = Union[Type[tsmd.BaseTransientSolid], Type[dsmd.BaseDynamicalSolid]]
+SolidClass = Union[Type[tsmd.TransientSolid], Type[dsmd.BaseDynamicalSolid]]
 FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.BaseDynamical1DFluid]]
 
 Labels = List[str]

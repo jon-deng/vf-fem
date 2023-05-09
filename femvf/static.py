@@ -64,7 +64,7 @@ def _add_static_docstring(func):
 
 @_add_static_docstring
 def static_solid_configuration(
-        model: slmodel.BaseTransientSolid,
+        model: slmodel.TransientSolid,
         control: bv.BlockVector,
         prop: bv.BlockVector,
         state=None,
