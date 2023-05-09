@@ -583,21 +583,26 @@ def base_form_definitions(
 
 class BaseFunctionSpaceSpec:
 
-    def __init__(self, *spec):
+    def __init__(self, *spec, default_value=0):
         self._spec = spec
+        self._default_value = default_value
 
     @property
     def spec(self) -> Tuple[Any, ...]:
         return self._spec
+
+    @property
+    def default_value(self) -> Any:
+        return self._default_value
 
     def generate_function(self, mesh: dfn.Mesh) -> Union[dfn.Constant, dfn.Function]:
         raise NotImplementedError()
 
 class FunctionSpaceSpec(BaseFunctionSpaceSpec):
 
-    def __init__(self, elem_family, elem_degree, value_dim):
+    def __init__(self, elem_family, elem_degree, value_dim, default_value=0):
         assert value_dim in {'vector', 'scalar'}
-        super().__init__(elem_family, elem_degree, value_dim)
+        super().__init__(elem_family, elem_degree, value_dim, default_value=default_value)
 
     def generate_function(self, mesh) -> dfn.Function:
         elem_family, elem_degree, value_dim = self.spec
@@ -612,19 +617,15 @@ class ConstantFunctionSpaceSpec(BaseFunctionSpaceSpec):
         super().__init__(value_dim)
         self._default_value = default_value
 
-    @property
-    def default_value(self):
-        return self._default_value
-
     def generate_function(self, mesh: dfn.Mesh) -> dfn.Constant:
         value_dim, = self.spec
         return dfn.Constant(value_dim*[self.default_value], mesh.ufl_cell())
 
-def func_spec(elem_family, elem_degree, value_dim):
-    return FunctionSpaceSpec(elem_family, elem_degree, value_dim)
+def func_spec(elem_family, elem_degree, value_dim, default_value=0):
+    return FunctionSpaceSpec(elem_family, elem_degree, value_dim, default_value=default_value)
 
 def const_spec(value_dim, default_value=0):
-    return ConstantFunctionSpaceSpec(value_dim, default_value=0)
+    return ConstantFunctionSpaceSpec(value_dim, default_value=default_value)
 
 # Inertial effect forms
 
