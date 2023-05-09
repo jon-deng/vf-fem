@@ -2,7 +2,7 @@
 Functionality for creating model objects from meshes, etc.
 """
 from os import path
-from typing import Union, Optional, List, Type, Any, Tuple
+from typing import Union, Optional, Type, Any, Tuple
 import numpy as np
 import dolfin as dfn
 
@@ -15,10 +15,10 @@ FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFlu
 SolidClass = Union[Type[tsmd.TransientSolid], Type[dsmd.BaseDynamicalSolid]]
 FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.BaseDynamical1DFluid]]
 
-Labels = List[str]
+Labels = list[str]
 
 def load_solid_model(
-        solid_mesh: str,
+        mesh: str,
         SolidType: SolidClass,
         pressure_facet_labels: Optional[Labels]=('pressure',),
         fixed_facet_labels: Optional[Labels]=('fixed',)
@@ -28,7 +28,7 @@ def load_solid_model(
 
     Parameters
     ----------
-    solid_mesh:
+    mesh:
         A string indicating the path to a mesh file. This can be either in
          '.xml' or '.msh' format.
     SolidType:
@@ -37,24 +37,29 @@ def load_solid_model(
         Lists of strings for labelled facets corresponding to the pressure
         loading and fixed boundaries.
     """
-    if isinstance(solid_mesh, str):
-        ext = path.splitext(solid_mesh)[1]
+    if isinstance(mesh, str):
+        ext = path.splitext(mesh)[1]
         # If no extension is supplied, assume it's a .msh file from gmsh
         if ext == '':
             ext = '.msh'
 
+        # The solid model is loaded a bit differently depending on if
+        # it uses the .xml (no longer supported) or newer gmsh interface
         if ext.lower() == '.xml':
             # The solid mesh is an xml file
-            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_xml(solid_mesh)
+            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_xml(mesh)
         elif ext.lower() == '.msh':
             # The solid mesh is an gmsh file
-            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_gmsh(solid_mesh)
+            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_gmsh(mesh)
         else:
-            raise ValueError(f"Can't process mesh {solid_mesh} with extension {ext}")
+            raise ValueError(f"Can't process mesh {mesh} with extension {ext}")
     else:
-        raise TypeError(f"`solid_mesh` must be a path (str) not {type(solid_mesh)}")
+        raise TypeError(f"`solid_mesh` must be a path (`str`) not `{type(mesh)}`")
 
-    return SolidType(mesh, mesh_funcs, mesh_entities_label_to_value, pressure_facet_labels, fixed_facet_labels)
+    return SolidType(
+        mesh, mesh_funcs, mesh_entities_label_to_value,
+        pressure_facet_labels, fixed_facet_labels
+    )
 
 # TODO: Can combine transient/dynamical model loading functions into single one
 def load_transient_fsi_model(
@@ -98,7 +103,9 @@ def load_transient_fsi_model(
     )
 
     # TODO: This FSI dof selection won't for higher order elements
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['coeff.fsi.p1'].function_space())[fsi_verts]
+    dofs_fsi_solid = dfn.vertex_to_dof_map(
+        solid.residual.form['coeff.fsi.p1'].function_space()
+    )[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     if coupling == 'explicit':
@@ -107,7 +114,7 @@ def load_transient_fsi_model(
         model = tcmd.ImplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
     else:
         raise ValueError(
-            f"'coupling' must be one of [explicit, implicit], not {coupling}"
+            f"'coupling' must be one of `['explicit', 'implicit']`, not `{coupling}`"
         )
 
     return model
@@ -151,7 +158,7 @@ def load_dynamical_fsi_model(
         separation_vertex_label=separation_vertex_label
     )
 
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
+    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['fspace.scalar'])[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
@@ -195,7 +202,7 @@ def load_transient_fsai_model(
         fixed_facet_labels=fixed_facet_labels
         )
 
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
+    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['fspace.scalar'])[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     return tcmd.FSAIModel(solid, fluid, acoustic, dofs_fsi_solid, dofs_fsi_fluid)
