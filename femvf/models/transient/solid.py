@@ -118,7 +118,7 @@ class BaseTransientSolid(base.BaseTransientModel):
         return self._mesh
 
     @staticmethod
-    def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]):
+    def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]) -> int:
         if isinstance(mesh_element_type, str):
             if mesh_element_type == 'vertex':
                 return 0
@@ -155,7 +155,7 @@ class BaseTransientSolid(base.BaseTransientModel):
         function_space = self.forms['coeff.state.u1'].function_space()
         n_subspace = function_space.num_sub_spaces()
 
-        xref[:] = function_space.tabulate_dof_coordinates().reshape(-1, n_subspace)[:, 0].copy()
+        xref[:] = function_space.tabulate_dof_coordinates()[::n_subspace, :].reshape(-1).copy()
         return xref
 
     @property

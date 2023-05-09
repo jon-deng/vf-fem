@@ -419,7 +419,7 @@ class MinGlottalWidth(BaseStateMeasure):
 
     def __init__(self, model: BaseTransientModel):
         super().__init__(model)
-        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
+        self.XREF = np.array(self.model.solid.XREF[:])
 
     def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]

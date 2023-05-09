@@ -333,7 +333,7 @@ class TestIntegrate(ForwardConfig):
     def _integrate(self, model, ini_state, controls, prop, times, save_path):
         # Set values to export
         print("Running forward model")
-        breakpoint()
+        # breakpoint()
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, mode='w') as f:
             fin_state, info = integrate(model, f, ini_state, controls, prop, times)
