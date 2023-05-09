@@ -25,7 +25,7 @@ def set_fenics_function(function: Union[dfn.Function, dfn.Constant], value):
     else:
         function.vector()[:] = value
 
-class FenicsLinearFunctionalForm:
+class FenicsLinearFunctional:
     """
     Representation of a `dfn.Form` instance with associated coefficients
 
@@ -64,13 +64,13 @@ class FenicsLinearFunctionalForm:
         return key in self.coefficients
 
     ## Basic math
-    def __add__(self, other: 'FenicsLinearFunctionalForm'):
+    def __add__(self, other: 'FenicsLinearFunctional'):
         return add_form(self,  other)
 
-    def __radd__(self, other: 'FenicsLinearFunctionalForm'):
+    def __radd__(self, other: 'FenicsLinearFunctional'):
         return add_form(self,  other)
 
-def add_form(form_a: FenicsLinearFunctionalForm, form_b: FenicsLinearFunctionalForm) -> FenicsLinearFunctionalForm:
+def add_form(form_a: FenicsLinearFunctional, form_b: FenicsLinearFunctional) -> FenicsLinearFunctional:
     """
     Return a new `FenicsForm` from a sum of other forms
     """
@@ -86,7 +86,7 @@ def add_form(form_a: FenicsLinearFunctionalForm, form_b: FenicsLinearFunctionalF
             residual = ufl.replace(residual, {coeff_a: coeff_b})
         else:
             raise ValueError("Summed forms contain duplicate coefficients with different function spaces.")
-    return FenicsLinearFunctionalForm(residual, {**form_a.coefficients, **form_b.coefficients})
+    return FenicsLinearFunctional(residual, {**form_a.coefficients, **form_b.coefficients})
 
 def _depack_property_ufl_coeff(form_property):
     """
@@ -308,7 +308,7 @@ def form_quad_penalty_pressure(gap, kcoll):
 
 # These functions are mainly for generating forms that are needed for solving
 # the transient problem with a time discretization
-def gen_residual_bilinear_forms(form: FenicsLinearFunctionalForm):
+def gen_residual_bilinear_forms(form: FenicsLinearFunctional):
     """
     Generates bilinear forms representing derivatives of the residual wrt state variables
 
@@ -464,7 +464,7 @@ def gen_unary_linearized_forms(forms):
         [forms[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
         )
 
-def modify_newmark_time_discretization(form: FenicsLinearFunctionalForm) -> FenicsLinearFunctionalForm:
+def modify_newmark_time_discretization(form: FenicsLinearFunctional) -> FenicsLinearFunctional:
     u1 = form['coeff.state.u1']
     v1 = form['coeff.state.v1']
     a1 = form['coeff.state.a1']
@@ -492,7 +492,7 @@ def modify_newmark_time_discretization(form: FenicsLinearFunctionalForm) -> Feni
 
     new_functional = ufl.replace(form.functional, {v1: v1_nmk, a1: a1_nmk})
 
-    return FenicsLinearFunctionalForm(new_functional, coefficients)
+    return FenicsLinearFunctional(new_functional, coefficients)
 
 ## These are the core form definitions
 def base_form_definitions(
@@ -619,7 +619,20 @@ class ConstantFunctionSpaceSpec(BaseFunctionSpaceSpec):
 
     def generate_function(self, mesh: dfn.Mesh) -> dfn.Constant:
         value_dim, = self.spec
-        return dfn.Constant(value_dim*[self.default_value], mesh.ufl_cell())
+        if value_dim == 'vector':
+            return dfn.Constant(
+                mesh.geometric_dimension()*[self.default_value],
+                mesh.ufl_cell()
+            )
+        elif value_dim == 'scalar':
+            return dfn.Constant(
+                self.default_value, mesh.ufl_cell()
+            )
+        else:
+            return dfn.Constant(
+                value_dim*[self.default_value], mesh.ufl_cell()
+            )
+
 
 def func_spec(elem_family, elem_degree, value_dim, default_value=0):
     return FunctionSpaceSpec(elem_family, elem_degree, value_dim, default_value=default_value)
@@ -629,7 +642,10 @@ def const_spec(value_dim, default_value=0):
 
 # Inertial effect forms
 
-class PredefinedFenicsForm(FenicsLinearFunctionalForm):
+class PredefLinearFunctional(FenicsLinearFunctional):
+    """
+    A pre-defined linear functional has a pre-defined residual in the class
+    """
 
     COEFFICIENT_SPEC: Mapping[str, BaseFunctionSpaceSpec] = {}
     _make_residual: Callable[[CoefficientMapping, dfn.Measure, dfn.Mesh], dfn.Form]
@@ -639,14 +655,21 @@ class PredefinedFenicsForm(FenicsLinearFunctionalForm):
             measure: dfn.Measure,
             mesh: dfn.Mesh
         ):
-        for key, function_space_spec in self.COEFFICIENT_SPEC.items():
+
+        # If a coefficient key is not supplied, generate a default coefficient
+        # from `COEFFICIENT_SPEC`
+        for key, spec in self.COEFFICIENT_SPEC.items():
             if key not in coefficients:
-                coefficients[key] = function_space_spec.generate_function(mesh)
+                coefficients[key] = spec.generate_function(mesh)
 
         residual = self._make_residual(coefficients, measure, mesh)
         super().__init__(residual, coefficients)
 
-class InertialForm(PredefinedFenicsForm):
+class InertialForm(PredefLinearFunctional):
+    """
+    Linear functional representing an inertial force
+    """
+
     COEFFICIENT_SPEC = {
         'coeff.state.a1': func_spec('CG', 1, 'vector'),
         'coeff.prop.rho': func_spec('DG', 0, 'scalar')
@@ -663,7 +686,16 @@ class InertialForm(PredefinedFenicsForm):
         # forms['expr.force_inertial'] = inertial_body_force
 
 # Elastic effect forms
-class IsotropicElasticForm(PredefinedFenicsForm):
+class IsotropicElasticForm(PredefLinearFunctional):
+    """
+    Linear functional representing an isotropic elastic stress
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.nu': const_spec('scalar', default_value=0.45)
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
 
@@ -680,7 +712,17 @@ class IsotropicElasticForm(PredefinedFenicsForm):
         # coefficients['expr.stress_elastic'] = stress_elastic
         return ufl.inner(stress_elastic, strain_test) * measure
 
-class IsotropicIncompressibleElasticSwellingForm(PredefinedFenicsForm):
+class IsotropicIncompressibleElasticSwellingForm(PredefLinearFunctional):
+    """
+    Linear functional representing an incompressible, isotropic elastic stress with swelling
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.k_swelling': func_spec('DG', 0, 'scalar')
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
 
@@ -702,7 +744,18 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedFenicsForm):
         # forms['expr.stress_elastic'] = stress_elastic
         # return forms
 
-class IsotropicElasticSwellingForm(PredefinedFenicsForm):
+class IsotropicElasticSwellingForm(PredefLinearFunctional):
+    """
+    Linear functional representing an isotropic elastic stress with swelling
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
+        'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.k_swelling': func_spec('DG', 0, 'scalar')
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
         """
@@ -741,7 +794,15 @@ class IsotropicElasticSwellingForm(PredefinedFenicsForm):
         # return forms
 
 # Surface forcing forms
-class SurfacePressureForm(PredefinedFenicsForm):
+class SurfacePressureForm(PredefLinearFunctional):
+    """
+    Linear functional representing a pressure follower load
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.fsi.p1': func_spec('CG', 1, 'scalar')
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
 
@@ -757,28 +818,45 @@ class SurfacePressureForm(PredefinedFenicsForm):
         # coefficients['expr.fluid_traction'] = reference_traction
         return ufl.inner(reference_traction, vector_test) * ds
 
-class ManualSurfaceContactTractionForm(PredefinedFenicsForm):
+class ManualSurfaceContactTractionForm(PredefLinearFunctional):
+    """
+    Linear functional representing a surface contact traction
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.state.manual.tcontact': func_spec('CG', 1, 'vector'),
+        'coeff.prop.ycontact': const_spec('scalar', np.inf),
+        'coeff.prop.ncontact': const_spec(2, default_value=(0, 1)),
+        'coeff.prop.kcontact': const_spec('scalar', 1.0)
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
 
+        # The contact traction must be manually linked with displacements and penalty parameters!
+        # These parameters are:
+        # `ycontact = coefficients['coeff.prop.ycontact']`
+        # `ncontact = coefficients['coeff.prop.ncontact']`
+        # `kcontact = coefficients['coeff.prop.kcontact']`
+
         vector_test = dfn.TestFunction(coefficients['coeff.state.manual.tcontact'].function_space())
-
-        # the contact traction must be manually linked with displacements and penalty parameters!
-        ycontact = coefficients['coeff.prop.ycontact']
-        ncontact = coefficients['coeff.prop.ncontact']
-        kcontact = coefficients['coeff.prop.kcontact']
-
-        set_fenics_function(ycontact, np.inf)
-        set_fenics_function(kcontact, 1)
-        set_fenics_function(ncontact, [0, 1])
-
         tcontact = coefficients['coeff.state.manual.tcontact']
         return ufl.inner(tcontact, vector_test) * measure
 
 # Surface membrane forms
-class IsotropicMembraneForm(PredefinedFenicsForm):
+class IsotropicMembraneForm(PredefLinearFunctional):
+    """
+    Linear functional representing an isotropic elastic membrane
+    """
 
-     def _make_residual(self, coefficients, measure, mesh, large_def=False):
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod_membrane': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.nu_membrane': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar')
+    }
+
+    def _make_residual(self, coefficients, measure, mesh, large_def=False):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
         # Define the 8th order projector to get the planar strain component
@@ -818,7 +896,17 @@ class IsotropicMembraneForm(PredefinedFenicsForm):
         # forms['coeff.prop.nu_membrane'] = nu
         # return forms
 
-class IsotropicIncompressibleMembraneForm(PredefinedFenicsForm):
+class IsotropicIncompressibleMembraneForm(PredefLinearFunctional):
+    """
+    Linear functional representing an incompressible isotropic elastic membrane
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod_membrane': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar')
+    }
+
     def _make_residual(self, coefficients, measure, mesh, large_def=False):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
@@ -855,7 +943,18 @@ class IsotropicIncompressibleMembraneForm(PredefinedFenicsForm):
 
 # Viscous effect forms
 
-class RayleighDampingForm(PredefinedFenicsForm):
+class RayleighDampingForm(PredefLinearFunctional):
+    """
+    Linear functional representing a Rayleigh damping viscous stress
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.v1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.nu': const_spec('scalar', 0.45),
+        'coeff.prop.rayleigh_m': const_spec('scalar', 1.0),
+        'coeff.prop.rayleigh_k': const_spec('scalar', 1.0)
+    }
 
     def _make_residual(self, coefficients, measure, mesh, large_def=False):
 
@@ -866,13 +965,10 @@ class RayleighDampingForm(PredefinedFenicsForm):
         v = coefficients['coeff.state.v1']
 
         rayleigh_m = coefficients['coeff.prop.rayleigh_m']
-        set_fenics_function(rayleigh_m, 1)
         rayleigh_k = coefficients['coeff.prop.rayleigh_k']
-        set_fenics_function(rayleigh_k, 1)
 
         emod = coefficients['coeff.prop.emod']
         nu = coefficients['coeff.prop.nu']
-        set_fenics_function(nu, 0.45)
         inf_strain = form_strain_inf(v)
         stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
         stress_visco = rayleigh_k*stress_elastic
@@ -888,7 +984,15 @@ class RayleighDampingForm(PredefinedFenicsForm):
         # # coefficients['coeff.prop.rayleigh_k'] = rayleigh_k
         # return coefficients
 
-class KelvinVoigtForm(PredefinedFenicsForm):
+class KelvinVoigtForm(PredefLinearFunctional):
+    """
+    Linear functional representing a Kelvin-Voigt viscous stress
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.v1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.eta': func_spec('DG', 0, 'scalar')
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
 
@@ -905,7 +1009,22 @@ class KelvinVoigtForm(PredefinedFenicsForm):
         # forms['expr.kv_stress'] = stress_visco
         # forms['expr.kv_strain_rate'] = inf_strain_rate
 
-class APForceForm(PredefinedFenicsForm):
+class APForceForm(PredefLinearFunctional):
+    """
+    Linear functional representing a anterior-posterior (AP) force
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.state.v1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.eta': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
+        'coeff.prop.u_ant': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.u_pos': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.length': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.muscle_stress': func_spec('DG', 0, 'scalar'),
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
@@ -931,15 +1050,21 @@ class APForceForm(PredefinedFenicsForm):
         return -stiffness - viscous
 
 # Add shape effect forms
-class ShapeForm(PredefinedFenicsForm):
+class ShapeForm(PredefLinearFunctional):
     """
-    Adds a shape parameter
+    Linear functional that just adds a shape parameter
+
+    TODO: This doesn't really work anymore after I updated the form class
     """
+
+    COEFFICIENT_SPEC = {
+        'coeff.prop.umesh': func_spec('CG', 1, 'vector')
+    }
 
     def _make_residual(self, coefficients, measure, mesh):
-
+        vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
         umesh = coefficients['coeff.prop.umesh']
-        mesh = coefficients['coeff.prop.umesh'].function_space().mesh()
+        umesh_ufl = ufl.SpatialCoordinate(mesh)
 
         # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
         # `ufl.SpatialCoordinate(mesh)`
@@ -949,7 +1074,7 @@ class ShapeForm(PredefinedFenicsForm):
         # function/vector and ufl coefficient instance
         # forms['coeff.prop.umesh'] = (umesh, ufl.SpatialCoordinate(mesh))
         # forms['mesh.REF_COORDINATES'] = mesh.coordinates().copy()
-        return 0
+        return 0*ufl.inner(umesh_ufl, vector_test)*measure
 
 ## Form models
 def Rayleigh(
