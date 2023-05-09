@@ -8,9 +8,9 @@ from petsc4py import PETSc as PETSc
 
 from blockarray import blockmat as bm, blockvec as bv, subops, linalg as bla
 
-from .base import BaseDynamicalModel
+from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
 from .fluid import BaseDynamical1DFluid
-from .solid import DynamicalSolid, LinearizedSolidDynamicalSystem
+from .solid import DynamicalSolid, LinearizedDynamicalSolid
 
 from ..fsi import FSIMap
 
@@ -22,9 +22,10 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
     """
 
     def __init__(self,
-        solid_model: DynamicalSolid,
-        fluid_model: BaseDynamical1DFluid,
-        solid_fsi_dofs, fluid_fsi_dofs):
+            solid_model: DynamicalSolid,
+            fluid_model: BaseDynamical1DFluid,
+            solid_fsi_dofs, fluid_fsi_dofs
+        ):
         self.solid = solid_model
         self.fluid = fluid_model
         self.models = (self.solid, self.fluid)
@@ -35,15 +36,6 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         self.statet = bv.concatenate_vec(
             [bv.convert_subtype_to_petsc(model.statet) for model in self.models]
         )
-
-        is_linearized = isinstance(solid_model, LinearizedSolidDynamicalSystem)
-        if is_linearized:
-            self.dstate = bv.concatenate_vec(
-                [bv.convert_subtype_to_petsc(model.dstate) for model in self.models]
-            )
-            self.dstatet = bv.concatenate_vec(
-                [bv.convert_subtype_to_petsc(model.dstatet) for model in self.models]
-            )
 
         # This selects only psub and psup from the fluid control
         self.control = bv.convert_subtype_to_petsc(self.fluid.control[1:])
@@ -57,8 +49,6 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         ## -- FSI --
         # Below here is all extra stuff needed to do the coupling between fluid/solid
         self.solid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
-        if is_linearized:
-            self.dsolid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
         # have to compute dslarea_du here as sensitivity of solid area wrt displacement function
 
         self.solid_xref = self.solid.XREF
@@ -329,3 +319,59 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
     #         [dfsolid_dxsolid, dfsolid_dxfluid],
     #         [dffluid_dxsolid, dffluid_dxfluid]]
     #     return bm.concatenate_mat(bmats)
+
+class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamicalFSIModel):
+    """
+    Class representing a fluid-solid coupled dynamical system
+    """
+
+    def __init__(self,
+            solid_model: LinearizedDynamicalSolid,
+            fluid_model: BaseDynamical1DFluid,
+            solid_fsi_dofs, fluid_fsi_dofs
+        ):
+        super().__init__(solid_model, fluid_model, solid_fsi_dofs, fluid_fsi_dofs)
+
+        self.dstate = bv.concatenate_vec(
+            [bv.convert_subtype_to_petsc(model.dstate) for model in self.models]
+        )
+        self.dstatet = bv.concatenate_vec(
+            [bv.convert_subtype_to_petsc(model.dstatet) for model in self.models]
+        )
+
+        self.dsolid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
+
+    def set_dstate(self, dstate):
+        self.dstate[:] = dstate
+        block_sizes = [model.dstate.size for model in self.models]
+        sub_states = bv.split_bvec(dstate, block_sizes)
+        for model, sub_state in zip(self.models, sub_states):
+            model.set_dstate(sub_state)
+
+        ## The below are needed to communicate FSI interactions
+        # map linearized state to linearized solid area
+        self.dsolid_area[:] = -2*(self.dstate['u'][1::2])
+
+        # map linearized solid area to fluid area
+        dfluid_control = self.fluid.dcontrol.copy()
+        dfluid_control['area'][:] = subops.mult_mat_vec(
+            self._dfluid_dsolid_scalar,
+            subops.convert_vec_to_petsc(self.dsolid_area))
+        self.fluid.set_dcontrol(dfluid_control)
+
+        # map linearized fluid pressure to solid pressure
+        dsolid_control = self.solid.control.copy()
+        dsolid_control['p'][:] = subops.mult_mat_vec(
+            self._dsolid_dfluid_scalar,
+            subops.convert_vec_to_petsc(self.fluid.dstate['p']))
+        self.solid.set_dcontrol(dsolid_control)
+
+    def set_dstatet(self, dstatet):
+        self.dstatet[:] = dstatet
+        block_sizes = [model.dstatet.size for model in self.models]
+        sub_states = bv.split_bvec(dstatet, block_sizes)
+        for model, sub_state in zip(self.models, sub_states):
+            model.set_dstatet(sub_state)
+
+    def set_dcontrol(self, dcontrol):
+        raise NotImplementedError()

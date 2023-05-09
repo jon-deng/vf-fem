@@ -34,17 +34,6 @@ class BaseDynamicalModel:
     def set_prop(self, prop: BlockVec):
         raise NotImplementedError()
 
-
-    def set_dstate(self, dstate: BlockVec):
-        raise NotImplementedError()
-
-    def set_dstatet(self, dstatet: BlockVec):
-        raise NotImplementedError()
-
-    def set_dcontrol(self, dcontrol: BlockVec):
-        raise NotImplementedError()
-
-
     def assem_res(self) -> BlockVec:
         raise NotImplementedError()
 
@@ -58,4 +47,15 @@ class BaseDynamicalModel:
         raise NotImplementedError()
 
     def assem_dres_dprop(self) -> BlockMat:
+        raise NotImplementedError()
+
+class BaseLinearizedDynamicalModel(BaseDynamicalModel):
+
+    def set_dstate(self, dstate: BlockVec):
+        raise NotImplementedError()
+
+    def set_dstatet(self, dstatet: BlockVec):
+        raise NotImplementedError()
+
+    def set_dcontrol(self, dcontrol: BlockVec):
         raise NotImplementedError()

@@ -127,7 +127,7 @@ def load_dynamical_fsi_model(
         fsi_facet_labels: Optional[Labels]=('pressure',),
         fixed_facet_labels: Optional[Labels]=('fixed',),
         separation_vertex_label: str='separation'
-    ) -> dcmd.BaseDynamicalModel:
+    ) -> Union[dcmd.BaseDynamicalModel, dcmd.BaseLinearizedDynamicalModel]:
     """
     Load a transient coupled (fsi) model
 
@@ -163,7 +163,10 @@ def load_dynamical_fsi_model(
     )[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
-    return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+    if isinstance(solid, dcmd.LinearizedDynamicalSolid):
+        return dcmd.BaseLinearizedDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+    else:
+        return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 def load_transient_fsai_model(
         solid_mesh: str,
