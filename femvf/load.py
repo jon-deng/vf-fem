@@ -98,7 +98,7 @@ def load_transient_fsi_model(
     )
 
     # TODO: This FSI dof selection won't for higher order elements
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['fspace.scalar'])[fsi_verts]
+    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.forms['coeff.fsi.p1'].function_space())[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     if coupling == 'explicit':
@@ -235,11 +235,13 @@ def process_fsi(
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
-    fsi_facet_ids = [solid.forms['mesh.facet_label_to_id'][name] for name in fsi_facet_labels]
-    fsi_edges = np.array([nedge for nedge, fedge in enumerate(solid.forms['mesh.facet_function'].array())
-                                if fedge in set(fsi_facet_ids)])
-    fsi_verts = meshutils.vertices_from_edges(solid.forms['mesh.mesh'], fsi_edges)
-    fsi_coordinates = solid.forms['mesh.mesh'].coordinates()[fsi_verts]
+    fsi_facet_ids = [solid.mesh_function_label_to_value('facet')[name] for name in fsi_facet_labels]
+    fsi_edges = np.array([
+        nedge for nedge, fedge in enumerate(solid.mesh_function('facet').array())
+        if fedge in set(fsi_facet_ids)
+    ])
+    fsi_verts = meshutils.vertices_from_edges(solid.mesh(), fsi_edges)
+    fsi_coordinates = solid.mesh().coordinates()[fsi_verts]
 
     # Sort the fsi vertices from inferior to superior
     # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
@@ -252,21 +254,22 @@ def process_fsi(
             FluidType,
             (tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid)
         ):
-        mesh = solid.forms['mesh.mesh']
-        facet_func = solid.forms['mesh.facet_function']
-        facet_labels = solid.forms['mesh.facet_label_to_id']
+        mesh = solid.mesh()
+        facet_func = solid.mesh_function('facet')
+        facet_labels = solid.mesh_function_label_to_value('facet')
         # TODO: The streamwise mesh can already be known from the fsi_coordinates
         # variable computed earlier
         x, y = meshutils.streamwise1dmesh_from_edges(
-            mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels])
+            mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels]
+        )
         dx = x[1:] - x[:-1]
         dy = y[1:] - y[:-1]
         s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
         if issubclass(FluidType, (dfmd.BaseBernoulliFixedSep, tfmd.BernoulliFixedSep)):
             # If the fluid has a fixed-separation point, set the appropriate
             # separation point for the fluid
-            vertex_label_to_id = solid.forms['mesh.vertex_label_to_id']
-            vertex_mf = solid.forms['mesh.vertex_function']
+            vertex_label_to_id = solid.mesh_function_label_to_value('vertex')
+            vertex_mf = solid.mesh_function('vertex')
             if vertex_mf is None:
                 raise ValueError(
                     f"Couldn't find separation point label {separation_vertex_label}"

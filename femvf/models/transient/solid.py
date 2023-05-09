@@ -5,7 +5,7 @@ Module definining a 'Model' class to represent finite-element (FE) based, transi
 import numpy as np
 import dolfin as dfn
 import functools
-from typing import Tuple, Mapping
+from typing import Tuple, Mapping, Union
 
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from femvf.constants import PASCAL_TO_CGS, SI_DENSITY_TO_CGS
@@ -72,17 +72,25 @@ class BaseTransientSolid(base.BaseTransientModel):
     def __init__(
             self,
             mesh: dfn.Mesh,
-            mesh_funcs: Tuple[dfn.MeshFunction],
-            mesh_entities_label_to_value: Tuple[Mapping[str, int]],
+            mesh_functions: Tuple[dfn.MeshFunction],
+            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
             fsi_facet_labels: Tuple[str],
             fixed_facet_labels: Tuple[str]
         ):
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
 
+        self._mesh = mesh
+        self._mesh_functions = mesh_functions
+        self._mesh_functions_label_values = mesh_functions_label_to_value
+
         self._forms = self.form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
-        solidforms.gen_residual_bilinear_forms(self._forms)
+            mesh, mesh_functions, mesh_functions_label_to_value,
+            fsi_facet_labels, fixed_facet_labels
+        )
+        bilinear_forms = solidforms.gen_residual_bilinear_forms(self._forms)
+
+
 
         self._dt_form = self.forms['coeff.time.dt']
 
@@ -101,18 +109,53 @@ class BaseTransientSolid(base.BaseTransientModel):
         self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
-            key: CachedFormAssembler(self.forms[key]) for key in self.forms
+            key: CachedFormAssembler(biform) for key, biform in bilinear_forms.items()
             if 'form.' in key
         }
+        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(self._forms.functional)
+
+    def mesh(self) -> dfn.Mesh:
+        return self._mesh
+
+    @staticmethod
+    def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]):
+        if isinstance(mesh_element_type, str):
+            if mesh_element_type == 'vertex':
+                return 0
+            elif mesh_element_type == 'facet':
+                return 1
+            elif mesh_element_type == 'cell':
+                return 2
+        elif isinstance(mesh_element_type, int):
+            return mesh_element_type
+        else:
+            raise TypeError(
+                f"`mesh_element_type` must be `str` or `int`, not `{type(mesh_element_type)}`"
+            )
+
+    def mesh_function(self, mesh_element_type: Union[str, int]) -> dfn.MeshFunction:
+        idx = self._mesh_element_type_to_idx(mesh_element_type)
+        return self._mesh_functions[idx]
+
+    def mesh_function_label_to_value(self, mesh_element_type: Union[str, int]) -> Mapping[str, int]:
+        idx = self._mesh_element_type_to_idx(mesh_element_type)
+        return self._mesh_functions_label_values[idx]
 
     @property
-    def mesh(self):
-        return self.forms['mesh.mesh']
+    def dirichlet_bcs(self):
+        bc_base = dfn.DirichletBC(
+            self._forms['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
+            self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
+        )
+        return (bc_base,)
 
     @property
     def XREF(self):
         xref = self.state0.sub[0].copy()
-        xref[:] = self.forms['fspace.scalar'].tabulate_dof_coordinates().reshape(-1).copy()
+        function_space = self.forms['coeff.state.u1'].function_space()
+        n_subspace = function_space.num_sub_spaces()
+
+        xref[:] = function_space.tabulate_dof_coordinates().reshape(-1, n_subspace)[:, 0].copy()
         return xref
 
     @property
@@ -222,7 +265,8 @@ class BaseTransientSolid(base.BaseTransientModel):
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt)
         ]
         res[:] = values
-        self.forms['bc.dirichlet'].apply(res.sub['u'])
+        for bc in self.dirichlet_bcs:
+                bc.apply(res.sub['u'])
         return res
 
     @functools.cached_property
@@ -270,7 +314,8 @@ class BaseTransientSolid(base.BaseTransientModel):
         dfu_dv = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
         dfu_da = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
         for mat in (dfu_du, dfu_dv, dfu_da):
-            self.forms['bc.dirichlet'].apply(mat)
+            for bc in self.dirichlet_bcs:
+                bc.apply(mat)
 
         dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du0(self.dt)))
         dfv_dv = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_dv0(self.dt)))
