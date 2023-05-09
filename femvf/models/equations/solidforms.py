@@ -25,7 +25,7 @@ def set_fenics_function(function: Union[dfn.Function, dfn.Constant], value):
     else:
         function.vector()[:] = value
 
-class FenicsLinearFunctional:
+class FenicsForm:
     """
     Representation of a `dfn.Form` instance with associated coefficients
 
@@ -35,17 +35,20 @@ class FenicsLinearFunctional:
     coefficients: Mapping[str, dfn.Function]
     """
 
-    def __init__(self, functional: dfn.Form, coefficients: CoefficientMapping):
-        self._functional = functional
+    def __init__(self, form: dfn.Form, coefficients: CoefficientMapping):
+        self._form = form
         self._coefficients = coefficients
 
     @property
-    def functional(self):
-        return self._functional
+    def form(self):
+        return self._form
 
     @property
     def coefficients(self):
         return self._coefficients
+
+    def arguments(self):
+        return self.form.arguments()
 
     ## Dict interface
     def keys(self):
@@ -64,29 +67,67 @@ class FenicsLinearFunctional:
         return key in self.coefficients
 
     ## Basic math
-    def __add__(self, other: 'FenicsLinearFunctional'):
+    def __add__(self, other: 'FenicsForm'):
         return add_form(self,  other)
 
-    def __radd__(self, other: 'FenicsLinearFunctional'):
+    def __radd__(self, other: 'FenicsForm'):
         return add_form(self,  other)
 
-def add_form(form_a: FenicsLinearFunctional, form_b: FenicsLinearFunctional) -> FenicsLinearFunctional:
+def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
     """
     Return a new `FenicsForm` from a sum of other forms
     """
-    residual = form_a.functional + form_b.functional
-
-    duplicate_coeff_keys = set.intersection(set(form_a.coefficients.keys()), set(form_b.coefficients.keys()))
-    for key in list(duplicate_coeff_keys):
-        coeff_a, coeff_b = form_a.coefficients[key], form_b.coefficients[key]
-        # Replace duplicate coefficient keys by the `form_b` coefficient
-        # only if the duplicate coefficients from `form_b` and `form_a` have the
-        # same function space
-        if coeff_a.function_space() == coeff_b.function_space():
-            residual = ufl.replace(residual, {coeff_a: coeff_b})
+    # Check that form arguments are consistent and replace duplicated
+    # consistent arguments
+    new_form_a = form_a.form
+    args_a, args_b = form_a.form.arguments(), form_b.form.arguments()
+    for arg_a, arg_b in zip(args_a, args_b):
+        if compare_function_space(arg_a.function_space(), arg_b.function_space()):
+            new_form_a = ufl.replace(new_form_a, {arg_a: arg_b})
         else:
-            raise ValueError("Summed forms contain duplicate coefficients with different function spaces.")
-    return FenicsLinearFunctional(residual, {**form_a.coefficients, **form_b.coefficients})
+            raise ValueError(
+                "Summed forms contain duplicate arguments with different function spaces."
+            )
+    residual = new_form_a + form_b.form
+
+    # Replace duplicate coefficient keys by the `form_b` coefficient
+    # only if the duplicate coefficients from `form_b` and `form_a` have the
+    # same function space
+    duplicate_coeff_keys = set.intersection(set(form_a.keys()), set(form_b.keys()))
+    for key in list(duplicate_coeff_keys):
+        coeff_a, coeff_b = form_a[key], form_b[key]
+
+        if isinstance(coeff_a, dfn.Function) and isinstance(coeff_b, dfn.Function):
+            if compare_function_space(coeff_a.function_space(), coeff_b.function_space()):
+                residual = ufl.replace(residual, {coeff_a: coeff_b})
+            else:
+                raise ValueError(
+                    "Summed forms contain duplicate coefficients with different function spaces."
+                )
+        elif isinstance(coeff_a, dfn.Constant) and isinstance(coeff_b, dfn.Constant):
+            if coeff_a.values().shape == coeff_b.values().shape:
+                residual = ufl.replace(residual, {coeff_a: coeff_b})
+            else:
+                raise ValueError(
+                    "Summed forms contain duplicate coefficients with different constant value shapes."
+                )
+        else:
+            raise TypeError(
+                "Summed forms have duplicate coefficients mixing `dfn.Function` and `dfn.Constant`."
+            )
+    return FenicsForm(residual, {**form_a.coefficients, **form_b.coefficients})
+
+def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace) -> bool:
+    """
+    Return whether two function spaces are equivalent
+    """
+    if (
+            space_a.element().signature() == space_b.element().signature()
+            and space_a.mesh() == space_b.mesh()
+        ):
+        return True
+    else:
+        return False
 
 def _depack_property_ufl_coeff(form_property):
     """
@@ -308,7 +349,7 @@ def form_quad_penalty_pressure(gap, kcoll):
 
 # These functions are mainly for generating forms that are needed for solving
 # the transient problem with a time discretization
-def gen_residual_bilinear_forms(form: FenicsLinearFunctional):
+def gen_residual_bilinear_forms(form: FenicsForm):
     """
     Generates bilinear forms representing derivatives of the residual wrt state variables
 
@@ -328,7 +369,7 @@ def gen_residual_bilinear_forms(form: FenicsLinearFunctional):
         + ['coeff.state.u1']
         + manual_state_var_names
         + ['coeff.time.dt', 'coeff.fsi.p1']):
-        f = form.functional
+        f = form.form
         x = form[full_var_name]
 
         var_name = full_var_name.split(".")[-1]
@@ -342,7 +383,7 @@ def gen_residual_bilinear_forms(form: FenicsLinearFunctional):
         final_state_names
         + manual_state_var_names
         + ['coeff.fsi.p1']):
-        f = form.functional
+        f = form.form
         x = form[full_var_name]
 
         var_name = full_var_name.split(".")[-1]
@@ -464,7 +505,7 @@ def gen_unary_linearized_forms(forms):
         [forms[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
         )
 
-def modify_newmark_time_discretization(form: FenicsLinearFunctional) -> FenicsLinearFunctional:
+def modify_newmark_time_discretization(form: FenicsForm) -> FenicsForm:
     u1 = form['coeff.state.u1']
     v1 = form['coeff.state.v1']
     a1 = form['coeff.state.a1']
@@ -490,9 +531,9 @@ def modify_newmark_time_discretization(form: FenicsLinearFunctional) -> FenicsLi
 
     coefficients = {**form.coefficients, **new_coefficients}
 
-    new_functional = ufl.replace(form.functional, {v1: v1_nmk, a1: a1_nmk})
+    new_functional = ufl.replace(form.form, {v1: v1_nmk, a1: a1_nmk})
 
-    return FenicsLinearFunctional(new_functional, coefficients)
+    return FenicsForm(new_functional, coefficients)
 
 ## These are the core form definitions
 def base_form_definitions(
@@ -580,7 +621,6 @@ def base_form_definitions(
         'mesh.fixed_facet_labels': fixed_facet_labels}
     return forms
 
-
 class BaseFunctionSpaceSpec:
 
     def __init__(self, *spec, default_value=0):
@@ -619,20 +659,26 @@ class ConstantFunctionSpaceSpec(BaseFunctionSpaceSpec):
 
     def generate_function(self, mesh: dfn.Mesh) -> dfn.Constant:
         value_dim, = self.spec
-        if value_dim == 'vector':
-            return dfn.Constant(
-                mesh.geometric_dimension()*[self.default_value],
-                mesh.ufl_cell()
+        if isinstance(value_dim, str):
+            if value_dim == 'vector':
+                return dfn.Constant(
+                    mesh.geometric_dimension()*[self.default_value],
+                    mesh.ufl_cell()
+                )
+            elif value_dim == 'scalar':
+                return dfn.Constant(
+                    self.default_value, mesh.ufl_cell()
+                )
+            else:
+                raise ValueError()
+        elif isinstance(value_dim, int):
+            const = dfn.Constant(
+                value_dim*[0], mesh.ufl_cell()
             )
-        elif value_dim == 'scalar':
-            return dfn.Constant(
-                self.default_value, mesh.ufl_cell()
-            )
+            const.values()[:] = self.default_value
+            return const
         else:
-            return dfn.Constant(
-                value_dim*[self.default_value], mesh.ufl_cell()
-            )
-
+            raise TypeError()
 
 def func_spec(elem_family, elem_degree, value_dim, default_value=0):
     return FunctionSpaceSpec(elem_family, elem_degree, value_dim, default_value=default_value)
@@ -640,9 +686,9 @@ def func_spec(elem_family, elem_degree, value_dim, default_value=0):
 def const_spec(value_dim, default_value=0):
     return ConstantFunctionSpaceSpec(value_dim, default_value=default_value)
 
-# Inertial effect forms
+## Pre-defined linear functionals
 
-class PredefLinearFunctional(FenicsLinearFunctional):
+class PredefLinearForm(FenicsForm):
     """
     A pre-defined linear functional has a pre-defined residual in the class
     """
@@ -665,7 +711,7 @@ class PredefLinearFunctional(FenicsLinearFunctional):
         residual = self._make_residual(coefficients, measure, mesh)
         super().__init__(residual, coefficients)
 
-class InertialForm(PredefLinearFunctional):
+class InertialForm(PredefLinearForm):
     """
     Linear functional representing an inertial force
     """
@@ -686,7 +732,7 @@ class InertialForm(PredefLinearFunctional):
         # forms['expr.force_inertial'] = inertial_body_force
 
 # Elastic effect forms
-class IsotropicElasticForm(PredefLinearFunctional):
+class IsotropicElasticForm(PredefLinearForm):
     """
     Linear functional representing an isotropic elastic stress
     """
@@ -712,7 +758,7 @@ class IsotropicElasticForm(PredefLinearFunctional):
         # coefficients['expr.stress_elastic'] = stress_elastic
         return ufl.inner(stress_elastic, strain_test) * measure
 
-class IsotropicIncompressibleElasticSwellingForm(PredefLinearFunctional):
+class IsotropicIncompressibleElasticSwellingForm(PredefLinearForm):
     """
     Linear functional representing an incompressible, isotropic elastic stress with swelling
     """
@@ -744,7 +790,7 @@ class IsotropicIncompressibleElasticSwellingForm(PredefLinearFunctional):
         # forms['expr.stress_elastic'] = stress_elastic
         # return forms
 
-class IsotropicElasticSwellingForm(PredefLinearFunctional):
+class IsotropicElasticSwellingForm(PredefLinearForm):
     """
     Linear functional representing an isotropic elastic stress with swelling
     """
@@ -794,7 +840,7 @@ class IsotropicElasticSwellingForm(PredefLinearFunctional):
         # return forms
 
 # Surface forcing forms
-class SurfacePressureForm(PredefLinearFunctional):
+class SurfacePressureForm(PredefLinearForm):
     """
     Linear functional representing a pressure follower load
     """
@@ -818,7 +864,7 @@ class SurfacePressureForm(PredefLinearFunctional):
         # coefficients['expr.fluid_traction'] = reference_traction
         return ufl.inner(reference_traction, vector_test) * ds
 
-class ManualSurfaceContactTractionForm(PredefLinearFunctional):
+class ManualSurfaceContactTractionForm(PredefLinearForm):
     """
     Linear functional representing a surface contact traction
     """
@@ -844,7 +890,7 @@ class ManualSurfaceContactTractionForm(PredefLinearFunctional):
         return ufl.inner(tcontact, vector_test) * measure
 
 # Surface membrane forms
-class IsotropicMembraneForm(PredefLinearFunctional):
+class IsotropicMembraneForm(PredefLinearForm):
     """
     Linear functional representing an isotropic elastic membrane
     """
@@ -896,7 +942,7 @@ class IsotropicMembraneForm(PredefLinearFunctional):
         # forms['coeff.prop.nu_membrane'] = nu
         # return forms
 
-class IsotropicIncompressibleMembraneForm(PredefLinearFunctional):
+class IsotropicIncompressibleMembraneForm(PredefLinearForm):
     """
     Linear functional representing an incompressible isotropic elastic membrane
     """
@@ -943,13 +989,14 @@ class IsotropicIncompressibleMembraneForm(PredefLinearFunctional):
 
 # Viscous effect forms
 
-class RayleighDampingForm(PredefLinearFunctional):
+class RayleighDampingForm(PredefLinearForm):
     """
     Linear functional representing a Rayleigh damping viscous stress
     """
 
     COEFFICIENT_SPEC = {
         'coeff.state.v1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.rho': func_spec('DG', 0, 'scalar'),
         'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
         'coeff.prop.nu': const_spec('scalar', 0.45),
         'coeff.prop.rayleigh_m': const_spec('scalar', 1.0),
@@ -984,7 +1031,7 @@ class RayleighDampingForm(PredefLinearFunctional):
         # # coefficients['coeff.prop.rayleigh_k'] = rayleigh_k
         # return coefficients
 
-class KelvinVoigtForm(PredefLinearFunctional):
+class KelvinVoigtForm(PredefLinearForm):
     """
     Linear functional representing a Kelvin-Voigt viscous stress
     """
@@ -1009,7 +1056,7 @@ class KelvinVoigtForm(PredefLinearFunctional):
         # forms['expr.kv_stress'] = stress_visco
         # forms['expr.kv_strain_rate'] = inf_strain_rate
 
-class APForceForm(PredefLinearFunctional):
+class APForceForm(PredefLinearForm):
     """
     Linear functional representing a anterior-posterior (AP) force
     """
@@ -1050,7 +1097,7 @@ class APForceForm(PredefLinearFunctional):
         return -stiffness - viscous
 
 # Add shape effect forms
-class ShapeForm(PredefLinearFunctional):
+class ShapeForm(PredefLinearForm):
     """
     Linear functional that just adds a shape parameter
 
@@ -1077,144 +1124,316 @@ class ShapeForm(PredefLinearFunctional):
         return 0*ufl.inner(umesh_ufl, vector_test)*measure
 
 ## Form models
-def Rayleigh(
-        mesh, mesh_functions: list[dfn.MeshFunction], mesh_function_value_labels: list[Mapping[str, int]],
-        fsi_facet_labels, fixed_facet_labels
-    ):
-    vertex_func, facet_func, cell_func = mesh_functions
-    vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_function_value_labels
-    dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-    _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-    traction_ds = reduce(operator.add, _traction_ds)
+class FenicsNonlinearResidual:
+    """
+    Class representing a residual in Fenics with associated boundary conditions, etc.
+    """
 
-    # Function space
-    SCALAR_CG1 = dfn.FunctionSpace(mesh, 'CG', 1)
-    VECTOR_CG1 = dfn.VectorFunctionSpace(mesh, 'CG', 1)
-    SCALAR_DG0 = dfn.FunctionSpace(mesh, 'DG', 0)
+    def __init__(
+            self,
+            linear_form: FenicsForm,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
 
-    form = (
-        InertialForm({'coeff.prop.rho': dfn.Function(SCALAR_DG0), 'coeff.state.a1': dfn.Function(VECTOR_CG1)}, dx, mesh)
-        + IsotropicElasticForm({'coeff.state.u1': dfn.Function(VECTOR_CG1), 'coeff.prop.emod': dfn.Function(SCALAR_DG0), 'coeff.prop.nu': dfn.Function(SCALAR_DG0)}, dx, mesh)
-        + RayleighDampingForm(
-            {
-                'coeff.state.v1': dfn.Function(VECTOR_CG1), 'coeff.prop.rho': dfn.Function(SCALAR_DG0), 'coeff.prop.emod': dfn.Function(SCALAR_DG0), 'coeff.prop.nu': dfn.Function(SCALAR_DG0),
-                'coeff.prop.rayleigh_m': dfn.Function(SCALAR_DG0), 'coeff.prop.rayleigh_k': dfn.Function(SCALAR_DG0)
-            }, dx, mesh
+        self._mesh = mesh
+        self._linear_form = linear_form
+
+        self._mesh_functions = mesh_functions
+        self._mesh_functions_label_values = mesh_functions_label_to_value
+
+        bc_base = dfn.DirichletBC(
+            self.linear_form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
+            self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
         )
-        + SurfacePressureForm({'coeff.state.u1': dfn.Function(VECTOR_CG1), 'coeff.fsi.p1': dfn.Function(SCALAR_CG1)}, traction_ds, mesh)
-        + ManualSurfaceContactTractionForm({
-                'coeff.state.manual.tcontact': dfn.Function(VECTOR_CG1), 'coeff.state.u1': dfn.Function(VECTOR_CG1),
-                'coeff.prop.ycontact': dfn.Constant(1.0),
-                'coeff.prop.ncontact': dfn.Constant([0, 1]),
-                'coeff.prop.kcontact': dfn.Constant(1.0)
-            },
-            traction_ds, mesh
+        self._dirichlet_bcs = (bc_base,)
+
+    # def keys(self):
+    #     return self.linear_form.keys()
+
+    # def __getitem__(self, key):
+    #     return self.linear_form[key]
+
+    @property
+    def linear_form(self):
+        return self._linear_form
+
+    def mesh(self) -> dfn.Mesh:
+        return self._mesh
+
+    @staticmethod
+    def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]) -> int:
+        if isinstance(mesh_element_type, str):
+            if mesh_element_type == 'vertex':
+                return 0
+            elif mesh_element_type == 'facet':
+                return 1
+            elif mesh_element_type == 'cell':
+                return 2
+        elif isinstance(mesh_element_type, int):
+            return mesh_element_type
+        else:
+            raise TypeError(
+                f"`mesh_element_type` must be `str` or `int`, not `{type(mesh_element_type)}`"
+            )
+
+    def mesh_function(self, mesh_element_type: Union[str, int]) -> dfn.MeshFunction:
+        idx = self._mesh_element_type_to_idx(mesh_element_type)
+        return self._mesh_functions[idx]
+
+    def mesh_function_label_to_value(self, mesh_element_type: Union[str, int]) -> Mapping[str, int]:
+        idx = self._mesh_element_type_to_idx(mesh_element_type)
+        return self._mesh_functions_label_values[idx]
+
+    @property
+    def dirichlet_bcs(self):
+        return self._dirichlet_bcs
+
+class PredefFenicsNonlinearResidual(FenicsNonlinearResidual):
+    """
+    Class representing a pre-defined residual
+    """
+
+    def __init__(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+
+        functional = self._make_functional(
+            mesh, mesh_functions, mesh_functions_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
-    )
-    return modify_newmark_time_discretization(form)
+        super().__init__(
+            functional,
+            mesh, mesh_functions, mesh_functions_label_to_value,
+            fsi_facet_labels, fixed_facet_labels
+        )
 
-    # return \
-    #     add_newmark_time_disc_form(
-    #     add_manual_contact_traction_form(
-    #     add_surface_pressure_form(
-    #     add_rayleigh_viscous_form(
-    #     add_inertial_form(
-    #     add_isotropic_elastic_form(
-    #     add_shape_form(
-    #     base_form_definitions(
-    #         mesh, mesh_functions, mesh_function_value_labels, fsi_facet_labels, fixed_facet_labels))))))))
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        raise NotImplementedError()
 
-def KelvinVoigt(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        modify_newmark_time_discretization(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+class Rayleigh(PredefFenicsNonlinearResidual):
 
-def KelvinVoigtWEpithelium(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return  \
-        modify_newmark_time_discretization(
-        add_isotropic_membrane(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
 
-def IncompSwellingKelvinVoigt(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        modify_newmark_time_discretization(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_with_incomp_swelling_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicElasticForm({}, dx, mesh)
+            + RayleighDampingForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
 
-def SwellingKelvinVoigt(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        modify_newmark_time_discretization(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_with_swelling_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels))))))))
+class KelvinVoigt(PredefFenicsNonlinearResidual):
 
-def SwellingKelvinVoigtWEpithelium(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        modify_newmark_time_discretization(
-        add_isotropic_membrane(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_with_swelling_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
 
-def SwellingKelvinVoigtWEpitheliumNoShape(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        modify_newmark_time_discretization(
-        add_isotropic_membrane(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_with_swelling_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))), large_def=False))
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicElasticForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
 
-def Approximate3DKelvinVoigt(
-    mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-    return \
-        modify_newmark_time_discretization(
-        add_manual_contact_traction_form(
-        add_surface_pressure_form(
-        add_ap_force_form(
-        add_kv_viscous_form(
-        add_inertial_form(
-        add_isotropic_elastic_form(
-        add_shape_form(
-        base_form_definitions(
-            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)))))))))
+class KelvinVoigtWEpithelium(PredefFenicsNonlinearResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicMembraneForm({}, traction_ds, mesh)
+            + IsotropicElasticForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
+
+class IncompSwellingKelvinVoigt(PredefFenicsNonlinearResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicIncompressibleElasticSwellingForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
+
+class SwellingKelvinVoigt(PredefFenicsNonlinearResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicElasticSwellingForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
+
+class SwellingKelvinVoigtWEpithelium(PredefFenicsNonlinearResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicMembraneForm({}, traction_ds, mesh)
+            + IsotropicElasticSwellingForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
+
+class SwellingKelvinVoigtWEpitheliumNoShape(PredefFenicsNonlinearResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicMembraneForm({}, traction_ds, mesh)
+            + IsotropicElasticSwellingForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
+
+class Approximate3DKelvinVoigt(PredefFenicsNonlinearResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicMembraneForm({}, traction_ds, mesh)
+            + IsotropicElasticForm({}, dx, mesh)
+            + APForceForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
