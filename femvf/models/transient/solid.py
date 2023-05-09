@@ -88,32 +88,32 @@ class BaseTransientSolid(base.BaseTransientModel):
             mesh, mesh_functions, mesh_functions_label_to_value,
             fsi_facet_labels, fixed_facet_labels
         )
-        bilinear_forms = solidforms.gen_residual_bilinear_forms(self.residual.linear_form)
+        bilinear_forms = solidforms.gen_residual_bilinear_forms(self.residual.form)
 
-        self._dt_form = self.residual.linear_form['coeff.time.dt']
+        self._dt_form = self.residual.form['coeff.time.dt']
 
         ## Define the state/controls/properties
-        u0 = self.residual.linear_form['coeff.state.u0']
-        v0 = self.residual.linear_form['coeff.state.v0']
-        a0 = self.residual.linear_form['coeff.state.a0']
-        u1 = self.residual.linear_form['coeff.state.u1']
-        v1 = self.residual.linear_form['coeff.state.v1']
-        a1 = self.residual.linear_form['coeff.state.a1']
+        u0 = self.residual.form['coeff.state.u0']
+        v0 = self.residual.form['coeff.state.v0']
+        a0 = self.residual.form['coeff.state.a0']
+        u1 = self.residual.form['coeff.state.u1']
+        v1 = self.residual.form['coeff.state.v1']
+        a1 = self.residual.form['coeff.state.a1']
 
         self.state0 = BlockVector((u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')])
         self.state1 = BlockVector((u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')])
-        self.control = BlockVector((self.residual.linear_form['coeff.fsi.p1'].vector(),), labels=[('p',)])
-        self.prop = properties_bvec_from_forms(self.residual.linear_form)
+        self.control = BlockVector((self.residual.form['coeff.fsi.p1'].vector(),), labels=[('p',)])
+        self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
             key: CachedFormAssembler(biform) for key, biform in bilinear_forms.items()
             if 'form.' in key
         }
-        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(self.residual.linear_form.form)
+        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(self.residual.form.form)
 
     @property
-    def residual(self):
+    def residual(self) -> solidforms.FenicsResidual:
         return self._residual
 
     def mesh(self) -> dfn.Mesh:
@@ -146,7 +146,7 @@ class BaseTransientSolid(base.BaseTransientModel):
     @property
     def dirichlet_bcs(self):
         bc_base = dfn.DirichletBC(
-            self.residual.linear_form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
+            self.residual.form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
             self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
         )
         return (bc_base,)
@@ -154,7 +154,7 @@ class BaseTransientSolid(base.BaseTransientModel):
     @property
     def XREF(self):
         xref = self.state0.sub[0].copy()
-        function_space = self.residual.linear_form['coeff.state.u1'].function_space()
+        function_space = self.residual.form['coeff.state.u1'].function_space()
         n_subspace = function_space.num_sub_spaces()
 
         xref[:] = function_space.tabulate_dof_coordinates()[::n_subspace, :].reshape(-1).copy()
@@ -234,7 +234,7 @@ class BaseTransientSolid(base.BaseTransientModel):
         """
         for key, value in prop.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = depack_form_coefficient_function(self.residual.linear_form['coeff.prop.'+key])
+            coefficient = depack_form_coefficient_function(self.residual.form['coeff.prop.'+key])
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
@@ -244,8 +244,8 @@ class BaseTransientSolid(base.BaseTransientModel):
                 coefficient.vector()[:] = value
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates
-        if 'coeff.prop.umesh' in self.residual.linear_form:
-            u_mesh_coeff = depack_form_coefficient_function(self.residual.linear_form['coeff.prop.umesh'])
+        if 'coeff.prop.umesh' in self.residual.form:
+            u_mesh_coeff = depack_form_coefficient_function(self.residual.form['coeff.prop.umesh'])
 
             mesh = self.forms['mesh.mesh']
             fspace = self.forms['fspace.vector']
@@ -423,7 +423,6 @@ class BaseTransientSolid(base.BaseTransientModel):
         dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
         return x
 
-
 class NodalContactSolid(BaseTransientSolid):
     """
     This class modifies the default behaviour of the solid to implement contact pressures
@@ -435,7 +434,7 @@ class NodalContactSolid(BaseTransientSolid):
         # This sets the 'standard' state variables u/v/a
         super().set_fin_state(state)
 
-        self.residual.linear_form['coeff.state.manual.tcontact'].vector()[:] = self._contact_traction(state.sub['u'])
+        self.residual.form['coeff.state.manual.tcontact'].vector()[:] = self._contact_traction(state.sub['u'])
 
     def assem_dres_dstate1(self):
         dres_dstate1 = super().assem_dres_dstate1()
@@ -447,9 +446,9 @@ class NodalContactSolid(BaseTransientSolid):
     def _contact_traction(self, u):
         # This computes the nodal values of the contact traction function
         XREF = self.XREF
-        ycontact = self.residual.linear_form['coeff.prop.ycontact'].values()[0]
-        ncontact = self.residual.linear_form['coeff.prop.ncontact'].values()
-        kcontact = self.residual.linear_form['coeff.prop.kcontact'].values()[0]
+        ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
+        ncontact = self.residual.form['coeff.prop.ncontact'].values()
+        kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
 
         gap = np.dot((XREF+u)[:].reshape(-1, 2), ncontact) - ycontact
         tcontact = (-solidforms.form_cubic_penalty_pressure(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
@@ -464,10 +463,10 @@ class NodalContactSolid(BaseTransientSolid):
             dfu2_dtcontact = self.cached_form_assemblers['form.bi.df1uva_dtcontact'].assemble()
 
         XREF = self.XREF
-        kcontact = self.residual.linear_form['coeff.prop.kcontact'].values()[0]
-        ycontact = self.residual.linear_form['coeff.prop.ycontact'].values()[0]
-        u1 = self.residual.linear_form['coeff.state.u1'].vector()
-        ncontact = self.residual.linear_form['coeff.prop.ncontact'].values()
+        kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
+        ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
+        u1 = self.residual.form['coeff.state.u1'].vector()
+        ncontact = self.residual.form['coeff.prop.ncontact'].values()
         gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - ycontact
         dgap_du = ncontact
 
@@ -475,7 +474,7 @@ class NodalContactSolid(BaseTransientSolid):
         # for a general collision plane normal, the operation 'df_dtc*dtc_du' will
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
-        dtcontact_du2 = self.residual.linear_form['coeff.state.u1'].vector().copy()
+        dtcontact_du2 = self.residual.form['coeff.state.u1'].vector().copy()
         dpcontact_dgap, _ = solidforms.dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
 
@@ -505,7 +504,6 @@ class Rayleigh(NodalContactSolid):
             solidforms.Rayleigh(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
-
 class KelvinVoigt(NodalContactSolid):
     """
     Represents the governing equations of a Kelvin-Voigt damped solid
@@ -523,13 +521,11 @@ class KelvinVoigt(NodalContactSolid):
         return solidforms.KelvinVoigt(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
 
-
 class KelvinVoigtWEpithelium(KelvinVoigt):
     @staticmethod
     def form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels):
         return  solidforms.KelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels,fixed_facet_labels)
-
 
 class IncompSwellingKelvinVoigt(NodalContactSolid):
     """

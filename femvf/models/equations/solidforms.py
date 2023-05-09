@@ -688,7 +688,7 @@ def const_spec(value_dim, default_value=0):
 
 ## Pre-defined linear functionals
 
-class PredefLinearForm(FenicsForm):
+class PredefinedForm(FenicsForm):
     """
     A pre-defined linear functional has a pre-defined residual in the class
     """
@@ -711,7 +711,7 @@ class PredefLinearForm(FenicsForm):
         residual = self._make_residual(coefficients, measure, mesh)
         super().__init__(residual, coefficients)
 
-class InertialForm(PredefLinearForm):
+class InertialForm(PredefinedForm):
     """
     Linear functional representing an inertial force
     """
@@ -732,7 +732,8 @@ class InertialForm(PredefLinearForm):
         # forms['expr.force_inertial'] = inertial_body_force
 
 # Elastic effect forms
-class IsotropicElasticForm(PredefLinearForm):
+
+class IsotropicElasticForm(PredefinedForm):
     """
     Linear functional representing an isotropic elastic stress
     """
@@ -758,7 +759,7 @@ class IsotropicElasticForm(PredefLinearForm):
         # coefficients['expr.stress_elastic'] = stress_elastic
         return ufl.inner(stress_elastic, strain_test) * measure
 
-class IsotropicIncompressibleElasticSwellingForm(PredefLinearForm):
+class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
     """
     Linear functional representing an incompressible, isotropic elastic stress with swelling
     """
@@ -790,7 +791,7 @@ class IsotropicIncompressibleElasticSwellingForm(PredefLinearForm):
         # forms['expr.stress_elastic'] = stress_elastic
         # return forms
 
-class IsotropicElasticSwellingForm(PredefLinearForm):
+class IsotropicElasticSwellingForm(PredefinedForm):
     """
     Linear functional representing an isotropic elastic stress with swelling
     """
@@ -840,7 +841,8 @@ class IsotropicElasticSwellingForm(PredefLinearForm):
         # return forms
 
 # Surface forcing forms
-class SurfacePressureForm(PredefLinearForm):
+
+class SurfacePressureForm(PredefinedForm):
     """
     Linear functional representing a pressure follower load
     """
@@ -864,7 +866,7 @@ class SurfacePressureForm(PredefLinearForm):
         # coefficients['expr.fluid_traction'] = reference_traction
         return ufl.inner(reference_traction, vector_test) * ds
 
-class ManualSurfaceContactTractionForm(PredefLinearForm):
+class ManualSurfaceContactTractionForm(PredefinedForm):
     """
     Linear functional representing a surface contact traction
     """
@@ -890,7 +892,8 @@ class ManualSurfaceContactTractionForm(PredefLinearForm):
         return ufl.inner(tcontact, vector_test) * measure
 
 # Surface membrane forms
-class IsotropicMembraneForm(PredefLinearForm):
+
+class IsotropicMembraneForm(PredefinedForm):
     """
     Linear functional representing an isotropic elastic membrane
     """
@@ -942,7 +945,7 @@ class IsotropicMembraneForm(PredefLinearForm):
         # forms['coeff.prop.nu_membrane'] = nu
         # return forms
 
-class IsotropicIncompressibleMembraneForm(PredefLinearForm):
+class IsotropicIncompressibleMembraneForm(PredefinedForm):
     """
     Linear functional representing an incompressible isotropic elastic membrane
     """
@@ -989,7 +992,7 @@ class IsotropicIncompressibleMembraneForm(PredefLinearForm):
 
 # Viscous effect forms
 
-class RayleighDampingForm(PredefLinearForm):
+class RayleighDampingForm(PredefinedForm):
     """
     Linear functional representing a Rayleigh damping viscous stress
     """
@@ -1031,7 +1034,7 @@ class RayleighDampingForm(PredefLinearForm):
         # # coefficients['coeff.prop.rayleigh_k'] = rayleigh_k
         # return coefficients
 
-class KelvinVoigtForm(PredefLinearForm):
+class KelvinVoigtForm(PredefinedForm):
     """
     Linear functional representing a Kelvin-Voigt viscous stress
     """
@@ -1056,7 +1059,7 @@ class KelvinVoigtForm(PredefLinearForm):
         # forms['expr.kv_stress'] = stress_visco
         # forms['expr.kv_strain_rate'] = inf_strain_rate
 
-class APForceForm(PredefLinearForm):
+class APForceForm(PredefinedForm):
     """
     Linear functional representing a anterior-posterior (AP) force
     """
@@ -1097,7 +1100,7 @@ class APForceForm(PredefLinearForm):
         return -stiffness - viscous
 
 # Add shape effect forms
-class ShapeForm(PredefLinearForm):
+class ShapeForm(PredefinedForm):
     """
     Linear functional that just adds a shape parameter
 
@@ -1124,7 +1127,7 @@ class ShapeForm(PredefLinearForm):
         return 0*ufl.inner(umesh_ufl, vector_test)*measure
 
 ## Form models
-class FenicsNonlinearResidual:
+class FenicsResidual:
     """
     Class representing a residual in Fenics with associated boundary conditions, etc.
     """
@@ -1140,13 +1143,13 @@ class FenicsNonlinearResidual:
         ):
 
         self._mesh = mesh
-        self._linear_form = linear_form
+        self._form = linear_form
 
         self._mesh_functions = mesh_functions
         self._mesh_functions_label_values = mesh_functions_label_to_value
 
         bc_base = dfn.DirichletBC(
-            self.linear_form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
+            self.form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
             self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
         )
         self._dirichlet_bcs = (bc_base,)
@@ -1158,8 +1161,8 @@ class FenicsNonlinearResidual:
     #     return self.linear_form[key]
 
     @property
-    def linear_form(self):
-        return self._linear_form
+    def form(self):
+        return self._form
 
     def mesh(self) -> dfn.Mesh:
         return self._mesh
@@ -1192,7 +1195,7 @@ class FenicsNonlinearResidual:
     def dirichlet_bcs(self):
         return self._dirichlet_bcs
 
-class PredefFenicsNonlinearResidual(FenicsNonlinearResidual):
+class PredefinedFenicsResidual(FenicsResidual):
     """
     Class representing a pre-defined residual
     """
@@ -1225,7 +1228,7 @@ class PredefFenicsNonlinearResidual(FenicsNonlinearResidual):
         ):
         raise NotImplementedError()
 
-class Rayleigh(PredefFenicsNonlinearResidual):
+class Rayleigh(PredefinedFenicsResidual):
 
     def _make_functional(
             self,
@@ -1251,7 +1254,7 @@ class Rayleigh(PredefFenicsNonlinearResidual):
         )
         return modify_newmark_time_discretization(form)
 
-class KelvinVoigt(PredefFenicsNonlinearResidual):
+class KelvinVoigt(PredefinedFenicsResidual):
 
     def _make_functional(
             self,
@@ -1277,7 +1280,7 @@ class KelvinVoigt(PredefFenicsNonlinearResidual):
         )
         return modify_newmark_time_discretization(form)
 
-class KelvinVoigtWEpithelium(PredefFenicsNonlinearResidual):
+class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
     def _make_functional(
             self,
@@ -1304,7 +1307,7 @@ class KelvinVoigtWEpithelium(PredefFenicsNonlinearResidual):
         )
         return modify_newmark_time_discretization(form)
 
-class IncompSwellingKelvinVoigt(PredefFenicsNonlinearResidual):
+class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
 
     def _make_functional(
             self,
@@ -1330,7 +1333,7 @@ class IncompSwellingKelvinVoigt(PredefFenicsNonlinearResidual):
         )
         return modify_newmark_time_discretization(form)
 
-class SwellingKelvinVoigt(PredefFenicsNonlinearResidual):
+class SwellingKelvinVoigt(PredefinedFenicsResidual):
 
     def _make_functional(
             self,
@@ -1356,34 +1359,7 @@ class SwellingKelvinVoigt(PredefFenicsNonlinearResidual):
         )
         return modify_newmark_time_discretization(form)
 
-class SwellingKelvinVoigtWEpithelium(PredefFenicsNonlinearResidual):
-
-    def _make_functional(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: list[dfn.MeshFunction],
-            mesh_functions_label_to_value: list[Mapping[str, int]],
-            fsi_facet_labels: list[str],
-            fixed_facet_labels: list[str]
-        ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
-
-        form = (
-            InertialForm({}, dx, mesh)
-            + IsotropicMembraneForm({}, traction_ds, mesh)
-            + IsotropicElasticSwellingForm({}, dx, mesh)
-            + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
-        )
-        return modify_newmark_time_discretization(form)
-
-class SwellingKelvinVoigtWEpitheliumNoShape(PredefFenicsNonlinearResidual):
+class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
     def _make_functional(
             self,
@@ -1410,7 +1386,34 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefFenicsNonlinearResidual):
         )
         return modify_newmark_time_discretization(form)
 
-class Approximate3DKelvinVoigt(PredefFenicsNonlinearResidual):
+class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+        traction_ds = reduce(operator.add, _traction_ds)
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicMembraneForm({}, traction_ds, mesh)
+            + IsotropicElasticSwellingForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            + SurfacePressureForm({}, traction_ds, mesh)
+            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return modify_newmark_time_discretization(form)
+
+class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
 
     def _make_functional(
             self,

@@ -98,7 +98,7 @@ def load_transient_fsi_model(
     )
 
     # TODO: This FSI dof selection won't for higher order elements
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.linear_form['coeff.fsi.p1'].function_space())[fsi_verts]
+    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['coeff.fsi.p1'].function_space())[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
     if coupling == 'explicit':

@@ -120,7 +120,7 @@ class ForwardConfig(unittest.TestCase):
         # fl_props = model.fluid.get_properties_vec(set_default=True)
         prop['ymid'][0] = np.max(model.solid.mesh().coordinates()[..., 1]) + y_gap
 
-        xy = model.solid.residual.linear_form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
+        xy = model.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
         x_min, x_max = x.min(), x.max()
@@ -136,10 +136,10 @@ class ForwardConfig(unittest.TestCase):
         prop['zeta_sep'] = 1e-8
 
         # Set the initial state
-        xy = model.solid.residual.linear_form['coeff.state.u1'].function_space().tabulate_dof_coordinates()
+        xy = model.solid.residual.form['coeff.state.u1'].function_space().tabulate_dof_coordinates()
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(model.solid.residual.linear_form['coeff.state.u1'].function_space()).vector()
+        u0 = dfn.Function(model.solid.residual.form['coeff.state.u1'].function_space()).vector()
 
         # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()

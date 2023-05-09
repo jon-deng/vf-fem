@@ -62,7 +62,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.prop = bv.concatenate_vec([self.solid.prop, self.fluid.prop, _self_properties])
 
         ## FSI related stuff
-        self._solid_area = dfn.Function(self.solid.residual.linear_form['coeff.fsi.p1'].function_space()).vector()
+        self._solid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
         # self._dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
 
         n_flq = self.fluid.state0['q'].size
