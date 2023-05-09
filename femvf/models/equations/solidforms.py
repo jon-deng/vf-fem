@@ -13,613 +13,11 @@ import ufl
 
 from . import newmark
 
-CoefficientMapping = Mapping[str, dfn.Function]
+DfnFunction = Union[ufl.Constant, dfn.Function]
+CoefficientMapping = Mapping[str, DfnFunction]
 FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
 
-def set_fenics_function(function: Union[dfn.Function, dfn.Constant], value):
-    """
-    Set a constant value for a general fenics function
-    """
-    if isinstance(function, dfn.Constant):
-        function.values()[:] = value
-    else:
-        function.vector()[:] = value
-
-class FenicsForm:
-    """
-    Representation of a `dfn.Form` instance with associated coefficients
-
-    Parameters
-    ----------
-    functional: dfn.Form
-    coefficients: Mapping[str, dfn.Function]
-    """
-
-    def __init__(self, form: dfn.Form, coefficients: CoefficientMapping):
-        self._form = form
-        self._coefficients = coefficients
-
-    @property
-    def form(self):
-        return self._form
-
-    @property
-    def coefficients(self):
-        return self._coefficients
-
-    def arguments(self):
-        return self.form.arguments()
-
-    ## Dict interface
-    def keys(self):
-        return self.coefficients.keys()
-
-    def values(self):
-        return self.coefficients.values()
-
-    def items(self):
-        return self.coefficients.items()
-
-    def __getitem__(self, key):
-        return self.coefficients[key]
-
-    def __contains__(self, key):
-        return key in self.coefficients
-
-    ## Basic math
-    def __add__(self, other: 'FenicsForm'):
-        return add_form(self,  other)
-
-    def __radd__(self, other: 'FenicsForm'):
-        return add_form(self,  other)
-
-def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
-    """
-    Return a new `FenicsForm` from a sum of other forms
-    """
-    # Check that form arguments are consistent and replace duplicated
-    # consistent arguments
-    new_form_a = form_a.form
-    args_a, args_b = form_a.form.arguments(), form_b.form.arguments()
-    for arg_a, arg_b in zip(args_a, args_b):
-        if compare_function_space(arg_a.function_space(), arg_b.function_space()):
-            new_form_a = ufl.replace(new_form_a, {arg_a: arg_b})
-        else:
-            raise ValueError(
-                "Summed forms contain duplicate arguments with different function spaces."
-            )
-    residual = new_form_a + form_b.form
-
-    # Replace duplicate coefficient keys by the `form_b` coefficient
-    # only if the duplicate coefficients from `form_b` and `form_a` have the
-    # same function space
-    duplicate_coeff_keys = set.intersection(set(form_a.keys()), set(form_b.keys()))
-    for key in list(duplicate_coeff_keys):
-        coeff_a, coeff_b = form_a[key], form_b[key]
-
-        if isinstance(coeff_a, dfn.Function) and isinstance(coeff_b, dfn.Function):
-            if compare_function_space(coeff_a.function_space(), coeff_b.function_space()):
-                residual = ufl.replace(residual, {coeff_a: coeff_b})
-            else:
-                raise ValueError(
-                    "Summed forms contain duplicate coefficients with different function spaces."
-                )
-        elif isinstance(coeff_a, dfn.Constant) and isinstance(coeff_b, dfn.Constant):
-            if coeff_a.values().shape == coeff_b.values().shape:
-                residual = ufl.replace(residual, {coeff_a: coeff_b})
-            else:
-                raise ValueError(
-                    "Summed forms contain duplicate coefficients with different constant value shapes."
-                )
-        else:
-            raise TypeError(
-                "Summed forms have duplicate coefficients mixing `dfn.Function` and `dfn.Constant`."
-            )
-    return FenicsForm(residual, {**form_a.coefficients, **form_b.coefficients})
-
-def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace) -> bool:
-    """
-    Return whether two function spaces are equivalent
-    """
-    if (
-            space_a.element().signature() == space_b.element().signature()
-            and space_a.mesh() == space_b.mesh()
-        ):
-        return True
-    else:
-        return False
-
-def _depack_property_ufl_coeff(form_property):
-    """
-    Return the 'ufl.Coefficient' component from a stored 'coeff.prop.' value
-
-    This mainly handles the shape parameter which is stored as a tuple
-    of a function and an associated `ufl.Coefficient`.
-    """
-    if isinstance(form_property, tuple):
-        return form_property[1]
-    else:
-        return form_property
-
-
-def form_lin_iso_cauchy_stress(strain, emod, nu):
-    """
-    Returns the Cauchy stress for a small-strain displacement field
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    emod : dfn.Function, ufl.Coefficient
-        Elastic modulus
-    nu : float
-        Poisson's ratio
-    """
-    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-    lame_mu = emod/2/(1+nu)
-    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0])
-
-
-def form_def_grad(u):
-    """
-    Returns the deformation gradient
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    spp = ufl.grad(u)
-    if u.geometric_dimension() == 2:
-        return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
-        ) + ufl.Identity(3)
-    else:
-        return spp + ufl.Identity(3)
-
-def form_def_cauchy_green(u):
-    """
-    Returns the right cauchy-green deformation tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    def_grad = form_def_grad(u)
-    return def_grad.T*def_grad
-
-def form_strain_green_lagrange(u):
-    """
-    Returns the strain tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    C = form_def_cauchy_green(u)
-    return 1/2*(C - ufl.Identity(3))
-
-def form_strain_inf(u):
-    """
-    Returns the strain tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    spp = 1/2 * (ufl.grad(u) + ufl.grad(u).T)
-    if u.geometric_dimension() == 2:
-        return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
-        )
-    else:
-        return spp
-
-def form_strain_lin_green_lagrange(u, du):
-    """
-    Returns the linearized Green-Lagrange strain tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Displacement to linearize about
-    du : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    E = form_strain_green_lagrange(u)
-    return ufl.derivative(E, u, du)
-
-def form_lin2_green_strain(u0, u):
-    """
-    Returns the double linearized Green-Lagrange strain tensor
-
-    Parameters
-    ----------
-    u0 : dfn.TrialFunction, ufl.Argument
-        Displacement to linearize about
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    spp = 1/2*(ufl.grad(u).T*ufl.grad(u0) + ufl.grad(u0).T*ufl.grad(u))
-    if u0.geometric_dimension() == 2:
-        return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
-        )
-    else:
-        return spp
-
-
-def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
-    """
-    Return the contact pressure expression according to the penalty method
-
-    Parameters
-    ----------
-    xref : dfn.Function
-        Reference configuration coordinates
-    u : dfn.Function
-        Displacement
-    k : float or dfn.Constant
-        Penalty contact spring value
-    d : float or dfn.Constant
-        y location of the contact plane
-    n : dfn.Constant
-        Contact plane normal, facing away from the vocal folds
-    """
-    gap = ufl.dot(xref+u, n) - ycoll
-    positive_gap = (gap + abs(gap)) / 2
-
-    # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-    return -k*positive_gap**3
-
-def form_pressure_as_reference_traction(p, u, n):
-    """
-
-    Parameters
-    ----------
-    p : Pressure load
-    u : displacement
-    n : facet outer normal
-    """
-    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-
-    return -p*deformation_cofactor*n
-
-def form_pullback_area_normal(u, n):
-    """
-
-    Parameters
-    ----------
-    p : Pressure load
-    u : displacement
-    n : facet outer normal
-    """
-    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-
-    return deformation_cofactor*n
-
-def form_positive_gap(gap):
-    """
-    Return the positive gap
-    """
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            'ignore',
-            category=RuntimeWarning,
-            message='invalid value encountered in add'
-        )
-        positive_gap = (gap + abs(gap)) / 2
-    positive_gap = np.where(
-        gap == -np.inf,
-        0.0,
-        positive_gap
-    )
-    return positive_gap
-
-def form_cubic_penalty_pressure(gap, kcoll):
-    """
-    Return the cubic penalty pressure
-    """
-    positive_gap = form_positive_gap(gap)
-    return kcoll*positive_gap**3
-
-def dform_cubic_penalty_pressure(gap, kcoll):
-    """
-    Return derivatives of the cubic penalty pressure
-    """
-    positive_gap = form_positive_gap(gap)
-    dpositive_gap = np.sign(gap)
-    return kcoll*3*positive_gap**2 * dpositive_gap, positive_gap**3
-
-
-def form_quad_penalty_pressure(gap, kcoll):
-    positive_gap = (gap + abs(gap)) / 2
-    return kcoll*positive_gap**2
-
-# These functions are mainly for generating forms that are needed for solving
-# the transient problem with a time discretization
-def gen_residual_bilinear_forms(form: FenicsForm):
-    """
-    Generates bilinear forms representing derivatives of the residual wrt state variables
-
-    If the residual is F(u, v, a; parameters, ...), this function generates
-    bilinear forms dF/du, dF/dv, etc...
-    """
-    bi_forms = {}
-    # Derivatives of the displacement residual form wrt all state variables
-    initial_state_names = [f'coeff.state.{y}' for y in ('u0', 'v0', 'a0')]
-    final_state_names = [f'coeff.state.{y}' for y in ('u1', 'v1', 'a1')]
-    manual_state_var_names = [name for name in form.keys() if 'coeff.state.manual' in name]
-
-    # This section is for derivatives of the time-discretized residual
-    # F(u0, v0, a0, u1; parameters, ...)
-    for full_var_name in (
-        initial_state_names
-        + ['coeff.state.u1']
-        + manual_state_var_names
-        + ['coeff.time.dt', 'coeff.fsi.p1']):
-        f = form.form
-        x = form[full_var_name]
-
-        var_name = full_var_name.split(".")[-1]
-        form_name = f'form.bi.df1_d{var_name}'
-        bi_forms[form_name] = dfn.derivative(f, x)
-        bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
-
-    # This section is for derivatives of the original not time-discretized residual
-    # F(u1, v1, a1; parameters, ...)
-    for full_var_name in (
-        final_state_names
-        + manual_state_var_names
-        + ['coeff.fsi.p1']):
-        f = form.form
-        x = form[full_var_name]
-
-        var_name = full_var_name.split(".")[-1]
-        form_name = f'form.bi.df1uva_d{var_name}'
-        bi_forms[form_name] = dfn.derivative(f, x)
-        try:
-            # TODO: This can fail if the form is not sensitive to a coefficient so the derivative
-            # is 0
-            bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
-        except:
-            pass
-
-    return bi_forms
-
-def gen_residual_bilinear_property_forms(forms):
-    """
-    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
-    """
-    df1_dsolid = {}
-    property_labels = [
-        form_name.split('.')[-1] for form_name in forms.keys()
-        if 'coeff.prop' in form_name
-    ]
-    for prop_name in property_labels:
-        prop_coeff = _depack_property_ufl_coeff(forms[f'coeff.prop.{prop_name}'])
-        try:
-            df1_dsolid[prop_name] = dfn.adjoint(
-                dfn.derivative(forms['form.un.f1'], prop_coeff)
-            )
-        except RuntimeError:
-            df1_dsolid[prop_name] = None
-
-    return df1_dsolid
-
-# These functions are mainly for generating derived forms that are needed for solving
-# the hopf bifurcation problem
-def gen_hopf_forms(forms):
-    gen_unary_linearized_forms(forms)
-
-    unary_form_names = ['f1uva', 'df1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
-    for unary_form_name in unary_form_names:
-        gen_jac_state_forms(unary_form_name, forms)
-    for unary_form_name in unary_form_names:
-        gen_jac_property_forms(unary_form_name, forms)
-
-def gen_jac_state_forms(unary_form_name, forms):
-    """
-    Return the derivatives of a unary form wrt all solid properties
-    """
-    state_labels = ['u1', 'v1', 'a1']
-    for state_name in state_labels:
-        df_dx = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.state.{state_name}'])
-        forms[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
-
-    state_labels = ['p1']
-    for state_name in state_labels:
-        df_dx = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.fsi.{state_name}'])
-        forms[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
-
-    return forms
-
-def gen_jac_property_forms(unary_form_name, forms):
-    """
-    Return the derivatives of a unary form wrt all solid properties
-    """
-    property_labels = [
-        form_name.split('.')[-1] for form_name in forms.keys()
-        if 'coeff.prop' in form_name
-    ]
-    for prop_name in property_labels:
-        prop_coeff = _depack_property_ufl_coeff(forms[f'coeff.prop.{prop_name}'])
-        try:
-            df_dprop = dfn.derivative(
-                forms[f'form.un.{unary_form_name}'], prop_coeff
-            )
-        except RuntimeError:
-            df_dprop = None
-
-        forms[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
-
-    return forms
-
-def gen_unary_linearized_forms(forms):
-    """
-    Generate linearized forms representing linearization of the residual wrt different states
-
-    These forms are needed for solving the Hopf bifurcation problem/conditions
-    """
-    # Specify the linearization directions
-    for var_name in ['u1', 'v1', 'a1']:
-        forms[f'coeff.dstate.{var_name}'] = dfn.Function(forms[f'coeff.state.{var_name}'].function_space())
-    for var_name in ['p1']:
-        forms[f'coeff.dfsi.{var_name}'] = dfn.Function(forms[f'coeff.fsi.{var_name}'].function_space())
-
-    # Compute the jacobian bilinear forms
-    unary_form_name = 'f1uva'
-    for var_name in ['u1', 'v1', 'a1']:
-        forms[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.state.{var_name}'])
-    for var_name in ['p1']:
-        forms[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(forms[f'form.un.{unary_form_name}'], forms[f'coeff.fsi.{var_name}'])
-
-    # Take the action of the jacobian linear forms along states to get linearized unary forms
-    # dF/dx * delta x, dF/dp * delta p, ...
-    for var_name in ['u1', 'v1', 'a1']:
-        unary_form_name = f'df1uva_{var_name}'
-        df_dx = forms[f'form.bi.df1uva_d{var_name}']
-        # print(len(df_dx.arguments()))
-        # print(len(forms[f'form.un.f1uva'].arguments()))
-        forms[f'form.un.{unary_form_name}'] = dfn.action(df_dx, forms[f'coeff.dstate.{var_name}'])
-
-    for var_name in ['p1']:
-        unary_form_name = f'df1uva_{var_name}'
-        df_dx = forms[f'form.bi.df1uva_d{var_name}']
-        forms[f'form.un.{unary_form_name}'] = dfn.action(df_dx, forms[f'coeff.dfsi.{var_name}'])
-
-    # Compute the total linearized residual
-    forms[f'form.un.df1uva'] = reduce(
-        operator.add,
-        [forms[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
-        )
-
-def modify_newmark_time_discretization(form: FenicsForm) -> FenicsForm:
-    u1 = form['coeff.state.u1']
-    v1 = form['coeff.state.v1']
-    a1 = form['coeff.state.a1']
-
-    u0 = dfn.Function(form['coeff.state.u1'].function_space())
-    v0 = dfn.Function(form['coeff.state.v1'].function_space())
-    a0 = dfn.Function(form['coeff.state.a1'].function_space())
-
-    dt = dfn.Function(form['coeff.prop.rho'].function_space())
-    gamma = dfn.Constant(1/2)
-    beta = dfn.Constant(1/4)
-    v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-    a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
-
-    new_coefficients = {
-        'coeff.state.u0': u0,
-        'coeff.state.v0': v0,
-        'coeff.state.a0': a0,
-        'coeff.time.dt': dt,
-        'coeff.time.gamma': gamma,
-        'coeff.time.beta': beta
-    }
-
-    coefficients = {**form.coefficients, **new_coefficients}
-
-    new_functional = ufl.replace(form.form, {v1: v1_nmk, a1: a1_nmk})
-
-    return FenicsForm(new_functional, coefficients)
-
-## These are the core form definitions
-def base_form_definitions(
-        mesh: dfn.Mesh,
-        mesh_funcs: Tuple[dfn.MeshFunction],
-        mesh_entities_label_to_value: Tuple[Mapping[str, int]],
-        fsi_facet_labels: Tuple[str],
-        fixed_facet_labels: Tuple[str]
-    ):
-    # Measures
-    vertex_func, facet_func, cell_func = mesh_funcs
-    vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_entities_label_to_value
-    dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-    _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-    traction_ds = reduce(operator.add, _traction_ds)
-
-    # Function space
-    scalar_fspace = dfn.FunctionSpace(mesh, 'CG', 1)
-    vector_fspace = dfn.VectorFunctionSpace(mesh, 'CG', 1)
-    scalar_dg0_fspace = dfn.FunctionSpace(mesh, 'DG', 0)
-
-    # Trial/test function
-    vector_trial = dfn.TrialFunction(vector_fspace)
-    vector_test = dfn.TestFunction(vector_fspace)
-    scalar_trial = dfn.TrialFunction(scalar_fspace)
-    scalar_test = dfn.TestFunction(scalar_fspace)
-    strain_test = form_strain_inf(vector_test)
-
-    # Dirichlet BCs
-    bc_base = dfn.DirichletBC(vector_fspace, dfn.Constant([0.0, 0.0]),
-                              facet_func, facet_label_to_id['fixed'])
-
-    # Basic kinematics
-    u0 = dfn.Function(vector_fspace)
-    v0 = dfn.Function(vector_fspace)
-    a0 = dfn.Function(vector_fspace)
-
-    u1 = dfn.Function(vector_fspace)
-    v1 = dfn.Function(vector_fspace)
-    a1 = dfn.Function(vector_fspace)
-
-    xref = dfn.Function(vector_fspace)
-    xref.vector()[:] = scalar_fspace.tabulate_dof_coordinates().reshape(-1).copy()
-
-    forms = {
-        'measure.dx': dx,
-        'measure.ds': ds,
-        'measure.ds_traction': traction_ds,
-        'bc.dirichlet': bc_base,
-
-        'geom.facet_normal': dfn.FacetNormal(mesh),
-
-        'fspace.vector': vector_fspace,
-        'fspace.scalar': scalar_fspace,
-        'fspace.scalar_dg0': scalar_dg0_fspace,
-
-        'test.scalar': scalar_test,
-        'test.vector': vector_test,
-        'test.strain': strain_test,
-        'trial.vector': vector_trial,
-        'trial.scalar': scalar_trial,
-
-        'coeff.state.u0': u0,
-        'coeff.state.v0': v0,
-        'coeff.state.a0': a0,
-        'coeff.state.u1': u1,
-        'coeff.state.v1': v1,
-        'coeff.state.a1': a1,
-        'coeff.ref.x': xref,
-
-        'expr.kin.inf_strain': form_strain_inf(u1),
-        'expr.kin.inf_strain_rate': form_strain_inf(v1),
-
-        'form.un.f1uva': 0.0,
-
-        'mesh.mesh': mesh,
-        'mesh.vertex_label_to_id': vertex_label_to_id,
-        'mesh.facet_label_to_id': facet_label_to_id,
-        'mesh.cell_label_to_id': cell_label_to_id,
-        'mesh.vertex_function': vertex_func,
-        'mesh.facet_function': facet_func,
-        'mesh.cell_function': cell_func,
-        'mesh.fsi_facet_labels': fsi_facet_labels,
-        'mesh.fixed_facet_labels': fixed_facet_labels}
-    return forms
+## Function space specification
 
 class BaseFunctionSpaceSpec:
 
@@ -685,6 +83,121 @@ def func_spec(elem_family, elem_degree, value_dim, default_value=0):
 
 def const_spec(value_dim, default_value=0):
     return ConstantFunctionSpaceSpec(value_dim, default_value=default_value)
+
+## Form class
+
+def set_fenics_function(function: Union[dfn.Function, dfn.Constant], value):
+    """
+    Set a constant value for a general fenics function
+    """
+    if isinstance(function, dfn.Constant):
+        function.values()[:] = value
+    else:
+        function.vector()[:] = value
+
+class FenicsForm:
+    """
+    Representation of a `dfn.Form` instance with associated coefficients
+
+    Parameters
+    ----------
+    functional: dfn.Form
+    coefficients: Mapping[str, dfn.Function]
+    """
+
+    def __init__(self, form: dfn.Form, coefficients: CoefficientMapping):
+        self._form = form
+        self._coefficients = coefficients
+
+    @property
+    def form(self):
+        return self._form
+
+    @property
+    def coefficients(self) -> CoefficientMapping:
+        return self._coefficients
+
+    def arguments(self) -> list[ufl.Argument]:
+        return self.form.arguments()
+
+    ## Dict interface
+    def keys(self) -> list[str]:
+        return self.coefficients.keys()
+
+    def values(self) -> list[DfnFunction]:
+        return self.coefficients.values()
+
+    def items(self) -> list[Tuple[str, DfnFunction]]:
+        return self.coefficients.items()
+
+    def __getitem__(self, key: str) -> DfnFunction:
+        return self.coefficients[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.coefficients
+
+    ## Basic math
+    def __add__(self, other: 'FenicsForm') -> 'FenicsForm':
+        return add_form(self,  other)
+
+    def __radd__(self, other: 'FenicsForm') -> 'FenicsForm':
+        return add_form(self,  other)
+
+def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
+    """
+    Return a new `FenicsForm` from a sum of other forms
+    """
+    # Check that form arguments are consistent and replace duplicated
+    # consistent arguments
+    new_form_a = form_a.form
+    args_a, args_b = form_a.form.arguments(), form_b.form.arguments()
+    for arg_a, arg_b in zip(args_a, args_b):
+        if compare_function_space(arg_a.function_space(), arg_b.function_space()):
+            new_form_a = ufl.replace(new_form_a, {arg_a: arg_b})
+        else:
+            raise ValueError(
+                "Summed forms contain duplicate arguments with different function spaces."
+            )
+    residual = new_form_a + form_b.form
+
+    # Replace duplicate coefficient keys by the `form_b` coefficient
+    # only if the duplicate coefficients from `form_b` and `form_a` have the
+    # same function space
+    duplicate_coeff_keys = set.intersection(set(form_a.keys()), set(form_b.keys()))
+    for key in list(duplicate_coeff_keys):
+        coeff_a, coeff_b = form_a[key], form_b[key]
+
+        if isinstance(coeff_a, dfn.Function) and isinstance(coeff_b, dfn.Function):
+            if compare_function_space(coeff_a.function_space(), coeff_b.function_space()):
+                residual = ufl.replace(residual, {coeff_a: coeff_b})
+            else:
+                raise ValueError(
+                    "Summed forms contain duplicate coefficients with different function spaces."
+                )
+        elif isinstance(coeff_a, dfn.Constant) and isinstance(coeff_b, dfn.Constant):
+            if coeff_a.values().shape == coeff_b.values().shape:
+                residual = ufl.replace(residual, {coeff_a: coeff_b})
+            else:
+                raise ValueError(
+                    "Summed forms contain duplicate coefficients with different constant value shapes."
+                )
+        else:
+            raise TypeError(
+                "Summed forms have duplicate coefficients mixing `dfn.Function` and `dfn.Constant`."
+            )
+    return FenicsForm(residual, {**form_a.coefficients, **form_b.coefficients})
+
+def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace) -> bool:
+    """
+    Return whether two function spaces are equivalent
+    """
+    if (
+            space_a.element().signature() == space_b.element().signature()
+            and space_a.mesh() == space_b.mesh()
+        ):
+        return True
+    else:
+        return False
 
 ## Pre-defined linear functionals
 
@@ -1154,6 +667,9 @@ class FenicsResidual:
         )
         self._dirichlet_bcs = (bc_base,)
 
+        self._fsi_facet_labels = fsi_facet_labels
+        self._fixed_facet_labels = fixed_facet_labels
+
     # def keys(self):
     #     return self.linear_form.keys()
 
@@ -1161,7 +677,7 @@ class FenicsResidual:
     #     return self.linear_form[key]
 
     @property
-    def form(self):
+    def form(self) -> FenicsForm:
         return self._form
 
     def mesh(self) -> dfn.Mesh:
@@ -1192,8 +708,16 @@ class FenicsResidual:
         return self._mesh_functions_label_values[idx]
 
     @property
-    def dirichlet_bcs(self):
+    def dirichlet_bcs(self) -> list[dfn.DirichletBC]:
         return self._dirichlet_bcs
+
+    @property
+    def fsi_facet_labels(self):
+        return self._fsi_facet_labels
+
+    @property
+    def fixed_facet_labels(self):
+        return self._fixed_facet_labels
 
 class PredefinedFenicsResidual(FenicsResidual):
     """
@@ -1225,7 +749,7 @@ class PredefinedFenicsResidual(FenicsResidual):
             mesh_functions_label_to_value: list[Mapping[str, int]],
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
-        ):
+        ) -> dfn.Form:
         raise NotImplementedError()
 
 class Rayleigh(PredefinedFenicsResidual):
@@ -1440,3 +964,410 @@ class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
             + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return modify_newmark_time_discretization(form)
+
+## Form modifiers
+
+def modify_newmark_time_discretization(form: FenicsForm) -> FenicsForm:
+    u1 = form['coeff.state.u1']
+    v1 = form['coeff.state.v1']
+    a1 = form['coeff.state.a1']
+
+    u0 = dfn.Function(form['coeff.state.u1'].function_space())
+    v0 = dfn.Function(form['coeff.state.v1'].function_space())
+    a0 = dfn.Function(form['coeff.state.a1'].function_space())
+
+    dt = dfn.Function(form['coeff.prop.rho'].function_space())
+    gamma = dfn.Constant(1/2)
+    beta = dfn.Constant(1/4)
+    v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+    a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+
+    new_coefficients = {
+        'coeff.state.u0': u0,
+        'coeff.state.v0': v0,
+        'coeff.state.a0': a0,
+        'coeff.time.dt': dt,
+        'coeff.time.gamma': gamma,
+        'coeff.time.beta': beta
+    }
+
+    coefficients = {**form.coefficients, **new_coefficients}
+
+    new_functional = ufl.replace(form.form, {v1: v1_nmk, a1: a1_nmk})
+
+    return FenicsForm(new_functional, coefficients)
+
+## Common functions
+
+def _depack_property_ufl_coeff(form_property):
+    """
+    Return the 'ufl.Coefficient' component from a stored 'coeff.prop.' value
+
+    This mainly handles the shape parameter which is stored as a tuple
+    of a function and an associated `ufl.Coefficient`.
+    """
+    if isinstance(form_property, tuple):
+        return form_property[1]
+    else:
+        return form_property
+
+def form_lin_iso_cauchy_stress(strain, emod, nu):
+    """
+    Returns the Cauchy stress for a small-strain displacement field
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    emod : dfn.Function, ufl.Coefficient
+        Elastic modulus
+    nu : float
+        Poisson's ratio
+    """
+    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
+    lame_mu = emod/2/(1+nu)
+    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0])
+
+def form_def_grad(u):
+    """
+    Returns the deformation gradient
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    spp = ufl.grad(u)
+    if u.geometric_dimension() == 2:
+        return ufl.as_tensor(
+            [[spp[0, 0], spp[0, 1], 0],
+            [spp[1, 0], spp[1, 1], 0],
+            [        0,         0, 0]]
+        ) + ufl.Identity(3)
+    else:
+        return spp + ufl.Identity(3)
+
+def form_def_cauchy_green(u):
+    """
+    Returns the right cauchy-green deformation tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    def_grad = form_def_grad(u)
+    return def_grad.T*def_grad
+
+def form_strain_green_lagrange(u):
+    """
+    Returns the strain tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    C = form_def_cauchy_green(u)
+    return 1/2*(C - ufl.Identity(3))
+
+def form_strain_inf(u):
+    """
+    Returns the strain tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    spp = 1/2 * (ufl.grad(u) + ufl.grad(u).T)
+    if u.geometric_dimension() == 2:
+        return ufl.as_tensor(
+            [[spp[0, 0], spp[0, 1], 0],
+            [spp[1, 0], spp[1, 1], 0],
+            [        0,         0, 0]]
+        )
+    else:
+        return spp
+
+def form_strain_lin_green_lagrange(u, du):
+    """
+    Returns the linearized Green-Lagrange strain tensor
+
+    Parameters
+    ----------
+    u : dfn.TrialFunction, ufl.Argument
+        Displacement to linearize about
+    du : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    E = form_strain_green_lagrange(u)
+    return ufl.derivative(E, u, du)
+
+def form_lin2_green_strain(u0, u):
+    """
+    Returns the double linearized Green-Lagrange strain tensor
+
+    Parameters
+    ----------
+    u0 : dfn.TrialFunction, ufl.Argument
+        Displacement to linearize about
+    u : dfn.TrialFunction, ufl.Argument
+        Trial displacement field
+    """
+    spp = 1/2*(ufl.grad(u).T*ufl.grad(u0) + ufl.grad(u0).T*ufl.grad(u))
+    if u0.geometric_dimension() == 2:
+        return ufl.as_tensor(
+            [[spp[0, 0], spp[0, 1], 0],
+            [spp[1, 0], spp[1, 1], 0],
+            [        0,         0, 0]]
+        )
+    else:
+        return spp
+
+def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
+    """
+    Return the contact pressure expression according to the penalty method
+
+    Parameters
+    ----------
+    xref : dfn.Function
+        Reference configuration coordinates
+    u : dfn.Function
+        Displacement
+    k : float or dfn.Constant
+        Penalty contact spring value
+    d : float or dfn.Constant
+        y location of the contact plane
+    n : dfn.Constant
+        Contact plane normal, facing away from the vocal folds
+    """
+    gap = ufl.dot(xref+u, n) - ycoll
+    positive_gap = (gap + abs(gap)) / 2
+
+    # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
+    return -k*positive_gap**3
+
+def form_pressure_as_reference_traction(p, u, n):
+    """
+
+    Parameters
+    ----------
+    p : Pressure load
+    u : displacement
+    n : facet outer normal
+    """
+    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
+    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+
+    return -p*deformation_cofactor*n
+
+def form_pullback_area_normal(u, n):
+    """
+
+    Parameters
+    ----------
+    p : Pressure load
+    u : displacement
+    n : facet outer normal
+    """
+    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
+    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+
+    return deformation_cofactor*n
+
+def form_positive_gap(gap):
+    """
+    Return the positive gap
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            'ignore',
+            category=RuntimeWarning,
+            message='invalid value encountered in add'
+        )
+        positive_gap = (gap + abs(gap)) / 2
+    positive_gap = np.where(
+        gap == -np.inf,
+        0.0,
+        positive_gap
+    )
+    return positive_gap
+
+def form_cubic_penalty_pressure(gap, kcoll):
+    """
+    Return the cubic penalty pressure
+    """
+    positive_gap = form_positive_gap(gap)
+    return kcoll*positive_gap**3
+
+def dform_cubic_penalty_pressure(gap, kcoll):
+    """
+    Return derivatives of the cubic penalty pressure
+    """
+    positive_gap = form_positive_gap(gap)
+    dpositive_gap = np.sign(gap)
+    return kcoll*3*positive_gap**2 * dpositive_gap, positive_gap**3
+
+def form_quad_penalty_pressure(gap, kcoll):
+    positive_gap = (gap + abs(gap)) / 2
+    return kcoll*positive_gap**2
+
+## Generation of new forms
+# These functions are mainly for generating forms that are needed for solving
+# the transient problem with a time discretization
+def gen_residual_bilinear_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
+    """
+    Generates bilinear forms representing derivatives of the residual wrt state variables
+
+    If the residual is F(u, v, a; parameters, ...), this function generates
+    bilinear forms dF/du, dF/dv, etc...
+    """
+    bi_forms = {}
+    # Derivatives of the displacement residual form wrt all state variables
+    initial_state_names = [f'coeff.state.{y}' for y in ('u0', 'v0', 'a0')]
+    final_state_names = [f'coeff.state.{y}' for y in ('u1', 'v1', 'a1')]
+    manual_state_var_names = [name for name in form.keys() if 'coeff.state.manual' in name]
+
+    # This section is for derivatives of the time-discretized residual
+    # F(u0, v0, a0, u1; parameters, ...)
+    for full_var_name in (
+        initial_state_names
+        + ['coeff.state.u1']
+        + manual_state_var_names
+        + ['coeff.time.dt', 'coeff.fsi.p1']):
+        f = form.form
+        x = form[full_var_name]
+
+        var_name = full_var_name.split(".")[-1]
+        form_name = f'form.bi.df1_d{var_name}'
+        bi_forms[form_name] = dfn.derivative(f, x)
+        bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
+
+    # This section is for derivatives of the original not time-discretized residual
+    # F(u1, v1, a1; parameters, ...)
+    for full_var_name in (
+        final_state_names
+        + manual_state_var_names
+        + ['coeff.fsi.p1']):
+        f = form.form
+        x = form[full_var_name]
+
+        var_name = full_var_name.split(".")[-1]
+        form_name = f'form.bi.df1uva_d{var_name}'
+        bi_forms[form_name] = dfn.derivative(f, x)
+        try:
+            # TODO: This can fail if the form is not sensitive to a coefficient so the derivative
+            # is 0
+            bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
+        except:
+            pass
+
+    return bi_forms
+
+def gen_residual_bilinear_property_forms(form) -> Mapping[str, dfn.Form]:
+    """
+    Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
+    """
+    df1_dsolid = {}
+    property_labels = [
+        form_name.split('.')[-1] for form_name in form.keys()
+        if 'coeff.prop' in form_name
+    ]
+    for prop_name in property_labels:
+        prop_coeff = _depack_property_ufl_coeff(form[f'coeff.prop.{prop_name}'])
+        try:
+            df1_dsolid[prop_name] = dfn.adjoint(
+                dfn.derivative(form['form.un.f1'], prop_coeff)
+            )
+        except RuntimeError:
+            df1_dsolid[prop_name] = None
+
+    return df1_dsolid
+
+# These functions are mainly for generating derived forms that are needed for solving
+# the hopf bifurcation problem
+def gen_hopf_forms(form) -> Mapping[str, dfn.Form]:
+    gen_unary_linearized_forms(form)
+
+    unary_form_names = ['f1uva', 'df1uva', 'df1uva_u1', 'df1uva_v1', 'df1uva_a1', 'df1uva_p1']
+    for unary_form_name in unary_form_names:
+        gen_jac_state_forms(unary_form_name, form)
+    for unary_form_name in unary_form_names:
+        gen_jac_property_forms(unary_form_name, form)
+
+def gen_jac_state_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
+    """
+    Return the derivatives of a unary form wrt all solid properties
+    """
+    state_labels = ['u1', 'v1', 'a1']
+    for state_name in state_labels:
+        df_dx = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.state.{state_name}'])
+        form[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
+
+    state_labels = ['p1']
+    for state_name in state_labels:
+        df_dx = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.fsi.{state_name}'])
+        form[f'form.bi.d{unary_form_name}_d{state_name}'] = df_dx
+
+    return form
+
+def gen_jac_property_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
+    """
+    Return the derivatives of a unary form wrt all solid properties
+    """
+    property_labels = [
+        form_name.split('.')[-1] for form_name in form.keys()
+        if 'coeff.prop' in form_name
+    ]
+    for prop_name in property_labels:
+        prop_coeff = _depack_property_ufl_coeff(form[f'coeff.prop.{prop_name}'])
+        try:
+            df_dprop = dfn.derivative(
+                form[f'form.un.{unary_form_name}'], prop_coeff
+            )
+        except RuntimeError:
+            df_dprop = None
+
+        form[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
+
+    return form
+
+def gen_unary_linearized_forms(form) -> Mapping[str, dfn.Form]:
+    """
+    Generate linearized forms representing linearization of the residual wrt different states
+
+    These forms are needed for solving the Hopf bifurcation problem/conditions
+    """
+    # Specify the linearization directions
+    for var_name in ['u1', 'v1', 'a1']:
+        form[f'coeff.dstate.{var_name}'] = dfn.Function(form[f'coeff.state.{var_name}'].function_space())
+    for var_name in ['p1']:
+        form[f'coeff.dfsi.{var_name}'] = dfn.Function(form[f'coeff.fsi.{var_name}'].function_space())
+
+    # Compute the jacobian bilinear forms
+    unary_form_name = 'f1uva'
+    for var_name in ['u1', 'v1', 'a1']:
+        form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.state.{var_name}'])
+    for var_name in ['p1']:
+        form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form[f'form.un.{unary_form_name}'], form[f'coeff.fsi.{var_name}'])
+
+    # Take the action of the jacobian linear forms along states to get linearized unary forms
+    # dF/dx * delta x, dF/dp * delta p, ...
+    for var_name in ['u1', 'v1', 'a1']:
+        unary_form_name = f'df1uva_{var_name}'
+        df_dx = form[f'form.bi.df1uva_d{var_name}']
+        # print(len(df_dx.arguments()))
+        # print(len(forms[f'form.un.f1uva'].arguments()))
+        form[f'form.un.{unary_form_name}'] = dfn.action(df_dx, form[f'coeff.dstate.{var_name}'])
+
+    for var_name in ['p1']:
+        unary_form_name = f'df1uva_{var_name}'
+        df_dx = form[f'form.bi.df1uva_d{var_name}']
+        form[f'form.un.{unary_form_name}'] = dfn.action(df_dx, form[f'coeff.dfsi.{var_name}'])
+
+    # Compute the total linearized residual
+    form[f'form.un.df1uva'] = reduce(
+        operator.add,
+        [form[f'form.un.df1uva_{var_name}'] for var_name in ('u1', 'v1', 'a1', 'p1')]
+    )

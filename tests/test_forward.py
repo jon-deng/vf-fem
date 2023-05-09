@@ -118,7 +118,7 @@ class ForwardConfig(unittest.TestCase):
 
         prop = model.prop
         # fl_props = model.fluid.get_properties_vec(set_default=True)
-        prop['ymid'][0] = np.max(model.solid.mesh().coordinates()[..., 1]) + y_gap
+        prop['ymid'][0] = np.max(model.solid.residual.mesh().coordinates()[..., 1]) + y_gap
 
         xy = model.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
         x = xy[:, 0]

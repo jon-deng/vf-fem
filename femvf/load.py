@@ -235,13 +235,16 @@ def process_fsi(
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
-    fsi_facet_ids = [solid.mesh_function_label_to_value('facet')[name] for name in fsi_facet_labels]
+    fsi_facet_ids = [
+        solid.residual.mesh_function_label_to_value('facet')[name]
+        for name in fsi_facet_labels
+    ]
     fsi_edges = np.array([
-        nedge for nedge, fedge in enumerate(solid.mesh_function('facet').array())
+        nedge for nedge, fedge in enumerate(solid.residual.mesh_function('facet').array())
         if fedge in set(fsi_facet_ids)
     ])
-    fsi_verts = meshutils.vertices_from_edges(solid.mesh(), fsi_edges)
-    fsi_coordinates = solid.mesh().coordinates()[fsi_verts]
+    fsi_verts = meshutils.vertices_from_edges(solid.residual.mesh(), fsi_edges)
+    fsi_coordinates = solid.residual.mesh().coordinates()[fsi_verts]
 
     # Sort the fsi vertices from inferior to superior
     # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
@@ -254,9 +257,9 @@ def process_fsi(
             FluidType,
             (tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid)
         ):
-        mesh = solid.mesh()
-        facet_func = solid.mesh_function('facet')
-        facet_labels = solid.mesh_function_label_to_value('facet')
+        mesh = solid.residual.mesh()
+        facet_func = solid.residual.mesh_function('facet')
+        facet_labels = solid.residual.mesh_function_label_to_value('facet')
         # TODO: The streamwise mesh can already be known from the fsi_coordinates
         # variable computed earlier
         x, y = meshutils.streamwise1dmesh_from_edges(
@@ -268,8 +271,8 @@ def process_fsi(
         if issubclass(FluidType, (dfmd.BaseBernoulliFixedSep, tfmd.BernoulliFixedSep)):
             # If the fluid has a fixed-separation point, set the appropriate
             # separation point for the fluid
-            vertex_label_to_id = solid.mesh_function_label_to_value('vertex')
-            vertex_mf = solid.mesh_function('vertex')
+            vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
+            vertex_mf = solid.residual.mesh_function('vertex')
             if vertex_mf is None:
                 raise ValueError(
                     f"Couldn't find separation point label {separation_vertex_label}"

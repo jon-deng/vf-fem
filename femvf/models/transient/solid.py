@@ -80,10 +80,6 @@ class BaseTransientSolid(base.BaseTransientModel):
         assert isinstance(fsi_facet_labels, (list, tuple))
         assert isinstance(fixed_facet_labels, (list, tuple))
 
-        self._mesh = mesh
-        self._mesh_functions = mesh_functions
-        self._mesh_functions_label_values = mesh_functions_label_to_value
-
         self._residual = self.form_definitions(
             mesh, mesh_functions, mesh_functions_label_to_value,
             fsi_facet_labels, fixed_facet_labels
@@ -116,40 +112,18 @@ class BaseTransientSolid(base.BaseTransientModel):
     def residual(self) -> solidforms.FenicsResidual:
         return self._residual
 
-    def mesh(self) -> dfn.Mesh:
-        return self._mesh
+    # def mesh(self) -> dfn.Mesh:
+    #     return self.residual.mesh()
 
-    @staticmethod
-    def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]) -> int:
-        if isinstance(mesh_element_type, str):
-            if mesh_element_type == 'vertex':
-                return 0
-            elif mesh_element_type == 'facet':
-                return 1
-            elif mesh_element_type == 'cell':
-                return 2
-        elif isinstance(mesh_element_type, int):
-            return mesh_element_type
-        else:
-            raise TypeError(
-                f"`mesh_element_type` must be `str` or `int`, not `{type(mesh_element_type)}`"
-            )
+    # def mesh_function(self, mesh_element_type: Union[str, int]) -> dfn.MeshFunction:
+    #     return self.residual.mesh_function(mesh_element_type)
 
-    def mesh_function(self, mesh_element_type: Union[str, int]) -> dfn.MeshFunction:
-        idx = self._mesh_element_type_to_idx(mesh_element_type)
-        return self._mesh_functions[idx]
+    # def mesh_function_label_to_value(self, mesh_element_type: Union[str, int]) -> Mapping[str, int]:
+    #     return self.residual.mesh_function_label_to_value()
 
-    def mesh_function_label_to_value(self, mesh_element_type: Union[str, int]) -> Mapping[str, int]:
-        idx = self._mesh_element_type_to_idx(mesh_element_type)
-        return self._mesh_functions_label_values[idx]
-
-    @property
-    def dirichlet_bcs(self):
-        bc_base = dfn.DirichletBC(
-            self.residual.form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
-            self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
-        )
-        return (bc_base,)
+    # @property
+    # def dirichlet_bcs(self):
+    #     return self.residual.dirichlet_bcs
 
     @property
     def XREF(self):
@@ -267,8 +241,8 @@ class BaseTransientSolid(base.BaseTransientModel):
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt)
         ]
         res[:] = values
-        for bc in self.dirichlet_bcs:
-                bc.apply(res.sub['u'])
+        for bc in self.residual.dirichlet_bcs:
+            bc.apply(res.sub['u'])
         return res
 
     @functools.cached_property

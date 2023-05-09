@@ -183,8 +183,8 @@ class StateFile:
         Writes the mesh information to the h5 file
         """
         solid = self.model.solid
-        coords = solid.mesh().coordinates()
-        cells = solid.mesh().cells()
+        coords = solid.residual.mesh().coordinates()
+        cells = solid.residual.mesh().cells()
         self.file.require_dataset(
             'mesh/solid/coordinates', coords.shape,
             data=coords, dtype=np.float64
