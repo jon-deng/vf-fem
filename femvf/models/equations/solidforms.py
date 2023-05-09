@@ -749,7 +749,6 @@ class SurfacePressureForm(PredefinedFenicsForm):
 
         dis = coefficients['coeff.state.u1']
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
-        mesh = coefficients['coeff.state.u1'].function_space().mesh()
         facet_normal = ufl.FacetNormal(mesh)
 
         p = coefficients['coeff.fsi.p1']
@@ -769,9 +768,6 @@ class ManualSurfaceContactTractionForm(PredefinedFenicsForm):
         ncontact = coefficients['coeff.prop.ncontact']
         kcontact = coefficients['coeff.prop.kcontact']
 
-        ycontact = dfn.Constant(1.0)
-        kcontact = dfn.Constant(1.0)
-        ncontact = dfn.Constant([0.0, 1.0])
         set_fenics_function(ycontact, np.inf)
         set_fenics_function(kcontact, 1)
         set_fenics_function(ncontact, [0, 1])
@@ -786,7 +782,6 @@ class IsotropicMembraneForm(PredefinedFenicsForm):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
         # Define the 8th order projector to get the planar strain component
-        mesh = coefficients['coeff.state.u1'].function_space().mesh()
         facet_normal = ufl.FacetNormal(mesh)
         n = ufl.as_tensor([facet_normal[0], facet_normal[1], 0.0])
         nn = ufl.outer(n, n)
@@ -985,9 +980,9 @@ def Rayleigh(
         + SurfacePressureForm({'coeff.state.u1': dfn.Function(VECTOR_CG1), 'coeff.fsi.p1': dfn.Function(SCALAR_CG1)}, traction_ds, mesh)
         + ManualSurfaceContactTractionForm({
                 'coeff.state.manual.tcontact': dfn.Function(VECTOR_CG1), 'coeff.state.u1': dfn.Function(VECTOR_CG1),
-                'coeff.prop.ycontact': dfn.Constant(np.inf),
+                'coeff.prop.ycontact': dfn.Constant(1.0),
                 'coeff.prop.ncontact': dfn.Constant([0, 1]),
-                'coeff.prop.kcontact': dfn.Constant(1)
+                'coeff.prop.kcontact': dfn.Constant(1.0)
             },
             traction_ds, mesh
         )
