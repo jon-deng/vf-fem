@@ -1366,7 +1366,7 @@ def gen_jac_state_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
 
     return forms
 
-def gen_jac_property_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
+def gen_jac_property_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
     """
     Return the derivatives of a unary form wrt all solid properties
     """
@@ -1376,15 +1376,13 @@ def gen_jac_property_forms(unary_form_name, form) -> Mapping[str, dfn.Form]:
         if 'coeff.prop' in form_name
     ]
     for prop_name in property_labels:
-        prop_coeff = _depack_property_ufl_coeff(form[f'coeff.prop.{prop_name}'])
+        prop_coeff = form[f'coeff.prop.{prop_name}']
         try:
-            df_dprop = dfn.derivative(
-                form[f'form.un.{unary_form_name}'], prop_coeff
-            )
+            df_dprop = dfn.derivative(form.form, prop_coeff)
         except RuntimeError:
             df_dprop = None
 
-        forms[f'form.bi.d{unary_form_name}_d{prop_name}'] = df_dprop
+        forms[f'form.bi.dres_d{prop_name}'] = df_dprop
 
     return forms
 

@@ -51,6 +51,8 @@ class DynamicalSolid(BaseDynamicalModel):
         # self._forms = self.form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
         # bilinear_forms = gen_residual_bilinear_forms(self.residual.form)
         hopf_forms = solidforms.gen_jac_state_forms(self.residual.form)
+        prop_jac_forms = solidforms.gen_jac_property_forms(self.residual.form)
+        forms = {**hopf_forms, **prop_jac_forms}
 
         self.u = self.residual.form['coeff.state.u1']
         self.v = self.residual.form['coeff.state.v1']
@@ -70,7 +72,7 @@ class DynamicalSolid(BaseDynamicalModel):
         self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
-            key: CachedFormAssembler(form) for key, form in hopf_forms.items()
+            key: CachedFormAssembler(form) for key, form in forms.items()
             if ('form.' in key and form is not None)
         }
 
@@ -211,8 +213,9 @@ class SolidDynamicalSystem(DynamicalSolid):
         j_emod = self.prop.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.dres_demod'].assemble()
 
-        j_shape = self.prop.labels[0].index('umesh')
-        mats[0][j_shape] = self.cached_form_assemblers['form.bi.dres_dumesh'].assemble()
+        if 'umesh' in self.prop:
+            j_shape = self.prop.labels[0].index('umesh')
+            mats[0][j_shape] = self.cached_form_assemblers['form.bi.dres_dumesh'].assemble()
 
         return bm.BlockMatrix(
             mats, labels=(self.state.labels[0], self.prop.labels[0]))
@@ -228,17 +231,7 @@ class LinearizedSolidDynamicalSystem(DynamicalSolid):
 
     def __init__(self, residual: solidforms.FenicsResidual):
 
-        new_form = solidforms.modify_unary_linearized_forms(residual.form)
-        new_residual = solidforms.FenicsResidual(
-            new_form,
-            residual.mesh(),
-            residual._mesh_functions,
-            residual._mesh_functions_label_to_value,
-            residual.fsi_facet_labels,
-            residual.fixed_facet_labels
-        )
-
-        super().__init__(new_residual)
+        super().__init__(residual)
 
         self.du = self.residual.form['coeff.dstate.u1']
         self.dv = self.residual.form['coeff.dstate.v1']
@@ -319,8 +312,7 @@ class LinearizedSolidDynamicalSystem(DynamicalSolid):
             mats, labels=self.state.labels+self.prop.labels
         )
 
-
-class PredefinedMixin(DynamicalSolid):
+class PredefinedSolidDynamicalSystem(SolidDynamicalSystem):
     def __init__(
                 self,
                 mesh: dfn.Mesh,
@@ -338,21 +330,33 @@ class PredefinedMixin(DynamicalSolid):
             )
             super().__init__(residual)
 
-    def _make_residual(
-                self,
-                mesh: dfn.Mesh,
-                mesh_functions: Tuple[dfn.MeshFunction],
-                mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-                fsi_facet_labels: Tuple[str],
-                fixed_facet_labels: Tuple[str]
-            ) -> solidforms.FenicsResidual:
-        raise NotImplementedError()
+class PredefinedLinearizedSolidDynamicalSystem(LinearizedSolidDynamicalSystem):
 
-class PredefinedSolidDynamicalSystem(PredefinedMixin, SolidDynamicalSystem):
-    pass
-
-class PredefinedLinearizedSolidDynamicalSystem(PredefinedMixin, LinearizedSolidDynamicalSystem):
-    pass
+    def __init__(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: Tuple[dfn.MeshFunction],
+            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str]
+        ):
+        residual = self._make_residual(
+                mesh,
+                mesh_functions,
+                mesh_functions_label_to_value,
+                fsi_facet_labels,
+                fixed_facet_labels
+            )
+        new_form = solidforms.modify_unary_linearized_forms(residual.form)
+        new_residual = solidforms.FenicsResidual(
+            new_form,
+            residual.mesh(),
+            residual._mesh_functions,
+            residual._mesh_functions_label_to_value,
+            residual.fsi_facet_labels,
+            residual.fixed_facet_labels
+        )
+        super().__init__(new_residual)
 
 class KelvinVoigt(PredefinedSolidDynamicalSystem):
 
