@@ -44,8 +44,8 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     """
     def __init__(
             self,
-            solid: tsmd.TransientSolid,
-            fluid: tfmd.BaseTransientQuasiSteady1DFluid,
+            solid: tsmd.Model,
+            fluid: tfmd.Model1DFluid,
             solid_fsi_dofs, fluid_fsi_dofs
         ):
         self.solid = solid

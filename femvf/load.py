@@ -10,10 +10,10 @@ from . import meshutils
 from .models.transient import solid as tsmd, fluid as tfmd, acoustic as tamd, coupled as tcmd
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[tsmd.TransientSolid, dsmd.DynamicalSolid]
-FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.Dynamical1DFluid]
-SolidClass = Union[Type[tsmd.TransientSolid], Type[dsmd.DynamicalSolid]]
-FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.Dynamical1DFluid]]
+SolidModel = Union[tsmd.Model, dsmd.Model]
+FluidModel = Union[tfmd.Model1DFluid, dfmd.Model]
+SolidClass = Union[Type[tsmd.Model], Type[dsmd.Model]]
+FluidClass = Union[Type[tfmd.Model1DFluid], Type[dfmd.Model]]
 
 Labels = list[str]
 
@@ -163,7 +163,7 @@ def load_dynamical_fsi_model(
     )[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
-    if isinstance(solid, dcmd.LinearizedDynamicalSolid):
+    if isinstance(solid, dcmd.LinearizedModel):
         return dcmd.BaseLinearizedDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
     else:
         return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
@@ -267,7 +267,7 @@ def process_fsi(
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
             FluidType,
-            (tfmd.BaseTransientQuasiSteady1DFluid, dfmd.Dynamical1DFluid, dfmd.LinearizedDynamical1DFluid)
+            (tfmd.Model1DFluid, dfmd.Model, dfmd.LinearizedModel)
         ):
         mesh = solid.residual.mesh()
         facet_func = solid.residual.mesh_function('facet')

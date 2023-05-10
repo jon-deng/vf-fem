@@ -65,7 +65,7 @@ def properties_bvec_from_forms(forms, defaults=None):
     return BlockVector(vecs, labels=[prop_labels])
 
 
-class TransientSolid(base.BaseTransientModel):
+class Model(base.BaseTransientModel):
     """
     Class representing the discretized governing equations of a solid
     """
@@ -111,7 +111,7 @@ class TransientSolid(base.BaseTransientModel):
         return xref
 
     @property
-    def solid(self) -> 'TransientSolid':
+    def solid(self) -> 'Model':
         return self
 
     ## Parameter setting functions
@@ -353,7 +353,7 @@ class TransientSolid(base.BaseTransientModel):
         dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
         return x
 
-class PredefinedTransientSolid(TransientSolid):
+class PredefinedModel(Model):
     def __init__(
             self,
             mesh: dfn.Mesh,
@@ -391,7 +391,7 @@ class PredefinedTransientSolid(TransientSolid):
             ) -> solidforms.FenicsResidual:
         raise NotImplementedError()
 
-class NodalContactSolid(PredefinedTransientSolid):
+class NodalContactSolid(PredefinedModel):
     """
     This class modifies the default behaviour of the solid to implement contact
     pressures interpolated with the displacement function space. This involves

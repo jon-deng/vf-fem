@@ -18,9 +18,7 @@ Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
 BlockVec = bv.BlockVector[Vector]
 BlockMat = bm.BlockMatrix[Matrix]
 
-class BaseDynamicalModel:
-
-    # def __init__()
+class DynamicalModelInterface:
 
     def set_state(self, state: BlockVec):
         raise NotImplementedError()
@@ -49,7 +47,7 @@ class BaseDynamicalModel:
     def assem_dres_dprop(self) -> BlockMat:
         raise NotImplementedError()
 
-class BaseLinearizedDynamicalModel(BaseDynamicalModel):
+class LinearizedDynamicalModelInterface(DynamicalModelInterface):
 
     def set_dstate(self, dstate: BlockVec):
         raise NotImplementedError()
@@ -59,3 +57,9 @@ class BaseLinearizedDynamicalModel(BaseDynamicalModel):
 
     def set_dcontrol(self, dcontrol: BlockVec):
         raise NotImplementedError()
+
+class BaseDynamicalModel(DynamicalModelInterface):
+    pass
+
+class BaseLinearizedDynamicalModel(LinearizedDynamicalModelInterface):
+    pass

@@ -17,7 +17,7 @@ import jax
 from blockarray import blockvec as bv
 
 
-from .base import BaseDynamicalModel
+from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
 from ..equations import bernoulli
 from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
@@ -30,64 +30,13 @@ JaxLinearizedResidualArgs = Tuple[DictVec, DictVec, DictVec, Tuple[DictVec, Dict
 JaxResidualFunction = Callable[JaxResidualArgs, DictVec]
 JaxLinearizedResidualFunction = Callable[JaxLinearizedResidualArgs, DictVec]
 
-
-def create_dynamical_residual_class(Parent, res_type):
-    class Residual(Parent):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-
-            if res_type == 'primal':
-                self.__res = self._res
-                self.__res_args = self.primals
-            elif res_type == 'linearized':
-                self.__res = self._dres
-                self.__res_args = (*self.primals, self.tangents)
-            else:
-                raise ValueError(f"Unknown `res_type` of {res_type}")
-
-        def assem_res(self):
-            submats = self.__res(*self.__res_args)
-            labels = self.state.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bv.BlockVector(submats, shape, labels)
-
-        def assem_dres_dstate(self):
-            submats = jax.jacfwd(self.__res, argnums=0)(*self.__res_args)
-            labels = self.state.labels+self.state.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bv.BlockMatrix(submats, shape, labels)
-
-        def assem_dres_dstatet(self):
-            dresq_dq = np.diag(np.zeros(self.state['q'].size))
-            dresq_dp = np.zeros((self.state['q'].size, self.state['p'].size))
-
-            dresp_dp = np.diag(np.zeros(self.state['p'].size))
-            dresp_dq = np.zeros((self.state['p'].size, self.state['q'].size))
-            mats = [
-                [dresq_dq, dresq_dp],
-                [dresp_dq, dresp_dp]]
-            labels = self.state.labels+self.state.labels
-            return bv.BlockMatrix(mats, labels=labels)
-
-        def assem_dres_dcontrol(self):
-            submats = jax.jacfwd(self.__res, argnums=1)(*self.__res_args)
-            labels = self.state.labels+self.control.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bv.BlockMatrix(submats, shape, labels)
-
-        def assem_dres_dprop(self):
-            submats = jax.jacfwd(self.__res, argnums=2)(*self.__res_args)
-            labels = self.state.labels + self.prop.labels
-            submats, shape = flatten_nested_dict(submats, labels)
-            return bv.BlockMatrix(submats, shape, labels)
-
-    return Residual
-
 Residual = Tuple[ArrayLike, Tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector], Callable]
 
 Test = Union[JaxResidualFunction, JaxLinearizedResidualFunction]
 
-class DynamicalFluidModelOps:
+class DynamicalFluidModelInterface:
+    _res: Residual
+    _res_args: Union[JaxResidualArgs, JaxLinearizedResidualArgs]
 
     def __init__(self, residual: Residual):
         s, (state, control, prop), _ = residual
@@ -158,8 +107,7 @@ class DynamicalFluidModelOps:
         submats, shape = flatten_nested_dict(submats, labels)
         return bv.BlockMatrix(submats, shape, labels)
 
-
-class Dynamical1DFluid(DynamicalFluidModelOps, BaseDynamicalModel):
+class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
 
     def __init__(self, residual: Residual):
 
@@ -175,7 +123,7 @@ class Dynamical1DFluid(DynamicalFluidModelOps, BaseDynamicalModel):
         self._res = jax.jit(res)
         self._res_args = primals
 
-class LinearizedDynamical1DFluid(DynamicalFluidModelOps, BaseDynamicalModel):
+class LinearizedModel(DynamicalFluidModelInterface, BaseLinearizedDynamicalModel):
 
     def __init__(self, residual: Residual):
 
@@ -222,7 +170,7 @@ class LinearizedDynamical1DFluid(DynamicalFluidModelOps, BaseDynamicalModel):
         self.dprop[:] = dprop
 
 
-class PredefinedDynamical1DFluid(Dynamical1DFluid):
+class Predefined1DModel(Model):
 
     def __init__(self, s: ArrayLike, **kwargs):
         residual = self._make_residual(s, **kwargs)
@@ -231,7 +179,7 @@ class PredefinedDynamical1DFluid(Dynamical1DFluid):
     def _make_residual(self, s, **kwargs):
         raise NotImplementedError()
 
-class PredefinedLinearizedDynamical1DFluid(LinearizedDynamical1DFluid):
+class PredefinedLinearized1DModel(LinearizedModel):
 
     def __init__(self, s: ArrayLike, **kwargs):
         residual = self._make_residual(s, **kwargs)
@@ -241,34 +189,34 @@ class PredefinedLinearizedDynamical1DFluid(LinearizedDynamical1DFluid):
         raise NotImplementedError()
 
 ## Predefined models
-class BernoulliSmoothMinSep(PredefinedDynamical1DFluid):
+class BernoulliSmoothMinSep(Predefined1DModel):
 
     def _make_residual(self, s):
         return bernoulli.BernoulliSmoothMinSep(s)
 
-class LinearizedBernoulliSmoothMinSep(PredefinedLinearizedDynamical1DFluid):
+class LinearizedBernoulliSmoothMinSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, s):
         return bernoulli.BernoulliSmoothMinSep(s)
 
 
-class BernoulliFixedSep(PredefinedDynamical1DFluid):
+class BernoulliFixedSep(Predefined1DModel):
 
     def _make_residual(self, s, idx_sep=0):
         return bernoulli.BernoulliFixedSep(s, idx_sep)
 
-class LinearizedBernoulliFixedSep(PredefinedLinearizedDynamical1DFluid):
+class LinearizedBernoulliFixedSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, s, idx_sep=0):
         return bernoulli.BernoulliFixedSep(s, idx_sep)
 
 
-class BernoulliAreaRatioSep(PredefinedDynamical1DFluid):
+class BernoulliAreaRatioSep(Predefined1DModel):
 
     def _make_residual(self, s):
         return bernoulli.BernoulliAreaRatioSep(s)
 
-class LinearizedBernoulliAreaRatioSep(PredefinedLinearizedDynamical1DFluid):
+class LinearizedBernoulliAreaRatioSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, s):
         return bernoulli.BernoulliAreaRatioSep(s)

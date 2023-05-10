@@ -95,7 +95,7 @@ def linearization(model):
         model_solid = model.solid
         model_fluid = model.fluid
         model_coupl = model
-    elif isinstance(model, dynsl.DynamicalSolid):
+    elif isinstance(model, dynsl.Model):
         model_solid = model
         model_fluid = None
         model_coupl = None
@@ -166,7 +166,7 @@ def perturbation(model):
         model_solid = model.solid
         model_fluid = model.fluid
         model_coupl = model
-    elif isinstance(model, dynsl.DynamicalSolid):
+    elif isinstance(model, dynsl.Model):
         model_solid = model
         model_fluid = None
         model_coupl = None
