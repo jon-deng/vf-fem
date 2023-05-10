@@ -9,7 +9,7 @@ from petsc4py import PETSc as PETSc
 from blockarray import blockmat as bm, blockvec as bv, subops, linalg as bla
 
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
-from .fluid import BaseDynamical1DFluid
+from .fluid import Dynamical1DFluid, LinearizedDynamical1DFluid
 from .solid import DynamicalSolid, LinearizedDynamicalSolid
 
 from ..fsi import FSIMap
@@ -23,7 +23,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
 
     def __init__(self,
             solid_model: DynamicalSolid,
-            fluid_model: BaseDynamical1DFluid,
+            fluid_model: Dynamical1DFluid,
             solid_fsi_dofs, fluid_fsi_dofs
         ):
         self.solid = solid_model
@@ -327,7 +327,7 @@ class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamica
 
     def __init__(self,
             solid_model: LinearizedDynamicalSolid,
-            fluid_model: BaseDynamical1DFluid,
+            fluid_model: LinearizedDynamical1DFluid,
             solid_fsi_dofs, fluid_fsi_dofs
         ):
         super().__init__(solid_model, fluid_model, solid_fsi_dofs, fluid_fsi_dofs)

@@ -11,9 +11,9 @@ from .models.transient import solid as tsmd, fluid as tfmd, acoustic as tamd, co
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
 SolidModel = Union[tsmd.TransientSolid, dsmd.DynamicalSolid]
-FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid]
+FluidModel = Union[tfmd.BaseTransientQuasiSteady1DFluid, dfmd.Dynamical1DFluid]
 SolidClass = Union[Type[tsmd.TransientSolid], Type[dsmd.DynamicalSolid]]
-FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.BaseDynamical1DFluid]]
+FluidClass = Union[Type[tfmd.BaseTransientQuasiSteady1DFluid], Type[dfmd.Dynamical1DFluid]]
 
 Labels = list[str]
 
@@ -267,7 +267,7 @@ def process_fsi(
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
             FluidType,
-            (tfmd.BaseTransientQuasiSteady1DFluid, dfmd.BaseDynamical1DFluid)
+            (tfmd.BaseTransientQuasiSteady1DFluid, dfmd.Dynamical1DFluid, dfmd.LinearizedDynamical1DFluid)
         ):
         mesh = solid.residual.mesh()
         facet_func = solid.residual.mesh_function('facet')
@@ -280,7 +280,10 @@ def process_fsi(
         dx = x[1:] - x[:-1]
         dy = y[1:] - y[:-1]
         s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-        if issubclass(FluidType, (dfmd.BaseBernoulliFixedSep, tfmd.BernoulliFixedSep)):
+        if issubclass(
+                FluidType,
+                (dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep, tfmd.BernoulliFixedSep)
+            ):
             # If the fluid has a fixed-separation point, set the appropriate
             # separation point for the fluid
             vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
