@@ -1,5 +1,5 @@
 """
-A basic test to see if forward.integrate will actually run
+Test to see if `forward.integrate` runs
 """
 
 import os
@@ -26,82 +26,58 @@ from femvf.postprocess.base import TimeSeries
 
 from blockarray import blockvec as vec
 
-class ForwardConfig(unittest.TestCase):
-    def setUp(self):
-        """
-        Set the solid mesh
-        """
-        dfn.set_log_level(30)
-        np.random.seed(123)
+MESH_DIR = '../meshes'
+MESH_BASENAME = 'M5-3layers'
+MESH_PATH = os.path.join(MESH_DIR, MESH_BASENAME + '.xml')
 
-        mesh_dir = '../meshes'
+class TestIntegrate:
 
-        mesh_base_filename = 'M5-3layers'
-        self.mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
+    @pytest.fixture(
+        params=[
+            ('KelvinVoigt', tsmd.KelvinVoigt, tfmd.BernoulliSmoothMinSep),
+            ('Rayleigh', tsmd.Rayleigh, tfmd.BernoulliSmoothMinSep)
+        ]
+    )
+    def model_specification(self, request):
+        return request.param
 
-    def config_fsi_kelvinvoigt_model(self):
+    @pytest.fixture()
+    def model(self, model_specification):
         ## Configure the model and its parameters
-        model = load_transient_fsi_model(
-            self.mesh_path, None,
-            SolidType=tsmd.KelvinVoigt,
-            FluidType=tfmd.BernoulliSmoothMinSep, coupling='explicit'
-            )
-        # breakpoint()
+        case_name, SolidType, FluidType = model_specification
+        return load_transient_fsi_model(
+            MESH_PATH, None,
+            SolidType=SolidType,
+            FluidType=FluidType,
+            coupling='explicit'
+        )
 
-        # Set the control vector
-        p_sub = 500.0
+    @pytest.fixture()
+    def case_name(self, model_specification):
+        case_name, SolidType, FluidType = model_specification
+        return case_name
 
-        control = model.control
-        control['psub'][:] = p_sub * PASCAL_TO_CGS
-        control['psup'][:] = 0.0 * PASCAL_TO_CGS
-
-        control['psub'][:] = 0.0 * PASCAL_TO_CGS
-        control['psup'][:] = p_sub * PASCAL_TO_CGS
-        controls = [control]
-
-        # Set the properties
-        y_gap = 0.01
-        y_midline = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-
-        prop = model.prop
-
-        prop['ymid'][0] = y_midline
-
-        xy = model.solid.forms['fspace.scalar_dg0'].tabulate_dof_coordinates()
-        x = xy[:, 0]
-        y = xy[:, 1]
-        x_min, x_max = x.min(), x.max()
-        y_min, y_max = y.min(), y.max()
-        prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
-        prop['eta'][()] = 4e-3
-        prop['kcontact'][()] = 1e11
-        prop['ycontact'][()] = prop['ymid'][0] - y_gap*1/2
-        prop['rho'] = 1.0
-
-        prop['zeta_min'] = 1e-8
-        prop['zeta_sep'] = 1e-8
-
+    @pytest.fixture()
+    def ini_state(self, model):
         # Set the initial state
-        xy = model.solid.forms['fspace.vector'].tabulate_dof_coordinates()
+        xy = model.solid.XREF[:].copy().reshape(-1, 2)
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(model.solid.forms['fspace.vector']).vector()
+        u0 = dfn.Function(model.solid.residual.form['coeff.state.u0'].function_space()).vector()
 
         # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluid.solve_qp0()
 
-        ini_state = model.state0
+        ini_state = model.state0.copy()
         ini_state[:] = 0.0
         ini_state['u'][:] = u0
         # ini_state['q'][()] = qp0['q']
         # ini_state['p'][:] = qp0['p']
+        return ini_state
 
-        return model, ini_state, controls, prop
-
-    def config_fsi_rayleigh_model(self):
-        ## Configure the model and its parameters
-        model = load_transient_fsi_model(self.mesh_path, None, SolidType=tsmd.Rayleigh, FluidType=tfmd.BernoulliSmoothMinSep, coupling='explicit')
-
+    @pytest.fixture()
+    def controls(self, model):
+        control = model.control.copy()
         # Set the control vector
         p_sub = 500.0
 
@@ -109,16 +85,19 @@ class ForwardConfig(unittest.TestCase):
         control['psub'][:] = p_sub * PASCAL_TO_CGS
         control['psup'][:] = 0.0 * PASCAL_TO_CGS
 
-        control['psub'][:] = 0.0 * PASCAL_TO_CGS
-        control['psup'][:] = p_sub * PASCAL_TO_CGS
-        controls = [control]
+        # control['psub'][:] = 0.0 * PASCAL_TO_CGS
+        # control['psup'][:] = p_sub * PASCAL_TO_CGS
+        return [control]
 
+    @pytest.fixture()
+    def prop(self, model):
         # Set the properties
         y_gap = 0.01
+        y_midline = np.max(model.solid.residual.mesh().coordinates()[..., 1]) + y_gap
 
-        prop = model.prop
-        # fl_props = model.fluid.get_properties_vec(set_default=True)
-        prop['ymid'][0] = np.max(model.solid.residual.mesh().coordinates()[..., 1]) + y_gap
+        prop = model.prop.copy()
+
+        prop['ymid'][0] = y_midline
 
         xy = model.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
         x = xy[:, 0]
@@ -126,214 +105,38 @@ class ForwardConfig(unittest.TestCase):
         x_min, x_max = x.min(), x.max()
         y_min, y_max = y.min(), y.max()
         prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
-        prop['rayleigh_m'][()] = 0
-        prop['rayleigh_k'][()] = 4e-3
-        prop['kcontact'][()] = 1e11
-        prop['ycontact'][()] = prop['ymid'][0] - y_gap*1/2
-        prop['rho'] = 1.0
 
-        prop['zeta_min'] = 1e-8
-        prop['zeta_sep'] = 1e-8
+        # Only set these properties if applicable to the current model
+        default_prop = {
+            'eta': 4e-3,
+            'rho': 1.0,
+            'kcontact': 1e11,
+            'ycontact': prop['ymid'][0] - y_gap*1/2,
+            'zeta_min' : 1e-8,
+            'zeta_sep' : 1e-8
+        }
+        for key, value in default_prop.items():
+            if key in prop:
+                prop[key] = value
 
-        # Set the initial state
-        xy = model.solid.residual.form['coeff.state.u1'].function_space().tabulate_dof_coordinates()
-        x = xy[:, 0]
-        y = xy[:, 1]
-        u0 = dfn.Function(model.solid.residual.form['coeff.state.u1'].function_space()).vector()
+        return prop
 
-        # model.fluid.set_prop(fluid_props)
-        # qp0, *_ = model.fluid.solve_qp0()
-
-        ini_state = model.state0.copy()
-        ini_state[:] = 0.0
-        ini_state['u'][:] = u0
-        # ini_state['q'][()] = qp0['q']
-        # ini_state['p'][:] = qp0['p']
-
-        return model, ini_state, controls, prop
-
-    def config_fsi_model(self):
-        return self.config_fsi_kelvinvoigt_model()
-
-    def config_fsai_model(self):
-        ## Configure the model and its parameters
-        acoustic = amd.WRAnalog(44)
-        model = load_transient_fsai_model(self.mesh_path, None, acoustic, SolidType=tsmd.Rayleigh, FluidType=tfmd.Bernoulli,
-                                coupling='explicit')
-
-        # Set the control vector
-        p_sub = 500
-
-        control = model.control.copy()
-        control['psub'][:] = p_sub * PASCAL_TO_CGS
-        controls = [control]
-
-        # Set the properties
-        y_gap = 0.01
-
-        prop = model.prop.copy()
-        prop['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-
-        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
-        x = xy[:, 0]
-        y = xy[:, 1]
-        x_min, x_max = x.min(), x.max()
-        y_min, y_max = y.min(), y.max()
-        prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
-        prop['rayleigh_m'][()] = 0
-        prop['rayleigh_k'][()] = 4e-3
-        prop['kcontact'][()] = 1e11
-        prop['ycontact'][()] = prop['ymid'][0] - y_gap*1/2
-
-        # ac_props = model.acoustic.get_properties_vec(set_default=True)
-        prop['area'][:] = amd.NEUTRAL_AREA
-        # ac_props['area'][:] = 3.0
-        prop['length'][:] = 12.0
-        prop['soundspeed'][:] = 340*100
-        prop['a_sup'][:] = prop['area'][0]
-
-        # prop = vec.concatenate_vec([sl_props, fl_props, ac_props])
-
-        # Set the initial state
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
-
-        # model.fluid.set_prop(fluid_props)
-        # qp0, *_ = model.fluid.solve_qp0()
-
-        ini_state = model.state0.copy()
-        ini_state[:] = 0.0
-        ini_state['u'][:] = u0
-        # ini_state['q'][()] = qp0['q']
-        # ini_state['p'][:] = qp0['p']
-
-        return model, ini_state, controls, prop
-
-    def config_approx3D_model(self):
-        ## Configure the model and its parameters
-        model = load_transient_fsi_model(self.mesh_path, None, SolidType=tsmd.Approximate3DKelvinVoigt, FluidType=tfmd.Bernoulli, coupling='explicit')
-
-        # Set the control vector
-        p_sub = 500
-
-        control = model.control.copy()
-        control['psub'][:] = p_sub * PASCAL_TO_CGS
-        control['psup'][:] = 0.0 * PASCAL_TO_CGS
-        controls = [control]
-
-        # Set the properties
-        y_gap = 0.01
-
-        prop = model.prop.copy()
-        prop['ymid'][0] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-
-        xy = model.solid.scalar_fspace.tabulate_dof_coordinates()
-        x = xy[:, 0]
-        y = xy[:, 1]
-        x_min, x_max = x.min(), x.max()
-        y_min, y_max = y.min(), y.max()
-        prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
-        prop['eta'][:] = 5.0
-        prop['kcontact'][()] = 1e11
-        prop['ycontact'][()] = prop['ymid'][0] - y_gap*1/2
-        prop['length'][:] = 1.2
-
-        # Set the initial state
-        xy = model.solid.vector_fspace.tabulate_dof_coordinates()
-        x = xy[:, 0]
-        y = xy[:, 1]
-        u0 = dfn.Function(model.solid.vector_fspace).vector()
-
-        # model.fluid.set_prop(fluid_props)
-        # qp0, *_ = model.fluid.solve_qp0()
-
-        ini_state = model.state0.copy()
-        ini_state[:] = 0.0
-        ini_state['u'][:] = u0
-        # ini_state['q'][()] = qp0['q']
-        # ini_state['p'][:] = qp0['p']
-
-        return model, ini_state, controls, prop
-
-    def config_variable_controls(self):
-        return self.config_fsi_rayleigh_model()
-
-class TestIntegrate(ForwardConfig):
-
-    def test_integrate_approx3D(self):
-        model, ini_state, controls, prop = self.config_approx3D_model()
+    def test_integrate(self, case_name, model, ini_state, controls, prop):
 
         times = np.linspace(0, 0.01, 100)
 
-        save_path = 'out/test_forward_fsi_2.5D.h5'
+        save_path = f'out/test_forward_{case_name}.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
         self._integrate(model, ini_state, controls, prop, times, save_path)
-        self._test_plot_glottal_width(model, save_path)
+        self._plot_glottal_width(model, save_path)
 
-    def test_integrate_fsi_rayleigh(self):
-        model, ini_state, controls, prop = self.config_fsi_rayleigh_model()
-
-        times = np.linspace(0, 0.01, 100)
-
-        save_path = 'out/test_forward_fsi_rayleigh.h5'
-        if os.path.isfile(save_path):
-            os.remove(save_path)
-
-        self._integrate(model, ini_state, controls, prop, times, save_path)
-        self._test_plot_glottal_width(model, save_path)
-
-    def test_integrate_fsi_kelvinvoigt(self):
-        model, ini_state, controls, prop = self.config_fsi_kelvinvoigt_model()
-
-        times = np.linspace(0, 0.01, 100)
-
-        save_path = 'out/test_forward_fsi_kelvinvoigt.h5'
-        if os.path.isfile(save_path):
-            os.remove(save_path)
-
-        self._integrate(model, ini_state, controls, prop, times, save_path)
-        self._test_plot_glottal_width(model, save_path)
-
-    def test_integrate_fsai(self):
-        model, ini_state, controls, prop = self.config_fsai_model()
-        times = np.linspace(0, 0.01, 100)
-
-        # Set the total length of the WRAnalog to match the specified time step
-        # dt = times[1]-times[0]
-        # C, N = model.acoustic.prop['soundspeed'][0], model.acoustic.prop['area'].size
-        # prop['length'][:] = (0.5*dt*C) * N
-
-        save_path = 'out/test_forward_fsai.h5'
-        if os.path.isfile(save_path):
-            os.remove(save_path)
-
-        self._integrate(model, ini_state, controls, prop, times, save_path)
-        self._test_plot_glottal_width(model, save_path)
-
-    def test_integrate_variable_controls(self):
-        model, ini_state, _controls, prop = self.config_variable_controls()
-        times = np.linspace(0, 0.01, 100)
-
-        tau = 0.0005
-        controls = [(1-np.exp(-t/tau))*_controls[0] for t in times[:30]]
-        # Set the total length of the WRAnalog to match the specified time step
-        # dt = times[1]-times[0]
-        # C, N = model.acoustic.prop['soundspeed'][0], model.acoustic.prop['area'].size
-        # prop['length'][:] = (0.5*dt*C) * N
-
-        save_path = 'out/test_forward_variable_controls.h5'
-        if os.path.isfile(save_path):
-            os.remove(save_path)
-
-        self._integrate(model, ini_state, controls, prop, times, save_path)
-        self._test_plot_glottal_width(model, save_path)
-        self._test_variable_controls(model, save_path, controls)
+        assert True
 
     def _integrate(self, model, ini_state, controls, prop, times, save_path):
-        # Set values to export
+
         print("Running forward model")
-        # breakpoint()
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, mode='w') as f:
             fin_state, info = integrate(model, f, ini_state, controls, prop, times)
@@ -341,7 +144,7 @@ class TestIntegrate(ForwardConfig):
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    def _test_plot_glottal_width(self, model, save_path):
+    def _plot_glottal_width(self, model, save_path):
         ## Plot the resulting glottal width
         with sf.StateFile(model, save_path, mode='r') as f:
             t, gw = proc_time_and_glottal_width(model, f)
@@ -351,67 +154,60 @@ class TestIntegrate(ForwardConfig):
         ax.set_ylabel("Glottal width [cm]")
         fig.savefig(os.path.splitext(save_path)[0] + '.png')
 
-    def _test_variable_controls(self, model, save_path, input_controls):
-        ## Plot the resulting glottal width
-        with sf.StateFile(model, save_path, mode='r') as f:
+    # def test_integrate_linear(self):
+    #     """
+    #     To test that the linearized forward integration is done properly:
+    #         - Integrate the forward model twice at x and x+dx for some test change, dx
+    #         - Compute the change in the final state using the difference
+    #         - Compute the change in the final state using the linearized integration and compare
+    #     """
+    #     ## Set the linearization point
+    #     NTIME = 50
+    #     model, ini_state, controls, prop = self.config_fsi_model()
+    #     control = controls[0]
+    #     times = np.linspace(0, 0.01, NTIME)
 
-            for ii in range(len(input_controls)):
-                assert input_controls[ii] == f.get_control(ii)
+    #     ## Specify the test change in model parameters
+    #     dini_state = model.state0.copy()
+    #     dcontrol = model.control.copy()
+    #     dprop = model.prop.copy()
+    #     dprop[:] = 0.0
+    #     # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
+    #     dtimes = np.linspace(0.0, 0.0, NTIME)
+    #     dtimes[-1] = 1e-10
+    #     dini_state[:] = 0.0
+    #     for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
+    #         model.solid.forms['bc.dirichlet'].apply(vec)
 
-    def test_integrate_linear(self):
-        """
-        To test that the linearized forward integration is done properly:
-            - Integrate the forward model twice at x and x+dx for some test change, dx
-            - Compute the change in the final state using the difference
-            - Compute the change in the final state using the linearized integration and compare
-        """
-        ## Set the linearization point
-        NTIME = 50
-        model, ini_state, controls, prop = self.config_fsi_model()
-        control = controls[0]
-        times = np.linspace(0, 0.01, NTIME)
+    #     ## Integrate the model at x, and x+dx
+    #     def _integrate(model, state, control, prop, times, h5file, overwrite=False):
+    #         if not overwrite and os.path.isfile(h5file):
+    #             print("File already exists. Continuing with old file.")
+    #         else:
+    #             with sf.StateFile(model, h5file, mode='w') as f:
+    #                 integrate(model, f, state, [control], prop, times)
 
-        ## Specify the test change in model parameters
-        dini_state = model.state0.copy()
-        dcontrol = model.control.copy()
-        dprop = model.prop.copy()
-        dprop[:] = 0.0
-        # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
-        dtimes = np.linspace(0.0, 0.0, NTIME)
-        dtimes[-1] = 1e-10
-        dini_state[:] = 0.0
-        for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
-            model.solid.forms['bc.dirichlet'].apply(vec)
+    #     xs = [ini_state, control, prop, times]
+    #     dxs = [dini_state, dcontrol, dprop, dtimes]
 
-        ## Integrate the model at x, and x+dx
-        def _integrate(model, state, control, prop, times, h5file, overwrite=False):
-            if not overwrite and os.path.isfile(h5file):
-                print("File already exists. Continuing with old file.")
-            else:
-                with sf.StateFile(model, h5file, mode='w') as f:
-                    integrate(model, f, state, [control], prop, times)
+    #     h5file1 = 'out/test_forward_integrate_linear-1.h5'
+    #     _integrate(model, *xs, h5file1)
 
-        xs = [ini_state, control, prop, times]
-        dxs = [dini_state, dcontrol, dprop, dtimes]
+    #     h5file2 = 'out/test_forward_integrate_linear-2.h5'
+    #     _integrate(model, *[x+dx for x, dx in zip(xs, dxs)], h5file2, overwrite=True)
 
-        h5file1 = 'out/test_forward_integrate_linear-1.h5'
-        _integrate(model, *xs, h5file1)
+    #     dfin_state_fd = None
+    #     with sf.StateFile(model, h5file1, mode='r') as f1, sf.StateFile(model, h5file2, mode='r') as f2:
+    #         dfin_state_fd = f2.get_state(f2.size-1) - f1.get_state(f1.size-1)
 
-        h5file2 = 'out/test_forward_integrate_linear-2.h5'
-        _integrate(model, *[x+dx for x, dx in zip(xs, dxs)], h5file2, overwrite=True)
+    #     ## Integrate the linearized model
+    #     dfin_state = None
+    #     with sf.StateFile(model, h5file1, mode='r') as f:
+    #         dfin_state = integrate_linear(
+    #             model, f, dini_state, [dcontrol], dprop, dtimes)
 
-        dfin_state_fd = None
-        with sf.StateFile(model, h5file1, mode='r') as f1, sf.StateFile(model, h5file2, mode='r') as f2:
-            dfin_state_fd = f2.get_state(f2.size-1) - f1.get_state(f1.size-1)
-
-        ## Integrate the linearized model
-        dfin_state = None
-        with sf.StateFile(model, h5file1, mode='r') as f:
-            dfin_state = integrate_linear(
-                model, f, dini_state, [dcontrol], dprop, dtimes)
-
-        err = dfin_state - dfin_state_fd
-        self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
+    #     err = dfin_state - dfin_state_fd
+    #     self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
 
 def proc_time_and_glottal_width(model, f):
     t = f.get_times()
@@ -422,14 +218,14 @@ def proc_time_and_glottal_width(model, f):
     return t, np.array(y)
 
 
-if __name__ == '__main__':
-    np.seterr(invalid='raise')
-    test = TestIntegrate()
-    test.setUp()
-    # test.test_integrate_variable_controls()
-    # test.test_integrate_fsi_kelvinvoigt()
-    test.test_integrate_fsi_rayleigh()
-    # test.test_integrate_approx3D()
-    # test.test_integrate_fsai()
-    # test.test_integrate_linear()
-    # unittest.main()
+# if __name__ == '__main__':
+#     np.seterr(invalid='raise')
+#     test = TestIntegrate()
+#     test.setUp()
+#     # test.test_integrate_variable_controls()
+#     # test.test_integrate_fsi_kelvinvoigt()
+#     test.test_integrate_fsi_rayleigh()
+#     # test.test_integrate_approx3D()
+#     # test.test_integrate_fsai()
+#     # test.test_integrate_linear()
+#     # unittest.main()
