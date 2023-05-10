@@ -143,6 +143,18 @@ class FenicsForm:
     def __radd__(self, other: 'FenicsForm') -> 'FenicsForm':
         return add_form(self,  other)
 
+    def __sub__(self, other: 'FenicsForm') -> 'FenicsForm':
+        return add_form(self,  -1.0*other)
+
+    def __rsub__(self, other: 'FenicsForm') -> 'FenicsForm':
+        return add_form(other, -1.0*self)
+
+    def __mul__(self, other: float) -> 'FenicsForm':
+        return mul_form(self, other)
+
+    def __rmul__(self, other: float) -> 'FenicsForm':
+        return mul_form(self, other)
+
 def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
     """
     Return a new `FenicsForm` from a sum of other forms
@@ -186,6 +198,16 @@ def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
                 "Summed forms have duplicate coefficients mixing `dfn.Function` and `dfn.Constant`."
             )
     return FenicsForm(residual, {**form_a.coefficients, **form_b.coefficients})
+
+def mul_form(form: FenicsForm, scalar: float) -> FenicsForm:
+    """
+    Return a new `FenicsForm` from a sum of other forms
+    """
+    # Check that form arguments are consistent and replace duplicated
+    # consistent arguments
+    new_form = scalar*form.form
+
+    return FenicsForm(new_form, form.coefficients)
 
 def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace) -> bool:
     """
@@ -773,8 +795,8 @@ class Rayleigh(PredefinedFenicsResidual):
             InertialForm({}, dx, mesh)
             + IsotropicElasticForm({}, dx, mesh)
             + RayleighDampingForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -799,8 +821,8 @@ class KelvinVoigt(PredefinedFenicsResidual):
             InertialForm({}, dx, mesh)
             + IsotropicElasticForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -826,8 +848,8 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
             + IsotropicMembraneForm({}, traction_ds, mesh)
             + IsotropicElasticForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -852,8 +874,8 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
             InertialForm({}, dx, mesh)
             + IsotropicIncompressibleElasticSwellingForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -878,8 +900,8 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
             InertialForm({}, dx, mesh)
             + IsotropicElasticSwellingForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -905,8 +927,8 @@ class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
             + IsotropicMembraneForm({}, traction_ds, mesh)
             + IsotropicElasticSwellingForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -932,8 +954,8 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
             + IsotropicMembraneForm({}, traction_ds, mesh)
             + IsotropicElasticSwellingForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
@@ -958,10 +980,10 @@ class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
             InertialForm({}, dx, mesh)
             + IsotropicMembraneForm({}, traction_ds, mesh)
             + IsotropicElasticForm({}, dx, mesh)
-            + APForceForm({}, dx, mesh)
+            - APForceForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
-            + SurfacePressureForm({}, traction_ds, mesh)
-            + ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )
         return form
 
