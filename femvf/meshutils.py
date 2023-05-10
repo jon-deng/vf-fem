@@ -10,6 +10,8 @@ import meshio as mio
 import numpy as np
 import dolfin as dfn
 
+from .models.equations import solidforms
+
 ## Functions for loading `dfn.Mesh` objects from other mesh formats
 MeshFunctions = List[dfn.MeshFunction]
 MeshFunctionMaps = List[Mapping[str, int]]
@@ -443,8 +445,8 @@ def process_meshlabel_to_dofs(
 
     return label_to_dofs
 
-def process_celllabel_to_dofs_from_forms(
-        forms: Mapping[str, Any], dofmap: dfn.DofMap
+def process_celllabel_to_dofs_from_residual(
+        residual: solidforms.FenicsResidual, dofmap: dfn.DofMap
     ) -> Mapping[str, np.ndarray]:
     """
     Return a mapping from mesh region labels to associated DOFs
@@ -462,9 +464,9 @@ def process_celllabel_to_dofs_from_forms(
         An array of DOFs associated with the closure of the specfied mesh region
         and function space (through `dofmap`)
     """
-    mesh = forms['mesh.mesh']
-    cell_func = forms['mesh.cell_function']
-    cell_label_to_id = forms['mesh.cell_label_to_id']
+    mesh = residual.mesh()
+    cell_func = residual.mesh_function('cell')
+    cell_label_to_id = residual.mesh_function_label_to_value('cell')
     return process_meshlabel_to_dofs(
         mesh, cell_func, cell_label_to_id, dofmap
     )
