@@ -18,7 +18,7 @@ from blockarray import blockvec as bv
 
 
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
-from ..equations import bernoulli
+from ..equations import fluid
 from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
 # pylint: disable=missing-docstring
@@ -38,7 +38,7 @@ class DynamicalFluidModelInterface:
     _res: JaxResidualFunction
     _res_args: Union[JaxResidualArgs, JaxLinearizedResidualArgs]
 
-    def __init__(self, residual: bernoulli.JaxResidual):
+    def __init__(self, residual: fluid.JaxResidual):
 
         (state, control, prop) = residual.res_args
 
@@ -114,7 +114,7 @@ class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
     Representation of a dynamical system model
     """
 
-    def __init__(self, residual: bernoulli.JaxResidual):
+    def __init__(self, residual: fluid.JaxResidual):
         super().__init__(residual)
 
         self._res = jax.jit(residual.res)
@@ -195,31 +195,31 @@ class PredefinedLinearized1DModel(LinearizedModel):
 class BernoulliSmoothMinSep(Predefined1DModel):
 
     def _make_residual(self, mesh):
-        return bernoulli.BernoulliSmoothMinSep(mesh)
+        return fluid.BernoulliSmoothMinSep(mesh)
 
 class LinearizedBernoulliSmoothMinSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, mesh):
-        return bernoulli.BernoulliSmoothMinSep(mesh)
+        return fluid.BernoulliSmoothMinSep(mesh)
 
 
 class BernoulliFixedSep(Predefined1DModel):
 
     def _make_residual(self, mesh, idx_sep=0):
-        return bernoulli.BernoulliFixedSep(mesh, idx_sep)
+        return fluid.BernoulliFixedSep(mesh, idx_sep)
 
 class LinearizedBernoulliFixedSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, mesh, idx_sep=0):
-        return bernoulli.BernoulliFixedSep(mesh, idx_sep)
+        return fluid.BernoulliFixedSep(mesh, idx_sep)
 
 
 class BernoulliAreaRatioSep(Predefined1DModel):
 
     def _make_residual(self, mesh):
-        return bernoulli.BernoulliAreaRatioSep(mesh)
+        return fluid.BernoulliAreaRatioSep(mesh)
 
 class LinearizedBernoulliAreaRatioSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, mesh):
-        return bernoulli.BernoulliAreaRatioSep(mesh)
+        return fluid.BernoulliAreaRatioSep(mesh)

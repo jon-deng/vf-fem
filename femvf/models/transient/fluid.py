@@ -13,13 +13,13 @@ from . import base
 
 from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
 
-from ..equations import bernoulli
+from ..equations import fluid
 
 ## 1D Bernoulli approximation codes
 
 class Model(base.BaseTransientModel):
 
-    def __init__(self, residual: bernoulli.JaxResidual):
+    def __init__(self, residual: fluid.JaxResidual):
         res, (state, control, prop) = residual.res, residual.res_args
 
         self._res = jax.jit(res)
@@ -114,7 +114,7 @@ class BernoulliSmoothMinSep(PredefinedModel):
     """
 
     def _make_residual(self, mesh):
-        return bernoulli.BernoulliSmoothMinSep(mesh)
+        return fluid.BernoulliSmoothMinSep(mesh)
 
 class BernoulliFixedSep(PredefinedModel):
     """
@@ -122,7 +122,7 @@ class BernoulliFixedSep(PredefinedModel):
     """
 
     def _make_residual(self, mesh, idx_sep=0):
-        return bernoulli.BernoulliFixedSep(mesh, idx_sep=idx_sep)
+        return fluid.BernoulliFixedSep(mesh, idx_sep=idx_sep)
 
 class BernoulliAreaRatioSep(PredefinedModel):
     """
@@ -130,4 +130,4 @@ class BernoulliAreaRatioSep(PredefinedModel):
     """
 
     def _make_residual(self, mesh):
-        return bernoulli.BernoulliAreaRatioSep(mesh)
+        return fluid.BernoulliAreaRatioSep(mesh)

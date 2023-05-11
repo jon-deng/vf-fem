@@ -33,8 +33,7 @@ from blockarray import blockvec as bv, blockmat as bm, subops
 
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
 from ..transient.solid import properties_bvec_from_forms, depack_form_coefficient_function
-from ..equations import solidforms
-from ..equations.solidforms import gen_residual_bilinear_forms, gen_hopf_forms
+from ..equations import solid
 from ..assemblyutils import CachedFormAssembler
 
 # pylint: disable=abstract-method
@@ -53,7 +52,7 @@ def cast_output_bvec_to_petsc(func):
 
 class DynamicalSolidModelInterface:
 
-    def __init__(self, residual: solidforms.FenicsResidual):
+    def __init__(self, residual: solid.FenicsResidual):
 
         self._residual = residual
 
@@ -62,8 +61,8 @@ class DynamicalSolidModelInterface:
         # self.residual_form_name = residual_form_name
         # self._forms = self.form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
         # bilinear_forms = gen_residual_bilinear_forms(self.residual.form)
-        hopf_forms = solidforms.gen_jac_state_forms(self.residual.form)
-        prop_jac_forms = solidforms.gen_jac_property_forms(self.residual.form)
+        hopf_forms = solid.gen_jac_state_forms(self.residual.form)
+        prop_jac_forms = solid.gen_jac_property_forms(self.residual.form)
         forms = {**hopf_forms, **prop_jac_forms}
 
         self.u = self.residual.form['coeff.state.u1']
@@ -91,7 +90,7 @@ class DynamicalSolidModelInterface:
         self.cached_form_assemblers['form.un.res'] = CachedFormAssembler(self.residual.form.form)
 
     @property
-    def residual(self) -> solidforms.FenicsResidual:
+    def residual(self) -> solid.FenicsResidual:
         return self._residual
 
     def set_state(self, state):
@@ -205,10 +204,10 @@ class Model(DynamicalSolidModelInterface, BaseDynamicalModel):
 
 class LinearizedModel(DynamicalSolidModelInterface, BaseLinearizedDynamicalModel):
 
-    def __init__(self, residual: solidforms.FenicsResidual):
+    def __init__(self, residual: solid.FenicsResidual):
 
-        new_form = solidforms.modify_unary_linearized_forms(residual.form)
-        new_residual = solidforms.FenicsResidual(
+        new_form = solid.modify_unary_linearized_forms(residual.form)
+        new_residual = solid.FenicsResidual(
             new_form,
             residual.mesh(),
             residual._mesh_functions,
@@ -348,57 +347,57 @@ class PredefinedLinearizedModel(LinearizedModel):
 class KelvinVoigt(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigt(
+        return solid.KelvinVoigt(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class LinearizedKelvinVoigt(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigt(
+        return solid.KelvinVoigt(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class KelvinVoigtWEpithelium(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigtWEpithelium(
+        return solid.KelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class LinearizedKelvinVoigtWEpithelium(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigtWEpithelium(
+        return solid.KelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class SwellingKelvinVoigtWEpithelium(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigtWEpithelium(
+        return solid.KelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class LinearizedSwellingKelvinVoigtWEpithelium(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigtWEpithelium(
+        return solid.KelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.KelvinVoigtWEpithelium(
+        return solid.KelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class LinearizedSwellingKelvinVoigtWEpitheliumNoShape(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.modify_unary_linearized_forms(
-            solidforms.SwellingKelvinVoigtWEpithelium(
+        return solid.modify_unary_linearized_forms(
+            solid.SwellingKelvinVoigtWEpithelium(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
             )
         )
@@ -406,13 +405,13 @@ class LinearizedSwellingKelvinVoigtWEpitheliumNoShape(PredefinedLinearizedModel)
 class Rayleigh(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.Rayleigh(
+        return solid.Rayleigh(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class LinearizedRayleigh(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solidforms.Rayleigh(
+        return solid.Rayleigh(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
