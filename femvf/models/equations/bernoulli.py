@@ -2,11 +2,16 @@
 This module contains the equations defining a quasi-steady Bernoulli fluid with
 separation at a fixed location.
 """
+
+from typing import Callable, Union, Tuple, Mapping
+
 import numpy as np
+from numpy.typing import ArrayLike
 from jax import numpy as jnp
 import jax
 
 from .smoothapproximation import (wavg, smooth_min_weight)
+from . import base
 
 ## Common bernoulli fluid functions
 def bernoulli_q(asep, psub, psup, rho):
@@ -25,10 +30,54 @@ def bernoulli_p(q, area, psub, psup, rho):
     p = psub - 1/2*rho*(q/area)**2
     return p
 
+ResArgs = Tuple[Mapping[str, ArrayLike], ...]
+ResReturn = Mapping[str, ArrayLike]
 
+## Fluid residual classes
+class JaxResidual(base.BaseResidual):
+    """
+    Representation of a (non-linear) residual in `JAX`
+    """
 
-## Fluid model definitions
-def BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
+    def __init__(
+            self,
+            res: Callable[ResArgs, ResReturn],
+            res_args: ResArgs
+        ):
+
+        self._res = res
+        self._res_args = res_args
+
+    @property
+    def res(self):
+        return self._res
+
+    @property
+    def res_args(self):
+        return self._res_args
+
+class PredefinedJaxResidual(JaxResidual):
+    """
+    Predefined `JaxResidual`
+    """
+
+    def __init__(
+            self,
+            mesh: ArrayLike,
+            *args, **kwargs
+        ):
+        res, res_args = self._make_residual(mesh, *args, **kwargs)
+        super().__init__(res, res_args)
+
+    def _make_residual(self, mesh, *args, **kwargs):
+        raise NotImplementedError("Subclasses must implement this method")
+
+class BernoulliFixedSep(PredefinedJaxResidual):
+
+    def _make_residual(self, mesh, idx_sep=0):
+        return _BernoulliFixedSep(mesh, idx_sep=idx_sep)
+
+def _BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
     """
     Return quantities defining a fixed-separation point Bernoulli model
     """
@@ -78,10 +127,14 @@ def BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
         'rho_air': np.ones(1)
     }
 
-    return s, (_state, _control, _props), res
+    return res, (_state, _control, _props)
 
+class BernoulliSmoothMinSep(PredefinedJaxResidual):
 
-def BernoulliSmoothMinSep(s: jnp.ndarray):
+    def _make_residual(self, mesh):
+        return _BernoulliSmoothMinSep(mesh)
+
+def _BernoulliSmoothMinSep(s: jnp.ndarray):
 
     def coeff_sep(s, ssep, zeta_sep):
         """
@@ -139,10 +192,14 @@ def BernoulliSmoothMinSep(s: jnp.ndarray):
         'zeta_min': np.ones(1)
     }
 
-    return s, (_state, _control, _props), res
+    return res, (_state, _control, _props)
 
+class BernoulliAreaRatioSep(PredefinedJaxResidual):
 
-def BernoulliAreaRatioSep(s: jnp.ndarray):
+    def _make_residual(self, mesh):
+        return _BernoulliAreaRatioSep(mesh)
+
+def _BernoulliAreaRatioSep(s: jnp.ndarray):
     N = s.size
 
     s = jnp.array(s)
@@ -198,4 +255,4 @@ def BernoulliAreaRatioSep(s: jnp.ndarray):
         'area_lb': np.zeros(1)
     }
 
-    return s, (_state, _control, _props), res
+    return res, (_state, _control, _props)

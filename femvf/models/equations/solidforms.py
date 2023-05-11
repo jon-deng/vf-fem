@@ -11,7 +11,7 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from . import newmark
+from . import newmark, base
 
 DfnFunction = Union[ufl.Constant, dfn.Function]
 CoefficientMapping = Mapping[str, DfnFunction]
@@ -661,10 +661,14 @@ class ShapeForm(PredefinedForm):
         # forms['mesh.REF_COORDINATES'] = mesh.coordinates().copy()
         return 0*ufl.inner(umesh_ufl, vector_test)*measure
 
-## Form models
-class FenicsResidual:
+## Residual definitions
+
+class FenicsResidual(base.BaseResidual):
     """
-    Class representing a residual in Fenics with associated boundary conditions, etc.
+    Representation of a (non-linear) residual in `Fenics`
+
+    This includes additional information defining the residual such as the mesh,
+    mesh functions, Dirichlet boundary conditions, etc.
     """
 
     def __init__(
@@ -691,12 +695,6 @@ class FenicsResidual:
 
         self._fsi_facet_labels = fsi_facet_labels
         self._fixed_facet_labels = fixed_facet_labels
-
-    # def keys(self):
-    #     return self.linear_form.keys()
-
-    # def __getitem__(self, key):
-    #     return self.linear_form[key]
 
     @property
     def form(self) -> FenicsForm:

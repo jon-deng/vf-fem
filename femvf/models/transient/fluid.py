@@ -5,7 +5,7 @@ TODO: Change smoothing parameters to all be expressed in units of length
 (all the smoothing parameters have a smoothing effect that occurs over a small length.
 The smaller the length, the sharper the smoothing. )
 """
-
+from numpy.typing import ArrayLike
 import jax
 
 from blockarray import blockvec as bla
@@ -17,10 +17,10 @@ from ..equations import bernoulli
 
 ## 1D Bernoulli approximation codes
 
-class Model1DFluid(base.BaseTransientModel):
+class Model(base.BaseTransientModel):
 
-    def __init__(self, s, res, state, control, prop):
-        self.s = s
+    def __init__(self, residual: bernoulli.JaxResidual):
+        res, (state, control, prop) = residual.res, residual.res_args
 
         self._res = jax.jit(res)
         self._dres = (
@@ -100,29 +100,34 @@ class Model1DFluid(base.BaseTransientModel):
         info = {}
         return self.state1 - self.assem_res(), info
 
-class BernoulliSmoothMinSep(Model1DFluid):
+class PredefinedModel(Model):
+    def __init__(self, mesh: ArrayLike, *args, **kwargs):
+        residual = self._make_residual(mesh, *args, **kwargs)
+        super().__init__(residual)
+
+    def _make_residual(self, mesh: ArrayLike, *args, **kwargs):
+        raise NotImplementedError("Subclasses must implement this method")
+
+class BernoulliSmoothMinSep(PredefinedModel):
     """
     Bernoulli fluid model with separation at the minimum
     """
 
-    def __init__(self, s):
-        _, (_state, _control, _prop), res = bernoulli.BernoulliSmoothMinSep(s)
-        super().__init__(s, res, _state, _control, _prop)
+    def _make_residual(self, mesh):
+        return bernoulli.BernoulliSmoothMinSep(mesh)
 
-class BernoulliFixedSep(Model1DFluid):
+class BernoulliFixedSep(PredefinedModel):
     """
     Bernoulli fluid model with separation at the minimum
     """
 
-    def __init__(self, s, idx_sep=0):
-        _, (_state, _control, _prop), res = bernoulli.BernoulliFixedSep(s, idx_sep=idx_sep)
-        super().__init__(s, res, _state, _control, _prop)
+    def _make_residual(self, mesh, idx_sep=0):
+        return bernoulli.BernoulliFixedSep(mesh, idx_sep=idx_sep)
 
-class BernoulliAreaRatioSep(Model1DFluid):
+class BernoulliAreaRatioSep(PredefinedModel):
     """
     Bernoulli fluid model with separation at the minimum
     """
 
-    def __init__(self, s):
-        _, (_state, _control, _prop), res = bernoulli.BernoulliAreaRatioSep(s)
-        super().__init__(s, res, _state, _control, _prop)
+    def _make_residual(self, mesh):
+        return bernoulli.BernoulliAreaRatioSep(mesh)

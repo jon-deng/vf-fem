@@ -11,9 +11,9 @@ from .models.transient import solid as tsmd, fluid as tfmd, acoustic as tamd, co
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
 SolidModel = Union[tsmd.Model, dsmd.Model]
-FluidModel = Union[tfmd.Model1DFluid, dfmd.Model]
+FluidModel = Union[tfmd.Model, dfmd.Model]
 SolidClass = Union[Type[tsmd.Model], Type[dsmd.Model]]
-FluidClass = Union[Type[tfmd.Model1DFluid], Type[dfmd.Model]]
+FluidClass = Union[Type[tfmd.Model], Type[dfmd.Model]]
 
 Labels = list[str]
 
@@ -267,7 +267,7 @@ def process_fsi(
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     if fluid_mesh is None and issubclass(
             FluidType,
-            (tfmd.Model1DFluid, dfmd.Model, dfmd.LinearizedModel)
+            (tfmd.Model, dfmd.Model, dfmd.LinearizedModel)
         ):
         mesh = solid.residual.mesh()
         facet_func = solid.residual.mesh_function('facet')

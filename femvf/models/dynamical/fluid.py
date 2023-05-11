@@ -35,12 +35,12 @@ Residual = Tuple[ArrayLike, Tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector
 Test = Union[JaxResidualFunction, JaxLinearizedResidualFunction]
 
 class DynamicalFluidModelInterface:
-    _res: Residual
+    _res: JaxResidualFunction
     _res_args: Union[JaxResidualArgs, JaxLinearizedResidualArgs]
 
-    def __init__(self, residual: Residual):
-        s, (state, control, prop), _ = residual
-        self.s = s
+    def __init__(self, residual: bernoulli.JaxResidual):
+
+        (state, control, prop) = residual.res_args
 
         self.state = bv.BlockVector(list(state.values()), labels=[list(state.keys())])
 
@@ -107,23 +107,27 @@ class DynamicalFluidModelInterface:
         submats, shape = flatten_nested_dict(submats, labels)
         return bv.BlockMatrix(submats, shape, labels)
 
+# NOTE: `Model` and `LinearizedModel` are very similar except for
+# the residual functions and arguments (the latter is linearized)
 class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
+    """
+    Representation of a dynamical system model
+    """
 
-    def __init__(self, residual: Residual):
-
+    def __init__(self, residual: bernoulli.JaxResidual):
         super().__init__(residual)
 
-        primals = (
+        self._res = jax.jit(residual.res)
+        self._res_args = (
             blockvec_to_dict(self.state),
             blockvec_to_dict(self.control),
             blockvec_to_dict(self.prop)
         )
-        *_, res = residual
-
-        self._res = jax.jit(res)
-        self._res_args = primals
 
 class LinearizedModel(DynamicalFluidModelInterface, BaseLinearizedDynamicalModel):
+    """
+    Representation of a linearized dynamical system model
+    """
 
     def __init__(self, residual: Residual):
 
@@ -149,11 +153,10 @@ class LinearizedModel(DynamicalFluidModelInterface, BaseLinearizedDynamicalModel
             blockvec_to_dict(self.dcontrol),
             blockvec_to_dict(self.dprop)
         )
-        *_, res = residual
 
         self._res = (
             lambda state, control, prop, tangents:
-            jax.jvp(jax.jit(res), (state, control, prop), tangents)[1]
+            jax.jvp(jax.jit(residual.res), (state, control, prop), tangents)[1]
         )
         self._res_args = (*primals, tangents)
 
@@ -172,51 +175,51 @@ class LinearizedModel(DynamicalFluidModelInterface, BaseLinearizedDynamicalModel
 
 class Predefined1DModel(Model):
 
-    def __init__(self, s: ArrayLike, **kwargs):
-        residual = self._make_residual(s, **kwargs)
+    def __init__(self, mesh: ArrayLike, **kwargs):
+        residual = self._make_residual(mesh, **kwargs)
         super().__init__(residual)
 
-    def _make_residual(self, s, **kwargs):
+    def _make_residual(self, mesh, **kwargs):
         raise NotImplementedError()
 
 class PredefinedLinearized1DModel(LinearizedModel):
 
-    def __init__(self, s: ArrayLike, **kwargs):
-        residual = self._make_residual(s, **kwargs)
+    def __init__(self, mesh: ArrayLike, **kwargs):
+        residual = self._make_residual(mesh, **kwargs)
         super().__init__(residual)
 
-    def _make_residual(self, s: ArrayLike, **kwargs):
+    def _make_residual(self, mesh: ArrayLike, **kwargs):
         raise NotImplementedError()
 
 ## Predefined models
 class BernoulliSmoothMinSep(Predefined1DModel):
 
-    def _make_residual(self, s):
-        return bernoulli.BernoulliSmoothMinSep(s)
+    def _make_residual(self, mesh):
+        return bernoulli.BernoulliSmoothMinSep(mesh)
 
 class LinearizedBernoulliSmoothMinSep(PredefinedLinearized1DModel):
 
-    def _make_residual(self, s):
-        return bernoulli.BernoulliSmoothMinSep(s)
+    def _make_residual(self, mesh):
+        return bernoulli.BernoulliSmoothMinSep(mesh)
 
 
 class BernoulliFixedSep(Predefined1DModel):
 
-    def _make_residual(self, s, idx_sep=0):
-        return bernoulli.BernoulliFixedSep(s, idx_sep)
+    def _make_residual(self, mesh, idx_sep=0):
+        return bernoulli.BernoulliFixedSep(mesh, idx_sep)
 
 class LinearizedBernoulliFixedSep(PredefinedLinearized1DModel):
 
-    def _make_residual(self, s, idx_sep=0):
-        return bernoulli.BernoulliFixedSep(s, idx_sep)
+    def _make_residual(self, mesh, idx_sep=0):
+        return bernoulli.BernoulliFixedSep(mesh, idx_sep)
 
 
 class BernoulliAreaRatioSep(Predefined1DModel):
 
-    def _make_residual(self, s):
-        return bernoulli.BernoulliAreaRatioSep(s)
+    def _make_residual(self, mesh):
+        return bernoulli.BernoulliAreaRatioSep(mesh)
 
 class LinearizedBernoulliAreaRatioSep(PredefinedLinearized1DModel):
 
-    def _make_residual(self, s):
-        return bernoulli.BernoulliAreaRatioSep(s)
+    def _make_residual(self, mesh):
+        return bernoulli.BernoulliAreaRatioSep(mesh)
