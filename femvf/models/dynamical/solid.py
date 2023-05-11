@@ -298,8 +298,9 @@ class LinearizedModel(DynamicalSolidModelInterface, BaseLinearizedDynamicalModel
         j_emod = self.prop.labels[0].index('emod')
         mats[0][j_emod] = self.cached_form_assemblers['form.bi.dres_demod'].assemble()
 
-        j_shape = self.prop.labels[0].index('umesh')
-        mats[0][j_shape] = self.cached_form_assemblers['form.bi.dres_dumesh'].assemble()
+        if 'umesh' in self.prop:
+            j_shape = self.prop.labels[0].index('umesh')
+            mats[0][j_shape] = self.cached_form_assemblers['form.bi.dres_dumesh'].assemble()
 
         return bm.BlockMatrix(
             mats, labels=self.state.labels+self.prop.labels
