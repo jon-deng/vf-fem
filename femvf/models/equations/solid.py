@@ -727,6 +727,15 @@ class FenicsResidual(base.BaseResidual):
         idx = self._mesh_element_type_to_idx(mesh_element_type)
         return self._mesh_functions_label_to_value[idx]
 
+    def measure(self, integral_type: str):
+        if integral_type == 'dx':
+            mf = self.mesh_function('cell')
+        elif integral_type == 'ds':
+            mf = self.mesh_function('facet')
+        else:
+            raise ValueError("Unknown `integral_type` '{integral_type}'")
+        return dfn.Measure(integral_type, self.mesh(), subdomain_data=mf)
+
     @property
     def dirichlet_bcs(self) -> list[dfn.DirichletBC]:
         return self._dirichlet_bcs
