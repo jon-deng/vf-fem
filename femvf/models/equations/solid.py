@@ -12,6 +12,7 @@ import dolfin as dfn
 import ufl
 
 from . import newmark, base
+from .uflcontinuum import *
 
 DfnFunction = Union[ufl.Constant, dfn.Function]
 CoefficientMapping = Mapping[str, DfnFunction]
@@ -282,14 +283,14 @@ class IsotropicElasticForm(PredefinedForm):
     def _make_residual(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
-        strain_test = form_strain_inf(vector_test)
+        strain_test = strain_inf(vector_test)
 
         u = coefficients['coeff.state.u1']
-        inf_strain = form_strain_inf(u)
+        inf_strain = strain_inf(u)
         emod = coefficients['coeff.prop.emod']
         nu = coefficients['coeff.prop.nu']
         set_fenics_function(nu, 0.45)
-        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        stress_elastic = stress_isotropic(inf_strain, emod, nu)
 
         # coefficients['expr.stress_elastic'] = stress_elastic
         return ufl.inner(stress_elastic, strain_test) * measure
@@ -309,12 +310,12 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
     def _make_residual(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
-        strain_test = form_strain_inf(vector_test)
+        strain_test = strain_inf(vector_test)
 
         emod = coefficients['coeff.prop.emod']
         nu = 0.5
         dis = coefficients['coeff.state.u1']
-        inf_strain = form_strain_inf(dis)
+        inf_strain = strain_inf(dis)
         v_swelling = coefficients['coeff.prop.v_swelling']
         set_fenics_function(v_swelling, 1.0)
         k_swelling = coefficients['coeff.prop.k_swelling']
@@ -348,8 +349,8 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         u = coefficients['coeff.state.u1']
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
-        DE = form_strain_lin_green_lagrange(u, vector_test)
-        E = form_strain_green_lagrange(u)
+        DE = strain_lin_green_lagrange(u, vector_test)
+        E = strain_green_lagrange(u)
 
         emod = coefficients['coeff.prop.emod']
         nu = dfn.Constant(0.45)
@@ -363,7 +364,7 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         # Then approximate the function $\hat{m} = m(v)*v^(-1)$ with a linear
         # approximation with slope `m`
         mhat = (m*(v-1) + 1)
-        S = mhat*v**(1/3)*form_lin_iso_cauchy_stress(E_v, emod, nu)
+        S = mhat*v**(1/3)*stress_isotropic(E_v, emod, nu)
 
         return ufl.inner(S, DE) * dx
         # # Make this the cauchy stress
@@ -396,7 +397,7 @@ class SurfacePressureForm(PredefinedForm):
         facet_normal = ufl.FacetNormal(mesh)
 
         p = coefficients['coeff.fsi.p1']
-        reference_traction = -p * form_pullback_area_normal(dis, facet_normal)
+        reference_traction = -p * pullback_area_normal(dis, facet_normal)
 
         # coefficients['expr.fluid_traction'] = reference_traction
         return ufl.inner(reference_traction, vector_test) * ds
@@ -454,11 +455,11 @@ class IsotropicMembraneForm(PredefinedForm):
 
         dis = coefficients['coeff.state.u1']
         if large_def:
-            strain = form_strain_green_lagrange(dis)
-            strain_test = form_strain_lin_green_lagrange(dis, vector_test)
+            strain = strain_green_lagrange(dis)
+            strain_test = strain_lin_green_lagrange(dis, vector_test)
         else:
-            strain = form_strain_inf(dis)
-            strain_test = form_strain_inf(vector_test)
+            strain = strain_inf(dis)
+            strain_test = strain_inf(vector_test)
         strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
         emod = coefficients['coeff.prop.emod_membrane']
@@ -503,16 +504,16 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
         project_pp = ufl.outer(ident-nn, ident-nn)
         i, j, k, l = ufl.indices(4)
 
-        strain_test = form_strain_inf(vector_test)
+        strain_test = strain_inf(vector_test)
         strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
         dis = coefficients['coeff.state.u1']
         if large_def:
-            strain = form_strain_green_lagrange(dis)
-            strain_test = form_strain_lin_green_lagrange(dis, vector_test)
+            strain = strain_green_lagrange(dis)
+            strain_test = strain_lin_green_lagrange(dis, vector_test)
         else:
-            strain = form_strain_inf(dis)
-            strain_test = form_strain_inf(vector_test)
+            strain = strain_inf(dis)
+            strain_test = strain_inf(vector_test)
         strain_pp_test = ufl.as_tensor(project_pp[i, j, k, l] * strain_test[j, k], (i, l))
 
         emod_membrane = coefficients['coeff.prop.emod_membrane']
@@ -546,7 +547,7 @@ class RayleighDampingForm(PredefinedForm):
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
         dx = measure
-        strain_test = form_strain_inf(vector_test)
+        strain_test = strain_inf(vector_test)
         v = coefficients['coeff.state.v1']
 
         rayleigh_m = coefficients['coeff.prop.rayleigh_m']
@@ -554,8 +555,8 @@ class RayleighDampingForm(PredefinedForm):
 
         emod = coefficients['coeff.prop.emod']
         nu = coefficients['coeff.prop.nu']
-        inf_strain = form_strain_inf(v)
-        stress_elastic = form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        inf_strain = strain_inf(v)
+        stress_elastic = stress_isotropic(inf_strain, emod, nu)
         stress_visco = rayleigh_k*stress_elastic
 
         rho = coefficients['coeff.prop.rho']
@@ -583,11 +584,11 @@ class KelvinVoigtForm(PredefinedForm):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
-        strain_test = form_strain_inf(vector_test)
+        strain_test = strain_inf(vector_test)
         v = coefficients['coeff.state.v1']
 
         eta = coefficients['coeff.prop.eta']
-        inf_strain_rate = form_strain_inf(v)
+        inf_strain_rate = strain_inf(v)
         stress_visco = eta*inf_strain_rate
 
         return ufl.inner(stress_visco, strain_test) * measure
@@ -1088,172 +1089,7 @@ def _depack_property_ufl_coeff(form_property):
     else:
         return form_property
 
-def form_lin_iso_cauchy_stress(strain, emod, nu):
-    """
-    Returns the Cauchy stress for a small-strain displacement field
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    emod : dfn.Function, ufl.Coefficient
-        Elastic modulus
-    nu : float
-        Poisson's ratio
-    """
-    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-    lame_mu = emod/2/(1+nu)
-    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0])
-
-def form_def_grad(u):
-    """
-    Returns the deformation gradient
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    spp = ufl.grad(u)
-    if u.geometric_dimension() == 2:
-        return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
-        ) + ufl.Identity(3)
-    else:
-        return spp + ufl.Identity(3)
-
-def form_def_cauchy_green(u):
-    """
-    Returns the right cauchy-green deformation tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    def_grad = form_def_grad(u)
-    return def_grad.T*def_grad
-
-def form_strain_green_lagrange(u):
-    """
-    Returns the strain tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    C = form_def_cauchy_green(u)
-    return 1/2*(C - ufl.Identity(3))
-
-def form_strain_inf(u):
-    """
-    Returns the strain tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    spp = 1/2 * (ufl.grad(u) + ufl.grad(u).T)
-    if u.geometric_dimension() == 2:
-        return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
-        )
-    else:
-        return spp
-
-def form_strain_lin_green_lagrange(u, du):
-    """
-    Returns the linearized Green-Lagrange strain tensor
-
-    Parameters
-    ----------
-    u : dfn.TrialFunction, ufl.Argument
-        Displacement to linearize about
-    du : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    E = form_strain_green_lagrange(u)
-    return ufl.derivative(E, u, du)
-
-def form_lin2_green_strain(u0, u):
-    """
-    Returns the double linearized Green-Lagrange strain tensor
-
-    Parameters
-    ----------
-    u0 : dfn.TrialFunction, ufl.Argument
-        Displacement to linearize about
-    u : dfn.TrialFunction, ufl.Argument
-        Trial displacement field
-    """
-    spp = 1/2*(ufl.grad(u).T*ufl.grad(u0) + ufl.grad(u0).T*ufl.grad(u))
-    if u0.geometric_dimension() == 2:
-        return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
-        )
-    else:
-        return spp
-
-def form_penalty_contact_pressure(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
-    """
-    Return the contact pressure expression according to the penalty method
-
-    Parameters
-    ----------
-    xref : dfn.Function
-        Reference configuration coordinates
-    u : dfn.Function
-        Displacement
-    k : float or dfn.Constant
-        Penalty contact spring value
-    d : float or dfn.Constant
-        y location of the contact plane
-    n : dfn.Constant
-        Contact plane normal, facing away from the vocal folds
-    """
-    gap = ufl.dot(xref+u, n) - ycoll
-    positive_gap = (gap + abs(gap)) / 2
-
-    # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-    return -k*positive_gap**3
-
-def form_pressure_as_reference_traction(p, u, n):
-    """
-
-    Parameters
-    ----------
-    p : Pressure load
-    u : displacement
-    n : facet outer normal
-    """
-    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-
-    return -p*deformation_cofactor*n
-
-def form_pullback_area_normal(u, n):
-    """
-
-    Parameters
-    ----------
-    p : Pressure load
-    u : displacement
-    n : facet outer normal
-    """
-    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
-
-    return deformation_cofactor*n
-
-def form_positive_gap(gap):
+def dis_contact_gap(gap):
     """
     Return the positive gap
     """
@@ -1271,24 +1107,22 @@ def form_positive_gap(gap):
     )
     return positive_gap
 
-def form_cubic_penalty_pressure(gap, kcoll):
+def pressure_contact_cubic_penalty(gap, kcoll):
     """
     Return the cubic penalty pressure
     """
-    positive_gap = form_positive_gap(gap)
+    positive_gap = dis_contact_gap(gap)
     return kcoll*positive_gap**3
 
 def dform_cubic_penalty_pressure(gap, kcoll):
     """
     Return derivatives of the cubic penalty pressure
     """
-    positive_gap = form_positive_gap(gap)
+    positive_gap = dis_contact_gap(gap)
     dpositive_gap = np.sign(gap)
     return kcoll*3*positive_gap**2 * dpositive_gap, positive_gap**3
 
-def form_quad_penalty_pressure(gap, kcoll):
-    positive_gap = (gap + abs(gap)) / 2
-    return kcoll*positive_gap**2
+
 
 ## Generation of new forms
 # These functions are mainly for generating forms that are needed for solving

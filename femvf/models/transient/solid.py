@@ -428,7 +428,7 @@ class NodalContactSolid(PredefinedModel):
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
 
         gap = np.dot((XREF+u)[:].reshape(-1, 2), ncontact) - ycontact
-        tcontact = (-solid.form_cubic_penalty_pressure(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
+        tcontact = (-solid.pressure_contact_cubic_penalty(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
         return tcontact
 
     def _assem_dresu_du_contact(self, adjoint=False):
