@@ -314,9 +314,20 @@ class JaxParameterization(BaseParameterization):
             map_y_to_x: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]]
         ):
         x, y, map = map_x_to_y
-        y, x, map = map_y_to_x
+        y, x, map_inv = map_y_to_x
         self._x = x
         self._y = y
+
+        self._map = map
+        self._map_inv = map_inv
+
+    @property
+    def map(self):
+        return self._map
+
+    @property
+    def map_inv(self):
+        return self._map_inv
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
@@ -398,41 +409,49 @@ class PredefJaxParametrization(JaxParameterization):
 class Identity(PredefJaxParametrization):
 
     @staticmethod
-    def make_map(model, **kwargs):
+    def make_map(model):
         def map(x):
             return x
 
         y = model.prop
-        return y, map
+        x = model.prop.copy()
+        return (x, y, map), (y, x, map)
 
 class LayerModuli(PredefJaxParametrization):
 
     @staticmethod
-    def make_map(model, **kwargs):
+    def make_map(model):
         ## Get the mapping from labelled cell regions to DOFs
-        E = model.solid.forms['coeff.prop.emod']
-        cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(
-            model.solid.forms,
-            E.function_space()
+        cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_residual(
+            model.solid.residual,
+            model.solid.residual.form['coeff.prop.emod'].function_space()
         )
 
-        _y_dict = bvec_to_dict(model.prop)
+        y_dict = bvec_to_dict(model.prop)
         def map(x):
-            y_dict = _y_dict.copy()
-            new_emod = jnp.array(y_dict['emod'], copy=True)
-            for label, value in x.items():
-                dofs = cell_label_to_dofs[label]
-                new_emod = new_emod.at[dofs][:] = value
 
-            y_dict['emod'] = new_emod
-            return y_dict
+            emod = jnp.zeros(y_dict['emod'].size, copy=True)
+            weight = jnp.zeros(y_dict['emod'].size, copy=True)
+            for label, layer_stiffness in x.items():
+                dofs = cell_label_to_dofs[label]
+
+                weight_region = jnp.zeros(emod.shape)
+                weight_region = weight_region.at[dofs][:] = layer_stiffness
+                emod_region = layer_stiffness*weight_region
+
+                emod = emod + emod_region
+                weight = weight + weight_region
+
+            new_y_dict = y_dict.copy()
+            new_y_dict['emod'] = emod
+            return new_y_dict
 
         ## Define the input vector
         labels = (tuple(cell_label_to_dofs.keys()),)
         subvecs = [np.zeros(1) for _ in labels[0]]
         in_vec = bv.BlockVector(subvecs, labels=labels)
 
-        return in_vec, map
+        return (in_vec, model.prop.copy(), map), (None, None, None)
 
 class ConstantSubset(PredefJaxParametrization):
     def __init__(
