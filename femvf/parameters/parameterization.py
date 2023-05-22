@@ -5,7 +5,8 @@ These objects should mappings from a given parameter set to the standard
 properties of the forward model.
 """
 
-from typing import Mapping, Union, Optional, Tuple
+from typing import Mapping, Union, Optional, Callable, Tuple
+from numpy.typing import ArrayLike
 
 import numpy as np
 from jax import numpy as jnp
@@ -16,30 +17,23 @@ from femvf.models.transient.base import BaseTransientModel as TranModel
 from femvf.models.dynamical.base import BaseDynamicalModel as DynModel
 from femvf.models.assemblyutils import CachedFormAssembler
 from femvf import meshutils
-from petsc4py import PETSc
 
 from blockarray import blockvec as bv, blockarray as ba
 from blockarray import typing
 
 class BaseParameterization:
     """
-    Map a parameterization to a model's `.prop` parameter set
-
-    Parameters
-    ----------
-    model :
-        The model to convert parameters to
-    kwargs : optional
-        Additional keyword arguments needed to specify the parameterization.
-        These will vary depending on the specific parameterization.
+    Map `BlockVector`s between spaces X and Y
 
     Attributes
     ----------
-    model : femvf.model.ForwardModel
     x, y : bv.BlockVector
         Prototype `BlockVectors` of the input (parameterization) and output
         (`model.prop`) attribute, respectively
     """
+
+    _x: bv.BlockVector
+    _y: bv.BlockVector
 
     @property
     def x(self):
@@ -47,14 +41,14 @@ class BaseParameterization:
         Return a prototype input vector for the parameterization
         """
         # raise NotImplementedError()
-        return self._x_vec
+        return self._x
 
     @property
     def y(self):
         """
         Return a prototype/default output vector for the parameterization
         """
-        return self._y_vec
+        return self._y
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
@@ -112,6 +106,62 @@ class BaseParameterization:
         """
         raise NotImplementedError()
 
+    def apply_inv(self, y: bv.BlockVector) -> bv.BlockVector:
+        """
+        Map the parameterization `x` to a `model.prop` vector
+
+        Parameters
+        ----------
+        x : bv.BlockVector
+            The input parameterization
+
+        Returns
+        -------
+        y : bv.BlockVector
+            The output `model.prop` vector
+        """
+        raise NotImplementedError()
+
+    def apply_inv_vjp(
+            self,
+            y: bv.BlockVector,
+            hx: bv.BlockVector
+        ) -> bv.BlockVector:
+        """
+        Map a dual vector `hx` (in `model.prop` space) to a dual vector `hy`
+
+        Parameters
+        ----------
+        hx : bv.BlockVector
+            The input dual vector in `model.prop` space
+
+        Returns
+        -------
+        yx : bv.BlockVector
+            The output dual vector in `x` space
+        """
+        raise NotImplementedError()
+
+    def apply_inv_jvp(
+            self,
+            y: bv.BlockVector,
+            dy: bv.BlockVector
+        ) -> bv.BlockVector:
+        """
+        Map a differential primal vector `dy` to `dx`
+
+        Parameters
+        ----------
+        dy : bv.BlockVector
+            The input parameterization
+
+        Returns
+        -------
+        dx : bv.BlockVector
+            The output primal vector
+        """
+        raise NotImplementedError()
+
 
 class BaseDolfinParameterization(BaseParameterization):
     def __init__(
@@ -121,7 +171,7 @@ class BaseDolfinParameterization(BaseParameterization):
         self.model = model
 
         _y_vec = ba.zeros(model.prop.bshape)
-        self._y_vec = bv.BlockVector(
+        self._y = bv.BlockVector(
             _y_vec.sub_blocks, labels=model.prop.labels
         )
 
@@ -145,7 +195,7 @@ class TractionShape(BaseDolfinParameterization):
             raise ValueError("model properties does not contain a shape") from err
 
         x_labels[ii] = 'tmesh'
-        self._x_vec = bv.BlockVector(x_subvecs, labels=(tuple(x_labels),))
+        self._x = bv.BlockVector(x_subvecs, labels=(tuple(x_labels),))
 
         ## Define the stiffness matrix and traction sensitivity matrices that
         # The two maps are
@@ -248,8 +298,54 @@ class TractionShape(BaseDolfinParameterization):
         dy_dict['umesh'][:] = self.umesh.vector()[:]
         return dict_to_bvec(dy_dict, self.y.labels)
 
+BlockVectorDict = Mapping[str, ArrayLike]
 
-class BaseJaxParameterization(BaseParameterization):
+class JaxParameterization(BaseParameterization):
+    """
+    Map an alternative parameterization to a model's `prop` parameters
+
+    The map here must be automatically defined through a `make_map` function
+    which uses `jax` to create output vector
+    """
+
+    def __init__(
+            self,
+            map_x_to_y: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]],
+            map_y_to_x: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]]
+        ):
+        x, y, map = map_x_to_y
+        y, x, map = map_y_to_x
+        self._x = x
+        self._y = y
+
+    def apply(self, x: bv.BlockVector) -> bv.BlockVector:
+        """
+        Return the corresponding `self.model.prop` vector
+        """
+        x_dict = bvec_to_dict(x)
+        y_dict = self.map(x_dict)
+        return dict_to_bvec(y_dict, self.y.labels)
+
+    def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
+        """
+        """
+        x_dict = bvec_to_dict(x)
+        _hy = self.y.copy()
+        _hy[:] = hy
+        hy_dict = bvec_to_dict(_hy)
+        _, vjp_fun = jax.vjp(self.map, x_dict)
+        hx_dict = vjp_fun(hy_dict)[0]
+        return dict_to_bvec(hx_dict, self.x.labels)
+
+    def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
+        """
+        """
+        x_dict = bvec_to_dict(x)
+        dx_dict = bvec_to_dict(dx)
+        _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
+        return dict_to_bvec(dy_dict, self.y.labels)
+
+class PredefJaxParametrization(JaxParameterization):
     """
     Map an alternative parameterization to a model's `prop` parameters
 
@@ -262,16 +358,8 @@ class BaseJaxParameterization(BaseParameterization):
             model: Union[DynModel, TranModel],
             **kwargs
         ):
-        _x_vec, self.map = self.make_map(model, **kwargs)
-        x_subvecs = ba.zeros(_x_vec.f_bshape).sub_blocks
-        x_labels = _x_vec.labels
-        self._x_vec = bv.BlockVector(x_subvecs, labels=x_labels)
-        # self._x_labels = self._x_vec.labels
-
-        _y_vec = ba.zeros(model.prop.bshape)
-        self._y_vec = bv.BlockVector(
-            _y_vec.sub_blocks, labels=model.prop.labels
-        )
+        map_x_to_y, map_y_to_x = self.make_map(model, **kwargs)
+        super().__init__(map_x_to_y, map_y_to_x)
 
     @staticmethod
     def make_map(model, **kwargs):
@@ -307,7 +395,7 @@ class BaseJaxParameterization(BaseParameterization):
         _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
         return dict_to_bvec(dy_dict, self.y.labels)
 
-class Identity(BaseJaxParameterization):
+class Identity(PredefJaxParametrization):
 
     @staticmethod
     def make_map(model, **kwargs):
@@ -317,7 +405,7 @@ class Identity(BaseJaxParameterization):
         y = model.prop
         return y, map
 
-class LayerModuli(BaseJaxParameterization):
+class LayerModuli(PredefJaxParametrization):
 
     @staticmethod
     def make_map(model, **kwargs):
@@ -346,7 +434,7 @@ class LayerModuli(BaseJaxParameterization):
 
         return in_vec, map
 
-class ConstantSubset(BaseJaxParameterization):
+class ConstantSubset(PredefJaxParametrization):
     def __init__(
             self,
             model: Union[DynModel, TranModel],
