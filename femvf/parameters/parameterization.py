@@ -408,6 +408,12 @@ class PredefJaxParametrization(JaxParameterization):
 
 class Identity(PredefJaxParametrization):
 
+    def __init__(
+            self,
+            model: Union[DynModel, TranModel]
+        ):
+        super().__init__(self, model)
+
     @staticmethod
     def make_map(model):
         def map(x):
@@ -418,6 +424,12 @@ class Identity(PredefJaxParametrization):
         return (x, y, map), (y, x, map)
 
 class LayerModuli(PredefJaxParametrization):
+
+    def __init__(
+            self,
+            model: Union[DynModel, TranModel]
+        ):
+        super().__init__(self, model)
 
     @staticmethod
     def make_map(model):
@@ -454,6 +466,7 @@ class LayerModuli(PredefJaxParametrization):
         return (in_vec, model.prop.copy(), map), (None, None, None)
 
 class ConstantSubset(PredefJaxParametrization):
+
     def __init__(
             self,
             model: Union[DynModel, TranModel],
@@ -464,10 +477,9 @@ class ConstantSubset(PredefJaxParametrization):
 
     @staticmethod
     def make_map(model, const_vals=None, scale=None):
-        """
-        Return the x->y mapping function and prototype x vector
-        """
-        x = model.prop
+        """"""
+        x = model.prop.copy()
+        y = x.copy()
 
         _scale = {key: 1.0 for key in x.labels[0]}
         if scale is not None:
@@ -488,7 +500,20 @@ class ConstantSubset(PredefJaxParametrization):
                 else:
                     y[key] = scale[key]*x[key]
             return y
-        return x, map
+
+        def map_inv(y):
+            """
+            Return the y->x mapping
+            """
+            x = {}
+            for key in y:
+                if key in const_vals:
+                    x[key] = const_vals[key]*np.ones(x[key].shape)
+                else:
+                    x[key] = 1/scale[key]*y[key]
+            return x
+
+        return (x, y, map), (y, x, map_inv)
 
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
