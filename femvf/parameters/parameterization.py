@@ -313,10 +313,11 @@ class JaxParameterization(BaseParameterization):
             map_x_to_y: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]],
             map_y_to_x: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]]
         ):
-        x, y, map = map_x_to_y
+        _x, _y, map = map_x_to_y
         y, x, map_inv = map_y_to_x
-        self._x = x
-        self._y = y
+
+        self._x = bv.convert_subtype_to_numpy(x)
+        self._y = bv.convert_subtype_to_numpy(y)
 
         self._map = map
         self._map_inv = map_inv
