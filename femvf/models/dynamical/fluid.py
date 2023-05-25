@@ -223,3 +223,14 @@ class LinearizedBernoulliAreaRatioSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, mesh):
         return fluid.BernoulliAreaRatioSep(mesh)
+
+
+class BernoulliFlowFixedSep(Predefined1DModel):
+
+    def _make_residual(self, mesh, idx_sep=0):
+        return fluid.BernoulliFlowFixedSep(mesh, idx_sep)
+
+class LinearizedBernoulliFlowFixedSep(PredefinedLinearized1DModel):
+
+    def _make_residual(self, mesh, idx_sep=0):
+        return fluid.BernoulliFlowFixedSep(mesh, idx_sep)
