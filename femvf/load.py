@@ -282,7 +282,11 @@ def process_fsi(
         s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
         if issubclass(
                 FluidType,
-                (dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep, tfmd.BernoulliFixedSep)
+                (
+                dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
+                dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
+                tfmd.BernoulliFixedSep
+                )
             ):
             # If the fluid has a fixed-separation point, set the appropriate
             # separation point for the fluid
