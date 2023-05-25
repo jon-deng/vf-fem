@@ -3,7 +3,7 @@ This module contains the equations defining a quasi-steady Bernoulli fluid with
 separation at a fixed location.
 """
 
-from typing import Callable, Union, Tuple, Mapping
+from typing import Callable, Tuple, Mapping
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -14,21 +14,21 @@ from .smoothapproximation import (wavg, smooth_min_weight)
 from . import base
 
 ## Common bernoulli fluid functions
-def bernoulli_q(asep, psub, psup, rho):
-        """
-        Return the flow rate based on Bernoulli
-        """
-        flow_sign = jnp.sign(psub-psup)
-        q = flow_sign * (2*jnp.abs(psub-psup)/rho)**0.5 * asep
-        return q
+def bernoulliq_from_psub_psep(psub, psep, area_sub, area_sep, rho):
+    """
+    Return the flow rate based on Bernoulli
+    """
+    # TODO: `area_sub` isn't accounted for
+    flow_sign = jnp.sign(psub-psep)
+    q = flow_sign * (2*jnp.abs(psub-psep)/rho)**0.5 * area_sep
+    return q
 
-# @jax.jit
-def bernoulli_p(q, area, psub, psup, rho):
+def bernoullip_from_q_psep(qsub, psep, area_sub, area_sep, area, rho):
     """
     Return the pressure based on Bernoulli
     """
-    p = psub - 1/2*rho*(q/area)**2
-    return p
+    psub = psep + 1/2*rho*(area_sep**-2 - area_sub**-2)
+    return psub - 1/2*rho*(qsub/area)**2
 
 ResArgs = Tuple[Mapping[str, ArrayLike], ...]
 ResReturn = Mapping[str, ArrayLike]
@@ -41,7 +41,7 @@ class JaxResidual(base.BaseResidual):
 
     def __init__(
             self,
-            res: Callable[ResArgs, ResReturn],
+            res: Callable[[ResArgs], ResReturn],
             res_args: ResArgs
         ):
 
@@ -94,10 +94,10 @@ def _BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
         Return Bernoulli flow and pressure
         """
         # print(idx_sep)
-        asep = area[idx_sep]
+        area_sep = area[idx_sep]
         # ssep = s[idx_sep]
-        q = bernoulli_q(asep, psub, psup, rho)
-        p = bernoulli_p(q, area, psub, psup, rho)
+        q = bernoulliq_from_psub_psep(psub, psup, jnp.inf, area_sep, rho)
+        p = bernoullip_from_q_psep(q, psup, jnp.inf, area_sep, area, rho)
 
         # Separation coefficient ensure pressures tends to zero after separation
         p = f * p + (1-f)*psup
@@ -158,8 +158,8 @@ def _BernoulliSmoothMinSep(s: jnp.ndarray):
 
         asep = amin
         ssep = smin
-        q = bernoulli_q(asep, psub, psup, rho)
-        p = bernoulli_p(q, area, psub, psup, rho)
+        q = bernoulliq_from_psub_psep(psub, psup, jnp.inf, asep, rho)
+        p = bernoullip_from_q_psep(q, psup, jnp.inf, asep, area, rho)
 
         # Separation coefficient ensure pressures tends to zero after separation
         f_sep = coeff_sep(s, ssep, zeta_sep)
@@ -222,8 +222,8 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
 
         f_sep = jnp.array(s < ssep, dtype=jnp.float64)
 
-        q = bernoulli_q(asep, psub, psup, rho)
-        p = bernoulli_p(q, area, psub, psup, rho)
+        q = bernoulliq_from_psub_psep(psub, psup, jnp.inf, asep, rho)
+        p = bernoullip_from_q_psep(q, psup, jnp.inf, asep, area, rho)
 
         # Separation coefficient ensure pressures tends to zero after separation
         p = f_sep * p + (1-f_sep)*psup
@@ -253,6 +253,60 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
         'rho_air': np.ones(1),
         'r_sep': np.ones(1),
         'area_lb': np.zeros(1)
+    }
+
+    return res, (_state, _control, _props)
+
+class BernoulliFlowFixedSep(PredefinedJaxResidual):
+
+    def _make_residual(self, mesh, idx_sep=0):
+        return _BernoulliFlowFixedSep(mesh, idx_sep=idx_sep)
+
+def _BernoulliFlowFixedSep(s: np.ndarray, idx_sep: int=0):
+    """
+    Return quantities defining a fixed-separation point Bernoulli model with constant flow
+    """
+
+    N = s.size
+
+    # Separation coefficient to ensure pressures after the separation point
+    # match the supraglottal pressure
+    f = np.ones((N,))
+    f[idx_sep+1:] = 0.0
+
+    def bernoulli_qp(area, q, psup, rho):
+        """
+        Return Bernoulli pressure
+        """
+        area_sep = area[idx_sep]
+        p = bernoullip_from_q_psep(q, psup, jnp.inf, area_sep, area, rho)
+
+        # Separation coefficient ensure pressures tends to zero after separation
+        p = f * p + (1-f)*psup
+        return q, p
+
+    def res(state, control, prop):
+        q, p = state['q'], state['p']
+        area, qsub, psup = control['area'], control['qsub'], control['psup']
+
+        q_, p_ = bernoulli_qp(area, qsub, psup, prop['rho_air'])
+        # print(q.shape, p.shape, q_.shape, p_.shape)
+        return {'q': q-q_, 'p': p-p_}
+
+    # Key functions/variables that have to be exported
+    _state = {
+        'q': np.ones(1),
+        'p': np.ones(N)
+    }
+
+    _control = {
+        'area': np.ones(N),
+        'qsub': np.ones(1),
+        'psup': np.ones(1)
+    }
+
+    _props = {
+        'rho_air': np.ones(1)
     }
 
     return res, (_state, _control, _props)
