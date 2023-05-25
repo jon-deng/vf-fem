@@ -118,7 +118,7 @@ class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
         super().__init__(residual)
 
         self._res = jax.jit(residual.res)
-        self._res = residual.res
+        # self._res = residual.res
         self._res_args = (
             blockvec_to_dict(self.state),
             blockvec_to_dict(self.control),
