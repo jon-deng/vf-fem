@@ -34,10 +34,34 @@ def _set_dirichlet_bvec(dirichlet_bc, bvec: bv.BlockVector):
 
 @pytest.fixture(
     params=[
+        (dynsl.KelvinVoigt, dynsl.LinearizedKelvinVoigt, {})
+    ]
+)
+def SolidModels(request):
+    """
+    Return dynamical solid model classes
+    """
+    return request.param
+
+@pytest.fixture(
+    params=[
+        (dynfl.BernoulliSmoothMinSep, dynfl.LinearizedBernoulliSmoothMinSep, {}),
+        # (dynfl.BernoulliFixedSep, dynfl.LinearizedBernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
+        # (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
+    ]
+)
+def FluidModels(request):
+    """
+    Return a dynamical fluid model
+    """
+    return request.param
+
+@pytest.fixture(
+    params=[
         'coupled'
     ]
 )
-def setup_dynamical_models(request):
+def setup_dynamical_models(SolidModels, FluidModels):
     """
     Setup the dynamical model objects
     """
@@ -48,28 +72,21 @@ def setup_dynamical_models(request):
     solid_mesh = mesh_path
     fluid_mesh = None
 
-    SolidType = dynsl.KelvinVoigt
-    FluidType = dynfl.BernoulliSmoothMinSep
+    SolidType, LinSolidType, solid_kwargs = SolidModels
+    FluidType, LinFluidType, fluid_kwargs = FluidModels
     model_coupled = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',),
+        **solid_kwargs, **fluid_kwargs
     )
 
-    SolidType = dynsl.LinearizedKelvinVoigt
-    FluidType = dynfl.LinearizedBernoulliSmoothMinSep
     model_coupled_linear = load.load_dynamical_fsi_model(
-        solid_mesh, fluid_mesh, SolidType, FluidType,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',)
+        solid_mesh, fluid_mesh, LinSolidType, LinFluidType,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',),
+        **solid_kwargs, **fluid_kwargs
     )
 
-    if request.param == 'coupled':
-        return model_coupled, model_coupled_linear
-    elif request.param == 'solid':
-        return model_coupled.solid, model_coupled_linear.solid
-    elif request.param == 'fluid':
-        return model_coupled.fluid, model_coupled_linear.fluid
-    else:
-        raise ValueError()
+    return model_coupled, model_coupled_linear
 
 @pytest.fixture()
 def model(setup_dynamical_models):
@@ -99,7 +116,7 @@ def linearization(model):
         model_solid = model
         model_fluid = None
         model_coupl = None
-    elif isinstance(model, dynfl.BaseDynamical1DFluid):
+    elif isinstance(model, dynfl.BaseDynamicalModel):
         model_solid = None
         model_fluid = model
         model_coupl = None
@@ -166,11 +183,11 @@ def perturbation(model):
         model_solid = model.solid
         model_fluid = model.fluid
         model_coupl = model
-    elif isinstance(model, dynsl.Model):
+    elif isinstance(model, (dynsl.Model, dynsl.LinearizedModel)):
         model_solid = model
         model_fluid = None
         model_coupl = None
-    elif isinstance(model, dynfl.BaseDynamical1DFluid):
+    elif isinstance(model, (dynfl.Model, dynfl.LinearizedModel)):
         model_solid = None
         model_fluid = model
         model_coupl = None
