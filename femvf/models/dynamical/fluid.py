@@ -118,6 +118,7 @@ class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
         super().__init__(residual)
 
         self._res = jax.jit(residual.res)
+        self._res = residual.res
         self._res_args = (
             blockvec_to_dict(self.state),
             blockvec_to_dict(self.control),
@@ -228,9 +229,9 @@ class LinearizedBernoulliAreaRatioSep(PredefinedLinearized1DModel):
 class BernoulliFlowFixedSep(Predefined1DModel):
 
     def _make_residual(self, mesh, idx_sep=0):
-        return fluid.BernoulliFlowFixedSep(mesh, idx_sep)
+        return fluid.BernoulliFlowFixedSep(mesh, idx_sep=idx_sep)
 
 class LinearizedBernoulliFlowFixedSep(PredefinedLinearized1DModel):
 
     def _make_residual(self, mesh, idx_sep=0):
-        return fluid.BernoulliFlowFixedSep(mesh, idx_sep)
+        return fluid.BernoulliFlowFixedSep(mesh, idx_sep=idx_sep)
