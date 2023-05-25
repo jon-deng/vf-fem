@@ -272,16 +272,16 @@ def _BernoulliFlowFixedSep(s: np.ndarray, idx_sep: int=0):
     f = np.ones((N,))
     f[idx_sep+1:] = 0.0
 
-    def bernoulli_qp(area, q, psup, rho):
+    def bernoulli_qp(area, qsub, psup, rho):
         """
         Return Bernoulli pressure
         """
         area_sep = area[idx_sep]
-        p = bernoullip_from_q_psep(q, psup, area_sep, area, rho)
+        p = bernoullip_from_q_psep(qsub, psup, area_sep, area, rho)
 
         # Separation coefficient ensure pressures tends to zero after separation
         p = f * p + (1-f)*psup
-        return q, p
+        return qsub, p
 
     def res(state, control, prop):
         q, p = state['q'], state['p']
