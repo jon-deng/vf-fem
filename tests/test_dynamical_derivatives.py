@@ -45,9 +45,9 @@ def SolidModels(request):
 
 @pytest.fixture(
     params=[
-        (dynfl.BernoulliSmoothMinSep, dynfl.LinearizedBernoulliSmoothMinSep, {}),
-        # (dynfl.BernoulliFixedSep, dynfl.LinearizedBernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
-        # (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
+        # (dynfl.BernoulliSmoothMinSep, dynfl.LinearizedBernoulliSmoothMinSep, {}),
+        (dynfl.BernoulliFixedSep, dynfl.LinearizedBernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
+        (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
     ]
 )
 def FluidModels(request):
@@ -65,9 +65,10 @@ def setup_dynamical_models(SolidModels, FluidModels):
     """
     Setup the dynamical model objects
     """
-    mesh_name = 'M5-3layers'
-    mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('../meshes', mesh_name+'.xml')
+    mesh_name = 'M5-3layers.xml'
+    mesh_name = 'BC-dcov5.00e-02-cl1.00.xml'
+    mesh_name = 'M5_CB_GA3_CL0.50.msh'
+    mesh_path = path.join('../meshes', mesh_name)
 
     solid_mesh = mesh_path
     fluid_mesh = None
@@ -137,19 +138,28 @@ def linearization(model):
         model_coupl.ymid = ymid
 
     if model_fluid is not None:
-        props0['zeta_sep'] = 1e-4
-        props0['zeta_min'] = 1e-4
-        props0['rho_air'] = 1.2e-3
+        prop_values = {
+            'zeta_sep': 1e-4,
+            'zeta_min': 1e-4,
+            'rho_air': 1.2e-3
+        }
+        for key, value in prop_values.items():
+            if key in model_fluid.prop:
+                props0[key] = value
 
     ## Model controls
     control0 = model.control.copy()
     control0[:] = 1.0
 
     if model_fluid is not None:
-        if 'psub' in control0:
-            control0['psub'] = 800*10
-        if 'psup' in control0:
-            control0['psup'] = 0
+        control_values = {
+            'qsub': 100,
+            'psub': 800*10,
+            'psup': 0
+        }
+        for key, value in control_values.items():
+            if key in model_fluid.control:
+                control0[key] = value
 
     ## Model state
     state0 = model.state.copy()
