@@ -19,7 +19,14 @@ def bernoulliq_from_psub_psep(psub, psep, area_sub, area_sep, rho):
     Return the flow rate based on Bernoulli
     """
     flow_sign = jnp.sign(psub-psep)
-    q = flow_sign * (2/rho*jnp.abs(psub-psep) / (area_sep**-2 - area_sub**-2))**0.5
+
+    # TODO: This equation is gives the flow rate between 'sub' and 'sep' points
+    # with different areas/pressures, but results in numerical instability in
+    # JAX and solver failures (not sure exactly why)
+    # q = flow_sign * (2/rho*jnp.abs(psub-psep) / (area_sep**-2 - area_sub**-2))**0.5
+
+    # This formula assumes `area_sub = np.inf` but is numerically stable
+    q = flow_sign * (2/rho*jnp.abs(psub-psep))**0.5 * area_sep
     return q
 
 def bernoullip_from_q_psep(qsub, psep, area_sep, area, rho):
