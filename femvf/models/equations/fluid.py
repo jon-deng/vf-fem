@@ -35,6 +35,22 @@ def bernoullip_from_q_psep(qsub, psep, area_sep, area, rho):
     """
     return psep + 1/2*rho*qsub**2*(area_sep**-2 - area**-2)
 
+def bernoulli_q(asep, psub, psup, rho):
+    """
+    Return the flow rate based on Bernoulli
+    """
+    flow_sign = jnp.sign(psub-psup)
+    q = flow_sign * (2*jnp.abs(psub-psup)/rho)**0.5 * asep
+    return q
+
+# @jax.jit
+def bernoulli_p(q, area, psub, psup, rho):
+    """
+    Return the pressure based on Bernoulli
+    """
+    p = psub - 1/2*rho*(q/area)**2
+    return p
+
 ResArgs = Tuple[Mapping[str, ArrayLike], ...]
 ResReturn = Mapping[str, ArrayLike]
 
@@ -101,8 +117,11 @@ def _BernoulliFixedSep(s: np.ndarray, idx_sep: int=0):
         # print(idx_sep)
         area_sep = area[idx_sep]
         # ssep = s[idx_sep]
-        q = bernoulliq_from_psub_psep(psub, psup, jnp.inf, area_sep, rho)
-        p = bernoullip_from_q_psep(q, psup, area_sep, area, rho)
+        # q = bernoulliq_from_psub_psep(psub, psup, jnp.inf, area_sep, rho)
+        # p = bernoullip_from_q_psep(q, psup, area_sep, area, rho)
+
+        q = bernoulli_q(area_sep, psub, psup, rho)
+        p = bernoulli_p(q, area, psub, psup, rho)
 
         # Separation coefficient ensure pressures tends to zero after separation
         p = f * p + (1-f)*psup
