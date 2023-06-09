@@ -337,7 +337,7 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
         'coeff.prop.nu': const_spec('scalar', default_value=0.45),
         'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.k_swelling': func_spec('DG', 0, 'scalar')
+        'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar')
     }
 
     def _make_residual(self, coefficients, measure, mesh):
