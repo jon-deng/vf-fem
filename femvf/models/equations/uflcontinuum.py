@@ -50,8 +50,8 @@ def def_cauchy_green(u):
     u : dfn.TrialFunction, ufl.Argument
         Trial displacement field
     """
-    def_grad = def_grad(u)
-    return def_grad.T*def_grad
+    dgrad = def_grad(u)
+    return dgrad.T*dgrad
 
 def strain_green_lagrange(u):
     """
