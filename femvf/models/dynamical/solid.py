@@ -376,21 +376,21 @@ class LinearizedKelvinVoigtWEpithelium(PredefinedLinearizedModel):
 class SwellingKelvinVoigtWEpithelium(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solid.KelvinVoigtWEpithelium(
+        return solid.SwellingKelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class LinearizedSwellingKelvinVoigtWEpithelium(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solid.KelvinVoigtWEpithelium(
+        return solid.SwellingKelvinVoigtWEpithelium(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
 class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
-        return solid.KelvinVoigtWEpithelium(
+        return solid.SwellingKelvinVoigtWEpitheliumNoShape(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
@@ -398,7 +398,7 @@ class LinearizedSwellingKelvinVoigtWEpitheliumNoShape(PredefinedLinearizedModel)
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solid.modify_unary_linearized_forms(
-            solid.SwellingKelvinVoigtWEpithelium(
+            solid.SwellingKelvinVoigtWEpitheliumNoShape(
                 mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
             )
         )
