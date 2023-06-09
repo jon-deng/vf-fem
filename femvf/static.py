@@ -101,22 +101,24 @@ def static_solid_configuration(
 
     if linear_solver == 'manual':
         def iterative_subproblem(x_n):
-            model.forms['coeff.state.u1'].vector()[:] = x_n
-            dx = model.forms['coeff.state.u1'].vector()
+            model.residual.form['coeff.state.u1'].vector()[:] = x_n
+            dx = model.residual.form['coeff.state.u1'].vector()
 
             jac = dfn.derivative(
-                model.forms['form.un.f1uva'],
-                model.forms['coeff.state.u1']
+                model.residual.form.form,
+                model.residual.form['coeff.state.u1']
             )
 
             def assem_res():
-                res = dfn.assemble(model.forms['form.un.f1uva'])
-                model.forms['bc.dirichlet'].apply(res)
+                res = dfn.assemble(model.residual.form.form)
+                for bc in model.residual.dirichlet_bcs:
+                    bc.apply(res)
                 return res
 
             def solve_res(res):
                 A = dfn.assemble(jac)
-                model.forms['bc.dirichlet'].apply(A)
+                for bc in model.residual.dirichlet_bcs:
+                    bc.apply(A)
                 dfn.solve(A, dx, res)
                 return dx
 
@@ -125,18 +127,18 @@ def static_solid_configuration(
         def norm(res_n):
             return res_n.norm('l2')
 
-        u_0 = model.forms['coeff.state.u1'].vector().copy()
+        u_0 = model.residual.form['coeff.state.u1'].vector().copy()
         u, info = nonlineq.newton_solve(u_0, iterative_subproblem, norm=norm)
         state_n['u'] = u
     elif linear_solver == 'automatic':
         jac = dfn.derivative(
-            model.forms['form.un.f1uva'],
-            model.forms['coeff.state.u1']
+            model.residual.form.form,
+            model.residual.form['coeff.state.u1']
         )
         dfn.solve(
-            model.forms['form.un.f1uva'] == 0.0,
-            model.forms['coeff.state.u1'],
-            bcs=[model.forms['bc.dirichlet']],
+            model.residual.form.form == 0.0,
+            model.residual.form['coeff.state.u1'],
+            bcs=model.residual.dirichlet_bcs,
             J=jac,
             solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
         )
@@ -199,13 +201,13 @@ def static_coupled_configuration_picard(
             """
             # Solve for the solid deformation under the guessed fluid load
             dfn.solve(
-                solid.forms['form.un.f1uva'] == 0.0,
-                solid.forms['coeff.state.u1'],
-                bcs=[solid.forms['bc.dirichlet']],
-                J=solid.forms['form.bi.df1uva_du1'],
+                solid.residual.form.form == 0.0,
+                solid.residual.form['coeff.state.u1'],
+                bcs=solid.residual.dirichlet_bcs,
+                # J= ... ()
                 solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM}
             )
-            # the vector corresponding to solid.forms['coeff.state.u1']
+            # the vector corresponding to solid.residual.form['coeff.state.u1']
             u = bv.BlockVector([solid.state1['u'].copy()], labels=[['u']])
 
             # update the fluid load for the new solid deformation
