@@ -782,6 +782,24 @@ class PredefinedFenicsResidual(FenicsResidual):
         ) -> dfn.Form:
         raise NotImplementedError()
 
+def _process_measures(
+        mesh: dfn.Mesh,
+        mesh_functions: list[dfn.MeshFunction],
+        mesh_functions_label_to_value: list[Mapping[str, int]],
+        fsi_facet_labels: list[str],
+        fixed_facet_labels: list[str]
+    ):
+    if len(mesh_functions) == 3:
+        vertex_func, facet_func, cell_func = mesh_functions
+    elif len(mesh_functions) == 4:
+        vertex_func, line_func, facet_func, cell_func = mesh_functions
+    vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+    dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
+    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
+    _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
+    traction_ds = reduce(operator.add, _traction_ds)
+    return dx, ds, traction_ds
+
 class Rayleigh(PredefinedFenicsResidual):
 
     def _make_functional(
@@ -792,12 +810,13 @@ class Rayleigh(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -818,12 +837,14 @@ class KelvinVoigt(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -844,12 +865,13 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -871,12 +893,13 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -897,12 +920,13 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -923,12 +947,13 @@ class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -950,12 +975,13 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
@@ -977,12 +1003,13 @@ class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
             fsi_facet_labels: list[str],
             fixed_facet_labels: list[str]
         ):
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
-        dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-        ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-        _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]
-        traction_ds = reduce(operator.add, _traction_ds)
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
 
         form = (
             InertialForm({}, dx, mesh)
