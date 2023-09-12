@@ -689,7 +689,7 @@ class FenicsResidual(base.BaseResidual):
         self._mesh_functions_label_to_value = mesh_functions_label_to_value
 
         bc_base = dfn.DirichletBC(
-            self.form['coeff.state.u1'].function_space(), dfn.Constant([0.0, 0.0]),
+            self.form['coeff.state.u1'].function_space(), dfn.Constant(3*[0.0]),
             self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
         )
         self._dirichlet_bcs = (bc_base,)
@@ -710,9 +710,9 @@ class FenicsResidual(base.BaseResidual):
             if mesh_element_type == 'vertex':
                 return 0
             elif mesh_element_type == 'facet':
-                return 1
+                return -2
             elif mesh_element_type == 'cell':
-                return 2
+                return -1
         elif isinstance(mesh_element_type, int):
             return mesh_element_type
         else:
@@ -791,9 +791,13 @@ def _process_measures(
     ):
     if len(mesh_functions) == 3:
         vertex_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
     elif len(mesh_functions) == 4:
-        vertex_func, line_func, facet_func, cell_func = mesh_functions
-    vertex_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+        vertex_func, edge_func, facet_func, cell_func = mesh_functions
+        vertex_label_to_id, edge_label_to_id, facet_label_to_id, cell_label_to_id = mesh_functions_label_to_value
+    else:
+        raise ValueError(f"`mesh_functions` has length {len(mesh_functions):d}")
+
     dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
     ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
     _traction_ds = [ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels]

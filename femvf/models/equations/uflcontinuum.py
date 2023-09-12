@@ -169,7 +169,7 @@ def pullback_area_normal(u, n):
     u : displacement
     n : facet outer normal
     """
-    deformation_gradient = ufl.grad(u) + ufl.Identity(2)
+    deformation_gradient = ufl.grad(u) + ufl.Identity(u.ufl_shape[0])
     deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
 
     return deformation_cofactor*n
