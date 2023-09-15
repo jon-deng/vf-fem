@@ -162,8 +162,10 @@ class StateFile:
         r"""
         Initializes the layout of the state file.
         """
-        self.file.require_dataset('time', (self.size,), maxshape=(None,), chunks=(self.NCHUNK,),
-                                        dtype=np.float64, exact=False)
+        self.file.require_dataset(
+            'time', (self.size,), maxshape=(None,), chunks=(self.NCHUNK,),
+            dtype=np.float64, exact=False
+        )
 
         if 'meas_indices' not in self.file:
             self.file.create_dataset(
@@ -193,6 +195,15 @@ class StateFile:
             'mesh/solid/connectivity', cells.shape,
             data=cells, dtype=np.intp
         )
+
+        dofmaps = [solid.residual.form['coeff.state.u0'].function_space().dofmap()]
+        for dofmap in dofmaps:
+            dofmap_array = np.array([
+                dofmap.cell_dofs(idx_cell) for idx_cell in range(cells.shape[0])
+            ])
+            self.file.require_dataset(
+                'dofmap/CG1', dofmap_array.shape, data=dofmap_array, dtype=np.intp
+            )
 
         # TODO: Write mesh function information + label: int region indentifiers
         # self.file.require_dataset(

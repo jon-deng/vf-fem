@@ -427,7 +427,8 @@ class NodalContactSolid(PredefinedModel):
         ncontact = self.residual.form['coeff.prop.ncontact'].values()
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
 
-        gap = np.dot((XREF+u)[:].reshape(-1, 2), ncontact) - ycontact
+        ndim = self.residual.form['coeff.state.u0'].ufl_shape[0]
+        gap = np.dot((XREF+u)[:].reshape(-1, ndim), ncontact) - ycontact
         tcontact = (-solid.pressure_contact_cubic_penalty(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
         return tcontact
 
@@ -444,7 +445,7 @@ class NodalContactSolid(PredefinedModel):
         ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
         u1 = self.residual.form['coeff.state.u1'].vector()
         ncontact = self.residual.form['coeff.prop.ncontact'].values()
-        gap = np.dot((XREF+u1)[:].reshape(-1, 2), ncontact) - ycontact
+        gap = np.dot((XREF+u1)[:].reshape(-1, ncontact.shape[-1]), ncontact) - ycontact
         dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
