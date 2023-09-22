@@ -279,7 +279,7 @@ def extract_edges_from_facets(facets, facet_function, facet_value):
     """
     edges = [
         edge for facet in facets for edge in dfn.edges(facet)
-        if any([mf[facet] == facet_value for facet in dfn.facets(edge)])
+        if any([facet_function[facet] == facet_value for facet in dfn.facets(edge)])
     ]
     return edges
 
