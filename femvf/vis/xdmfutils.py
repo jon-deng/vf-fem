@@ -32,21 +32,24 @@ def export_vertex_values(model, statefile_path, export_path):
 
             fo.create_dataset('time', data=fi.file['time'])
 
-            vert_to_sdof = dfn.vertex_to_dof(solid.vert_to_sdof)
-            vert_to_vdof = solid.vert_to_vdof
+            fspace_dg0 = model.residual.form['coeff.fsi.p1'].function_space()
+            fspace_cg1 = model.residual.form['coeff.state.u0'].function_space()
+            vert_to_sdof = dfn.vertex_to_dof_map(fspace_dg0)
+            vert_to_vdof = dfn.vertex_to_dof_map(fspace_cg1)
 
             ## Make empty functions to store vector values
-            scalar_func = dfn.Function(solid.scalar_fspace)
-            vector_func = dfn.Function(solid.vector_fspace)
+            scalar_func = dfn.Function(fspace_dg0)
+            vector_func = dfn.Function(fspace_cg1)
 
             ## Prepare constant variables describing the shape
             N_TIME = fi.size
-            N_VERT = solid.mesh.num_vertices()
+            N_VERT = solid.residual.mesh().num_vertices()
             VECTOR_VALUE_SHAPE = tuple(vector_func.value_shape())
             SCALAR_VALUE_SHAPE = tuple(scalar_func.value_shape())
 
             ## Initialize solid/fluid state variables
-            for label in ['state/u', 'state/v', 'state/a']:
+            labels = ['state/u', 'state/v', 'state/a']
+            for label in labels:
                 fo.create_dataset(label, shape=(N_TIME, N_VERT, *VECTOR_VALUE_SHAPE), dtype=np.float64)
 
             # for label in ['p']:
@@ -57,7 +60,7 @@ def export_vertex_values(model, statefile_path, export_path):
                 state = fi.get_state(ii)
 
                 u, v, a = state['u'], state['v'], state['a']
-                for label, vector in zip(['u', 'v', 'a'], [u, v, a]):
+                for label, vector in zip(labels, [u, v, a]):
                     vector_func.vector()[:] = vector
                     fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VECTOR_VALUE_SHAPE)
 

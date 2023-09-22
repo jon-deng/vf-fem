@@ -94,11 +94,11 @@ def load_transient_fsi_model(
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
     """
-    solid, fluid, fsi_verts = process_fsi(
-        solid_mesh, fluid_mesh,
-        SolidType=SolidType, FluidType=FluidType,
+    ## Load the solid
+    solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
+    fluid, fsi_verts = process_fsi(
+        solid, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels,
-        fixed_facet_labels=fixed_facet_labels,
         separation_vertex_label=separation_vertex_label
     )
 
@@ -150,11 +150,10 @@ def load_dynamical_fsi_model(
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
     """
-    solid, fluid, fsi_verts = process_fsi(
-        solid_mesh, fluid_mesh,
-        SolidType=SolidType, FluidType=FluidType,
+    solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
+    fluid, fsi_verts = process_fsi(
+        solid, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels,
-        fixed_facet_labels=fixed_facet_labels,
         separation_vertex_label=separation_vertex_label
     )
 
@@ -200,12 +199,11 @@ def load_transient_fsai_model(
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
     """
-    solid, fluid, fsi_verts = process_fsi(
-        solid_mesh, fluid_mesh,
-        SolidType=SolidType, FluidType=FluidType,
-        fsi_facet_labels=fsi_facet_labels,
-        fixed_facet_labels=fixed_facet_labels
-        )
+    solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
+    fluid, fsi_verts = process_fsi(
+        solid_mesh, FluidType=FluidType,
+        fsi_facet_labels=fsi_facet_labels
+    )
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['fspace.scalar'])[fsi_verts]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
@@ -215,12 +213,9 @@ def load_transient_fsai_model(
 # TODO: Refactor this function; currently does too many things
 # the function should take a loaded solid model and derive a fluid mesh from it
 def process_fsi(
-        solid_mesh: str,
-        fluid_mesh: Any,
-        SolidType: SolidClass=tsmd.KelvinVoigt,
+        solid: SolidModel,
         FluidType: FluidClass=tfmd.BernoulliAreaRatioSep,
         fsi_facet_labels: Optional[Labels]=('pressure',),
-        fixed_facet_labels: Optional[Labels]=('fixed',),
         separation_vertex_label: str='separation',
     ) -> Tuple[SolidModel, FluidModel, np.ndarray]:
     """
@@ -242,9 +237,6 @@ def process_fsi(
         occur. This is only relevant for quasi-static fluid models with a fixed
         separation point
     """
-    ## Load the solid
-    solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
-
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
     fsi_facet_ids = [
@@ -265,67 +257,62 @@ def process_fsi(
     fsi_coordinates = fsi_coordinates[idx_sort]
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
-    if fluid_mesh is None and issubclass(
+    mesh = solid.residual.mesh()
+    facet_func = solid.residual.mesh_function('facet')
+    facet_labels = solid.residual.mesh_function_label_to_value('facet')
+    # TODO: The streamwise mesh can already be known from the fsi_coordinates
+    # variable computed earlier
+    x, y = meshutils.streamwise1dmesh_from_edges(
+        mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels]
+    )
+    dx = x[1:] - x[:-1]
+    dy = y[1:] - y[:-1]
+    s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
+    if issubclass(
             FluidType,
-            (tfmd.Model, dfmd.Model, dfmd.LinearizedModel)
+            (
+            dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
+            dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
+            tfmd.BernoulliFixedSep
+            )
         ):
-        mesh = solid.residual.mesh()
-        facet_func = solid.residual.mesh_function('facet')
-        facet_labels = solid.residual.mesh_function_label_to_value('facet')
-        # TODO: The streamwise mesh can already be known from the fsi_coordinates
-        # variable computed earlier
-        x, y = meshutils.streamwise1dmesh_from_edges(
-            mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels]
-        )
-        dx = x[1:] - x[:-1]
-        dy = y[1:] - y[:-1]
-        s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-        if issubclass(
-                FluidType,
-                (
-                dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
-                dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
-                tfmd.BernoulliFixedSep
-                )
-            ):
-            # If the fluid has a fixed-separation point, set the appropriate
-            # separation point for the fluid
-            vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
-            vertex_mf = solid.residual.mesh_function('vertex')
-            if vertex_mf is None:
-                raise ValueError(
-                    f"Couldn't find separation point label {separation_vertex_label}"
-                )
+        # If the fluid has a fixed-separation point, set the appropriate
+        # separation point for the fluid
+        vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
+        vertex_mf = solid.residual.mesh_function('vertex')
+        if vertex_mf is None:
+            raise ValueError(
+                f"Couldn't find separation point label {separation_vertex_label}"
+            )
 
-            if separation_vertex_label in vertex_label_to_id:
-                sep_mf_value = vertex_label_to_id[separation_vertex_label]
-                # assert isinstance(sep_mf_value, int)
-            else:
-                raise ValueError(
-                    f"Couldn't find separation point label {separation_vertex_label}"
-                )
-
-            sep_vert = vertex_mf.where_equal(sep_mf_value)
-            if len(sep_vert) == 1:
-                sep_vert = sep_vert[0]
-            else:
-                raise ValueError(
-                    "A single separation point was expected but"
-                    f" {len(sep_vert):d} were supplied"
-                )
-
-            fsi_verts_fluid_ord = np.arange(fsi_verts.size)
-            idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
-            if len(idx_sep) == 1:
-                idx_sep = idx_sep[0]
-            else:
-                raise ValueError(
-                    "Expected to find single separation point on FSI surface"
-                    f" but found {len(idx_sep):d} instead"
-                )
-            fluid = FluidType(s, idx_sep=idx_sep)
+        if separation_vertex_label in vertex_label_to_id:
+            sep_mf_value = vertex_label_to_id[separation_vertex_label]
+            # assert isinstance(sep_mf_value, int)
         else:
-            fluid = FluidType(s)
+            raise ValueError(
+                f"Couldn't find separation point label {separation_vertex_label}"
+            )
+
+        sep_vert = vertex_mf.where_equal(sep_mf_value)
+        if len(sep_vert) == 1:
+            sep_vert = sep_vert[0]
+        else:
+            raise ValueError(
+                "A single separation point was expected but"
+                f" {len(sep_vert):d} were supplied"
+            )
+
+        fsi_verts_fluid_ord = np.arange(fsi_verts.size)
+        idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
+        if len(idx_sep) == 1:
+            idx_sep = idx_sep[0]
+        else:
+            raise ValueError(
+                "Expected to find single separation point on FSI surface"
+                f" but found {len(idx_sep):d} instead"
+            )
+        fluid = FluidType(s, idx_sep=idx_sep)
     else:
-        raise ValueError("This function does not yet support input fluid meshes.")
-    return solid, fluid, fsi_verts
+        fluid = FluidType(s)
+
+    return fluid, fsi_verts
