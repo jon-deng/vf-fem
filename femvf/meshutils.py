@@ -259,6 +259,29 @@ def _parse_msh2_physical_groups(mesh_path: str) -> MeshFunctionMaps:
                 celllabel_to_id[name] = val
     return vertexlabel_to_id, facetlabel_to_id, celllabel_to_id
 
+## Functions for getting z-slices from a 3D mesh
+
+def extract_zplane_facets(mesh, z=0.0):
+    """
+    Return all facets on a z-normal plane
+    """
+    facets = [
+        facet for facet in dfn.facets(mesh)
+        if np.isclose(np.abs(np.dot(facet.normal().array(), [0, 0, 1])), 1.0)
+        and np.isclose(facet.midpoint().array()[-1], z)
+    ]
+
+    return facets
+
+def extract_edges_from_facets(facets, facet_function, facet_value):
+    """
+    Return all edges from facets that lie on a particular facet value
+    """
+    edges = [
+        edge for facet in facets for edge in dfn.edges(facet)
+        if any([mf[facet] == facet_value for facet in dfn.facets(edge)])
+    ]
+    return edges
 
 ## Functions for sorting medial surface coordinates in a stream-wise manner
 # This is needed for getting 1D fluid model coordinates

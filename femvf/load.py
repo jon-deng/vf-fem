@@ -96,7 +96,7 @@ def load_transient_fsi_model(
     """
     ## Load the solid
     solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
-    fluid, fsi_verts = process_fsi(
+    fluid, fsi_verts = derive_1dfluid_from_2dsolid(
         solid, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels,
         separation_vertex_label=separation_vertex_label
@@ -151,7 +151,7 @@ def load_dynamical_fsi_model(
         fluid/solid domains
     """
     solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
-    fluid, fsi_verts = process_fsi(
+    fluid, fsi_verts = derive_1dfluid_from_2dsolid(
         solid, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels,
         separation_vertex_label=separation_vertex_label
@@ -200,7 +200,7 @@ def load_transient_fsai_model(
         fluid/solid domains
     """
     solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
-    fluid, fsi_verts = process_fsi(
+    fluid, fsi_verts = derive_1dfluid_from_2dsolid(
         solid_mesh, FluidType=FluidType,
         fsi_facet_labels=fsi_facet_labels
     )
@@ -212,11 +212,116 @@ def load_transient_fsai_model(
 
 # TODO: Refactor this function; currently does too many things
 # the function should take a loaded solid model and derive a fluid mesh from it
-def process_fsi(
+def derive_1dfluid_from_2dsolid(
         solid: SolidModel,
         FluidType: FluidClass=tfmd.BernoulliAreaRatioSep,
         fsi_facet_labels: Optional[Labels]=('pressure',),
-        separation_vertex_label: str='separation',
+        separation_vertex_label: str='separation'
+    ) -> Tuple[SolidModel, FluidModel, np.ndarray]:
+    """
+    Processes appropriate mappings between fluid/solid domains for FSI
+
+    Parameters
+    ----------
+    solid_mesh : str
+        Path to the solid mesh
+    fluid_mesh : None or (future proofing for other fluid types)
+        Currently this isn't used
+    SolidType, FluidType:
+        Classes of the solid and fluid models to load
+    fsi_facet_labels, fixed_facet_labels:
+        String identifiers for facets corresponding to traction/dirichlet
+        conditions
+    separation_vertex_label:
+        A string corresponding to a labelled vertex where separation should
+        occur. This is only relevant for quasi-static fluid models with a fixed
+        separation point
+    """
+    ## Process the fsi surface vertices to set the coupling between solid and fluid
+    # Find vertices corresponding to the fsi facets
+    fsi_facet_ids = [
+        solid.residual.mesh_function_label_to_value('facet')[name]
+        for name in fsi_facet_labels
+    ]
+    fsi_edges = np.array([
+        nedge for nedge, fedge in enumerate(solid.residual.mesh_function('facet').array())
+        if fedge in set(fsi_facet_ids)
+    ])
+    fsi_verts = meshutils.vertices_from_edges(solid.residual.mesh(), fsi_edges)
+    fsi_coordinates = solid.residual.mesh().coordinates()[fsi_verts]
+
+    # Sort the fsi vertices from inferior to superior
+    # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
+    idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
+    fsi_verts = fsi_verts[idx_sort]
+    fsi_coordinates = fsi_coordinates[idx_sort]
+
+    # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
+    mesh = solid.residual.mesh()
+    facet_func = solid.residual.mesh_function('facet')
+    facet_labels = solid.residual.mesh_function_label_to_value('facet')
+    # TODO: The streamwise mesh can already be known from the fsi_coordinates
+    # variable computed earlier
+    x, y = meshutils.streamwise1dmesh_from_edges(
+        mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels]
+    )
+    dx = x[1:] - x[:-1]
+    dy = y[1:] - y[:-1]
+    s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
+    if issubclass(
+            FluidType,
+            (
+            dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
+            dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
+            tfmd.BernoulliFixedSep
+            )
+        ):
+        # If the fluid has a fixed-separation point, set the appropriate
+        # separation point for the fluid
+        vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
+        vertex_mf = solid.residual.mesh_function('vertex')
+        if vertex_mf is None:
+            raise ValueError(
+                f"Couldn't find separation point label {separation_vertex_label}"
+            )
+
+        if separation_vertex_label in vertex_label_to_id:
+            sep_mf_value = vertex_label_to_id[separation_vertex_label]
+            # assert isinstance(sep_mf_value, int)
+        else:
+            raise ValueError(
+                f"Couldn't find separation point label {separation_vertex_label}"
+            )
+
+        sep_vert = vertex_mf.where_equal(sep_mf_value)
+        if len(sep_vert) == 1:
+            sep_vert = sep_vert[0]
+        else:
+            raise ValueError(
+                "A single separation point was expected but"
+                f" {len(sep_vert):d} were supplied"
+            )
+
+        fsi_verts_fluid_ord = np.arange(fsi_verts.size)
+        idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
+        if len(idx_sep) == 1:
+            idx_sep = idx_sep[0]
+        else:
+            raise ValueError(
+                "Expected to find single separation point on FSI surface"
+                f" but found {len(idx_sep):d} instead"
+            )
+        fluid = FluidType(s, idx_sep=idx_sep)
+    else:
+        fluid = FluidType(s)
+
+    return fluid, fsi_verts
+
+def derive_1dfluid_from_3dsolid(
+        solid: SolidModel,
+        FluidType: FluidClass=tfmd.BernoulliAreaRatioSep,
+        fsi_facet_labels: Optional[Labels]=('pressure',),
+        separation_vertex_label: str='separation'
     ) -> Tuple[SolidModel, FluidModel, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
