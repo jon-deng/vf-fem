@@ -344,14 +344,20 @@ def derive_1dfluid_from_3dsolid(
     """
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
+    mesh = solid.residual.mesh
+
+    # TODO: Replace this with multiple z's
+    facets = meshutils.extract_zplane_facets(mesh)
+
     fsi_facet_ids = [
         solid.residual.mesh_function_label_to_value('facet')[name]
         for name in fsi_facet_labels
     ]
-    fsi_edges = np.array([
-        nedge for nedge, fedge in enumerate(solid.residual.mesh_function('facet').array())
-        if fedge in set(fsi_facet_ids)
-    ])
+    fsi_edges = meshutils.extract_edges_from_facets(
+        facets, solid.residual.mesh_function('facet'), fsi_facet_ids
+    )
+    fsi_edges = np.array([edge.index() for edge in fsi_edges])
+
     fsi_verts = meshutils.vertices_from_edges(solid.residual.mesh(), fsi_edges)
     fsi_coordinates = solid.residual.mesh().coordinates()[fsi_verts]
 

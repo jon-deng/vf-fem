@@ -273,13 +273,13 @@ def extract_zplane_facets(mesh, z=0.0):
 
     return facets
 
-def extract_edges_from_facets(facets, facet_function, facet_value):
+def extract_edges_from_facets(facets, facet_function, facet_values):
     """
     Return all edges from facets that lie on a particular facet value
     """
     edges = [
         edge for facet in facets for edge in dfn.edges(facet)
-        if any([facet_function[facet] == facet_value for facet in dfn.facets(edge)])
+        if any([any(facet_function[facet] == x for x in facet_values) for facet in dfn.facets(edge)])
     ]
     return edges
 
