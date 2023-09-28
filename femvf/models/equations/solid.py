@@ -689,7 +689,7 @@ class FenicsResidual(base.BaseResidual):
         self._mesh_functions_label_to_value = mesh_functions_label_to_value
 
         bc_base = dfn.DirichletBC(
-            self.form['coeff.state.u1'].function_space(), dfn.Constant(3*[0.0]),
+            self.form['coeff.state.u1'].function_space(), dfn.Constant(mesh.topology().dim()*[0.0]),
             self.mesh_function('facet'), self.mesh_function_label_to_value('facet')['fixed']
         )
         self._dirichlet_bcs = (bc_base,)
