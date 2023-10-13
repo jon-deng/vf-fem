@@ -349,10 +349,11 @@ def derive_1dfluid_from_3dsolid(
     # Find vertices corresponding to the fsi facets
     mesh = solid.residual.mesh()
     fluids = []
+    fsi_verts_coll = []
     for z in zs:
 
         # TODO: Replace this with multiple z's
-        facets = meshutils.extract_zplane_facets(mesh, z=0.0)
+        facets = meshutils.extract_zplane_facets(mesh, z=z)
 
         fsi_facet_ids = [
             solid.residual.mesh_function_label_to_value('facet')[name]
@@ -364,6 +365,7 @@ def derive_1dfluid_from_3dsolid(
         fsi_edges = np.array([edge.index() for edge in fsi_edges])
 
         s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
+        fsi_verts_coll.append(fsi_verts)
         if issubclass(
                 FluidType,
                 (
@@ -389,7 +391,7 @@ def derive_1dfluid_from_3dsolid(
 
         fluids.append(fluid)
 
-    return fluids, fsi_verts
+    return fluids, fsi_verts_coll
 
 def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
 
