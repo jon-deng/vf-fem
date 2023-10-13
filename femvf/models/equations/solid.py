@@ -411,7 +411,7 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         'coeff.state.u1': func_spec('CG', 1, 'vector'),
         'coeff.state.manual.tcontact': func_spec('CG', 1, 'vector'),
         'coeff.prop.ycontact': const_spec('scalar', np.inf),
-        'coeff.prop.ncontact': const_spec(3, default_value=(0, 1, 0)),
+        'coeff.prop.ncontact': const_spec('vector'),
         'coeff.prop.kcontact': const_spec('scalar', 1.0)
     }
 
