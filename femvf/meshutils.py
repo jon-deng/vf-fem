@@ -296,7 +296,13 @@ def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     """
     assert isinstance(f_edges, (list, tuple))
     edges = [n_edge for n_edge, f_edge in enumerate(edge_function.array()) if f_edge in set(f_edges)]
-    vertices = vertices_from_edges(mesh, edges)
+    return sort_edge_vertices(mesh, edges)
+
+def sort_edge_vertices(mesh, edge_indices):
+    """
+    Return sorted vertices associated with a set of 1D connected edges
+    """
+    vertices = vertices_from_edges(mesh, edge_indices)
 
     surface_coordinates = mesh.coordinates()[vertices]
 
@@ -305,7 +311,7 @@ def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     idx_sort = sort_vertices_by_nearest_neighbours(surface_coordinates)
     surface_coordinates = surface_coordinates[idx_sort]
 
-    return surface_coordinates[:, 0], surface_coordinates[:, 1]
+    return surface_coordinates[:, 0], surface_coordinates[:, 1], vertices[idx_sort]
 
 def vertices_from_edges(mesh, edge_indices):
     """

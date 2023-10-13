@@ -61,6 +61,46 @@ def load_solid_model(
         pressure_facet_labels, fixed_facet_labels
     )
 
+def load_fluid_model(
+        mesh: str,
+        FluidType: FluidClass,
+        idx_sep: Optional[int]=0
+    ) -> FluidModel:
+    """
+    Load a solid model of the specified type
+
+    Parameters
+    ----------
+    mesh:
+        A string indicating the path to a mesh file. This can be either in
+         '.xml' or '.msh' format.
+    SolidType:
+        A class indicating the type of solid model to load.
+    pressure_facet_labels, fixed_facet_labels:
+        Lists of strings for labelled facets corresponding to the pressure
+        loading and fixed boundaries.
+    """
+    if issubclass(
+            FluidType,
+            (
+            dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
+            dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
+            tfmd.BernoulliFixedSep
+            )
+        ):
+        if len(idx_sep) == 1:
+            idx_sep = idx_sep[0]
+        else:
+            raise ValueError(
+                "Expected to find single separation point on FSI surface"
+                f" but found {len(idx_sep):d} instead"
+            )
+        fluid = FluidType(mesh, idx_sep=idx_sep)
+    else:
+        fluid = FluidType(mesh)
+
+    return fluid
+
 # TODO: Can combine transient/dynamical model loading functions into single one
 def load_transient_fsi_model(
         solid_mesh: str,
@@ -217,7 +257,7 @@ def derive_1dfluid_from_2dsolid(
         FluidType: FluidClass=tfmd.BernoulliAreaRatioSep,
         fsi_facet_labels: Optional[Labels]=('pressure',),
         separation_vertex_label: str='separation'
-    ) -> Tuple[SolidModel, FluidModel, np.ndarray]:
+    ) -> Tuple[FluidModel, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 
@@ -247,27 +287,10 @@ def derive_1dfluid_from_2dsolid(
         nedge for nedge, fedge in enumerate(solid.residual.mesh_function('facet').array())
         if fedge in set(fsi_facet_ids)
     ])
-    fsi_verts = meshutils.vertices_from_edges(solid.residual.mesh(), fsi_edges)
-    fsi_coordinates = solid.residual.mesh().coordinates()[fsi_verts]
-
-    # Sort the fsi vertices from inferior to superior
-    # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
-    idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
-    fsi_verts = fsi_verts[idx_sort]
-    fsi_coordinates = fsi_coordinates[idx_sort]
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     mesh = solid.residual.mesh()
-    facet_func = solid.residual.mesh_function('facet')
-    facet_labels = solid.residual.mesh_function_label_to_value('facet')
-    # TODO: The streamwise mesh can already be known from the fsi_coordinates
-    # variable computed earlier
-    x, y = meshutils.streamwise1dmesh_from_edges(
-        mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels]
-    )
-    dx = x[1:] - x[:-1]
-    dy = y[1:] - y[:-1]
-    s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
+    s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
     if issubclass(
             FluidType,
             (
@@ -276,31 +299,7 @@ def derive_1dfluid_from_2dsolid(
             tfmd.BernoulliFixedSep
             )
         ):
-        # If the fluid has a fixed-separation point, set the appropriate
-        # separation point for the fluid
-        vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
-        vertex_mf = solid.residual.mesh_function('vertex')
-        if vertex_mf is None:
-            raise ValueError(
-                f"Couldn't find separation point label {separation_vertex_label}"
-            )
-
-        if separation_vertex_label in vertex_label_to_id:
-            sep_mf_value = vertex_label_to_id[separation_vertex_label]
-            # assert isinstance(sep_mf_value, int)
-        else:
-            raise ValueError(
-                f"Couldn't find separation point label {separation_vertex_label}"
-            )
-
-        sep_vert = vertex_mf.where_equal(sep_mf_value)
-        if len(sep_vert) == 1:
-            sep_vert = sep_vert[0]
-        else:
-            raise ValueError(
-                "A single separation point was expected but"
-                f" {len(sep_vert):d} were supplied"
-            )
+        sep_vert = locate_separation_vertex(solid, separation_vertex_label)
 
         fsi_verts_fluid_ord = np.arange(fsi_verts.size)
         idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
@@ -321,7 +320,8 @@ def derive_1dfluid_from_3dsolid(
         solid: SolidModel,
         FluidType: FluidClass=tfmd.BernoulliAreaRatioSep,
         fsi_facet_labels: Optional[Labels]=('pressure',),
-        separation_vertex_label: str='separation'
+        separation_vertex_label: str='separation',
+        zs: Optional[np.typing.NDArray[int]]=None
     ) -> Tuple[SolidModel, FluidModel, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
@@ -342,88 +342,95 @@ def derive_1dfluid_from_3dsolid(
         occur. This is only relevant for quasi-static fluid models with a fixed
         separation point
     """
+    if zs is None:
+        zs = np.array([0])
+
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
-    mesh = solid.residual.mesh
+    mesh = solid.residual.mesh()
+    fluids = []
+    for z in zs:
 
-    # TODO: Replace this with multiple z's
-    facets = meshutils.extract_zplane_facets(mesh)
+        # TODO: Replace this with multiple z's
+        facets = meshutils.extract_zplane_facets(mesh, z=0.0)
 
-    fsi_facet_ids = [
-        solid.residual.mesh_function_label_to_value('facet')[name]
-        for name in fsi_facet_labels
-    ]
-    fsi_edges = meshutils.extract_edges_from_facets(
-        facets, solid.residual.mesh_function('facet'), fsi_facet_ids
-    )
-    fsi_edges = np.array([edge.index() for edge in fsi_edges])
+        fsi_facet_ids = [
+            solid.residual.mesh_function_label_to_value('facet')[name]
+            for name in fsi_facet_labels
+        ]
+        fsi_edges = meshutils.extract_edges_from_facets(
+            facets, solid.residual.mesh_function('facet'), fsi_facet_ids
+        )
+        fsi_edges = np.array([edge.index() for edge in fsi_edges])
 
-    fsi_verts = meshutils.vertices_from_edges(solid.residual.mesh(), fsi_edges)
-    fsi_coordinates = solid.residual.mesh().coordinates()[fsi_verts]
+        s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
+        if issubclass(
+                FluidType,
+                (
+                dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
+                dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
+                tfmd.BernoulliFixedSep
+                )
+            ):
+            sep_vert = locate_separation_vertex(solid, separation_vertex_label)
 
-    # Sort the fsi vertices from inferior to superior
-    # NOTE: This only works for a 1D fluid mesh and isn't guaranteed if the VF surface is shaped strangely
-    idx_sort = meshutils.sort_vertices_by_nearest_neighbours(fsi_coordinates)
-    fsi_verts = fsi_verts[idx_sort]
-    fsi_coordinates = fsi_coordinates[idx_sort]
+            fsi_verts_fluid_ord = np.arange(fsi_verts.size)
+            idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
+            if len(idx_sep) == 1:
+                idx_sep = idx_sep[0]
+            else:
+                raise ValueError(
+                    "Expected to find single separation point on FSI surface"
+                    f" but found {len(idx_sep):d} instead"
+                )
+            fluid = FluidType(s, idx_sep=idx_sep)
+        else:
+            fluid = FluidType(s)
+
+        fluids.append(fluid)
+
+    return fluids, fsi_verts
+
+def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
-    mesh = solid.residual.mesh()
-    facet_func = solid.residual.mesh_function('facet')
-    facet_labels = solid.residual.mesh_function_label_to_value('facet')
     # TODO: The streamwise mesh can already be known from the fsi_coordinates
     # variable computed earlier
-    x, y = meshutils.streamwise1dmesh_from_edges(
-        mesh, facet_func, [facet_labels[label] for label in fsi_facet_labels]
-    )
+    x, y, fsi_verts = meshutils.sort_edge_vertices(mesh, fsi_edges)
     dx = x[1:] - x[:-1]
     dy = y[1:] - y[:-1]
     s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-    if issubclass(
-            FluidType,
-            (
-            dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep,
-            dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep,
-            tfmd.BernoulliFixedSep
-            )
-        ):
-        # If the fluid has a fixed-separation point, set the appropriate
-        # separation point for the fluid
-        vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
-        vertex_mf = solid.residual.mesh_function('vertex')
-        if vertex_mf is None:
-            raise ValueError(
-                f"Couldn't find separation point label {separation_vertex_label}"
-            )
 
-        if separation_vertex_label in vertex_label_to_id:
-            sep_mf_value = vertex_label_to_id[separation_vertex_label]
-            # assert isinstance(sep_mf_value, int)
-        else:
-            raise ValueError(
-                f"Couldn't find separation point label {separation_vertex_label}"
-            )
+    return s, fsi_verts
 
-        sep_vert = vertex_mf.where_equal(sep_mf_value)
-        if len(sep_vert) == 1:
-            sep_vert = sep_vert[0]
-        else:
-            raise ValueError(
-                "A single separation point was expected but"
-                f" {len(sep_vert):d} were supplied"
-            )
+def locate_separation_vertex(
+        solid: SolidModel,
+        separation_vertex_label: str='separation'
+    ):
+    # If the fluid has a fixed-separation point, set the appropriate
+    # separation point for the fluid
+    vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
+    vertex_mf = solid.residual.mesh_function('vertex')
+    if vertex_mf is None:
+        raise ValueError(
+            f"Couldn't find separation point label {separation_vertex_label}"
+        )
 
-        fsi_verts_fluid_ord = np.arange(fsi_verts.size)
-        idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
-        if len(idx_sep) == 1:
-            idx_sep = idx_sep[0]
-        else:
-            raise ValueError(
-                "Expected to find single separation point on FSI surface"
-                f" but found {len(idx_sep):d} instead"
-            )
-        fluid = FluidType(s, idx_sep=idx_sep)
+    if separation_vertex_label in vertex_label_to_id:
+        sep_mf_value = vertex_label_to_id[separation_vertex_label]
+        # assert isinstance(sep_mf_value, int)
     else:
-        fluid = FluidType(s)
+        raise ValueError(
+            f"Couldn't find separation point label {separation_vertex_label}"
+        )
 
-    return fluid, fsi_verts
+    sep_vert = vertex_mf.where_equal(sep_mf_value)
+    if len(sep_vert) == 1:
+        sep_vert = sep_vert[0]
+    else:
+        raise ValueError(
+            "A single separation point was expected but"
+            f" {len(sep_vert):d} were supplied"
+        )
+
+    return sep_vert
