@@ -6,7 +6,7 @@ Currently a lot of code is being duplicated to do the coupling through different
 approaches (very confusing)
 """
 
-from typing import List
+from typing import List, TypeVar
 from numpy.typing import NDArrayLike
 
 import itertools
@@ -36,6 +36,22 @@ def concatenate_bvec_with_prefix(bvecs: List[bv.BlockVector], prefix=''):
     return bv.concatenate_vec(
         [bvec for bvec in bvecs], labels
     )
+
+T = TypeVar('T')
+def chunk(items: List[T], chunk_sizes: List[int]):
+    """
+    Split a list into several sublists with given sizes
+    """
+    if sum(chunk_sizes) != len(items):
+        raise ValueError(
+            f"Total number of chunks, {sum(chunk_sizes):d}, "
+            f"does not match total number of items, {len(items):d}"
+        )
+    else:
+        offsets = np.cumsum([0] + items)
+        chunks = [items[i_start:i_end] for i_start, i_end in zip(offsets[:-1], offsets[1:])]
+        return chunks
+
 
 class BaseTransientFSIModel(base.BaseTransientModel):
     """
