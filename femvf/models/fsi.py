@@ -2,6 +2,8 @@
 This module contains functionality for coupling fluid/solid domains
 """
 
+from numpy.typing import NDArrayLike
+
 from petsc4py import PETSc
 
 class FSIMap:
@@ -10,7 +12,12 @@ class FSIMap:
 
     This mapping involves a 1-to-1 correspondence between DOFs of vectors on the two domains
     """
-    def __init__(self, ndof_fluid, ndof_solid, fluid_dofs, solid_dofs, comm=None):
+    def __init__(
+            self,
+            ndof_fluid: int, ndof_solid: int,
+            fluid_dofs: NDArrayLike, solid_dofs: NDArrayLike,
+            comm=None
+        ):
         """
         Parameters
         ----------

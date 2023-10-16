@@ -6,6 +6,9 @@ Currently a lot of code is being duplicated to do the coupling through different
 approaches (very confusing)
 """
 
+from typing import List
+from numpy.typing import NDArrayLike
+
 import itertools
 
 import numpy as np
@@ -22,9 +25,21 @@ from ..equations import newmark
 from ..fsi import FSIMap
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 
+def concatenate_bvec_with_prefix(bvecs: List[bv.BlockVector], prefix=''):
+    """
+    Concatenate a list of block vectors with a numbered prefix
+    """
+    labels = [
+        f'{prefix}{n}.{label}' for n, bvec in enumerate(bvecs)
+        for label in bvec.labels
+    ]
+    return bv.concatenate_vec(
+        [bvec for bvec in bvecs], labels
+    )
+
 class BaseTransientFSIModel(base.BaseTransientModel):
     """
-    Represents a coupled system of a solid and a fluid model
+    Represents a coupled system of a solid and fluid(s) models
 
     Parameters
     ----------
@@ -34,7 +49,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     ----------
     solid : Solid
         A solid model object
-    fluid : Fluid
+    fluids : List[Fluid]
         A fluid model object
 
     fsi_verts : array_like
@@ -45,53 +60,62 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     def __init__(
             self,
             solid: tsmd.Model,
-            fluid: tfmd.Model,
-            solid_fsi_dofs, fluid_fsi_dofs
+            fluids: List[tfmd.Model],
+            solid_fsi_dofs: NDArrayLike, fluid_fsi_dofs: NDArrayLike
         ):
         self.solid = solid
-        self.fluid = fluid
+        self.fluids = fluids
 
         ## Specify state, controls, and properties
-        self.state0 = bv.concatenate_vec([self.solid.state0, self.fluid.state0])
-        self.state1 = bv.concatenate_vec([self.solid.state1, self.fluid.state1])
+        fluid_state0 = concatenate_bvec_with_prefix([fluid.state0 for fluid in fluids])
+        fluid_state1 = concatenate_bvec_with_prefix([fluid.state1 for fluid in fluids])
+        self.state0 = bv.concatenate_vec([self.solid.state0, fluid_state0])
+        self.state1 = bv.concatenate_vec([self.solid.state1, fluid_state1])
 
         # The control is just the subglottal and supraglottal pressures
-        self.control = self.fluid.control[1:].copy()
+        self.control = concatenate_bvec_with_prefix([fluid.control[1:] for fluid in self.fluids])
 
         _self_properties = bv.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
-        self.prop = bv.concatenate_vec([self.solid.prop, self.fluid.prop, _self_properties])
+        fluid_props = concatenate_bvec_with_prefix([fluid.prop for fluid in self.fluids])
+        self.prop = bv.concatenate_vec([self.solid.prop, fluid_props, _self_properties])
 
         ## FSI related stuff
         self._solid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
         # self._dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
 
-        n_flq = self.fluid.state0['q'].size
-        n_flp = self.fluid.state0['p'].size
+        # n_flq = self.fluid.state0['q'].size
+        # n_flp = self.fluid.state0['p'].size
         n_slp = self.solid.control['p'].size
         n_slu = self.solid.state0['u'].size
 
-        self._fsimap = FSIMap(
-            self.fluid.state1['p'].size,
-            self._solid_area.size(),
-            fluid_fsi_dofs, solid_fsi_dofs
+        self._fsimaps = tuple(
+            FSIMap(
+                fluid.state1['p'].size,
+                self._solid_area.size(),
+                fluid_fsi_dofs, solid_fsi_dofs
+            )
+            for fluid in fluids
         )
 
         ## Construct the derivative of the solid control w.r.t fluid state
-        dslp_dflq = subops.zero_mat(n_slp, n_flq)
-        dslp_dflp = self.fsimap.dsolid_dfluid
-        mats = (dslp_dflq, dslp_dflp)
+        dslp_dflq_coll = [subops.zero_mat(n_slp, fluid.state0['q'].size) for fluid in fluids]
+        dslp_dflp_coll = [fsimap.dsolid_dfluid for fsimap in self._fsimaps]
+        mats = tuple(
+            mat for dslp_dflq, dslp_dflp in zip(dslp_dflq_coll, dslp_dflp_coll)
+            for mat in [dslp_dflq, dslp_dflp]
+        )
 
-        ret_bshape = self.solid.control.bshape + self.fluid.state0.bshape
+        ret_bshape = self.solid.control.bshape + fluid_state0.bshape
         self._dslcontrol_dflstate = bm.BlockMatrix(
             mats,
-            shape=self.solid.control.shape+self.fluid.state0.shape,
-            labels=self.solid.control.labels+self.fluid.state0.labels
+            shape=self.solid.control.shape+fluid_state0.shape,
+            labels=self.solid.control.labels+fluid_state0.labels
         )
         assert self._dslcontrol_dflstate.bshape == ret_bshape
 
         ## Construct the derivative of the fluid control w.r.t solid state
         # To do this, first build the sensitivty of area wrt displacement:
-        # TODO: Many of the lines here are copy paste from `femvf.dynamical.coupled`
+        # TODO: Many of the lines here are copy-pasted from `femvf.dynamical.coupled`
         # and should be refactored to a seperate function
         dslarea_dslu = PETSc.Mat().createAIJ(
             (n_slp, n_slu), nnz=2
@@ -104,42 +128,46 @@ class BaseTransientFSIModel(base.BaseTransientModel):
             dslarea_dslu.setValues([ii], [2*ii, 2*ii+1], [0, -2])
         dslarea_dslu.assemble()
 
-        dflarea_dslarea = self.fsimap.dfluid_dsolid
-        dflarea_dslu = dflarea_dslarea*dslarea_dslu
-        ret_bshape = self.fluid.control.bshape+self.solid.state0.bshape
+        dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in self.fsimaps]
+        dflarea_dslu_coll = [dflarea_dslarea*dslarea_dslu for dflarea_dslarea in dflarea_dslarea_coll]
+        fluid_control = concatenate_bvec_with_prefix([fluid.control for fluid in fluids])
+        ret_bshape = fluid_control.bshape+self.solid.state0.bshape
         mats = [
             subops.zero_mat(nrow, ncol) for nrow, ncol
             in itertools.product(*ret_bshape)
         ]
-        # This hard-coded and relies on the fluid area being the first block
-        # of the control vector!
-        mats[0] = dflarea_dslu
+        # TODO: This is hard-coded and relies on the fluid area being the first
+        # block of the control vector!
+        block_sizes = [fluid.control.shape[0] for fluid in fluids]
+        block_offsets = np.cumsum([0] + block_sizes)
+        for ii, offset, dflarea_dslu in zip(range(len(block_sizes)), block_offsets, dflarea_dslu_coll):
+            mats[0+offset] = dflarea_dslu
 
         self._dflcontrol_dslstate = bm.BlockMatrix(
             mats,
-            shape=self.fluid.control.shape+self.solid.state0.shape,
-            labels=self.fluid.control.labels+self.solid.state0.labels
+            shape=fluid_control.shape+self.solid.state0.shape,
+            labels=fluid_control.labels+self.solid.state0.labels
         )
         assert self._dflcontrol_dslstate.bshape == ret_bshape
 
         # Make null BlockMats relating fluid/solid states
         mats = [
-            [subops.zero_mat(slvec.size, flvec.size) for flvec in self.fluid.state0.blocks]
+            [subops.zero_mat(slvec.size, flvec.size) for flvec in fluid_state0.blocks]
             for slvec in self.solid.state0.blocks
         ]
         self._null_dslstate_dflstate = bm.BlockMatrix(mats)
         mats = [
             [subops.zero_mat(flvec.size, slvec.size) for slvec in self.solid.state0.blocks]
-            for flvec in self.fluid.state0.blocks
+            for flvec in fluid_state0.blocks
         ]
         self._null_dflstate_dslstate = bm.BlockMatrix(mats)
 
     @property
-    def fsimap(self):
+    def fsimaps(self):
         """
         Return the FSI map object
         """
-        return self._fsimap
+        return self._fsimaps
 
     # These have to be defined to exchange data between fluid/solid domains
     # Explicit/implicit coupling methods may define these in differnt ways to
