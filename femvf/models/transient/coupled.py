@@ -7,7 +7,7 @@ approaches (very confusing)
 """
 
 from typing import List, TypeVar
-from numpy.typing import NDArrayLike
+from numpy.typing import ArrayLike
 
 import itertools
 
@@ -77,7 +77,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
             self,
             solid: tsmd.Model,
             fluids: List[tfmd.Model],
-            solid_fsi_dofs: NDArrayLike, fluid_fsi_dofs: NDArrayLike
+            solid_fsi_dofs: ArrayLike, fluid_fsi_dofs: ArrayLike
         ):
         self.solid = solid
         self.fluids = fluids

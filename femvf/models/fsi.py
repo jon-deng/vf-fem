@@ -2,7 +2,7 @@
 This module contains functionality for coupling fluid/solid domains
 """
 
-from numpy.typing import NDArrayLike
+from numpy.typing import ArrayLike
 
 from petsc4py import PETSc
 
@@ -15,7 +15,7 @@ class FSIMap:
     def __init__(
             self,
             ndof_fluid: int, ndof_solid: int,
-            fluid_dofs: NDArrayLike, solid_dofs: NDArrayLike,
+            fluid_dofs: ArrayLike, solid_dofs: ArrayLike,
             comm=None
         ):
         """
