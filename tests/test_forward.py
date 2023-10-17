@@ -82,8 +82,8 @@ class TestIntegrate:
         p_sub = 500.0
 
         control = model.control
-        control['psub'][:] = p_sub * PASCAL_TO_CGS
-        control['psup'][:] = 0.0 * PASCAL_TO_CGS
+        control['fluid0.psub'][:] = p_sub * PASCAL_TO_CGS
+        control['fluid0.psup'][:] = 0.0 * PASCAL_TO_CGS
 
         # control['psub'][:] = 0.0 * PASCAL_TO_CGS
         # control['psup'][:] = p_sub * PASCAL_TO_CGS

@@ -29,12 +29,12 @@ def concatenate_bvec_with_prefix(bvecs: List[bv.BlockVector], prefix=''):
     """
     Concatenate a list of block vectors with a numbered prefix
     """
-    labels = [
+    labels = tuple(
         f'{prefix}{n}.{label}' for n, bvec in enumerate(bvecs)
-        for label in bvec.labels
-    ]
+        for label in bvec.labels[0]
+    )
     return bv.concatenate_vec(
-        [bvec for bvec in bvecs], labels
+        [bvec for bvec in bvecs], (labels,)
     )
 
 T = TypeVar('T')
@@ -48,9 +48,21 @@ def chunk(items: List[T], chunk_sizes: List[int]):
             f"does not match total number of items, {len(items):d}"
         )
     else:
-        offsets = np.cumsum([0] + items)
+        offsets = np.cumsum([0] + chunk_sizes)
         chunks = [items[i_start:i_end] for i_start, i_end in zip(offsets[:-1], offsets[1:])]
         return chunks
+
+T = TypeVar('T')
+def chunk_bvec(bvec: bv.BlockVector, chunk_sizes: List[int]):
+    """
+    Split a list into several sublists with given sizes
+    """
+    block_chunks = chunk(bvec.blocks, chunk_sizes)
+    label_chunks = chunk(bvec.labels[0], chunk_sizes)
+    return [
+        bv.BlockVector(block_chunk, labels=(label_chunk,))
+        for block_chunk, label_chunk in zip(block_chunks, label_chunks)
+    ]
 
 
 class BaseTransientFSIModel(base.BaseTransientModel):
@@ -89,16 +101,16 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.fluids = fluids
 
         ## Specify state, controls, and properties
-        fluid_state0 = concatenate_bvec_with_prefix([fluid.state0 for fluid in fluids])
-        fluid_state1 = concatenate_bvec_with_prefix([fluid.state1 for fluid in fluids])
+        fluid_state0 = concatenate_bvec_with_prefix([fluid.state0 for fluid in fluids], 'fluid')
+        fluid_state1 = concatenate_bvec_with_prefix([fluid.state1 for fluid in fluids], 'fluid')
         self.state0 = bv.concatenate_vec([self.solid.state0, fluid_state0])
         self.state1 = bv.concatenate_vec([self.solid.state1, fluid_state1])
 
         # The control is just the subglottal and supraglottal pressures
-        self.control = concatenate_bvec_with_prefix([fluid.control[1:] for fluid in self.fluids])
+        self.control = concatenate_bvec_with_prefix([fluid.control[1:] for fluid in self.fluids], 'fluid')
 
         _self_properties = bv.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
-        fluid_props = concatenate_bvec_with_prefix([fluid.prop for fluid in self.fluids])
+        fluid_props = concatenate_bvec_with_prefix([fluid.prop for fluid in self.fluids], 'fluid')
         self.prop = bv.concatenate_vec([self.solid.prop, fluid_props, _self_properties])
 
         ## FSI related stuff
@@ -152,7 +164,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
 
         dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in self.fsimaps]
         dflarea_dslu_coll = [dflarea_dslarea*dslarea_dslu for dflarea_dslarea in dflarea_dslarea_coll]
-        fluid_control = concatenate_bvec_with_prefix([fluid.control for fluid in fluids])
+        fluid_control = concatenate_bvec_with_prefix([fluid.control for fluid in fluids], 'fluid')
         ret_bshape = fluid_control.bshape+self.solid.state0.bshape
         mats = [
             subops.zero_mat(nrow, ncol) for nrow, ncol
@@ -214,11 +226,12 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     @dt.setter
     def dt(self, value):
         self.solid.dt = value
-        self.fluid.dt = value
+        for fluid in self.fluids:
+            fluid.dt = value
 
     def set_ini_state(self, state):
-        state_chunk_sizes = [model.state0.size for model in [self.solid]+self.fluids]
-        states = chunk(state, state_chunk_sizes)
+        state_chunk_sizes = [model.state0.size for model in (self.solid,)+self.fluids]
+        states = chunk_bvec(state, state_chunk_sizes)
         state_setters = [self._set_ini_solid_state] + [lambda x: self._set_ini_fluid_state(x, n) for n in range(len(self.fluids))]
 
         for set_state, state in zip(state_setters, states):
@@ -227,8 +240,8 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         # self._set_ini_fluid_state(state[3:])
 
     def set_fin_state(self, state):
-        state_chunk_sizes = [model.state0.size for model in [self.solid]+self.fluids]
-        states = chunk(state, state_chunk_sizes)
+        state_chunk_sizes = [model.state0.size for model in (self.solid,)+self.fluids]
+        states = chunk_bvec(state, state_chunk_sizes)
         state_setters = [self._set_fin_solid_state] + [lambda x: self._set_fin_fluid_state(x, n) for n in range(len(self.fluids))]
 
         for set_state, state in zip(state_setters, states):
@@ -240,7 +253,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.control[:] = control
 
         chunk_sizes = len(self.fluids)*[2]
-        control_chunks = chunk(self.control, chunk_sizes)
+        control_chunks = chunk_bvec(self.control, chunk_sizes)
 
         for n, control in enumerate(control_chunks):
             for key, value in control.sub_items():
@@ -251,8 +264,8 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.prop[:] = prop
 
         # The final `+ [1]` accounts for the 'ymid' property
-        chunk_sizes = [model.prop.size for model in [self.solid]+self.fluids] + [1]
-        prop_chunks = chunk(self.prop, chunk_sizes)[:-1]
+        chunk_sizes = [model.prop.size for model in (self.solid,)+self.fluids] + [1]
+        prop_chunks = chunk_bvec(self.prop, chunk_sizes)[:-1]
         prop_setters = [self.solid.set_prop] + [fluid.set_prop for fluid in self.fluids]
 
         for set_prop, prop in zip(prop_setters, prop_chunks):
