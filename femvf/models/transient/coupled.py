@@ -166,7 +166,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         )
         assert self._dflcontrol_dslstate.bshape == ret_bshape
 
-        # Make null BlockMats relating fluid/solid states
+        # Make null `BlockMatrix`s relating fluid/solid states
         mats = [
             [subops.zero_mat(slvec.size, flvec.size) for flvec in fluid_state0.blocks]
             for slvec in self.solid.state0.blocks
@@ -186,7 +186,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         return self._fsimaps
 
     # These have to be defined to exchange data between fluid/solid domains
-    # Explicit/implicit coupling methods may define these in differnt ways to
+    # Explicit/implicit coupling methods may define these in different ways to
     # achieve the desired coupling
     def _set_ini_solid_state(self, uva0):
         raise NotImplementedError("Subclasses must implement this method")
@@ -194,10 +194,10 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     def _set_fin_solid_state(self, uva1):
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _set_ini_fluid_state(self, qp0):
+    def _set_ini_fluid_state(self, qp0, n=0):
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _set_fin_fluid_state(self, qp1):
+    def _set_fin_fluid_state(self, qp1, n=0):
         raise NotImplementedError("Subclasses must implement this method")
 
     ## Parameter setting methods
@@ -211,24 +211,49 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.fluid.dt = value
 
     def set_ini_state(self, state):
-        self._set_ini_solid_state(state[:3])
-        self._set_ini_fluid_state(state[3:])
+        state_chunk_sizes = [model.state0.size for model in [self.solid]+self.fluids]
+        states = chunk(state, state_chunk_sizes)
+        state_setters = [self._set_ini_solid_state] + [lambda x: self._set_ini_fluid_state(x, n) for n in range(len(self.fluids))]
+
+        for set_state, state in zip(state_setters, states):
+            set_state(state)
+        # self._set_ini_solid_state(state[:3])
+        # self._set_ini_fluid_state(state[3:])
 
     def set_fin_state(self, state):
-        self._set_fin_solid_state(state[:3])
-        self._set_fin_fluid_state(state[3:])
+        state_chunk_sizes = [model.state0.size for model in [self.solid]+self.fluids]
+        states = chunk(state, state_chunk_sizes)
+        state_setters = [self._set_fin_solid_state] + [lambda x: self._set_fin_fluid_state(x, n) for n in range(len(self.fluids))]
+
+        for set_state, state in zip(state_setters, states):
+            set_state(state)
+        # self._set_fin_solid_state(state[:3])
+        # self._set_fin_fluid_state(state[3:])
 
     def set_control(self, control):
         self.control[:] = control
 
-        for key, value in control.sub_items():
-            self.fluid.control[key][:] = value
+        chunk_sizes = len(self.fluids)*[2]
+        control_chunks = chunk(self.control, chunk_sizes)
+
+        for n, control in enumerate(control_chunks):
+            for key, value in control.sub_items():
+                key_postfix = '.'.join(key.split('.')[1:])
+                self.fluids[n].control[key_postfix][:] = value
 
     def set_prop(self, prop):
         self.prop[:] = prop
 
-        self.solid.set_prop(prop[:self.solid.prop.size])
-        self.fluid.set_prop(prop[self.solid.prop.size:-1])
+        # The final `+ [1]` accounts for the 'ymid' property
+        chunk_sizes = [model.prop.size for model in [self.solid]+self.fluids] + [1]
+        prop_chunks = chunk(self.prop, chunk_sizes)[:-1]
+        prop_setters = [self.solid.set_prop] + [fluid.set_prop for fluid in self.fluids]
+
+        for set_prop, prop in zip(prop_setters, prop_chunks):
+            set_prop(prop)
+
+        # self.solid.set_prop(prop[:self.solid.prop.size])
+        # self.fluid.set_prop(prop[self.solid.prop.size:-1])
 
 # TODO: The `assem_*` type methods are incomplete as I haven't had to use them
 class ExplicitFSIModel(BaseTransientFSIModel):
