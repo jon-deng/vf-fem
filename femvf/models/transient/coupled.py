@@ -6,7 +6,7 @@ Currently a lot of code is being duplicated to do the coupling through different
 approaches (very confusing)
 """
 
-from typing import List, TypeVar
+from typing import List, TypeVar, Union
 from numpy.typing import ArrayLike
 
 import itertools
@@ -76,9 +76,15 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     def __init__(
             self,
             solid: tsmd.Model,
-            fluids: List[tfmd.Model],
+            fluids: Union[List[tfmd.Model], tfmd.Model],
             solid_fsi_dofs: ArrayLike, fluid_fsi_dofs: ArrayLike
         ):
+        if isinstance(fluids, list):
+            fluids = tuple(fluids)
+        elif isinstance(fluids, tuple):
+            pass
+        else:
+            fluids = (fluids,)
         self.solid = solid
         self.fluids = fluids
 
