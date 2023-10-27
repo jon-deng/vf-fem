@@ -297,22 +297,23 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
         self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1.sub['u'])[1::2])
-        fl_control = self.fluid.control.copy()
-        self.fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
-        self.fluid.set_control(fl_control)
+        for n, (fluid, fsimap) in enumerate(zip(self.fluids, self.fsimaps)):
+            fl_control = fluid.control.copy()
+            fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
+            fluid.set_control(fl_control)
 
-    def _set_ini_fluid_state(self, qp0):
+    def _set_ini_fluid_state(self, qp0, n=0):
         """Set the fluid state and communicate FSI interactions"""
-        self.fluid.set_ini_state(qp0)
+        self.fluids[n].set_ini_state(qp0)
 
         # For explicit coupling, the final solid pressure corresponds to the initial fluid pressure
         sl_control = self.solid.control.copy()
-        self.fsimap.map_fluid_to_solid(qp0.sub[1], sl_control.sub['p'])
+        self.fsimaps[n].map_fluid_to_solid(qp0.sub[1], sl_control.sub['p'])
         self.solid.set_control(sl_control)
 
-    def _set_fin_fluid_state(self, qp1):
+    def _set_fin_fluid_state(self, qp1, n=0):
         """Set the final fluid state"""
-        self.fluid.set_fin_state(qp1)
+        self.fluids[n].set_fin_state(qp1)
 
     ## Residual and derivative assembly functions
     def assem_res(self):
@@ -369,7 +370,10 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         uva1, solid_info = self.solid.solve_state1(ini_state[:3], options)
 
         self._set_fin_solid_state(uva1)
-        qp1, fluid_info = self.fluid.solve_state1(ini_state[3:], options)
+
+        qp1s = chunk_bvec(ini_state[3:], [fluid.state0.size for fluid in self.fluids])
+        for fluid in self.fluids:
+            qp1, fluid_info = fluid.solve_state1(ini_state[3:], options)
 
         step_info = solid_info
         step_info.update({'fluid_info': fluid_info})
@@ -422,14 +426,14 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 
 class ImplicitFSIModel(BaseTransientFSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
-    def _set_ini_fluid_state(self, qp0):
-        self.fluid.set_ini_state(qp0)
+    def _set_ini_fluid_state(self, qp0, n=0):
+        self.fluids[n].set_ini_state(qp0)
 
-    def _set_fin_fluid_state(self, qp1):
-        self.fluid.set_fin_state(qp1)
+    def _set_fin_fluid_state(self, qp1, n=0):
+        self.fluids[n].set_fin_state(qp1)
 
         sl_control = self.solid.control
-        self.fsimap.map_fluid_to_solid(qp1[1], sl_control['p'])
+        self.fsimaps[n].map_fluid_to_solid(qp1[1], sl_control['p'])
         self.solid.set_control(sl_control)
 
     def _set_ini_solid_state(self, uva0):
@@ -441,9 +445,10 @@ class ImplicitFSIModel(BaseTransientFSIModel):
 
         # For both implicit/explicit coupling, the final fluid area corresponds to the final solid deformation
         self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
-        fl_control = self.fluid.control
-        self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
-        self.fluid.set_control(fl_control)
+        for n, (fluid, fsimap) in enumerate(zip(self.fluids, self.fsimaps)):
+            fl_control = fluid.control
+            fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
+            fluid.set_control(fl_control)
 
     ## Forward solver methods
     def assem_res(self):
