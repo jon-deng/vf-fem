@@ -106,15 +106,24 @@ class TestIntegrate:
         y_min, y_max = y.min(), y.max()
         prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
 
-        # Only set these properties if applicable to the current model
+        # Set default properties
         default_prop = {
             'eta': 4e-3,
             'rho': 1.0,
             'kcontact': 1e11,
             'ycontact': prop['ymid'][0] - y_gap*1/2,
-            'zeta_min' : 1e-8,
-            'zeta_sep' : 1e-8
         }
+
+
+        # Set relevant fluid properties
+        for ii in range(len(model.fluids)):
+            default_prop.update({
+                f'fluid{ii}.zeta_min': 1e-8,
+                f'fluid{ii}.zeta_sep': 1e-8,
+                f'fluid{ii}.rho_air': 1.0
+            })
+
+        # This only sets the properties if they exist
         for key, value in default_prop.items():
             if key in prop:
                 prop[key] = value
