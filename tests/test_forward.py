@@ -27,8 +27,8 @@ from femvf.postprocess.base import TimeSeries
 from blockarray import blockvec as vec
 
 MESH_DIR = '../meshes'
-MESH_BASENAME = 'M5-3layers'
-MESH_PATH = os.path.join(MESH_DIR, MESH_BASENAME + '.xml')
+MESH_BASENAME = 'M5_BC--GA0--DZ1.00'
+MESH_PATH = os.path.join(MESH_DIR, MESH_BASENAME + '.msh')
 
 class TestIntegrate:
 
