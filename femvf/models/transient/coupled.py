@@ -371,14 +371,17 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 
         self._set_fin_solid_state(uva1)
 
-        qp1s = chunk_bvec(ini_state[3:], [fluid.state0.size for fluid in self.fluids])
-        for fluid in self.fluids:
-            qp1, fluid_info = fluid.solve_state1(ini_state[3:], options)
+        fluids_solve_res = [fluid.solve_state1(ini_state[3:], options) for fluid in self.fluids]
+        qp1s = [solve_res[0] for solve_res in fluids_solve_res]
+        fluids_solve_info = [solve_res[1] for solve_res in fluids_solve_res]
 
         step_info = solid_info
-        step_info.update({'fluid_info': fluid_info})
+        step_info.update({
+            f'fluid{ii}_info': fluid_info
+            for ii, fluid_info in enumerate(fluids_solve_info)
+        })
 
-        return bv.concatenate_vec([uva1, qp1]), step_info
+        return bv.concatenate_vec([uva1]+qp1s, labels=self.state1.labels), step_info
 
     def solve_dres_dstate1(self, b):
         """
@@ -393,9 +396,6 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         dfp2_du2 = 0.0 - dp_du
 
         x['q'][:] = b['q'] - dfq2_du2.inner(x['u'])
-        # _bp = dfp2_du2.getVecRight()
-        # dfp2_du2.multTranspose(x['u'].vec(), _bp)
-        # breakpoint()
         x['p'][:] = b['p'] - dfp2_du2*x['u'].vec()
         return x
 
@@ -736,15 +736,6 @@ class FSAIModel(BaseTransientFSIModel):
         ini_slstate = ini_state[:3]
         sl_state1, solver_info = self.solid.solve_state1(ini_slstate, newton_solver_prm)
         self._set_fin_solid_state(sl_state1)
-        # print(self.solid.res().norm())
-        # if self.solid.res().norm() > 1e-4:
-        #     breakpoint()
-
-        # self.set_fin_state(fin_state)
-        # res_norm = self.res().norm()
-        # print(res_norm)
-        # if res_norm > 1:
-        #     breakpoint()
 
         def make_linearized_flow_residual(qac):
             """

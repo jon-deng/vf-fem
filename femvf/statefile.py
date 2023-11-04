@@ -99,7 +99,6 @@ class StateFile:
                 self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.file[f'state/{name}'])
 
             for name in model.control.keys():
-                # breakpoint()
                 self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.file[f'control/{name}'])
 
     ## Functions mimicking the `h5py.File` interface
