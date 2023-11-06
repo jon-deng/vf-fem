@@ -110,7 +110,8 @@ def load_transient_fsi_model(
         fsi_facet_labels: Optional[Labels]=('pressure',),
         fixed_facet_labels: Optional[Labels]=('fixed',),
         separation_vertex_label: str='separation',
-        coupling: str='explicit'
+        coupling: str='explicit',
+        zs: Optional[Tuple[float]]=None
     ) -> tcmd.BaseTransientFSIModel:
     """
     Load a transient coupled (fsi) model
@@ -136,17 +137,32 @@ def load_transient_fsi_model(
     """
     ## Load the solid
     solid = load_solid_model(solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels)
-    fluid, fsi_verts = derive_1dfluid_from_2dsolid(
-        solid, FluidType=FluidType,
-        fsi_facet_labels=fsi_facet_labels,
-        separation_vertex_label=separation_vertex_label
-    )
+    if zs is None:
+        fluid, fsi_verts = derive_1dfluid_from_2dsolid(
+            solid, FluidType=FluidType,
+            fsi_facet_labels=fsi_facet_labels,
+            separation_vertex_label=separation_vertex_label
+        )
+        dofs_fsi_solid =dfn.vertex_to_dof_map(
+            solid.residual.form['coeff.fsi.p1'].function_space()
+        )[fsi_verts]
+        dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
+    else:
+        fluid, fsi_verts = derive_1dfluid_from_3dsolid(
+            solid, FluidType=FluidType,
+            fsi_facet_labels=fsi_facet_labels,
+            separation_vertex_label=separation_vertex_label,
+            zs=zs
+        )
 
-    # TODO: This FSI dof selection won't for higher order elements
-    dofs_fsi_solid = dfn.vertex_to_dof_map(
-        solid.residual.form['coeff.fsi.p1'].function_space()
-    )[fsi_verts]
-    dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
+        # TODO: This FSI dof selection won't for higher order elements
+        dofs_fsi_solid = tuple(
+            dfn.vertex_to_dof_map(
+                solid.residual.form['coeff.fsi.p1'].function_space()
+            )[verts]
+            for verts in fsi_verts
+        )
+        dofs_fsi_fluid = tuple(np.arange(dofs.size) for dofs in dofs_fsi_solid)
 
     if coupling == 'explicit':
         model = tcmd.ExplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
@@ -322,7 +338,7 @@ def derive_1dfluid_from_3dsolid(
         fsi_facet_labels: Optional[Labels]=('pressure',),
         separation_vertex_label: str='separation',
         zs: Optional[np.typing.NDArray[int]]=None
-    ) -> Tuple[SolidModel, FluidModel, np.ndarray]:
+    ) -> Tuple[FluidModel, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 

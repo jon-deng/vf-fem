@@ -28,6 +28,7 @@ from blockarray import blockvec as vec
 
 MESH_DIR = '../meshes'
 MESH_BASENAME = 'M5_BC--GA0--DZ1.00'
+MESH_BASENAME = 'M5_BC--GA0--DZ0.00'
 MESH_PATH = os.path.join(MESH_DIR, MESH_BASENAME + '.msh')
 
 class TestIntegrate:
@@ -45,11 +46,17 @@ class TestIntegrate:
     def model(self, model_specification):
         ## Configure the model and its parameters
         case_name, SolidType, FluidType = model_specification
+        if 'DZ0.00' in MESH_BASENAME:
+            zs = None
+        else:
+            zs = (0.0, 0.5, 1.0)
+            zs = np.linspace(0, 1, 6)
         return load_transient_fsi_model(
             MESH_PATH, None,
             SolidType=SolidType,
             FluidType=FluidType,
-            coupling='explicit'
+            coupling='explicit',
+            zs=zs
         )
 
     @pytest.fixture()

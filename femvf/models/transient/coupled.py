@@ -78,25 +78,31 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     solid : Solid
         A solid model object
     fluids : List[Fluid]
-        A fluid model object
-
-    fsi_verts : array_like
-        A list of vertex indices on the pressure driven surface (FSI). These must be are ordered in
-        increasing streamwise direction since the fluid mesh numbering is ordered like that too.
-    fsi_coordinates
+        A collection of 1D fluid model objects
+    solid_fsi_dofs, fluid_fsi_dofs : Union[List[ArrayLike], ArrayLike]
+        A collection of corresponding DOF arrays for fluid/structure interaction
+        on the solid and fluid models, respectively.
+        If there are `n` fluid models, then there must be `n` DOF arrays on both
+        solid and fluid models.
+        Note that while each DOF array
     """
     def __init__(
             self,
             solid: tsmd.Model,
             fluids: Union[List[tfmd.Model], tfmd.Model],
-            solid_fsi_dofs: ArrayLike, fluid_fsi_dofs: ArrayLike
+            solid_fsi_dofs: Union[List[ArrayLike], ArrayLike],
+            fluid_fsi_dofs: Union[List[ArrayLike], ArrayLike]
         ):
         if isinstance(fluids, list):
             fluids = tuple(fluids)
+            fluid_fsi_dofs = tuple(fluid_fsi_dofs)
+            solid_fsi_dofs = tuple(solid_fsi_dofs)
         elif isinstance(fluids, tuple):
             pass
         else:
             fluids = (fluids,)
+            fluid_fsi_dofs = (fluid_fsi_dofs,)
+            solid_fsi_dofs = (solid_fsi_dofs,)
         self.solid = solid
         self.fluids = fluids
 
@@ -126,9 +132,9 @@ class BaseTransientFSIModel(base.BaseTransientModel):
             FSIMap(
                 fluid.state1['p'].size,
                 self._solid_area.size(),
-                fluid_fsi_dofs, solid_fsi_dofs
+                fluid_dofs, solid_dofs
             )
-            for fluid in fluids
+            for fluid, fluid_dofs, solid_dofs in zip(fluids, fluid_fsi_dofs, solid_fsi_dofs)
         )
 
         ## Construct the derivative of the solid control w.r.t fluid state
@@ -170,13 +176,15 @@ class BaseTransientFSIModel(base.BaseTransientModel):
             subops.zero_mat(nrow, ncol) for nrow, ncol
             in itertools.product(*ret_bshape)
         ]
-        # TODO: This is hard-coded and relies on the fluid area being the first
-        # block of the control vector!
-        block_sizes = [fluid.control.shape[0] for fluid in fluids]
-        block_offsets = np.cumsum([0] + block_sizes)
-        for ii, offset, dflarea_dslu in zip(range(len(block_sizes)), block_offsets, dflarea_dslu_coll):
-            mats[0+offset] = dflarea_dslu
+        # Set the block components `[f'fluid{ii}.area', 'u']`
+        labels = [f'fluid{ii}.area' for ii in range(len(self.fluids))]
+        rows = [fluid_control.labels[0].index(label) for label in labels]
+        ncol = self.solid.state0.size
+        col = solid.state0.labels[0].index('u')
+        for ii, dflarea_dslu in zip(rows, dflarea_dslu_coll):
+            mats[ii*ncol+col] = dflarea_dslu
 
+        # breakpoint()
         self._dflcontrol_dslstate = bm.BlockMatrix(
             mats,
             shape=fluid_control.shape+self.solid.state0.shape,
@@ -296,7 +304,8 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1.sub['u'])[1::2])
+        ndim = self.solid.residual.mesh().topology().dim()
+        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1.sub['u'])[1::ndim])
         for n, (fluid, fsimap) in enumerate(zip(self.fluids, self.fsimaps)):
             fl_control = fluid.control.copy()
             fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
