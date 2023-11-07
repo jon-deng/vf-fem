@@ -26,43 +26,50 @@ from femvf.postprocess.base import TimeSeries
 
 from blockarray import blockvec as vec
 
-MESH_DIR = '../meshes'
-MESH_BASENAME = 'M5_BC--GA0--DZ1.00'
-MESH_BASENAME = 'M5_BC--GA0--DZ0.00'
-MESH_PATH = os.path.join(MESH_DIR, MESH_BASENAME + '.msh')
+
 
 class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            ('KelvinVoigt', tsmd.KelvinVoigt, tfmd.BernoulliSmoothMinSep),
-            ('Rayleigh', tsmd.Rayleigh, tfmd.BernoulliSmoothMinSep)
+            tsmd.KelvinVoigt, tsmd.Rayleigh
         ]
     )
-    def model_specification(self, request):
+    def solid_type(self, request):
         return request.param
 
+    @pytest.fixture(
+        params=[tfmd.BernoulliSmoothMinSep]
+    )
+    def fluid_type(self, request):
+        return request.param
+
+    @pytest.fixture(
+        params=[
+            'M5_BC--GA0--DZ0.00',
+            'M5_BC--GA0--DZ1.00'
+        ]
+    )
+    def mesh_path(self, request):
+        mesh_dir = '../meshes'
+        return os.path.join(mesh_dir, request.param + '.msh')
+
     @pytest.fixture()
-    def model(self, model_specification):
+    def model(self, mesh_path, solid_type, fluid_type):
         ## Configure the model and its parameters
-        case_name, SolidType, FluidType = model_specification
-        if 'DZ0.00' in MESH_BASENAME:
+        SolidType, FluidType = (solid_type, fluid_type)
+        if 'DZ0.00' in mesh_path:
             zs = None
         else:
             zs = (0.0, 0.5, 1.0)
             zs = np.linspace(0, 1, 6)
         return load_transient_fsi_model(
-            MESH_PATH, None,
+            mesh_path, None,
             SolidType=SolidType,
             FluidType=FluidType,
             coupling='explicit',
             zs=zs
         )
-
-    @pytest.fixture()
-    def case_name(self, model_specification):
-        case_name, SolidType, FluidType = model_specification
-        return case_name
 
     @pytest.fixture()
     def ini_state(self, model):
@@ -121,7 +128,6 @@ class TestIntegrate:
             'ycontact': prop['ymid'][0] - y_gap*1/2,
         }
 
-
         # Set relevant fluid properties
         for ii in range(len(model.fluids)):
             default_prop.update({
@@ -137,11 +143,12 @@ class TestIntegrate:
 
         return prop
 
-    def test_integrate(self, case_name, model, ini_state, controls, prop):
+    def test_integrate(self, mesh_path, model, ini_state, controls, prop):
 
         times = np.linspace(0, 0.01, 100)
 
-        save_path = f'out/test_forward_{case_name}.h5'
+        mesh_name = os.path.splitext(os.path.split(mesh_path)[1])[0]
+        save_path = f'out/{mesh_name}--{model.solid.__class__.__name__}--{model.fluids[0].__class__.__name__}.h5'
         if os.path.isfile(save_path):
             os.remove(save_path)
 
@@ -170,61 +177,6 @@ class TestIntegrate:
         ax.set_ylabel("Glottal width [cm]")
         fig.savefig(os.path.splitext(save_path)[0] + '.png')
 
-    # def test_integrate_linear(self):
-    #     """
-    #     To test that the linearized forward integration is done properly:
-    #         - Integrate the forward model twice at x and x+dx for some test change, dx
-    #         - Compute the change in the final state using the difference
-    #         - Compute the change in the final state using the linearized integration and compare
-    #     """
-    #     ## Set the linearization point
-    #     NTIME = 50
-    #     model, ini_state, controls, prop = self.config_fsi_model()
-    #     control = controls[0]
-    #     times = np.linspace(0, 0.01, NTIME)
-
-    #     ## Specify the test change in model parameters
-    #     dini_state = model.state0.copy()
-    #     dcontrol = model.control.copy()
-    #     dprop = model.prop.copy()
-    #     dprop[:] = 0.0
-    #     # dtimes = vec.BlockVector([np.linspace(0, 1e-6, NTIME)], ['times'])
-    #     dtimes = np.linspace(0.0, 0.0, NTIME)
-    #     dtimes[-1] = 1e-10
-    #     dini_state[:] = 0.0
-    #     for vec in [dini_state[label] for label in ['u', 'v', 'a']]:
-    #         model.solid.forms['bc.dirichlet'].apply(vec)
-
-    #     ## Integrate the model at x, and x+dx
-    #     def _integrate(model, state, control, prop, times, h5file, overwrite=False):
-    #         if not overwrite and os.path.isfile(h5file):
-    #             print("File already exists. Continuing with old file.")
-    #         else:
-    #             with sf.StateFile(model, h5file, mode='w') as f:
-    #                 integrate(model, f, state, [control], prop, times)
-
-    #     xs = [ini_state, control, prop, times]
-    #     dxs = [dini_state, dcontrol, dprop, dtimes]
-
-    #     h5file1 = 'out/test_forward_integrate_linear-1.h5'
-    #     _integrate(model, *xs, h5file1)
-
-    #     h5file2 = 'out/test_forward_integrate_linear-2.h5'
-    #     _integrate(model, *[x+dx for x, dx in zip(xs, dxs)], h5file2, overwrite=True)
-
-    #     dfin_state_fd = None
-    #     with sf.StateFile(model, h5file1, mode='r') as f1, sf.StateFile(model, h5file2, mode='r') as f2:
-    #         dfin_state_fd = f2.get_state(f2.size-1) - f1.get_state(f1.size-1)
-
-    #     ## Integrate the linearized model
-    #     dfin_state = None
-    #     with sf.StateFile(model, h5file1, mode='r') as f:
-    #         dfin_state = integrate_linear(
-    #             model, f, dini_state, [dcontrol], dprop, dtimes)
-
-    #     err = dfin_state - dfin_state_fd
-    #     self.assertAlmostEqual(err.norm()/dfin_state.norm(), 0.0)
-
 def proc_time_and_glottal_width(model, f):
     t = f.get_times()
 
@@ -233,15 +185,3 @@ def proc_time_and_glottal_width(model, f):
 
     return t, np.array(y)
 
-
-# if __name__ == '__main__':
-#     np.seterr(invalid='raise')
-#     test = TestIntegrate()
-#     test.setUp()
-#     # test.test_integrate_variable_controls()
-#     # test.test_integrate_fsi_kelvinvoigt()
-#     test.test_integrate_fsi_rayleigh()
-#     # test.test_integrate_approx3D()
-#     # test.test_integrate_fsai()
-#     # test.test_integrate_linear()
-#     # unittest.main()
