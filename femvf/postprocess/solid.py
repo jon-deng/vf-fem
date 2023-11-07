@@ -422,8 +422,32 @@ class MinGlottalWidth(BaseStateMeasure):
         self.XREF = np.array(self.model.solid.XREF[:])
 
     def assem(self, state, control, prop):
+        # self.model.set_fin_state(state)
+        # self.model.set_control(control)
+        # self.model.set_prop(prop)
+
+        fluid_areas = [np.min(fluid.control['area']) for fluid in self.model.fluids]
+        area_min = sum(fluid_areas)/len(fluid_areas)
+        return area_min
+
+class MinGlottalWidthFromSolid(BaseStateMeasure):
+    """
+    Return the minimum glottal width
+
+    Parameters
+    ----------
+    model :
+        The model to post process
+    """
+
+    def __init__(self, model: BaseTransientModel):
+        super().__init__(model)
+        self.XREF = np.array(self.model.solid.XREF[:])
+
+    def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
-        widths = 2*(self.model.prop['ymid'] - xcur[1::2])
+        ndim = self.model.solid.residual.mesh().topology().dim()
+        widths = 2*(self.model.prop['ymid'] - xcur[1::ndim])
         gw = np.min(widths)
         return gw
 
