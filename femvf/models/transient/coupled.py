@@ -240,22 +240,30 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     def set_ini_state(self, state):
         state_chunk_sizes = [model.state0.size for model in (self.solid,)+self.fluids]
         states = chunk_bvec(state, state_chunk_sizes)
-        state_setters = [self._set_ini_solid_state] + [lambda x: self._set_ini_fluid_state(x, n) for n in range(len(self.fluids))]
+        state_setters = (
+            [self._set_ini_solid_state]
+            + [
+                lambda x: self._set_ini_fluid_state(x, n)
+                for n in range(len(self.fluids))
+            ]
+        )
 
         for set_state, state in zip(state_setters, states):
             set_state(state)
-        # self._set_ini_solid_state(state[:3])
-        # self._set_ini_fluid_state(state[3:])
 
     def set_fin_state(self, state):
         state_chunk_sizes = [model.state0.size for model in (self.solid,)+self.fluids]
         states = chunk_bvec(state, state_chunk_sizes)
-        state_setters = [self._set_fin_solid_state] + [lambda x: self._set_fin_fluid_state(x, n) for n in range(len(self.fluids))]
+        state_setters = (
+            [self._set_fin_solid_state]
+            + [
+                lambda x: self._set_fin_fluid_state(x, n)
+                for n in range(len(self.fluids))
+            ]
+        )
 
         for set_state, state in zip(state_setters, states):
             set_state(state)
-        # self._set_fin_solid_state(state[:3])
-        # self._set_fin_fluid_state(state[3:])
 
     def set_control(self, control):
         self.control[:] = control
