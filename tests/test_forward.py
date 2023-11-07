@@ -3,15 +3,12 @@ Test to see if `forward.integrate` runs
 """
 
 import os
-import unittest
 import pytest
 from time import perf_counter
 
 import numpy as np
-# import pandas as pd
 import matplotlib.pyplot as plt
 import dolfin as dfn
-# import h5py
 
 import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
@@ -21,12 +18,6 @@ from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
-# from femvf import callbacks
-# from femvf import linalg
-
-from blockarray import blockvec as vec
-
-
 
 class TestIntegrate:
 
