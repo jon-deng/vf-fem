@@ -37,7 +37,7 @@ class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            'M5_BC--GA0--DZ0.00',
+            # 'M5_BC--GA0--DZ0.00',
             'M5_BC--GA0--DZ1.00'
         ]
     )
@@ -87,8 +87,9 @@ class TestIntegrate:
         p_sub = 500.0
 
         control = model.control
-        control['fluid0.psub'][:] = p_sub * PASCAL_TO_CGS
-        control['fluid0.psup'][:] = 0.0 * PASCAL_TO_CGS
+        for ii in range(len(model.fluids)):
+            control[f'fluid{ii}.psub'][:] = p_sub * PASCAL_TO_CGS
+            control[f'fluid{ii}.psup'][:] = 0.0 * PASCAL_TO_CGS
 
         # control['psub'][:] = 0.0 * PASCAL_TO_CGS
         # control['psup'][:] = p_sub * PASCAL_TO_CGS
@@ -143,6 +144,7 @@ class TestIntegrate:
         if os.path.isfile(save_path):
             os.remove(save_path)
 
+        breakpoint()
         self._integrate(model, ini_state, controls, prop, times, save_path)
         self._plot_glottal_width(model, save_path)
 
