@@ -48,7 +48,7 @@ def chunk(items: List[T], chunk_sizes: List[int]):
             f"does not match total number of items, {len(items):d}"
         )
     else:
-        offsets = np.cumsum([0] + chunk_sizes)
+        offsets = np.cumsum([0] + list(chunk_sizes))
         chunks = [items[i_start:i_end] for i_start, i_end in zip(offsets[:-1], offsets[1:])]
         return chunks
 
@@ -111,6 +111,8 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         fluid_state1 = concatenate_bvec_with_prefix([fluid.state1 for fluid in fluids], 'fluid')
         self.state0 = bv.concatenate_vec([self.solid.state0, fluid_state0])
         self.state1 = bv.concatenate_vec([self.solid.state1, fluid_state1])
+        self.fluid_state0 = fluid_state0
+        self.fluid_state1 = fluid_state1
 
         # The control is just the subglottal and supraglottal pressures
         self.control = concatenate_bvec_with_prefix([fluid.control[1:] for fluid in self.fluids], 'fluid')
@@ -214,16 +216,16 @@ class BaseTransientFSIModel(base.BaseTransientModel):
     # These have to be defined to exchange data between fluid/solid domains
     # Explicit/implicit coupling methods may define these in different ways to
     # achieve the desired coupling
-    def _set_ini_solid_state(self, uva0):
+    def _set_ini_solid_state(self, uva0: bv.BlockVector):
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _set_fin_solid_state(self, uva1):
+    def _set_fin_solid_state(self, uva1: bv.BlockVector):
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _set_ini_fluid_state(self, qp0, n=0):
+    def _set_ini_fluid_state(self, qp0: bv.BlockVector):
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _set_fin_fluid_state(self, qp1, n=0):
+    def _set_fin_fluid_state(self, qp1: bv.BlockVector):
         raise NotImplementedError("Subclasses must implement this method")
 
     ## Parameter setting methods
@@ -238,32 +240,20 @@ class BaseTransientFSIModel(base.BaseTransientModel):
             fluid.dt = value
 
     def set_ini_state(self, state):
-        state_chunk_sizes = [model.state0.size for model in (self.solid,)+self.fluids]
-        states = chunk_bvec(state, state_chunk_sizes)
-        state_setters = (
-            [self._set_ini_solid_state]
-            + [
-                lambda x: self._set_ini_fluid_state(x, n)
-                for n in range(len(self.fluids))
-            ]
+        sl_state, fl_state = chunk_bvec(
+            state, (self.solid.state0.size, self.fluid_state0.size)
         )
 
-        for set_state, state in zip(state_setters, states):
-            set_state(state)
+        self._set_ini_solid_state(sl_state)
+        self._set_ini_fluid_state(fl_state)
 
     def set_fin_state(self, state):
-        state_chunk_sizes = [model.state0.size for model in (self.solid,)+self.fluids]
-        states = chunk_bvec(state, state_chunk_sizes)
-        state_setters = (
-            [self._set_fin_solid_state]
-            + [
-                lambda x: self._set_fin_fluid_state(x, n)
-                for n in range(len(self.fluids))
-            ]
+        sl_state, fl_state = chunk_bvec(
+            state, (self.solid.state1.size, self.fluid_state1.size)
         )
 
-        for set_state, state in zip(state_setters, states):
-            set_state(state)
+        self._set_fin_solid_state(sl_state)
+        self._set_fin_fluid_state(fl_state)
 
     def set_control(self, control):
         self.control[:] = control
@@ -304,11 +294,9 @@ class ExplicitFSIModel(BaseTransientFSIModel):
     #   changes based on the computed deformation for the current time step
     #    - Setting the final solid state updates the fluid control
     def _set_ini_solid_state(self, uva0):
-        """Set the initial solid state"""
         self.solid.set_ini_state(uva0)
 
     def _set_fin_solid_state(self, uva1):
-        """Set the final solid state and communicate FSI interactions"""
         self.solid.set_fin_state(uva1)
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
@@ -319,18 +307,22 @@ class ExplicitFSIModel(BaseTransientFSIModel):
             fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
             fluid.set_control(fl_control)
 
-    def _set_ini_fluid_state(self, qp0, n=0):
-        """Set the fluid state and communicate FSI interactions"""
-        self.fluids[n].set_ini_state(qp0)
-
-        # For explicit coupling, the final solid pressure corresponds to the initial fluid pressure
+    def _set_ini_fluid_state(self, qp0):
+        # For explicit coupling, the final/current solid pressure corresponds to
+        # the initial/previous fluid pressure
         sl_control = self.solid.control.copy()
-        self.fsimaps[n].map_fluid_to_solid(qp0.sub[1], sl_control.sub['p'])
+        sl_control['p'] = 0
+        qp0_parts = chunk_bvec(qp0, tuple(fluid.state0.size for fluid in self.fluids))
+        for fluid, fsimap, qp0_part in zip(self.fluids, self.fsimaps, qp0_parts):
+            fluid.set_ini_state(qp0_part)
+            fsimap.map_fluid_to_solid(qp0_part[1], sl_control.sub['p'])
         self.solid.set_control(sl_control)
 
-    def _set_fin_fluid_state(self, qp1, n=0):
+    def _set_fin_fluid_state(self, qp1):
         """Set the final fluid state"""
-        self.fluids[n].set_fin_state(qp1)
+        qp1_parts = chunk_bvec(qp1, tuple(fluid.state1.size for fluid in self.fluids))
+        for fluid, qp1_part in zip(self.fluids, qp1_parts):
+            fluid.set_fin_state(qp1_part)
 
     ## Residual and derivative assembly functions
     def assem_res(self):
