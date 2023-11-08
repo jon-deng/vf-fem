@@ -436,7 +436,6 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 class ImplicitFSIModel(BaseTransientFSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
     def _set_ini_fluid_state(self, qp0):
-        self.fluids[n].set_ini_state(qp0)
         qp0_parts = chunk_bvec(qp0, tuple(fluid.state0.size for fluid in self.fluids))
         for fluid, qp0_part in zip(self.fluids, qp0_parts):
             fluid.set_ini_state(qp0_part)
