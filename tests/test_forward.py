@@ -18,6 +18,7 @@ from femvf.models.transient import solid as tsmd, fluid as tfmd, acoustic as amd
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
+from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
 
 class TestIntegrate:
 
@@ -37,7 +38,7 @@ class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            # 'M5_BC--GA0--DZ0.00',
+            'M5_BC--GA0--DZ0.00',
             'M5_BC--GA0--DZ1.00'
         ]
     )
@@ -104,6 +105,7 @@ class TestIntegrate:
         prop = model.prop.copy()
 
         prop['ymid'][0] = y_midline
+        prop['ncontact'][1] = 1.0
 
         xy = model.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
         x = xy[:, 0]
@@ -144,9 +146,9 @@ class TestIntegrate:
         if os.path.isfile(save_path):
             os.remove(save_path)
 
-        breakpoint()
         self._integrate(model, ini_state, controls, prop, times, save_path)
         self._plot_glottal_width(model, save_path)
+        self._export_paraview(model, save_path)
 
         assert True
 
@@ -169,6 +171,13 @@ class TestIntegrate:
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
         fig.savefig(os.path.splitext(save_path)[0] + '.png')
+
+    def _export_paraview(self, model, save_path):
+        vertex_data_path = os.path.splitext(save_path)[0] + '--vertex.h5'
+        export_vertex_values(model, save_path, vertex_data_path)
+
+        xdmf_name = os.path.split(os.path.splitext(save_path)[0])[-1] + '--vertex.xdmf'
+        write_xdmf(model, vertex_data_path, xdmf_name)
 
 def proc_time_and_glottal_width(model, f):
     t = f.get_times()
