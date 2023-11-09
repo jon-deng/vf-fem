@@ -32,8 +32,9 @@ def export_vertex_values(model, statefile_path, export_path):
 
             fo.create_dataset('time', data=fi.file['time'])
 
-            fspace_dg0 = model.residual.form['coeff.fsi.p1'].function_space()
-            fspace_cg1 = model.residual.form['coeff.state.u0'].function_space()
+            solid = model.solid
+            fspace_dg0 = solid.residual.form['coeff.fsi.p1'].function_space()
+            fspace_cg1 = solid.residual.form['coeff.state.u0'].function_space()
             vert_to_sdof = dfn.vertex_to_dof_map(fspace_dg0)
             vert_to_vdof = dfn.vertex_to_dof_map(fspace_cg1)
 
@@ -48,26 +49,29 @@ def export_vertex_values(model, statefile_path, export_path):
             SCALAR_VALUE_SHAPE = tuple(scalar_func.value_shape())
 
             ## Initialize solid/fluid state variables
-            labels = ['state/u', 'state/v', 'state/a']
-            for label in labels:
+            vector_labels = ['state/u', 'state/v', 'state/a']
+            for label in vector_labels:
                 fo.create_dataset(label, shape=(N_TIME, N_VERT, *VECTOR_VALUE_SHAPE), dtype=np.float64)
 
-            # for label in ['p']:
-            #     fo.create_dataset(label, shape=(N_TIME, N_VERT, *SCALAR_VALUE_SHAPE), dtype=np.float64)
+            scalar_labels = ['p']
+            for label in scalar_labels:
+                fo.create_dataset(label, shape=(N_TIME, N_VERT, *SCALAR_VALUE_SHAPE), dtype=np.float64)
 
             ## Write solid/fluid state variables in vertex order
             for ii in range(N_TIME):
                 state = fi.get_state(ii)
+                model.set_fin_state(state)
+                model.set_ini_state(state)
 
                 u, v, a = state['u'], state['v'], state['a']
-                for label, vector in zip(labels, [u, v, a]):
+                for label, vector in zip(vector_labels, [u, v, a]):
                     vector_func.vector()[:] = vector
                     fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VECTOR_VALUE_SHAPE)
 
-                # p = state['p']
-                # for label, vector in zip(['p'], [p]):
-                #     scalar_func.vector()[:] = model.map_fsi_scalar_from_fluid_to_solid(p)
-                #     fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *SCALAR_VALUE_SHAPE))
+                p = model.solid.control['p']
+                for label, scalar in zip(scalar_labels, [p]):
+                    scalar_func.vector()[:] = scalar
+                    fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *SCALAR_VALUE_SHAPE))
 
             ## Write (q, p) vertex values (pressure only defined)
 
@@ -258,9 +262,8 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                 slice_data.text = f'{h5file_name}:{label}'
 
             # Write q, p data to xdmf
-            fluid_state_labels = ['state/q', 'state/p']
-            fluid_state_labels = []
-            for label in fluid_state_labels:
+            scalar_labels = ['p']
+            for label in scalar_labels:
                 comp = SubElement(
                     grid, 'Attribute', {
                         'Name': label,
