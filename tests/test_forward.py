@@ -118,6 +118,7 @@ class TestIntegrate:
         default_prop = {
             'eta': 4e-3,
             'rho': 1.0,
+            'nu': 0.45,
             'kcontact': 1e11,
             'ycontact': prop['ymid'][0] - y_gap*1/2,
         }
@@ -146,6 +147,7 @@ class TestIntegrate:
         if os.path.isfile(save_path):
             os.remove(save_path)
 
+        prop.print_summary()
         self._integrate(model, ini_state, controls, prop, times, save_path)
         self._plot_glottal_width(model, save_path)
         self._export_paraview(model, save_path)
