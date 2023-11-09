@@ -224,6 +224,8 @@ class Model(base.BaseTransientModel):
 
     def assem_dres_dstate1(self):
         dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        for bc in self.residual.dirichlet_bcs:
+            bc.apply(dfu_du)
         (_, dfu_dv, dfu_da,
         dfv_du, dfv_dv, dfv_da,
         dfa_du, dfa_dv, dfa_da) = self._const_assem_dres_dstate1
