@@ -28,12 +28,14 @@ class TestIntegrate:
         ]
     )
     def solid_type(self, request):
+        """Return the solid class"""
         return request.param
 
     @pytest.fixture(
         params=[tfmd.BernoulliSmoothMinSep]
     )
     def fluid_type(self, request):
+        """Return the fluid class"""
         return request.param
 
     @pytest.fixture(
@@ -43,11 +45,13 @@ class TestIntegrate:
         ]
     )
     def mesh_path(self, request):
+        """Return the mesh path"""
         mesh_dir = '../meshes'
         return os.path.join(mesh_dir, request.param + '.msh')
 
     @pytest.fixture()
     def model(self, mesh_path, solid_type, fluid_type):
+        """Return the model"""
         ## Configure the model and its parameters
         SolidType, FluidType = (solid_type, fluid_type)
         if 'DZ0.00' in mesh_path:
@@ -65,14 +69,14 @@ class TestIntegrate:
 
     @pytest.fixture()
     def ini_state(self, model):
-        # Set the initial state
+        """Return the initial state"""
         xy = model.solid.XREF[:].copy().reshape(-1, 2)
         x = xy[:, 0]
         y = xy[:, 1]
         u0 = dfn.Function(model.solid.residual.form['coeff.state.u0'].function_space()).vector()
 
         # model.fluid.set_prop(fluid_props)
-        # qp0, *_ = model.fluid.solve_qp0()
+        # qp0, *_ = model.fluids[0].solve_qp0()
 
         ini_state = model.state0.copy()
         ini_state[:] = 0.0
@@ -83,22 +87,19 @@ class TestIntegrate:
 
     @pytest.fixture()
     def controls(self, model):
+        """Return the control vector"""
         control = model.control.copy()
-        # Set the control vector
         p_sub = 500.0
 
         control = model.control
         for ii in range(len(model.fluids)):
             control[f'fluid{ii}.psub'][:] = p_sub * PASCAL_TO_CGS
             control[f'fluid{ii}.psup'][:] = 0.0 * PASCAL_TO_CGS
-
-        # control['psub'][:] = 0.0 * PASCAL_TO_CGS
-        # control['psup'][:] = p_sub * PASCAL_TO_CGS
         return [control]
 
     @pytest.fixture()
     def prop(self, model):
-        # Set the properties
+        """Return the properties"""
         y_gap = 0.01
         y_midline = np.max(model.solid.residual.mesh().coordinates()[..., 1]) + y_gap
 
