@@ -15,7 +15,8 @@ class CachedFormAssembler:
     def __init__(self, form: ufl.Form, **kwargs):
         self._form = form
 
-        if 'tensor' not in kwargs:
+        tensor = kwargs.pop('tensor', None)
+        if tensor is None:
             if len(form.arguments()) == 0:
                 tensor = dfn.Scalar()
             elif len(form.arguments()) == 1:
@@ -24,10 +25,8 @@ class CachedFormAssembler:
                 tensor = dfn.PETScMatrix()
             else:
                 raise ValueError("Form arity must be between 0 and 2")
-        else:
-            tensor = kwargs['tensor']
-        self._tensor = tensor
 
+        self._tensor = tensor
         self._kwargs = kwargs
 
     @property
