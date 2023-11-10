@@ -91,7 +91,8 @@ class Model(base.BaseTransientModel):
         self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
-            key: CachedFormAssembler(biform) for key, biform in bilinear_forms.items()
+            key: CachedFormAssembler(biform, keep_diagonal=True)
+            for key, biform in bilinear_forms.items()
             if 'form.' in key
         }
         self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(self.residual.form.form)
@@ -223,9 +224,18 @@ class Model(base.BaseTransientModel):
         )
 
     def assem_dres_dstate1(self):
-        dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        # BUG: Applying BCs to a tensor (`dfn.PETScMatrix()`) then
+        # trying to reassemble into that tensor seems to cause problems.
+        # This is done with the `cached_form_assembler` since it caches the
+        # tensor it applies on
+        dfu_du = dfn.assemble(
+            self.cached_form_assemblers['form.bi.df1_du1'].form,
+            tensor=dfn.PETScMatrix()
+        )
+        # dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
         for bc in self.residual.dirichlet_bcs:
             bc.apply(dfu_du)
+
         (_, dfu_dv, dfu_da,
         dfv_du, dfv_dv, dfv_da,
         dfa_du, dfa_dv, dfa_da) = self._const_assem_dres_dstate1
