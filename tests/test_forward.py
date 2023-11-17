@@ -223,7 +223,7 @@ class TestLiEtal2020(TestIntegrate):
         # (I also checked the referenced thesis but couldn't find details
         # on the geometry either)
         params=[
-            # 'M5_BC--GA0--DZ0.00',
+            'M5_BC--GA0--DZ0.00',
             'M5_BC--GA0--DZ2.00'
         ]
     )
@@ -361,15 +361,21 @@ class TestBounceFromDeformation(TestIntegrate):
     def ini_state(self, model):
         """Return the initial state"""
         NDIM = model.solid.residual.mesh().topology().dim()
-        xy = model.solid.XREF[:].copy().reshape(-1, NDIM)
-        x = xy[:, 0]
-        y = xy[:, 1]
-        u0 = dfn.Function(model.solid.residual.form['coeff.state.u0'].function_space()).vector()
         # This sets x/y/z deformation
+        u0 = dfn.Function(model.solid.residual.form['coeff.state.u0'].function_space()).vector()
         u0 = np.array(u0)
-        u0[0:-2:NDIM] = 0.05*y
-        u0[1:-1:NDIM] = 0.0
-        u0[2::NDIM] = 0.0
+        xy = model.solid.XREF[:].copy().reshape(-1, NDIM)
+        if NDIM > 2:
+            # Make the deformation respect BCs; deformation increases
+            # linearly with y and is parabolic in z with no deformation
+            # at the z margins of the VF
+            z = xy[:, 2]
+            y = xy[:, 1]
+            z_max = np.max(z)
+            u0[0:-2:NDIM] = 0.2*(y*(z)*(z_max-z)/z_max)
+        else:
+            y = xy[:, 1]
+            u0[0:-2:NDIM] = 0.2*y
 
         # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluids[0].solve_qp0()
@@ -393,13 +399,10 @@ class TestBounceFromDeformation(TestIntegrate):
     @pytest.fixture()
     def prop(self, model):
         """Return the properties"""
-        # NOTE: (Li2020, Section 2.2) says the initial glottal gap is 0.4 mm
-        y_gap = 0.04
+        y_gap = 999.0
         y_max = np.max(model.solid.residual.mesh().coordinates()[..., 1])
         y_midline = y_max + y_gap
-        # NOTE: (Li2020, Section 2.2) says that the VF is allowed to have a
-        # small gap of 0.2 mm during vibration
-        y_contact = y_midline - 0.02
+        y_contact = y_midline
 
         prop = model.prop.copy()
         prop['ymid'][0] = y_midline
