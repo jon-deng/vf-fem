@@ -407,14 +407,9 @@ class FieldStats(BaseDerivedStateMeasure):
 
 ### Custom post-processing functions that don't fit nicely into any type
 
-class MinGlottalWidth(BaseStateMeasure):
+class MeanGlottalWidth(BaseStateMeasure):
     """
-    Return the minimum glottal width
-
-    Parameters
-    ----------
-    model :
-        The model to post process
+    Return the mean glottal width
     """
 
     def __init__(self, model: BaseTransientModel):
@@ -422,11 +417,31 @@ class MinGlottalWidth(BaseStateMeasure):
         self.XREF = np.array(self.model.solid.XREF[:])
 
     def assem(self, state, control, prop):
-        # self.model.set_fin_state(state)
-        # self.model.set_control(control)
-        # self.model.set_prop(prop)
 
-        fluid_areas = [np.min(fluid.control['area']) for fluid in self.model.fluids]
+        fluids = [fluid for fluid in self.model.fluids]
+        # This gets the glottal width for each 1D fluid channel
+        fluid_areas = [np.min(fluid.control['area']) for fluid in fluids]
+        area_min = sum(fluid_areas)/len(fluid_areas)
+        return area_min
+
+class MidpointGlottalWidth(BaseStateMeasure):
+    """
+    Return the midpoint glottal width
+    """
+
+    def __init__(self, model: BaseTransientModel):
+        super().__init__(model)
+        self.XREF = np.array(self.model.solid.XREF[:])
+
+    def assem(self, state, control, prop):
+
+        if len(self.model.fluids) % 2 == 1:
+            idxs_mid = [(len(self.model.fluids)-1)/2+1]
+        else:
+            idxs_mid = [len(self.model.fluids)/2+ii for ii in range(-1, 1)]
+
+        fluids = [self.models.fluids[ii] for ii in idxs_mid]
+        fluid_areas = [np.min(fluid.control['area']) for fluid in fluids]
         area_min = sum(fluid_areas)/len(fluid_areas)
         return area_min
 
