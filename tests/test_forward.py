@@ -5,10 +5,12 @@ Test to see if `forward.integrate` runs
 import os
 import pytest
 from time import perf_counter
+import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dfn
+import pandas as pd
 
 from blockarray import blockvec as bv
 
@@ -22,6 +24,8 @@ from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
 from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
+
+from vfsig import modal as modalsig
 
 class TestIntegrate:
 
@@ -158,19 +162,29 @@ class TestIntegrate:
 
         psub = controls[0]['fluid0.psub'][0]
         mesh_name = os.path.splitext(os.path.split(mesh_path)[1])[0]
-        save_path = f'out/{self.__class__.__name__}--{mesh_name}--{model.solid.__class__.__name__}--{model.fluids[0].__class__.__name__}--psub{psub/10:.1f}.h5'
+        save_path = (
+            f'out/{self.__class__.__name__}--{mesh_name}'
+            f'--{model.solid.__class__.__name__}'
+            f'--{model.fluids[0].__class__.__name__}--psub{psub/10:.1f}.h5'
+        )
         if os.path.isfile(save_path):
-            os.remove(save_path)
+            warnings.warn(
+                f"Skipping existing test result file: {save_path}"
+            )
+        else:
+            self.integrate(model, ini_state, controls, prop, times, save_path)
 
-        # prop.print_summary()
-        self._integrate(model, ini_state, controls, prop, times, save_path)
-        self._plot_glottal_width(model, save_path)
-        self._export_paraview(model, save_path)
+        self.plot_glottal_width(model, save_path)
+        self.export_paraview(model, save_path)
+
+        self.export_stats(model, save_path)
 
         assert True
 
-    def _integrate(self, model, ini_state, controls, prop, times, save_path):
-
+    def integrate(self, model, ini_state, controls, prop, times, save_path):
+        """
+        Run the transient simulation and save results
+        """
         print("Running forward model")
         runtime_start = perf_counter()
         with sf.StateFile(model, save_path, mode='w') as f:
@@ -179,22 +193,54 @@ class TestIntegrate:
         runtime_end = perf_counter()
         print(f"Runtime {runtime_end-runtime_start:.2f} seconds")
 
-    def _plot_glottal_width(self, model, save_path):
+    def plot_glottal_width(self, model, save_path):
+        """
+        Plot the glottal area/width waveform from results
+        """
         ## Plot the resulting glottal width
         with sf.StateFile(model, save_path, mode='r') as f:
-            t, gw = proc_time_and_glottal_width(model, f)
+            t = f.get_times()
+            gw = TimeSeries(solidfunc.MeanGlottalWidth(model))(f)
+
         fig, ax = plt.subplots(1, 1)
         ax.plot(t, gw)
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Glottal width [cm]")
         fig.savefig(os.path.splitext(save_path)[0] + '.png')
 
-    def _export_paraview(self, model, save_path):
+    def export_paraview(self, model, save_path):
+        """
+        Export paraview visualization data from the results
+        """
         vertex_data_path = os.path.splitext(save_path)[0] + '--vertex.h5'
         export_vertex_values(model, save_path, vertex_data_path)
 
         xdmf_name = os.path.split(os.path.splitext(save_path)[0])[-1] + '--vertex.xdmf'
         write_xdmf(model, vertex_data_path, xdmf_name)
+
+    def export_stats(self, model, save_path):
+        with sf.StateFile(model, save_path, mode='r') as f:
+            t = f.get_times()
+            gw = TimeSeries(solidfunc.MeanGlottalWidth(model))(f)
+
+        # Truncate parts of the glottal width signal
+        idx_truncate_start = 0
+        idx_truncate_end = len(t)
+
+        t = t[idx_truncate_start:idx_truncate_end]
+        gw = gw[idx_truncate_start:idx_truncate_end]
+
+        dt = t[1] - t[0]
+        fo, *_ = modalsig.fundamental_mode_from_rfft(gw-np.mean(gw), dt)
+        amplitude = np.max(gw)
+
+        column_labels = ['fo', 'amplitude']
+        df = pd.DataFrame(index=[0], columns=column_labels)
+        df['fo'] = fo
+        df['amplitude'] = amplitude
+
+        stats_path = f'{os.path.splitext(save_path)[0]}.xlsx'
+        df.to_excel(stats_path)
 
 class TestLiEtal2020(TestIntegrate):
     """
@@ -223,8 +269,9 @@ class TestLiEtal2020(TestIntegrate):
         # (I also checked the referenced thesis but couldn't find details
         # on the geometry either)
         params=[
-            'M5_BC--GA0--DZ0.00',
-            'M5_BC--GA0--DZ2.00'
+            # 'M5_BC--GA0--DZ0.00',
+            # 'M5_BC--GA0--DZ2.00',
+            'LiEtal2020--GA0--DZ2.00'
         ]
     )
     def mesh_path(self, request):
@@ -300,7 +347,7 @@ class TestLiEtal2020(TestIntegrate):
 
     @pytest.fixture()
     def times(self):
-        tfin = 0.1
+        tfin = 0.2
         return np.linspace(0, tfin, round(100/0.01*tfin) + 1)
 
 class TestBounceFromDeformation(TestIntegrate):
@@ -325,10 +372,6 @@ class TestBounceFromDeformation(TestIntegrate):
         return request.param
 
     @pytest.fixture(
-        # NOTE: (Li2020) specifies a 20 mm VF length, but they don't give
-        # details on the geometry shape
-        # (I also checked the referenced thesis but couldn't find details
-        # on the geometry either)
         params=[
             # 'M5_BC--GA0--DZ0.00',
             'M5_BC--GA0--DZ2.00'
@@ -347,7 +390,6 @@ class TestBounceFromDeformation(TestIntegrate):
         if 'DZ0.00' in mesh_path:
             zs = None
         else:
-            # zs = (0.0, 0.5, 2.0)
             zs = np.linspace(0.0, 2.0, 6)
         return load_transient_fsi_model(
             mesh_path, None,
@@ -418,8 +460,6 @@ class TestBounceFromDeformation(TestIntegrate):
         prop['nu'] = 0.475
 
         for ii in range(len(model.fluids)):
-            # NOTE: (Li2020, Table 1) Model B1 corresponds to a separation
-            # area ratio of 1.0 (i.e. separation happens at the minimum area)
             prop[f'fluid{ii}.r_sep'] = 1.0
             prop[f'fluid{ii}.area_lb'] = 2*(y_midline-y_contact)
 
@@ -429,12 +469,3 @@ class TestBounceFromDeformation(TestIntegrate):
     def times(self):
         tfin = 0.1
         return np.linspace(0, tfin, round(100/0.01*tfin) + 1)
-
-def proc_time_and_glottal_width(model, f):
-    t = f.get_times()
-
-    glottal_width_sharp = TimeSeries(solidfunc.MinGlottalWidth(model))
-    y = glottal_width_sharp(f)
-
-    return t, np.array(y)
-
