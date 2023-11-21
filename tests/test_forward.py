@@ -31,7 +31,8 @@ class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            tsmd.KelvinVoigt, tsmd.Rayleigh
+            tsmd.KelvinVoigt,
+            # tsmd.Rayleigh
         ]
     )
     def solid_type(self, request):
@@ -39,7 +40,10 @@ class TestIntegrate:
         return request.param
 
     @pytest.fixture(
-        params=[tfmd.BernoulliSmoothMinSep]
+        params=[
+            # tfmd.BernoulliSmoothMinSep,
+            tfmd.BernoulliAreaRatioSep
+        ]
     )
     def fluid_type(self, request):
         """Return the fluid class"""
@@ -48,7 +52,9 @@ class TestIntegrate:
     @pytest.fixture(
         params=[
             'M5_BC--GA0--DZ0.00',
-            'M5_BC--GA0--DZ1.00'
+            'M5_BC--GA0--DZ2.00',
+            'M5_BC--GA0--DZ4.00',
+            'M5_BC--GA0--DZ8.00'
         ]
     )
     def mesh_path(self, request):
@@ -63,9 +69,15 @@ class TestIntegrate:
         SolidType, FluidType = (solid_type, fluid_type)
         if 'DZ0.00' in mesh_path:
             zs = None
+        elif 'DZ2.00' in mesh_path:
+            zs = np.linspace(0, 2.0, 5+1)
+        elif 'DZ4.00' in mesh_path:
+            zs = np.linspace(0, 4.0, 10+1)
+        elif 'DZ8.00' in mesh_path:
+            zs = np.linspace(0, 8.0, 20+1)
         else:
-            zs = (0.0, 0.5, 1.0)
-            zs = np.linspace(0, 1, 6)
+            raise ValueError()
+
         return load_transient_fsi_model(
             mesh_path, None,
             SolidType=SolidType,
@@ -96,7 +108,7 @@ class TestIntegrate:
     def controls(self, model):
         """Return the control vector"""
         control = model.control.copy()
-        p_sub = 500.0
+        p_sub = 800.0
 
         control = model.control
         for ii in range(len(model.fluids)):
@@ -107,7 +119,7 @@ class TestIntegrate:
     @pytest.fixture()
     def prop(self, model):
         """Return the properties"""
-        y_gap = 0.01
+        y_gap = 0.05
         y_midline = np.max(model.solid.residual.mesh().coordinates()[..., 1]) + y_gap
 
         prop = model.prop.copy()
@@ -120,7 +132,8 @@ class TestIntegrate:
         y = xy[:, 1]
         x_min, x_max = x.min(), x.max()
         y_min, y_max = y.min(), y.max()
-        prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        # prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        prop['emod'][:] = 10e3 * PASCAL_TO_CGS
 
         # Set default properties
         default_prop = {
@@ -136,7 +149,8 @@ class TestIntegrate:
             default_prop.update({
                 f'fluid{ii}.zeta_min': 1e-8,
                 f'fluid{ii}.zeta_sep': 1e-8,
-                f'fluid{ii}.rho_air': 1.0
+                f'fluid{ii}.rho_air': 1.0,
+                f'fluid{ii}.r_sep': 1.0
             })
 
         # This only sets the properties if they exist
@@ -148,7 +162,8 @@ class TestIntegrate:
 
     @pytest.fixture()
     def times(self):
-        return np.linspace(0, 0.01, 100)
+        tfin = 0.2
+        return np.linspace(0, tfin, round(tfin*100/0.01)+1)
 
     def test_integrate(
             self,
@@ -232,7 +247,7 @@ class TestIntegrate:
 
         dt = t[1] - t[0]
         fo, *_ = modalsig.fundamental_mode_from_rfft(gw-np.mean(gw), dt)
-        amplitude = np.max(gw)
+        amplitude = np.max(gw) - np.min(gw)
 
         column_labels = ['fo', 'amplitude']
         df = pd.DataFrame(index=[0], columns=column_labels)
@@ -347,7 +362,7 @@ class TestLiEtal2020(TestIntegrate):
 
     @pytest.fixture()
     def times(self):
-        tfin = 0.2
+        tfin = 0.4
         return np.linspace(0, tfin, round(100/0.01*tfin) + 1)
 
 class TestBounceFromDeformation(TestIntegrate):
