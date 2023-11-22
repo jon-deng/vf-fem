@@ -37,9 +37,9 @@ def _set_dirichlet_bvec(dirichlet_bc, bvec: bv.BlockVector):
         (dynsl.KelvinVoigt, dynsl.LinearizedKelvinVoigt, {})
     ]
 )
-def SolidModels(request):
+def SolidModelPair(request):
     """
-    Return dynamical solid model classes
+    Return a non-linear/linearized dynamical solid model class pair
     """
     return request.param
 
@@ -50,36 +50,51 @@ def SolidModels(request):
         (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
     ]
 )
-def FluidModels(request):
+def FluidModelPair(request):
     """
-    Return a dynamical fluid model
+    Return a non-linear/linearized dynamical fluid model class pair
     """
     return request.param
 
 @pytest.fixture(
     params=[
-        'coupled'
+        'M5_BC--GA3--DZ0.00.msh'
     ]
 )
-def setup_dynamical_models(SolidModels, FluidModels):
-    """
-    Setup the dynamical model objects
-    """
-    mesh_name = 'M5-3layers.xml'
-    mesh_name = 'BC-dcov5.00e-02-cl1.00.xml'
-    mesh_name = 'M5_CB_GA3_CL0.50.msh'
+def mesh_path(request):
+    mesh_name = request.param
     mesh_path = path.join('../meshes', mesh_name)
 
+    return mesh_path
+
+@pytest.fixture()
+def model(mesh_path, SolidModelPair, FluidModelPair):
+    """
+    Return a dynamical system model residual
+    """
     solid_mesh = mesh_path
     fluid_mesh = None
 
-    SolidType, LinSolidType, solid_kwargs = SolidModels
-    FluidType, LinFluidType, fluid_kwargs = FluidModels
+    SolidType, LinSolidType, solid_kwargs = SolidModelPair
+    FluidType, LinFluidType, fluid_kwargs = FluidModelPair
     model_coupled = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, SolidType, FluidType,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',),
         **solid_kwargs, **fluid_kwargs
     )
+
+    return model_coupled
+
+@pytest.fixture()
+def model_linear(mesh_path, SolidModelPair, FluidModelPair):
+    """
+    Return a linearized dynamical system model residual
+    """
+    solid_mesh = mesh_path
+    fluid_mesh = None
+
+    SolidType, LinSolidType, solid_kwargs = SolidModelPair
+    FluidType, LinFluidType, fluid_kwargs = FluidModelPair
 
     model_coupled_linear = load.load_dynamical_fsi_model(
         solid_mesh, fluid_mesh, LinSolidType, LinFluidType,
@@ -87,26 +102,12 @@ def setup_dynamical_models(SolidModels, FluidModels):
         **solid_kwargs, **fluid_kwargs
     )
 
-    return model_coupled, model_coupled_linear
+    return model_coupled_linear
 
-@pytest.fixture()
-def model(setup_dynamical_models):
-    """
-    Return a dynamical system model residual
-    """
-    return setup_dynamical_models[0]
 
-@pytest.fixture()
-def model_linear(setup_dynamical_models):
+def split_model_components(model):
     """
-    Return a linearized dynamical system model residual
-    """
-    return setup_dynamical_models[1]
-
-@pytest.fixture()
-def linearization(model):
-    """
-    Return linearization point
+    Return model split into fluid/solid/coupled parts
     """
     # Determine whether the model has fluid/solid components
     if isinstance(model, dynco.BaseDynamicalFSIModel):
@@ -121,8 +122,41 @@ def linearization(model):
         model_solid = None
         model_fluid = model
         model_coupl = None
+    return model_solid, model_fluid, model_coupl
 
-    ## Model properties
+
+@pytest.fixture()
+def state(model):
+    model_solid, model_fluid, model_coupl = split_model_components(model)
+
+    ## Model state
+    state0 = model.state.copy()
+
+    if model_solid is not None:
+        # Make the initial displacement a pure shear motion
+        xref = model_solid.XREF.copy()
+        xx = xref[:-1:2]
+        yy = xref[1::2]
+        _u = np.zeros(state0['u'].shape)
+        _u[:-1:2] = 0.01*(yy/yy.max())
+        _u[1::2] = 0.0 * yy
+        state0['u']= _u
+
+    if model_fluid is not None:
+        state0['q'] = 1
+        state0['p'] = 1e4
+    return state0
+
+@pytest.fixture()
+def statet(model):
+    statet0 = model.state.copy()
+
+    return statet0
+
+@pytest.fixture()
+def prop(model):
+    model_solid, model_fluid, model_coupl = split_model_components(model)
+
     props0 = model.prop.copy()
     if model_solid is not None:
         props0['emod'] = 5e3*10
@@ -146,8 +180,12 @@ def linearization(model):
         for key, value in prop_values.items():
             if key in model_fluid.prop:
                 props0[key] = value
+    return props0
 
-    ## Model controls
+@pytest.fixture()
+def control(model):
+    model_solid, model_fluid, model_coupl = split_model_components(model)
+
     control0 = model.control.copy()
     control0[:] = 1.0
 
@@ -160,49 +198,15 @@ def linearization(model):
         for key, value in control_values.items():
             if key in model_fluid.control:
                 control0[key] = value
+    return control0
 
-    ## Model state
-    state0 = model.state.copy()
-
-    if model_solid is not None:
-        # Make the initial displacement a pure shear motion
-        xref = model_solid.XREF.copy()
-        xx = xref[:-1:2]
-        yy = xref[1::2]
-        _u = np.zeros(state0['u'].shape)
-        _u[:-1:2] = 0.01*(yy/yy.max())
-        _u[1::2] = 0.0 * yy
-        state0['u']= _u
-
-    if model_fluid is not None:
-        state0['q'] = 1
-        state0['p'] = 1e4
-
-    ## Model state time-derivative
-    statet0 = state0.copy()
-
-    return state0, statet0, control0, props0
 
 @pytest.fixture()
-def perturbation(model):
-    """
-    Return parameter perturbations
-    """
-    # Determine whether the model has fluid/solid components
-    if isinstance(model, dynco.BaseDynamicalFSIModel):
-        model_solid = model.solid
-        model_fluid = model.fluid
-        model_coupl = model
-    elif isinstance(model, (dynsl.Model, dynsl.LinearizedModel)):
-        model_solid = model
-        model_fluid = None
-        model_coupl = None
-    elif isinstance(model, (dynfl.Model, dynfl.LinearizedModel)):
-        model_solid = None
-        model_fluid = model
-        model_coupl = None
+def dstate(model):
+    """Return a state perturbation"""
 
-    ## State perturbation
+    model_solid, model_fluid, model_coupl = split_model_components(model)
+
     dstate = model.state.copy()
 
     if model_solid is not None:
@@ -227,15 +231,38 @@ def perturbation(model):
         if 'p' in dstate:
             dstate['p'] = 1e-3
 
-    ## State time-derivative perturbation
-    dstatet = dstate.copy()
+    return dstate
+
+@pytest.fixture()
+def dstatet(model):
+    """Return a state derivative perturbation"""
+
+    model_solid, model_fluid, model_coupl = split_model_components(model)
+
+    dstatet = model.state.copy()
 
     dstatet[:] = 1e-6
     if model_solid is not None:
         for bc in model_solid.residual.dirichlet_bcs:
             _set_dirichlet_bvec(bc, dstatet)
 
-    ## Properties perturbation
+    return dstatet
+
+@pytest.fixture()
+def dcontrol(model):
+    """Return a control perturbation"""
+
+    dcontrol = model.control.copy()
+    dcontrol[:] = 1e0
+
+    return dcontrol
+
+@pytest.fixture()
+def dprop(model):
+    """Return a properties perturbation"""
+
+    model_solid, model_fluid, model_coupl = split_model_components(model)
+
     dprop = model.prop.copy()
     dprop[:] = 0
 
@@ -252,39 +279,16 @@ def perturbation(model):
             umesh[:, 1] = 1e-5*coords[:, 1]/coords[:, 1].max()
             dprop['umesh'] = umesh.reshape(-1)[VDOF_TO_VERT]
             # dprop['umesh'] = 0
-
-    ## Controls perturbation
-    dcontrol = model.control.copy()
-    dcontrol[:] = 1e0
-
-    return dstate, dstatet, dcontrol, dprop
-
-@pytest.fixture()
-def dstate(perturbation):
-    """Return a state perturbation"""
-    return perturbation[0]
-
-@pytest.fixture()
-def dstatet(perturbation):
-    """Return a state derivative perturbation"""
-    return perturbation[1]
-
-@pytest.fixture()
-def dcontrol(perturbation):
-    """Return a control perturbation"""
-    return perturbation[2]
-
-@pytest.fixture()
-def dprop(perturbation):
-    """Return a properties perturbation"""
-    return perturbation[3]
+    return dprop
 
 
-def set_linearization(model: dynbase.BaseDynamicalModel, linearization):
+def set_linearization(
+        model: dynbase.BaseDynamicalModel,
+        state, statet, control, prop
+    ):
     """
     Set the model linearization point
     """
-    state, statet, control, prop = linearization
     model.set_state(state)
     model.set_statet(statet)
     model.set_control(control)
@@ -329,34 +333,40 @@ def _test_taylor(x0, dx, res, jac):
     print("Convergence rates: ", np.array(conv_rates))
 
 
-def test_assem_dres_dstate(model, linearization, dstate):
+def test_assem_dres_dstate(
+        model, state, statet, control, prop,
+        dstate
+    ):
     """
     Test `model.assem_dres_dstate`
     """
-    set_linearization(model, linearization)
-    state, statet, control, prop = linearization
+    set_linearization(model, state, statet, control, prop)
     res = lambda state: set_and_assemble(state, model.set_state, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_state, model.assem_dres_dstate)
 
     _test_taylor(state, dstate, res, jac)
 
-def test_assem_dres_dstatet(model, linearization, dstatet):
+def test_assem_dres_dstatet(
+        model, state, statet, control, prop,
+        dstatet
+    ):
     """
     Test `model.assem_dres_dstatet`
     """
-    set_linearization(model, linearization)
-    state, statet, control, prop = linearization
+    set_linearization(model, state, statet, control, prop)
     res = lambda state: set_and_assemble(state, model.set_statet, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_statet, model.assem_dres_dstatet)
 
     _test_taylor(statet, dstatet, res, jac)
 
-def test_assem_dres_dcontrol(model, linearization, dcontrol):
+def test_assem_dres_dcontrol(
+        model, state, statet, control, prop,
+        dcontrol
+    ):
     """
     Test `model.assem_dres_dcontrol`
     """
-    set_linearization(model, linearization)
-    state, statet, control, prop = linearization
+    set_linearization(model, state, statet, control, prop)
     # model_fluid.control['psub'][:] = 1
     # model_fluid.control['psup'][:] = 0
     res = lambda state: set_and_assemble(state, model.set_control, model.assem_res)
@@ -364,18 +374,23 @@ def test_assem_dres_dcontrol(model, linearization, dcontrol):
 
     _test_taylor(control, dcontrol, res, jac)
 
-def test_assem_dres_dprops(model, linearization, dprop):
+def test_assem_dres_dprops(
+        model, state, statet, control, prop,
+        dprop
+    ):
     """
     Test `model.assem_dres_dprops`
     """
-    set_linearization(model, linearization)
-    state, statet, control, prop = linearization
+    set_linearization(model, state, statet, control, prop)
     res = lambda state: set_and_assemble(state, model.set_prop, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_prop, model.assem_dres_dprop)
 
     _test_taylor(prop, dprop, res, jac)
 
-def test_dres_dstate_vs_dres_state(model, model_linear, linearization, dstate):
+def test_dres_dstate_vs_dres_state(
+        model, model_linear, state, statet, control, prop,
+        dstate
+    ):
     """
     Test consistency between `model` and `model_linear_state`
 
@@ -386,9 +401,8 @@ def test_dres_dstate_vs_dres_state(model, model_linear, linearization, dstate):
         is equal to
         (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
     """
-    set_linearization(model, linearization)
-    set_linearization(model_linear, linearization)
-    state, statet, control, prop = linearization
+    set_linearization(model, state, statet, control, prop)
+    set_linearization(model_linear, state, statet, control, prop)
 
     # compute the linearized residual from `model`
     dres_dstate = set_and_assemble(state, model.set_state, model.assem_dres_dstate)
@@ -407,7 +421,10 @@ def test_dres_dstate_vs_dres_state(model, model_linear, linearization, dstate):
         for key, subvec in vec.sub_items():
             print(key, subvec.norm())
 
-def test_dres_dstatet_vs_dres_statet(model, model_linear, linearization, dstatet):
+def test_dres_dstatet_vs_dres_statet(
+        model, model_linear, state, statet, control, prop,
+        dstatet
+    ):
     """
     Test consistency between `model` and `model_linear_state`
 
@@ -418,9 +435,8 @@ def test_dres_dstatet_vs_dres_statet(model, model_linear, linearization, dstatet
         is equal to
         (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
     """
-    set_linearization(model, linearization)
-    set_linearization(model_linear, linearization)
-    state, statet, control, prop = linearization
+    set_linearization(model, state, statet, control, prop)
+    set_linearization(model_linear, state, statet, control, prop)
 
     # compute the linearized residual from `model`
     dres_dstatet = set_and_assemble(statet, model.set_state, model.assem_dres_dstatet)
