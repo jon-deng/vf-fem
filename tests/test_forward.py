@@ -119,20 +119,27 @@ class TestIntegrate:
     @pytest.fixture()
     def prop(self, model):
         """Return the properties"""
+        residual = model.solid.residual
         y_gap = 0.05
-        y_midline = np.max(model.solid.residual.mesh().coordinates()[..., 1]) + y_gap
+        y_midline = np.max(residual.mesh().coordinates()[..., 1]) + y_gap
 
         prop = model.prop.copy()
 
         prop['ymid'][0] = y_midline
         prop['ncontact'][1] = 1.0
 
-        xy = model.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
-        x = xy[:, 0]
-        y = xy[:, 1]
-        x_min, x_max = x.min(), x.max()
-        y_min, y_max = y.min(), y.max()
-        # prop['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        # xy = (
+        #     residual.form['coeff.prop.emod'].function_space()
+        #     .tabulate_dof_coordinates()
+        # )
+        # x = xy[:, 0]
+        # y = xy[:, 1]
+        # x_min, x_max = x.min(), x.max()
+        # y_min, y_max = y.min(), y.max()
+        # prop['emod'][:] = (
+        #     1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min)
+        #     + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        # )
         prop['emod'][:] = 10e3 * PASCAL_TO_CGS
 
         # Set default properties
@@ -174,6 +181,9 @@ class TestIntegrate:
             prop: bv.BlockVector,
             times: np.typing.NDArray
         ):
+        """
+        Test forward time integration of the model
+        """
 
         psub = controls[0]['fluid0.psub'][0]
         mesh_name = os.path.splitext(os.path.split(mesh_path)[1])[0]
