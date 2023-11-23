@@ -8,6 +8,8 @@ properties of the forward model.
 from typing import Mapping, Union, Optional, Callable, Tuple
 from numpy.typing import ArrayLike
 
+from functools import reduce
+
 import numpy as np
 from jax import numpy as jnp
 import jax
@@ -201,10 +203,18 @@ class TractionShape(BaseDolfinParameterization):
         # The two maps are
         # dF/du : sensitivity of residual to mesh displacement
         # dF/dt : sensitivity of residual to medial surface tractions
-        fspace = model.solid.forms['fspace.vector']
-        bc_dir = model.solid.forms['bc.dirichlet']
-        dx = model.solid.forms['measure.dx']
-        ds = model.solid.forms['measure.ds_traction']
+        residual = model.solid.residual
+        fspace = residual.form['coeff.prop.umesh'].function_space()
+        dirichlet_bcs = residual.dirichlet_bcs
+        dx = residual.measure('dx')
+        ds = residual.measure('ds')
+
+        facet_label_to_id = residual.mesh_function_label_to_value('facet')
+        ds_traction_surfaces = [
+            ds(int(facet_label_to_id[facet_label]))
+            for facet_label in residual.fsi_facet_labels
+        ]
+        ds_traction = reduce(lambda x, y: x+y, ds_traction_surfaces)
 
         tmesh = dfn.Function(fspace)
         trial = dfn.TrialFunction(fspace)
@@ -224,17 +234,18 @@ class TractionShape(BaseDolfinParameterization):
             keep_diagonal=True
         )
 
-        form_dF_dt = ufl.inner(trial, test)*ds
+        form_dF_dt = ufl.inner(trial, test)*ds_traction
         mat_dF_dt = dfn.assemble(
             form_dF_dt,
             tensor=dfn.PETScMatrix(),
             keep_diagonal=True
         )
 
-        bc_dir.apply(mat_dF_du)
-        bc_dir.zero_columns(mat_dF_du, tmesh.vector(), diagonal_value=1.0)
-        bc_dir.apply(mat_dF_dt)
-        bc_dir.zero_columns(mat_dF_dt, tmesh.vector(), diagonal_value=0.0)
+        for bc_dir in dirichlet_bcs:
+            bc_dir.apply(mat_dF_du)
+            bc_dir.zero_columns(mat_dF_du, tmesh.vector(), diagonal_value=1.0)
+            bc_dir.apply(mat_dF_dt)
+            bc_dir.zero_columns(mat_dF_dt, tmesh.vector(), diagonal_value=0.0)
 
         self.mat_dF_du = mat_dF_du
         self.mat_dF_dt = mat_dF_dt

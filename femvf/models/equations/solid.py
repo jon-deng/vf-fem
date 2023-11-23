@@ -648,7 +648,7 @@ class ShapeForm(PredefinedForm):
     }
 
     def _make_residual(self, coefficients, measure, mesh):
-        vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
+        vector_test = dfn.TestFunction(coefficients['coeff.prop.umesh'].function_space())
         umesh = coefficients['coeff.prop.umesh']
         umesh_ufl = ufl.SpatialCoordinate(mesh)
 
@@ -864,6 +864,35 @@ class KelvinVoigt(PredefinedFenicsResidual):
             + KelvinVoigtForm({}, dx, mesh)
             - SurfacePressureForm({}, traction_ds, mesh)
             - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return form
+
+class KelvinVoigtWShape(PredefinedFenicsResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicElasticForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - ShapeForm({}, dx, mesh)
         )
         return form
 

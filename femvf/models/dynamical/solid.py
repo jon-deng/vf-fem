@@ -120,7 +120,7 @@ class DynamicalSolidModelInterface:
 
             mesh = self.residual.mesh()
             fspace = self.residual.form['coeff.state.u1'].function_space()
-            mesh_coord0 = self.mesh.coordinates()
+            mesh_coord0 = self.residual.mesh().coordinates()
             VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
             dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(mesh_coord0.shape)
             mesh_coord = mesh_coord0 + dmesh_coords
@@ -352,10 +352,24 @@ class KelvinVoigt(PredefinedModel):
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
+class KelvinVoigtWShape(PredefinedModel):
+
+    def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+        return solid.KelvinVoigtWShape(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
+        )
+
 class LinearizedKelvinVoigt(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
         return solid.KelvinVoigt(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
+        )
+
+class LinearizedKelvinVoigtWShape(PredefinedLinearizedModel):
+
+    def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+        return solid.KelvinVoigtWShape(
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
