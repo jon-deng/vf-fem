@@ -35,10 +35,12 @@ Residual = Tuple[ArrayLike, Tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector
 Test = Union[JaxResidualFunction, JaxLinearizedResidualFunction]
 
 class DynamicalFluidModelInterface:
-    _res: JaxResidualFunction
+    _res: Union[JaxResidualFunction, JaxLinearizedResidualFunction]
     _res_args: Union[JaxResidualArgs, JaxLinearizedResidualArgs]
 
     def __init__(self, residual: fluid.JaxResidual):
+
+        self._residual = residual
 
         (state, control, prop) = residual.res_args
 
@@ -52,7 +54,7 @@ class DynamicalFluidModelInterface:
 
     @property
     def residual(self) -> Union[JaxResidualFunction, JaxLinearizedResidualFunction]:
-        return self._res
+        return self._residual
 
     @property
     def residual_args(self) -> Union[JaxResidualArgs, JaxLinearizedResidualArgs]:
@@ -71,13 +73,13 @@ class DynamicalFluidModelInterface:
         self.prop[:] = prop
 
     def assem_res(self):
-        submats = self.residual(*self.residual_args)
+        submats = self._res(*self.residual_args)
         labels = self.state.labels
         submats, shape = flatten_nested_dict(submats, labels)
         return bv.BlockVector(submats, shape, labels)
 
     def assem_dres_dstate(self):
-        submats = jax.jacfwd(self.residual, argnums=0)(*self.residual_args)
+        submats = jax.jacfwd(self._res, argnums=0)(*self.residual_args)
         labels = self.state.labels+self.state.labels
         submats, shape = flatten_nested_dict(submats, labels)
         return bv.BlockMatrix(submats, shape, labels)
@@ -96,13 +98,13 @@ class DynamicalFluidModelInterface:
         return bv.BlockMatrix(mats, labels=labels)
 
     def assem_dres_dcontrol(self):
-        submats = jax.jacfwd(self.residual, argnums=1)(*self.residual_args)
+        submats = jax.jacfwd(self._res, argnums=1)(*self.residual_args)
         labels = self.state.labels+self.control.labels
         submats, shape = flatten_nested_dict(submats, labels)
         return bv.BlockMatrix(submats, shape, labels)
 
     def assem_dres_dprop(self):
-        submats = jax.jacfwd(self.residual, argnums=2)(*self.residual_args)
+        submats = jax.jacfwd(self._res, argnums=2)(*self.residual_args)
         labels = self.state.labels + self.prop.labels
         submats, shape = flatten_nested_dict(submats, labels)
         return bv.BlockMatrix(submats, shape, labels)

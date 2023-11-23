@@ -68,6 +68,11 @@ class PredefinedJaxResidual(JaxResidual):
         res, res_args = self._make_residual(mesh, *args, **kwargs)
         super().__init__(res, res_args)
 
+        self._mesh = mesh
+
+    def mesh(self):
+        return self._mesh
+
     def _make_residual(self, mesh, *args, **kwargs):
         raise NotImplementedError("Subclasses must implement this method")
 
