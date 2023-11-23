@@ -413,7 +413,7 @@ class Identity(PredefJaxParametrization):
             self,
             model: Union[DynModel, TranModel]
         ):
-        super().__init__(self, model)
+        super().__init__(model)
 
     @staticmethod
     def make_map(model):
