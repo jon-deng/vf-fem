@@ -120,10 +120,12 @@ class DynamicalSolidModelInterface:
 
             mesh = self.residual.mesh()
             fspace = self.residual.form['coeff.state.u1'].function_space()
-            mesh_coord0 = self.residual.mesh().coordinates()
+            ref_mesh_coord = self.residual.ref_mesh_coords
             VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
-            dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(mesh_coord0.shape)
-            mesh_coord = mesh_coord0 + dmesh_coords
+            dmesh_coords = np.array(
+                u_mesh_coeff.vector()[VERT_TO_VDOF]
+            ).reshape(ref_mesh_coord.shape)
+            mesh_coord = ref_mesh_coord + dmesh_coords
             mesh.coordinates()[:] = mesh_coord
 
     # Convenience methods

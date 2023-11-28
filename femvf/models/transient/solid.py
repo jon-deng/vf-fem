@@ -179,10 +179,12 @@ class Model(base.BaseTransientModel):
 
             mesh = self.residual.mesh()
             fspace = self.residual.form['coeff.state.u1'].function_space()
-            mesh_coord0 = self.mesh.coordinates()
+            ref_mesh_coord = self.residual.ref_mesh_coords
             VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
-            dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(mesh_coord0.shape)
-            mesh_coord = mesh_coord0 + dmesh_coords
+            dmesh_coords = np.array(
+                u_mesh_coeff.vector()[VERT_TO_VDOF]
+            ).reshape(ref_mesh_coord.shape)
+            mesh_coord = ref_mesh_coord + dmesh_coords
             mesh.coordinates()[:] = mesh_coord
 
     ## Residual and sensitivity functions
@@ -512,7 +514,7 @@ class KelvinVoigt(NodalContactSolid):
             fsi_facet_labels, fixed_facet_labels
         )
 
-class KelvinVoigtWEpithelium(KelvinVoigt):
+class KelvinVoigtWEpithelium(NodalContactSolid):
 
     def _make_residual(
             self,
@@ -523,6 +525,24 @@ class KelvinVoigtWEpithelium(KelvinVoigt):
             fixed_facet_labels: Tuple[str]
         ) -> solid.FenicsResidual:
         return solid.KelvinVoigtWEpithelium(
+            mesh, mesh_functions, mesh_functions_label_to_value,
+            fsi_facet_labels, fixed_facet_labels
+        )
+
+class KelvinVoigtWShape(NodalContactSolid):
+    """
+    Represents the governing equations of a Kelvin-Voigt damped solid
+    """
+
+    def _make_residual(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: Tuple[dfn.MeshFunction],
+            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str]
+        ) -> solid.FenicsResidual:
+        return solid.KelvinVoigtWShape(
             mesh, mesh_functions, mesh_functions_label_to_value,
             fsi_facet_labels, fixed_facet_labels
         )

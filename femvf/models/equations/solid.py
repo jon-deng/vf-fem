@@ -6,6 +6,7 @@ import operator
 import warnings
 from functools import reduce
 from typing import Tuple, Mapping, Callable, Union, Any
+from numpy.typing import NDArray
 
 import numpy as np
 import dolfin as dfn
@@ -683,6 +684,7 @@ class FenicsResidual(base.BaseResidual):
         ):
 
         self._mesh = mesh
+        self._ref_mesh_coords = np.array(mesh.coordinates())
         self._form = linear_form
 
         self._mesh_functions = mesh_functions
@@ -711,6 +713,15 @@ class FenicsResidual(base.BaseResidual):
 
     def mesh(self) -> dfn.Mesh:
         return self._mesh
+
+    @property
+    def ref_mesh_coords(self) -> NDArray[float]:
+        """
+        Return the original/reference mesh coordinates
+
+        These are the mesh coordinates for zero mesh motion
+        """
+        return self._ref_mesh_coords
 
     @staticmethod
     def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]) -> int:
