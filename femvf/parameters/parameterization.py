@@ -23,6 +23,8 @@ from femvf import meshutils
 from blockarray import blockvec as bv, blockarray as ba
 from blockarray import typing
 
+# TODO: Rename to transformations and allow composing of transformations
+
 class BaseParameterization:
     """
     Map `BlockVector`s between spaces X and Y
@@ -183,9 +185,15 @@ class TractionShape(BaseDolfinParameterization):
     def __init__(
             self,
             model: Union[DynModel, TranModel],
-            lame_lambda=1.0, lame_mu=1.0
+            lame_lambda=1.0, lame_mu=1.0,
+            const_vals=None
         ):
         super().__init__(model)
+
+        if const_vals is None:
+            self.const_vals = {}
+        else:
+            self.const_vals = const_vals
 
         # The input vector simply renames the mesh displacement vector
         _x_vec = ba.zeros(model.prop.f_bshape)
@@ -258,7 +266,23 @@ class TractionShape(BaseDolfinParameterization):
 
         for key, val in x_dict.items():
             if key in y_dict:
-                y_dict[key][:] = val
+                if key in self.const_vals:
+                    y_dict[key][:] = self.const_vals[key]*np.ones(val.shape)
+                else:
+                    y_dict[key][:] = val
+
+        return x_dict, y_dict
+
+    def _set_y_defaults_from_x_linear(self, x: bv.BlockVector, y: bv.BlockVector):
+        x_dict = bvec_to_dict(x)
+        y_dict = bvec_to_dict(y)
+
+        for key, val in x_dict.items():
+            if key in y_dict:
+                if key in self.const_vals:
+                    y_dict[key][:] = np.zeros(val.shape)
+                else:
+                    y_dict[key][:] = val
 
         return x_dict, y_dict
 
@@ -283,7 +307,7 @@ class TractionShape(BaseDolfinParameterization):
         Return the corresponding `self.model.prop` vector
         """
         self.y[:] = hy
-        hy_dict, hx_dict = self._set_y_defaults_from_x(self.y, self.x)
+        hy_dict, hx_dict = self._set_y_defaults_from_x_linear(self.y, self.x)
 
         # Assemble the RHS for the given medial surface traction
         self.umesh.vector()[:] = hy_dict['umesh']
@@ -298,7 +322,7 @@ class TractionShape(BaseDolfinParameterization):
         Return the corresponding `self.model.prop` vector
         """
         self.x[:] = dx
-        dx_dict, dy_dict = self._set_y_defaults_from_x(self.x, self.y)
+        dx_dict, dy_dict = self._set_y_defaults_from_x_linear(self.x, self.y)
 
         # Assemble the RHS for the given medial surface traction
         self.tmesh.vector()[:] = dx_dict['tmesh']

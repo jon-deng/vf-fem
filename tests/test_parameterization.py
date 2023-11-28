@@ -18,7 +18,7 @@ from femvf.parameters import parameterization
 
 from blockarray import (blockvec as bv, linalg as blinalg)
 
-from .taylor import taylor_convergence
+from taylor import taylor_convergence
 
 dfn.set_log_level(50)
 
@@ -29,11 +29,11 @@ class TestParameterization:
         """
         Return the model to test
         """
-        mesh_path = '../meshes/M5-3layers.xml'
+        mesh_path = '../meshes/M5_BC--GA3--DZ0.00.msh'
         model = load_transient_fsi_model(
             mesh_path,
             None,
-            SolidType=tsld.KelvinVoigt,
+            SolidType=tsld.KelvinVoigtWShape,
             FluidType=tfld.BernoulliAreaRatioSep
         )
         return model
@@ -41,11 +41,11 @@ class TestParameterization:
     @pytest.fixture(
         params=[
             # parameterization.Identity,
-            # parameterization.TractionShape,
+            parameterization.TractionShape,
             parameterization.ConstantSubset
         ]
     )
-    def params(self, model, request):
+    def transform(self, model, request):
         """
         Return the parameterization to test
         """
@@ -56,63 +56,67 @@ class TestParameterization:
                 'const_vals': {'umesh': 0},
                 'scale': {'emod': 1e-3}
             }
+        elif issubclass(Param, parameterization.TractionShape):
+            kwargs = {
+                'const_vals': {'emod': 1e4, 'nu': 0.3},
+            }
         return Param(model, **kwargs)
 
     @pytest.fixture()
-    def x(self, params):
+    def x(self, transform):
         """
         Return the linearization point for the parameterization
         """
-        ret_x = params.x.copy()
+        ret_x = transform.x.copy()
         ret_x[:] = 5
         return ret_x
 
     @pytest.fixture()
-    def dx(self, params):
+    def dx(self, transform):
         """
         Return the perturbation direction for the parameterization
         """
-        ret_dx = params.x.copy()
+        ret_dx = transform.x.copy()
         ret_dx[:] = 1e-2
         return ret_dx
 
     @pytest.fixture()
-    def hy(self, params):
+    def hy(self, transform):
         """
         Return a dual vector for the model properties
         """
-        ret_hy = params.y.copy()
+        ret_hy = transform.y.copy()
         ret_hy[:] = 1e-2
         return ret_hy
 
-    def test_apply(self, params, x):
+    def test_apply(self, transform, x):
         """
-        Test `params.apply`
+        Test `transform.apply`
         """
         x.print_summary()
-        y = params.apply(x)
+        y = transform.apply(x)
         y.print_summary()
 
-    def test_apply_jvp(self, params, x, dx):
+    def test_apply_jvp(self, transform, x, dx):
         """
-        Test `params.apply_jvp`
+        Test `transform.apply_jvp`
         """
         def f(x):
-            return params.apply(x).copy()
+            return transform.apply(x).copy()
 
         def jac(x, dx):
-            return params.apply_jvp(x, dx)
+            return transform.apply_jvp(x, dx)
 
         taylor_convergence(x, dx, f, jac, norm=blinalg.norm)
 
-    def test_apply_vjp(self, params, x, dx, hy):
+    def test_apply_vjp(self, transform, x, dx, hy):
         """
-        Test `params.apply_vjp`
+        Test `transform.apply_vjp`
         """
-        dy = params.apply_jvp(x, dx)
+        dy = transform.apply_jvp(x, dx)
         g_from_primal = bv.dot(hy, dy)
 
-        hx = params.apply_vjp(x, hy)
+        hx = transform.apply_vjp(x, hy)
         g_from_dual = bv.dot(dx, hx)
 
         print(
