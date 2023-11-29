@@ -4,6 +4,8 @@ Test `femvf.parameters.transform`
 
 from typing import Union
 
+from functools import reduce
+
 import pytest
 
 import numpy as np
@@ -13,13 +15,51 @@ from femvf.models.transient.base import BaseTransientModel
 from femvf.models.dynamical.base import BaseDynamicalModel
 from femvf.models.transient import solid as tsld, fluid as tfld
 from femvf.load import load_transient_fsi_model
-from femvf.parameters import transform
+from femvf.parameters import transform as tform
 
 from blockarray import (blockvec as bv, linalg as blinalg)
 
 from taylor import taylor_convergence
 
 dfn.set_log_level(50)
+
+def init_default_transform(
+        Transform: tform.Transform, model, x=None, y=None
+    ):
+    """
+    Return a basic transform
+    """
+    # `TransformFromModel` and `JaxTransformFromModel` instances
+    if issubclass(
+            Transform,
+            (tform.TransformFromModel, tform.JaxTransformFromModel)
+        ):
+        transform_args = (model,)
+
+        if issubclass(Transform, tform.TractionShape):
+            kwargs = {'lame_lambda': 101.0, 'lame_mu': 2.0}
+        elif issubclass(Transform, tform.LayerModuli):
+            kwargs = {}
+    # `JaxTransformFromX`:
+    elif issubclass(
+            Transform,
+            tform.JaxTransformFromX
+        ):
+        transform_args = (model.prop,)
+        if issubclass(Transform, tform.Identity):
+            kwargs = {}
+        elif issubclass(Transform, tform.ConstantSubset):
+            kwargs = {'const_vals': {'emod': 1e4, 'nu': 0.3}}
+        elif issubclass(Transform, tform.Scale):
+            kwargs = {'scale': {'emod': 1e4, 'nu': 0.3}}
+    # `JaxTransformFromY`:
+    elif issubclass(
+            Transform,
+            tform.JaxTransformFromY
+        ):
+        transform_args = (model.prop,)
+
+    return Transform(*transform_args, **kwargs)
 
 class TestTransform:
 
@@ -39,9 +79,12 @@ class TestTransform:
 
     @pytest.fixture(
         params=[
-            transform.Identity,
-            transform.TractionShape,
-            transform.ConstantSubset
+            tform.Identity,
+            tform.TractionShape,
+            tform.ConstantSubset,
+            tform.Scale,
+            (tform.Scale, tform.TractionShape),
+            (tform.Scale, tform.ConstantSubset, tform.TractionShape)
         ]
     )
     def transform(self, model, request):
@@ -52,39 +95,16 @@ class TestTransform:
         kwargs = {}
 
         # This handles different initialization calls for
-        # `TransformFromModel` and `JaxTransformFromModel` instances
-        if issubclass(
-                Transform,
-                (transform.TransformFromModel, transform.JaxTransformFromModel)
-            ):
-            transform_args = (model,)
 
-            if issubclass(Transform, transform.TractionShape):
-                kwargs = {'lame_lambda': 101.0, 'lame_mu': 2.0}
-            elif issubclass(Transform, transform.LayerModuli):
-                kwargs = {}
-        # `JaxTransformFromX`:
-        elif issubclass(
-                Transform,
-                transform.JaxTransformFromX
-            ):
-            transform_args = (model.prop,)
-            if issubclass(Transform, transform.Identity):
-                kwargs = {}
-            elif issubclass(Transform, transform.ConstantSubset):
-                kwargs = {'const_vals': {'emod': 1e4, 'nu': 0.3}}
-            elif issubclass(Transform, transform.Scale):
-                kwargs = {'scale': {'emod': 1e4, 'nu': 0.3}}
-        # `JaxTransformFromY`:
-        elif issubclass(
-                Transform,
-                transform.JaxTransformFromY
-            ):
-            transform_args = (model.prop,)
+        if isinstance(Transform, tuple):
+            _transform = reduce(
+                tform.TransformComposition,
+                [init_default_transform(x, model) for x in Transform]
+            )
         else:
-            pass
+            _transform = init_default_transform(Transform, model)
 
-        return Transform(*transform_args, **kwargs)
+        return _transform
 
     @pytest.fixture()
     def x(self, transform):
