@@ -112,62 +112,6 @@ class Transform:
         """
         raise NotImplementedError()
 
-    def apply_inv(self, y: bv.BlockVector) -> bv.BlockVector:
-        """
-        Map an output `y` to an input `x`
-
-        Parameters
-        ----------
-        x : bv.BlockVector
-            The input parameterization
-
-        Returns
-        -------
-        y : bv.BlockVector
-            The output `model.prop` vector
-        """
-        raise NotImplementedError()
-
-    def apply_inv_vjp(
-            self,
-            y: bv.BlockVector,
-            hx: bv.BlockVector
-        ) -> bv.BlockVector:
-        """
-        Map a dual vector `hx` to a dual vector `hy` at the point `y`
-
-        Parameters
-        ----------
-        hy : bv.BlockVector
-            The output dual vector
-
-        Returns
-        -------
-        hx : bv.BlockVector
-            The input dual vector
-        """
-        raise NotImplementedError()
-
-    def apply_inv_jvp(
-            self,
-            y: bv.BlockVector,
-            dy: bv.BlockVector
-        ) -> bv.BlockVector:
-        """
-        Map a differential input vector `dy` to an output vector `dx` at the point `y`
-
-        Parameters
-        ----------
-        dx : bv.BlockVector
-            The input vector
-
-        Returns
-        -------
-        dy : bv.BlockVector
-            The output vector
-        """
-        raise NotImplementedError()
-
 
 class ModelPropTransform(Transform):
     """
@@ -358,24 +302,17 @@ class JaxTransform(Transform):
     def __init__(
             self,
             map_x_to_y: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]],
-            map_y_to_x: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]]
         ):
-        _x, _y, map = map_x_to_y
-        y, x, map_inv = map_y_to_x
+        x, y, map = map_x_to_y
 
         self._x = bv.convert_subtype_to_numpy(x)
         self._y = bv.convert_subtype_to_numpy(y)
 
         self._map = map
-        self._map_inv = map_inv
 
     @property
     def map(self):
         return self._map
-
-    @property
-    def map_inv(self):
-        return self._map_inv
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
@@ -417,8 +354,8 @@ class PredefJaxTransform(JaxTransform):
             model: Union[DynModel, TranModel],
             **kwargs
         ):
-        map_x_to_y, map_y_to_x = self.make_map(model, **kwargs)
-        super().__init__(map_x_to_y, map_y_to_x)
+        map_x_to_y = self.make_map(model, **kwargs)
+        super().__init__(map_x_to_y)
 
     @staticmethod
     def make_map(model, **kwargs):
@@ -469,7 +406,7 @@ class Identity(PredefJaxTransform):
 
         y = model.prop
         x = model.prop.copy()
-        return (x, y, map), (y, x, map)
+        return (x, y, map)
 
 class LayerModuli(PredefJaxTransform):
 
@@ -511,7 +448,7 @@ class LayerModuli(PredefJaxTransform):
         subvecs = [np.zeros(1) for _ in labels[0]]
         in_vec = bv.BlockVector(subvecs, labels=labels)
 
-        return (in_vec, model.prop.copy(), map), (None, None, None)
+        return (in_vec, model.prop.copy(), map)
 
 class ConstantSubset(PredefJaxTransform):
 
@@ -549,19 +486,7 @@ class ConstantSubset(PredefJaxTransform):
                     y[key] = scale[key]*x[key]
             return y
 
-        def map_inv(y):
-            """
-            Return the y->x mapping
-            """
-            x = {}
-            for key in y:
-                if key in const_vals:
-                    x[key] = const_vals[key]*np.ones(x[key].shape)
-                else:
-                    x[key] = 1/scale[key]*y[key]
-            return x
-
-        return (x, y, map), (y, x, map_inv)
+        return (x, y, map)
 
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
