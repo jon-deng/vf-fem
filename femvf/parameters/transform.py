@@ -6,7 +6,7 @@ properties of the forward model.
 """
 
 from typing import Mapping, Union, Optional, Callable, Tuple
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 
 from functools import reduce
 
@@ -23,9 +23,7 @@ from femvf import meshutils
 from blockarray import blockvec as bv, blockarray as ba
 from blockarray import typing
 
-# TODO: Rename to transformations and allow composing of transformations
-
-class BaseParameterization:
+class BaseTransform:
     """
     Map `BlockVector`s between spaces X and Y
 
@@ -167,7 +165,7 @@ class BaseParameterization:
         raise NotImplementedError()
 
 
-class BaseDolfinParameterization(BaseParameterization):
+class BaseDolfinParameterization(BaseTransform):
     def __init__(
             self,
             model: Union[DynModel, TranModel]
@@ -333,9 +331,9 @@ class TractionShape(BaseDolfinParameterization):
         dy_dict['umesh'][:] = self.umesh.vector()[:]
         return dict_to_bvec(dy_dict, self.y.labels)
 
-BlockVectorDict = Mapping[str, ArrayLike]
+BlockVectorDict = Mapping[str, NDArray]
 
-class JaxParameterization(BaseParameterization):
+class JaxParameterization(BaseTransform):
     """
     Map an alternative parameterization to a model's `prop` parameters
 
