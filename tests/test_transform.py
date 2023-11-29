@@ -1,5 +1,5 @@
 """
-Test `femvf.parameters.parameterization`
+Test `femvf.parameters.transform`
 """
 
 from typing import Union
@@ -13,8 +13,7 @@ from femvf.models.transient.base import BaseTransientModel
 from femvf.models.dynamical.base import BaseDynamicalModel
 from femvf.models.transient import solid as tsld, fluid as tfld
 from femvf.load import load_transient_fsi_model
-from femvf import meshutils
-from femvf.parameters import parameterization
+from femvf.parameters import transform
 
 from blockarray import (blockvec as bv, linalg as blinalg)
 
@@ -22,7 +21,7 @@ from taylor import taylor_convergence
 
 dfn.set_log_level(50)
 
-class TestParameterization:
+class TestTransform:
 
     @pytest.fixture()
     def model(self) -> Union[BaseDynamicalModel, BaseTransientModel]:
@@ -40,32 +39,57 @@ class TestParameterization:
 
     @pytest.fixture(
         params=[
-            # parameterization.Identity,
-            parameterization.TractionShape,
-            parameterization.ConstantSubset
+            transform.Identity,
+            transform.TractionShape,
+            transform.ConstantSubset
         ]
     )
     def transform(self, model, request):
         """
-        Return the parameterization to test
+        Return the transform to test
         """
-        Param = request.param
+        Transform = request.param
         kwargs = {}
-        if issubclass(Param, parameterization.ConstantSubset):
-            kwargs = {
-                'const_vals': {'umesh': 0},
-                'scale': {'emod': 1e-3}
-            }
-        elif issubclass(Param, parameterization.TractionShape):
-            kwargs = {
-                'const_vals': {'emod': 1e4, 'nu': 0.3},
-            }
-        return Param(model, **kwargs)
+
+        # This handles different initialization calls for
+        # `TransformFromModel` and `JaxTransformFromModel` instances
+        if issubclass(
+                Transform,
+                (transform.TransformFromModel, transform.JaxTransformFromModel)
+            ):
+            transform_args = (model,)
+
+            if issubclass(Transform, transform.TractionShape):
+                kwargs = {'lame_lambda': 101.0, 'lame_mu': 2.0}
+            elif issubclass(Transform, transform.LayerModuli):
+                kwargs = {}
+        # `JaxTransformFromX`:
+        elif issubclass(
+                Transform,
+                transform.JaxTransformFromX
+            ):
+            transform_args = (model.prop,)
+            if issubclass(Transform, transform.Identity):
+                kwargs = {}
+            elif issubclass(Transform, transform.ConstantSubset):
+                kwargs = {'const_vals': {'emod': 1e4, 'nu': 0.3}}
+            elif issubclass(Transform, transform.Scale):
+                kwargs = {'scale': {'emod': 1e4, 'nu': 0.3}}
+        # `JaxTransformFromY`:
+        elif issubclass(
+                Transform,
+                transform.JaxTransformFromY
+            ):
+            transform_args = (model.prop,)
+        else:
+            pass
+
+        return Transform(*transform_args, **kwargs)
 
     @pytest.fixture()
     def x(self, transform):
         """
-        Return the linearization point for the parameterization
+        Return the linearization point for the transform
         """
         ret_x = transform.x.copy()
         ret_x[:] = 5
@@ -74,7 +98,7 @@ class TestParameterization:
     @pytest.fixture()
     def dx(self, transform):
         """
-        Return the perturbation direction for the parameterization
+        Return the perturbation direction for the transform
         """
         ret_dx = transform.x.copy()
         ret_dx[:] = 1e-2
@@ -93,9 +117,9 @@ class TestParameterization:
         """
         Test `transform.apply`
         """
-        x.print_summary()
+        # x.print_summary()
         y = transform.apply(x)
-        y.print_summary()
+        # y.print_summary()
 
     def test_apply_jvp(self, transform, x, dx):
         """

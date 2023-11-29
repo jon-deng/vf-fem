@@ -123,7 +123,6 @@ class Transform:
     def __rmul__(self, other):
         return TransformComposition(other, self)
 
-
 class TransformComposition(Transform):
     """
     A composition of two `Transform` instances
@@ -176,7 +175,8 @@ class TransformComposition(Transform):
 
         return dy2
 
-class ModelPropTransform(Transform):
+
+class TransformFromModel(Transform):
     """
     Map `BlockVector`s from an input space to a `model.prop` space
 
@@ -197,22 +197,16 @@ class ModelPropTransform(Transform):
             _y_vec.sub_blocks, labels=model.prop.labels
         )
 
-class TractionShape(ModelPropTransform):
+class TractionShape(TransformFromModel):
     """
     Map a surface traction to mesh displacement
     """
     def __init__(
             self,
             model: Model,
-            lame_lambda=1.0, lame_mu=1.0,
-            const_vals=None
+            lame_lambda=1.0, lame_mu=1.0
         ):
         super().__init__(model)
-
-        if const_vals is None:
-            self.const_vals = {}
-        else:
-            self.const_vals = const_vals
 
         # The input vector simply renames the mesh displacement vector
         _x_vec = ba.zeros(model.prop.f_bshape)
@@ -285,10 +279,7 @@ class TractionShape(ModelPropTransform):
 
         for key, val in x_dict.items():
             if key in y_dict:
-                if key in self.const_vals:
-                    y_dict[key][:] = self.const_vals[key]*np.ones(val.shape)
-                else:
-                    y_dict[key][:] = val
+                y_dict[key][:] = val
 
         return x_dict, y_dict
 
@@ -298,10 +289,7 @@ class TractionShape(ModelPropTransform):
 
         for key, val in x_dict.items():
             if key in y_dict:
-                if key in self.const_vals:
-                    y_dict[key][:] = np.zeros(val.shape)
-                else:
-                    y_dict[key][:] = val
+                y_dict[key][:] = val
 
         return x_dict, y_dict
 
@@ -408,7 +396,7 @@ class JaxTransform(Transform):
         return dict_to_bvec(dy_dict, self.y.labels)
 
 
-class ModelPropJaxTransform(JaxTransform):
+class JaxTransformFromModel(JaxTransform):
     """
     Map an alternative parameterization to a model's `prop` parameters
 
@@ -421,6 +409,7 @@ class ModelPropJaxTransform(JaxTransform):
             model: Model,
             **kwargs
         ):
+        super().__init__()
         x_y_map = self.make_x_y_map(model, **kwargs)
         super().__init__(x_y_map)
 
@@ -431,7 +420,7 @@ class ModelPropJaxTransform(JaxTransform):
         """
         raise NotImplementedError()
 
-class LayerModuli(ModelPropJaxTransform):
+class LayerModuli(JaxTransformFromModel):
 
     @staticmethod
     def make_x_y_map(model):
@@ -468,19 +457,19 @@ class LayerModuli(ModelPropJaxTransform):
         return (in_vec, model.prop.copy(), map)
 
 
-class PredefinedJaxTransform(JaxTransform):
+class JaxTransformFromX(JaxTransform):
     """
     Map `BlockVector`s between two spaces
     """
 
     def __init__(
-            self, x: bv.BlockVector, y: bv.BlockVector, **kwargs
+            self, x: bv.BlockVector, **kwargs
         ):
-        map = self.make_map(x, y, **kwargs)
+        y, map = self.make_y_map(x, **kwargs)
         super().__init__((x, y, map))
 
     @staticmethod
-    def make_map(x: bv.BlockVector, y: bv.BlockVector, **kwargs):
+    def make_y_map(x: bv.BlockVector, **kwargs):
         """
         Return a `jax` function that performs the map
         """
@@ -513,24 +502,26 @@ class PredefinedJaxTransform(JaxTransform):
         _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
         return dict_to_bvec(dy_dict, self.y.labels)
 
-class Identity(PredefinedJaxTransform):
+class Identity(JaxTransformFromX):
 
     @staticmethod
-    def make_map(x: bv.BlockVector, y: bv.BlockVector, **kwargs):
+    def make_y_map(x: bv.BlockVector, **kwargs):
         def map(input):
             return input
 
-        return map
+        y = x
 
-class ConstantSubset(PredefinedJaxTransform):
+        return y, map
+
+class ConstantSubset(JaxTransformFromX):
 
     def __init__(
-            self, x: bv.BlockVector, y: bv.BlockVector, const_vals=None
+            self, x: bv.BlockVector, const_vals=None
         ):
-        super().__init__(x, y, const_vals=const_vals)
+        super().__init__(x, const_vals=const_vals)
 
     @staticmethod
-    def make_map(x: bv.BlockVector, y: bv.BlockVector, const_vals=None):
+    def make_y_map(x: bv.BlockVector, const_vals=None):
 
         if const_vals is None:
             const_vals = {}
@@ -540,22 +531,25 @@ class ConstantSubset(PredefinedJaxTransform):
             Return the x->y mapping
             """
             y = {}
-            for key in x:
+            for key, value in x.items():
                 if key in const_vals:
                     y[key] = const_vals[key]*np.ones(x[key].shape)
+                else:
+                    y[key] = value
             return y
 
-        return map
+        y = x.copy()
+        return y, map
 
-class Scale(PredefinedJaxTransform):
+class Scale(JaxTransformFromX):
 
     def __init__(
-            self, x: bv.BlockVector, y: bv.BlockVector, scale=None
+            self, x: bv.BlockVector, scale=None
         ):
-        super().__init__(x, y, scale=scale)
+        super().__init__(x, scale=scale)
 
     @staticmethod
-    def make_map(x: bv.BlockVector, y: bv.BlockVector, scale=None):
+    def make_y_map(x: bv.BlockVector, y: bv.BlockVector, scale=None):
         _scale = {key: 1.0 for key in x.labels[0]}
         if scale is not None:
             _scale.update(scale)
@@ -570,8 +564,28 @@ class Scale(PredefinedJaxTransform):
                 y[key] = scale[key]*x[key]
             return y
 
-        return map
+        y = x
 
+        return y, map
+
+
+class JaxTransformFromY(JaxTransform):
+    """
+    Map `BlockVector`s between two spaces
+    """
+
+    def __init__(
+            self, y: bv.BlockVector, **kwargs
+        ):
+        x, map = self.make_x_map(y, **kwargs)
+        super().__init__((x, y, map))
+
+    @staticmethod
+    def make_x_map(y: bv.BlockVector, **kwargs):
+        """
+        Return a `jax` function that performs the map
+        """
+        raise NotImplementedError()
 
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
