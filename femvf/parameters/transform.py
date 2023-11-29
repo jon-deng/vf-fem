@@ -135,6 +135,9 @@ class TransformComposition(Transform):
     def __init__(self, transform_a: Transform, transform_b: Transform):
         self._transforms = (transform_a, transform_b)
 
+        self._x = transform_a.x
+        self._y = transform_b.y
+
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         trans1, trans2 = self._transforms
         return trans2.apply(trans1.apply(x))
@@ -549,7 +552,7 @@ class Scale(JaxTransformFromX):
         super().__init__(x, scale=scale)
 
     @staticmethod
-    def make_y_map(x: bv.BlockVector, y: bv.BlockVector, scale=None):
+    def make_y_map(x: bv.BlockVector, scale=None):
         _scale = {key: 1.0 for key in x.labels[0]}
         if scale is not None:
             _scale.update(scale)
