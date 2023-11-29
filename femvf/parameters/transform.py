@@ -23,14 +23,18 @@ from femvf import meshutils
 from blockarray import blockvec as bv, blockarray as ba
 from blockarray import typing
 
-class BaseTransform:
+class Transform:
     """
-    Map `BlockVector`s between spaces X and Y
+    Map `BlockVector`s between two spaces
+
+    Letting the spaces be denoted by 'X' (input space) and 'Y' (output space),
+    instances of this class map `BlockVector` objects from 'X' to 'Y' and also
+    linearizations.
 
     Attributes
     ----------
     x, y : bv.BlockVector
-        Prototype `BlockVectors` of the input (parameterization) and output
+        Prototype `BlockVector` of the input and output spaces
         (`model.prop`) attribute, respectively
     """
 
@@ -54,17 +58,17 @@ class BaseTransform:
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         """
-        Map the parameterization `x` to a `model.prop` vector
+        Map an input `x` to an output `y`
 
         Parameters
         ----------
         x : bv.BlockVector
-            The input parameterization
+            The input vector
 
         Returns
         -------
         y : bv.BlockVector
-            The output `model.prop` vector
+            The output vector
         """
         raise NotImplementedError()
 
@@ -74,17 +78,17 @@ class BaseTransform:
             hy: bv.BlockVector
         ) -> bv.BlockVector:
         """
-        Map a dual vector `hy` (in `model.prop` space) to a dual vector `hx`
+        Map a dual vector `hy` to a dual vector `hx` at the point `x`
 
         Parameters
         ----------
         hy : bv.BlockVector
-            The input dual vector in `model.prop` space
+            The output dual vector
 
         Returns
         -------
         hx : bv.BlockVector
-            The output dual vector in `x` space
+            The input dual vector
         """
         raise NotImplementedError()
 
@@ -94,23 +98,23 @@ class BaseTransform:
             dx: bv.BlockVector
         ) -> bv.BlockVector:
         """
-        Map a differential primal vector `dx` to a `dy` (`model.prop`)
+        Map a differential input vector `dx` to an output vector `dy` at the point `x`
 
         Parameters
         ----------
         dx : bv.BlockVector
-            The input parameterization
+            The input vector
 
         Returns
         -------
         dy : bv.BlockVector
-            The output primal vector in `model.prop` space
+            The output vector
         """
         raise NotImplementedError()
 
     def apply_inv(self, y: bv.BlockVector) -> bv.BlockVector:
         """
-        Map the parameterization `x` to a `model.prop` vector
+        Map an output `y` to an input `x`
 
         Parameters
         ----------
@@ -130,17 +134,17 @@ class BaseTransform:
             hx: bv.BlockVector
         ) -> bv.BlockVector:
         """
-        Map a dual vector `hx` (in `model.prop` space) to a dual vector `hy`
+        Map a dual vector `hx` to a dual vector `hy` at the point `y`
 
         Parameters
         ----------
-        hx : bv.BlockVector
-            The input dual vector in `model.prop` space
+        hy : bv.BlockVector
+            The output dual vector
 
         Returns
         -------
-        yx : bv.BlockVector
-            The output dual vector in `x` space
+        hx : bv.BlockVector
+            The input dual vector
         """
         raise NotImplementedError()
 
@@ -150,22 +154,28 @@ class BaseTransform:
             dy: bv.BlockVector
         ) -> bv.BlockVector:
         """
-        Map a differential primal vector `dy` to `dx`
+        Map a differential input vector `dy` to an output vector `dx` at the point `y`
 
         Parameters
         ----------
-        dy : bv.BlockVector
-            The input parameterization
+        dx : bv.BlockVector
+            The input vector
 
         Returns
         -------
-        dx : bv.BlockVector
-            The output primal vector
+        dy : bv.BlockVector
+            The output vector
         """
         raise NotImplementedError()
 
 
-class BaseDolfinParameterization(BaseTransform):
+class ModelPropTransform(Transform):
+    """
+    Map `BlockVector`s from an input space to a `model.prop` space
+
+    This is used by defining subclasses that implement the input space vector,
+    and the appropriate transformations.
+    """
     def __init__(
             self,
             model: Union[DynModel, TranModel]
@@ -177,9 +187,12 @@ class BaseDolfinParameterization(BaseTransform):
             _y_vec.sub_blocks, labels=model.prop.labels
         )
 
-        # NOTE: Subclasses have to supply a `self._x_vec` attribute
+        # NOTE: Subclasses have to supply a `self._x` attribute
 
-class TractionShape(BaseDolfinParameterization):
+class TractionShape(ModelPropTransform):
+    """
+    Map a surface traction to mesh displacement
+    """
     def __init__(
             self,
             model: Union[DynModel, TranModel],
@@ -205,7 +218,7 @@ class TractionShape(BaseDolfinParameterization):
         x_labels[ii] = 'tmesh'
         self._x = bv.BlockVector(x_subvecs, labels=(tuple(x_labels),))
 
-        ## Define the stiffness matrix and traction sensitivity matrices that
+        ## Define the stiffness matrix and traction sensitivity matrices:
         # The two maps are
         # dF/du : sensitivity of residual to mesh displacement
         # dF/dt : sensitivity of residual to medial surface tractions
@@ -300,12 +313,13 @@ class TractionShape(BaseDolfinParameterization):
         y_dict['umesh'][:] = self.umesh.vector()[:]
         return dict_to_bvec(y_dict, self.y.labels)
 
-    def apply_vjp(self, x, hy):
+    def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
         """
         Return the corresponding `self.model.prop` vector
         """
-        self.y[:] = hy
-        hy_dict, hx_dict = self._set_y_defaults_from_x_linear(self.y, self.x)
+        self.x[:] = x
+        # self.y[:] = hy
+        hy_dict, hx_dict = self._set_y_defaults_from_x_linear(hy, self.x)
 
         # Assemble the RHS for the given medial surface traction
         self.umesh.vector()[:] = hy_dict['umesh']
@@ -319,8 +333,8 @@ class TractionShape(BaseDolfinParameterization):
         """
         Return the corresponding `self.model.prop` vector
         """
-        self.x[:] = dx
-        dx_dict, dy_dict = self._set_y_defaults_from_x_linear(self.x, self.y)
+        self.x[:] = x
+        dx_dict, dy_dict = self._set_y_defaults_from_x_linear(dx, self.y)
 
         # Assemble the RHS for the given medial surface traction
         self.tmesh.vector()[:] = dx_dict['tmesh']
@@ -333,7 +347,7 @@ class TractionShape(BaseDolfinParameterization):
 
 BlockVectorDict = Mapping[str, NDArray]
 
-class JaxParameterization(BaseTransform):
+class JaxTransform(Transform):
     """
     Map an alternative parameterization to a model's `prop` parameters
 
@@ -390,7 +404,7 @@ class JaxParameterization(BaseTransform):
         _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
         return dict_to_bvec(dy_dict, self.y.labels)
 
-class PredefJaxParametrization(JaxParameterization):
+class PredefJaxTransform(JaxTransform):
     """
     Map an alternative parameterization to a model's `prop` parameters
 
@@ -440,7 +454,7 @@ class PredefJaxParametrization(JaxParameterization):
         _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
         return dict_to_bvec(dy_dict, self.y.labels)
 
-class Identity(PredefJaxParametrization):
+class Identity(PredefJaxTransform):
 
     def __init__(
             self,
@@ -457,7 +471,7 @@ class Identity(PredefJaxParametrization):
         x = model.prop.copy()
         return (x, y, map), (y, x, map)
 
-class LayerModuli(PredefJaxParametrization):
+class LayerModuli(PredefJaxTransform):
 
     def __init__(
             self,
@@ -499,7 +513,7 @@ class LayerModuli(PredefJaxParametrization):
 
         return (in_vec, model.prop.copy(), map), (None, None, None)
 
-class ConstantSubset(PredefJaxParametrization):
+class ConstantSubset(PredefJaxTransform):
 
     def __init__(
             self,
