@@ -17,7 +17,6 @@ import dolfin as dfn
 import ufl
 from femvf.models.transient.base import BaseTransientModel as TranModel
 from femvf.models.dynamical.base import BaseDynamicalModel as DynModel
-from femvf.models.assemblyutils import CachedFormAssembler
 from femvf import meshutils
 
 from blockarray import blockvec as bv, blockarray as ba
@@ -132,11 +131,11 @@ class TransformComposition(Transform):
     transforms
     """
 
-    def __init__(self, transform_a: Transform, transform_b: Transform):
-        self._transforms = (transform_a, transform_b)
+    def __init__(self, transform_1: Transform, transform_2: Transform):
+        self._transforms = (transform_1, transform_2)
 
-        self._x = transform_a.x
-        self._y = transform_b.y
+        self._x = transform_1.x
+        self._y = transform_2.y
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         trans1, trans2 = self._transforms
@@ -171,10 +170,10 @@ class TransformComposition(Transform):
         x2 = trans1.apply(x1)
 
         dx1 = dx
-        dy1 = trans1.apply_vjp(x1, dx1)
+        dy1 = trans1.apply_jvp(x1, dx1)
 
         dx2 = dy1
-        dy2 = trans2.apply_vjp(x2, dx2)
+        dy2 = trans2.apply_jvp(x2, dx2)
 
         return dy2
 
@@ -276,7 +275,10 @@ class TractionShape(TransformFromModel):
         self.umesh = dfn.Function(fspace)
         self.tmesh = tmesh
 
-    def _set_y_defaults_from_x(self, x: bv.BlockVector, y: bv.BlockVector):
+    def _set_y_from_x(self, x: bv.BlockVector, y: bv.BlockVector):
+        """
+        Set all `y` subvectors except for 'umesh' from `x`
+        """
         x_dict = bvec_to_dict(x)
         y_dict = bvec_to_dict(y)
 
@@ -286,7 +288,10 @@ class TractionShape(TransformFromModel):
 
         return x_dict, y_dict
 
-    def _set_y_defaults_from_x_linear(self, x: bv.BlockVector, y: bv.BlockVector):
+    def _set_y_from_x_linear(self, x: bv.BlockVector, y: bv.BlockVector):
+        """
+        Set all linearized `y` subvectors except for 'umesh' from `x`
+        """
         x_dict = bvec_to_dict(x)
         y_dict = bvec_to_dict(y)
 
@@ -297,11 +302,8 @@ class TractionShape(TransformFromModel):
         return x_dict, y_dict
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
-        """
-        Return the corresponding `self.model.prop` vector
-        """
         self.x[:] = x
-        x_dict, y_dict = self._set_y_defaults_from_x(self.x, self.y)
+        x_dict, y_dict = self._set_y_from_x(self.x, self.y)
 
         # Assemble the RHS for the given medial surface traction
         self.tmesh.vector()[:] = x_dict['tmesh']
@@ -318,14 +320,15 @@ class TractionShape(TransformFromModel):
         """
         self.x[:] = x
         # self.y[:] = hy
-        hy_dict, hx_dict = self._set_y_defaults_from_x_linear(hy, self.x)
+        hx_dict, hy_dict = self._set_y_from_x_linear(self.x, hy)
 
         # Assemble the RHS for the given medial surface traction
-        self.umesh.vector()[:] = hy_dict['umesh']
+        humesh = self.umesh.vector()
+        humesh[:] = hy_dict['umesh']
 
-        # Solve for the mesh displacement
-        dfn.solve(self.mat_dF_du, self.tmesh.vector(), self.umesh.vector(), 'lu')
-        hx_dict['tmesh'][:] = self.mat_dF_dt*self.tmesh.vector()
+        hF = self.tmesh.vector()
+        dfn.solve(self.mat_dF_du, hF, humesh, 'lu')
+        hx_dict['tmesh'][:] = self.mat_dF_dt*hF
         return dict_to_bvec(hx_dict, self.x.labels)
 
     def apply_jvp(self, x, dx) -> bv.BlockVector:
@@ -333,15 +336,17 @@ class TractionShape(TransformFromModel):
         Return the corresponding `self.model.prop` vector
         """
         self.x[:] = x
-        dx_dict, dy_dict = self._set_y_defaults_from_x_linear(dx, self.y)
+        dx_dict, dy_dict = self._set_y_from_x_linear(dx, self.y)
 
         # Assemble the RHS for the given medial surface traction
-        self.tmesh.vector()[:] = dx_dict['tmesh']
-        rhs = self.mat_dF_dt * self.tmesh.vector()
+        dtmesh = self.tmesh.vector()
+        dtmesh[:] = dx_dict['tmesh']
+        dF = self.mat_dF_dt * dtmesh
 
         # Solve for the mesh displacement
-        dfn.solve(self.mat_dF_du, self.umesh.vector(), rhs, 'lu')
-        dy_dict['umesh'][:] = self.umesh.vector()[:]
+        dumesh = self.umesh.vector()
+        dfn.solve(self.mat_dF_du, dumesh, dF, 'lu')
+        dy_dict['umesh'][:] = dumesh[:]
         return dict_to_bvec(dy_dict, self.y.labels)
 
 
@@ -380,7 +385,10 @@ class JaxTransform(Transform):
 
     def apply(self, x: bv.BlockVector) -> bv.BlockVector:
         x_dict = bvec_to_dict(x)
+
+        # Convert any JAX arrays into numpy arrays
         y_dict = self.map(x_dict)
+        y_dict = jax_to_numpy_dict(y_dict)
         return dict_to_bvec(y_dict, self.y.labels)
 
     def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
@@ -388,14 +396,17 @@ class JaxTransform(Transform):
         _hy = self.y.copy()
         _hy[:] = hy
         hy_dict = bvec_to_dict(_hy)
+
         _, vjp_fun = jax.vjp(self.map, x_dict)
-        hx_dict = vjp_fun(hy_dict)[0]
+        hx_dict, = vjp_fun(hy_dict)
+        hx_dict = jax_to_numpy_dict(hx_dict)
         return dict_to_bvec(hx_dict, self.x.labels)
 
     def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
         x_dict = bvec_to_dict(x)
         dx_dict = bvec_to_dict(dx)
         _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
+        dy_dict = jax_to_numpy_dict(dy_dict)
         return dict_to_bvec(dy_dict, self.y.labels)
 
 
@@ -478,33 +489,6 @@ class JaxTransformFromX(JaxTransform):
         """
         raise NotImplementedError()
 
-    def apply(self, x: bv.BlockVector) -> bv.BlockVector:
-        """
-        Return the corresponding `self.model.prop` vector
-        """
-        x_dict = bvec_to_dict(x)
-        y_dict = self.map(x_dict)
-        return dict_to_bvec(y_dict, self.y.labels)
-
-    def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
-        """
-        """
-        x_dict = bvec_to_dict(x)
-        _hy = self.y.copy()
-        _hy[:] = hy
-        hy_dict = bvec_to_dict(_hy)
-        _, vjp_fun = jax.vjp(self.map, x_dict)
-        hx_dict = vjp_fun(hy_dict)[0]
-        return dict_to_bvec(hx_dict, self.x.labels)
-
-    def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
-        """
-        """
-        x_dict = bvec_to_dict(x)
-        dx_dict = bvec_to_dict(dx)
-        _, dy_dict = jax.jvp(self.map, (x_dict,), (dx_dict,))
-        return dict_to_bvec(dy_dict, self.y.labels)
-
 class Identity(JaxTransformFromX):
 
     @staticmethod
@@ -533,12 +517,11 @@ class ConstantSubset(JaxTransformFromX):
             """
             Return the x->y mapping
             """
-            y = {}
-            for key, value in x.items():
-                if key in const_vals:
-                    y[key] = const_vals[key]*np.ones(x[key].shape)
-                else:
-                    y[key] = value
+            y = {
+                key: const_vals[key]*np.ones(value.shape) if key in const_vals
+                else value
+                for key, value in x.items()
+            }
             return y
 
         y = x.copy()
@@ -562,12 +545,10 @@ class Scale(JaxTransformFromX):
             """
             Return the x->y mapping
             """
-            y = {}
-            for key in x:
-                y[key] = scale[key]*x[key]
+            y = {key: scale[key]*x_sub for key, x_sub in x.items()}
             return y
 
-        y = x
+        y = x.copy()
 
         return y, map
 
@@ -601,3 +582,9 @@ def dict_to_bvec(
         labels = (tuple(y.keys()), )
     subvecs = [y[label] for label in labels[0]]
     return bv.BlockVector(subvecs, labels=labels)
+
+def jax_to_numpy_dict(dict: Mapping[str, NDArray]):
+    return {
+        key: np.array(value)
+        for key, value in dict.items()
+    }
