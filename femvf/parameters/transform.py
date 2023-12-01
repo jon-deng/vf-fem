@@ -320,7 +320,7 @@ class TractionShape(TransformFromModel):
         """
         self.x[:] = x
         # self.y[:] = hy
-        hx_dict, hy_dict = self._set_y_from_x_linear(self.x, hy)
+        hy_dict, hx_dict = self._set_y_from_x_linear(hy, self.x)
 
         # Assemble the RHS for the given medial surface traction
         humesh = self.umesh.vector()
@@ -331,7 +331,7 @@ class TractionShape(TransformFromModel):
         hx_dict['tmesh'][:] = self.mat_dF_dt*hF
         return dict_to_bvec(hx_dict, self.x.labels)
 
-    def apply_jvp(self, x, dx) -> bv.BlockVector:
+    def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
         """
         Return the corresponding `self.model.prop` vector
         """
