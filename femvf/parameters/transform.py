@@ -571,6 +571,40 @@ class JaxTransformFromY(JaxTransform):
         """
         raise NotImplementedError()
 
+class ExtractSubset(JaxTransformFromY):
+
+    def __init__(
+            self, y: bv.BlockVector, keys_to_extract=None
+        ):
+
+        _const_vals = bvec_to_dict(y.copy())
+        super().__init__(y, keys_to_extract=keys_to_extract, const_vals=_const_vals)
+
+    @staticmethod
+    def make_x_map(y: bv.BlockVector, keys_to_extract=None, const_vals=None):
+        """
+        Return a `jax` function that performs the map
+        """
+        if keys_to_extract is None:
+            keys_to_extract = list(self._const.keys())
+
+        x = bv.BlockVector(
+            [np.array(y[key]) for key in keys_to_extract],
+            shape=(len(keys_to_extract),),
+            labels=(keys_to_extract,)
+        )
+
+        def map(x):
+            y = {
+                key:
+                x[key] if key in x
+                else value
+                for key, value in const_vals.items()
+            }
+            return y
+
+        return x, map
+
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
 
