@@ -2,11 +2,12 @@
 Contains definitions of different solid model forms
 """
 
+from typing import Tuple, Mapping, Callable, Union, Any, Optional
+from numpy.typing import NDArray
+
 import operator
 import warnings
 from functools import reduce
-from typing import Tuple, Mapping, Callable, Union, Any
-from numpy.typing import NDArray
 
 import numpy as np
 import dolfin as dfn
@@ -177,11 +178,27 @@ class FenicsForm:
     coefficients: CoefficientMapping
         A mapping from string labels to `dfn.Coefficient` instances used in
         `form`
+    expressions: CoefficientMapping
+        A mapping from string labels to `dfn.Expression` instances, using the
+        coefficients in `coefficients`
     """
 
-    def __init__(self, form: dfn.Form, coefficients: CoefficientMapping):
+    _form: dfn.Form
+    _coefficients: CoefficientMapping
+    _expressions: CoefficientMapping
+
+    def __init__(
+            self,
+            form: dfn.Form,
+            coefficients: CoefficientMapping,
+            expressions: Optional[CoefficientMapping]=None
+        ):
         self._form = form
         self._coefficients = coefficients
+
+        if expressions is None:
+            expressions = {}
+        self._expressions = expressions
 
     @property
     def form(self):
@@ -190,6 +207,10 @@ class FenicsForm:
     @property
     def coefficients(self) -> CoefficientMapping:
         return self._coefficients
+
+    @property
+    def expressions(self) -> CoefficientMapping:
+        return self._expressions
 
     def arguments(self) -> list[ufl.Argument]:
         return self.form.arguments()
@@ -307,7 +328,7 @@ class PredefinedForm(FenicsForm):
         A mapping defining all coefficients that are needed to create the form
     MAKE_FORM: Callable[
             [CoefficientMapping, dfn.Measure, dfn.Mesh],
-            dfn.Form
+            Tuple[dfn.Form, CoefficientMapping]
         ]
         A function that returns a `dfn.Form` instance using the coefficients
         given in `COEFFICIENT_SPEC` and additional mesh information
@@ -332,7 +353,7 @@ class PredefinedForm(FenicsForm):
     COEFFICIENT_SPEC: Mapping[str, BaseFunctionSpaceSpec] = {}
     MAKE_FORM: Callable[
         [CoefficientMapping, dfn.Measure, dfn.Mesh],
-        dfn.Form
+        Tuple[dfn.Form, CoefficientMapping]
     ]
 
     def __init__(self,
@@ -347,8 +368,8 @@ class PredefinedForm(FenicsForm):
             if key not in coefficients:
                 coefficients[key] = spec.generate_function(mesh)
 
-        form = self.MAKE_FORM(coefficients, measure, mesh)
-        super().__init__(form, coefficients)
+        form, expressions = self.MAKE_FORM(coefficients, measure, mesh)
+        super().__init__(form, coefficients, expressions)
 
 class InertialForm(PredefinedForm):
     """
@@ -367,7 +388,7 @@ class InertialForm(PredefinedForm):
         density = coefficients['coeff.prop.rho']
         inertial_body_force = density*acc
 
-        return ufl.inner(inertial_body_force, vector_test) * measure
+        return ufl.inner(inertial_body_force, vector_test) * measure, {}
         # forms['expr.force_inertial'] = inertial_body_force
 
 # Elastic effect forms
@@ -395,8 +416,9 @@ class IsotropicElasticForm(PredefinedForm):
         set_fenics_function(nu, 0.45)
         stress_elastic = stress_isotropic(inf_strain, emod, nu)
 
-        # coefficients['expr.stress_elastic'] = stress_elastic
-        return ufl.inner(stress_elastic, strain_test) * measure
+        expressions = {}
+        expressions['expr.stress_elastic'] = stress_elastic
+        return ufl.inner(stress_elastic, strain_test) * measure, expressions
 
 class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
     """
@@ -426,8 +448,9 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
         lame_mu = emod/2/(1+nu)
         stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(inf_strain.ufl_shape[0])
 
-        return ufl.inner(stress_elastic, strain_test) * measure
-        # forms['expr.stress_elastic'] = stress_elastic
+        expressions = {}
+        expressions['expr.stress_elastic'] = stress_elastic
+        return ufl.inner(stress_elastic, strain_test) * measure, expressions
         # return forms
 
 class IsotropicElasticSwellingForm(PredefinedForm):
@@ -469,11 +492,14 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         mhat = (m*(v-1) + 1)
         S = mhat*v**(1/3)*stress_isotropic(E_v, emod, nu)
 
-        return ufl.inner(S, DE) * dx
-        # # Make this the cauchy stress
-        # F = form_def_grad(u)
-        # J = ufl.det(F)
-        # forms['expr.stress_elastic'] = (1/J)*F*S*F.T
+        expressions = {}
+        expressions['expr.strain_energy'] = ufl.inner(S, DE)
+        # This converts the Green stress to Cauchy stress
+        F = def_grad(u)
+        J = ufl.det(F)
+        expressions['expr.stress_elastic'] = (1/J)*F*S*F.T
+
+        return ufl.inner(S, DE) * dx, expressions
 
         # # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
         # # lame_mu = emod/2/(1+nu)
@@ -502,8 +528,9 @@ class SurfacePressureForm(PredefinedForm):
         p = coefficients['coeff.fsi.p1']
         reference_traction = -p * pullback_area_normal(dis, facet_normal)
 
-        # coefficients['expr.fluid_traction'] = reference_traction
-        return ufl.inner(reference_traction, vector_test) * ds
+        expressions = {}
+        expressions['expr.fluid_traction'] = reference_traction
+        return ufl.inner(reference_traction, vector_test) * ds, expressions
 
 class ManualSurfaceContactTractionForm(PredefinedForm):
     """
@@ -528,7 +555,9 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.manual.tcontact'].function_space())
         tcontact = coefficients['coeff.state.manual.tcontact']
-        return ufl.inner(tcontact, vector_test) * measure
+
+        expressions = {}
+        return ufl.inner(tcontact, vector_test) * measure, expressions
 
 # Surface membrane forms
 
@@ -578,7 +607,9 @@ class IsotropicMembraneForm(PredefinedForm):
         lmbda_pp = ufl.conditional(ufl.eq(emod, 0), 0, 2*mu*lmbda/(lmbda+2*mu))
         stress_pp = 2*mu*strain_pp + lmbda_pp*ufl.tr(strain_pp)*(ident-nn)
 
-        return ufl.inner(stress_pp, strain_pp_test) * th_membrane*measure
+        expressions = {}
+
+        return ufl.inner(stress_pp, strain_pp_test) * th_membrane*measure, expressions
 
         # forms['form.un.f1uva'] += res
         # forms['coeff.prop.nu_membrane'] = nu
@@ -627,7 +658,8 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
 
         stress_pp = 2*lame_mu*strain_pp + 2*lame_mu*ufl.tr(strain_pp)*(ident-nn)
 
-        return ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure
+        expressions = {}
+        return ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure, expressions
 
 # Viscous effect forms
 
@@ -665,7 +697,9 @@ class RayleighDampingForm(PredefinedForm):
         rho = coefficients['coeff.prop.rho']
         force_visco = rayleigh_m*rho*v
 
-        return (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx
+        expressions = {}
+
+        return (ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test))*dx, expressions
 
         # coefficients['form.un.f1uva'] += damping
         # # coefficients['coeff.prop.nu'] = nu
@@ -694,9 +728,11 @@ class KelvinVoigtForm(PredefinedForm):
         inf_strain_rate = strain_inf(v)
         stress_visco = eta*inf_strain_rate
 
-        return ufl.inner(stress_visco, strain_test) * measure
-        # forms['expr.kv_stress'] = stress_visco
-        # forms['expr.kv_strain_rate'] = inf_strain_rate
+        expressions = {}
+        expressions['expr.kv_stress'] = stress_visco
+        expressions['expr.kv_strain_rate'] = inf_strain_rate
+
+        return ufl.inner(stress_visco, strain_test) * measure, expressions
 
 class APForceForm(PredefinedForm):
     """
@@ -736,7 +772,9 @@ class APForceForm(PredefinedForm):
         stiffness = ufl.inner(force_elast_ap, vector_test) * measure
         viscous = ufl.inner(force_visco_ap, vector_test) * measure
 
-        return -stiffness - viscous
+        expressions = {}
+
+        return -stiffness - viscous, expressions
 
 # Add shape effect forms
 class ShapeForm(PredefinedForm):
@@ -763,7 +801,10 @@ class ShapeForm(PredefinedForm):
         # function/vector and ufl coefficient instance
         # forms['coeff.prop.umesh'] = (umesh, ufl.SpatialCoordinate(mesh))
         # forms['mesh.REF_COORDINATES'] = mesh.coordinates().copy()
-        return 0*ufl.inner(umesh_ufl, vector_test)*measure
+
+        expressions = {}
+
+        return 0*ufl.inner(umesh_ufl, vector_test)*measure, expressions
 
 ## Residual definitions
 
