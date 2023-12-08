@@ -193,6 +193,8 @@ class FenicsForm:
             coefficients: CoefficientMapping,
             expressions: Optional[CoefficientMapping]=None
         ):
+
+        assert expressions is not None
         self._form = form
         self._coefficients = coefficients
 
@@ -250,63 +252,13 @@ class FenicsForm:
     def __rmul__(self, other: float) -> 'FenicsForm':
         return mul_form(self, other)
 
-def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
-    """
-    Return a new `FenicsForm` from a sum of other forms
-    """
-    # Check that form arguments are consistent and replace duplicated
-    # consistent arguments
-    new_form_a = form_a.form
-    args_a, args_b = form_a.form.arguments(), form_b.form.arguments()
-    for arg_a, arg_b in zip(args_a, args_b):
-        if compare_function_space(arg_a.function_space(), arg_b.function_space()):
-            new_form_a = ufl.replace(new_form_a, {arg_a: arg_b})
-        else:
-            raise ValueError(
-                "Summed forms contain duplicate arguments with different function spaces."
-            )
-    residual = new_form_a + form_b.form
+FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
 
-    # Replace duplicate coefficient keys by the `form_b` coefficient
-    # only if the duplicate coefficients from `form_b` and `form_a` have the
-    # same function space
-    duplicate_coeff_keys = set.intersection(set(form_a.keys()), set(form_b.keys()))
-    for key in list(duplicate_coeff_keys):
-        coeff_a, coeff_b = form_a[key], form_b[key]
-
-        if isinstance(coeff_a, dfn.Function) and isinstance(coeff_b, dfn.Function):
-            if compare_function_space(coeff_a.function_space(), coeff_b.function_space()):
-                residual = ufl.replace(residual, {coeff_a: coeff_b})
-            else:
-                raise ValueError(
-                    "Summed forms contain duplicate coefficients with different function spaces."
-                )
-        elif isinstance(coeff_a, dfn.Constant) and isinstance(coeff_b, dfn.Constant):
-            if coeff_a.values().shape == coeff_b.values().shape:
-                residual = ufl.replace(residual, {coeff_a: coeff_b})
-            else:
-                raise ValueError(
-                    "Summed forms contain duplicate coefficients with different constant value shapes."
-                )
-        else:
-            raise TypeError(
-                "Summed forms have duplicate coefficients mixing `dfn.Function` and `dfn.Constant`."
-            )
-    return FenicsForm(residual, {**form_a.coefficients, **form_b.coefficients})
-
-def mul_form(form: FenicsForm, scalar: float) -> FenicsForm:
+def compare_function_space(
+        space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace
+    ) -> bool:
     """
-    Return a new `FenicsForm` from a sum of other forms
-    """
-    # Check that form arguments are consistent and replace duplicated
-    # consistent arguments
-    new_form = scalar*form.form
-
-    return FenicsForm(new_form, form.coefficients)
-
-def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace) -> bool:
-    """
-    Return whether two function spaces are equivalent
+    Return if two function spaces are equivalent
     """
     if (
             space_a.element().signature() == space_b.element().signature()
@@ -316,11 +268,95 @@ def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpac
     else:
         return False
 
+def get_shared_function(
+        function_a: FunctionLike, function_b: FunctionLike
+    ) -> FunctionLike:
+    """
+    Return a shared function space for two `fenics` objects
+    """
+    if type(function_a) != type(function_b):
+        raise TypeError("Functions must have the same type")
+
+    if compare_function_space(
+            function_a.function_space(), function_b.function_space()
+        ):
+            # TODO: You could create a new function space for the shared function
+            shared_function = function_a
+            return shared_function
+    else:
+        raise ValueError(
+            "Functions have different function spaces."
+        )
+
+def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
+    """
+    Return a new `FenicsForm` from a sum of other forms
+
+    This function:
+        sums the two `ufl.Form` instances
+        combines any coefficients with the same name
+        adds any expressions with the same name together
+    """
+    # Ensure that the two forms have arguments with consistent function spaces.
+    # Oftentimes, the function spaces from the arguments will be the same but
+    # correspond to difference `FunctionSpace` instances; this code replaces
+    # these with a single argument
+    # NOTE: The form arguments are the test functions that forms are integrated
+    # against for linear forms/functionals
+    new_form_a = form_a.form
+    new_form_b = form_b.form
+    args_a, args_b = new_form_a.arguments(), new_form_b.arguments()
+    for arg_a, arg_b in zip(args_a, args_b):
+        arg_shared = get_shared_function(arg_a, arg_b)
+        new_form_a = ufl.replace(form_a.form, {arg_a: arg_shared})
+        new_form_b = ufl.replace(form_b.form, {arg_b: arg_shared})
+    new_form = new_form_a + new_form_b
+
+    # Link coefficients with the same key to a single shared `dfn.Function`
+    new_coefficients = {**form_a.coefficients, **form_b.coefficients}
+    duplicate_coeff_keys = set.intersection(set(form_a.keys()), set(form_b.keys()))
+    duplicate_coeffs = {
+        key: (form_a[key], form_b[key])
+        for key in list(duplicate_coeff_keys)
+    }
+    for key, (coeff_a, coeff_b) in duplicate_coeffs.items():
+        coeff_shared = get_shared_function(coeff_a, coeff_b)
+        new_form = ufl.replace(new_form, {coeff_a: coeff_shared})
+        new_form = ufl.replace(new_form, {coeff_b: coeff_shared})
+        new_coefficients[key] = coeff_shared
+
+    # Sum any expressions with the same key
+    new_expressions = {**form_a.expressions, **form_b.expressions}
+    duplicate_expr_keys = set.intersection(
+        set(form_a.expressions.keys()), set(form_b.expressions.keys())
+    )
+    duplicate_exprs = {
+        key: (form_a.expressions[key], form_b.expressions[key])
+        for key in list(duplicate_expr_keys)
+    }
+    for key, (expr_a, expr_b) in duplicate_exprs.items():
+        new_expressions[key] = expr_a+expr_b
+
+    return FenicsForm(new_form, new_coefficients, new_expressions)
+
+def mul_form(form: FenicsForm, scalar: float) -> FenicsForm:
+    """
+    Return a new `FenicsForm` from a sum of other forms
+    """
+    # Check that form arguments are consistent and replace duplicated
+    # consistent arguments
+    new_form = scalar*form.form
+
+    return FenicsForm(new_form, form.coefficients, form.expressions)
+
 ## Pre-defined linear functionals
 
 class PredefinedForm(FenicsForm):
     """
     Represents a predefined `dfn.Form`
+
+    The predefined form is defined through two class attributes (see below)
+    which specify the coefficients in the form and return the form itself.
 
     Class Attributes
     ----------------
@@ -1247,7 +1283,7 @@ def modify_newmark_time_discretization(form: FenicsForm) -> FenicsForm:
 
     new_functional = ufl.replace(form.form, {v1: v1_nmk, a1: a1_nmk})
 
-    return FenicsForm(new_functional, coefficients)
+    return FenicsForm(new_functional, coefficients, form.expressions)
 
 def modify_unary_linearized_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
     """
