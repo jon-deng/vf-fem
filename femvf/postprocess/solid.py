@@ -52,12 +52,12 @@ class BaseFieldMeasure(BaseStateMeasure):
         ):
         super().__init__(model)
         if fspace is None:
-            self.fspace = dfn.FunctionSpace(self.model.solid.forms['mesh.mesh'], 'DG', 0)
+            self.fspace = dfn.FunctionSpace(self.model.solid.residual.mesh(), 'DG', 0)
         else:
             self.fspace = fspace
 
         if dx is None:
-            self.dx = self.model.solid.forms['measure.dx']
+            self.dx = self.model.solid.residual.measure('dx')
         else:
             self.dx = dx
 
@@ -78,8 +78,8 @@ class StressI1Field(BaseFieldMeasure):
     """
     def _init_expression(self):
         model = self.model
-        kv_stress = model.solid.forms['expr.kv_stress']
-        el_stress = model.solid.forms['expr.stress_elastic']
+        kv_stress = model.solid.residual.form.expressions['expr.kv_stress']
+        el_stress = model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
         # This is the first invariant (I1)
@@ -98,8 +98,8 @@ class StressI2Field(BaseFieldMeasure):
     def _init_expression(self):
         model = self.model
 
-        kv_stress = model.solid.forms['expr.kv_stress']
-        el_stress = model.solid.forms['expr.stress_elastic']
+        kv_stress = model.solid.residual.form.expressions['expr.kv_stress']
+        el_stress = model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
         # This is the second invariant (I2)
@@ -118,8 +118,8 @@ class StressI3Field(BaseFieldMeasure):
     def _init_expression(self):
         model = self.model
 
-        kv_stress = model.solid.forms['expr.kv_stress']
-        el_stress = model.solid.forms['expr.stress_elastic']
+        kv_stress = model.solid.residual.form.expressions['expr.kv_stress']
+        el_stress = model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
         # This is the third invariant (I3)
@@ -137,8 +137,8 @@ class StressHydrostaticField(BaseFieldMeasure):
 
     def _init_expression(self):
 
-        kv_stress = self.model.solid.forms['expr.kv_stress']
-        el_stress = self.model.solid.forms['expr.stress_elastic']
+        kv_stress = self.model.solid.residual.form.expressions['expr.kv_stress']
+        el_stress = self.model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
         return -1/3*ufl.tr(S)
@@ -154,8 +154,8 @@ class StressVonMisesField(BaseFieldMeasure):
     """
 
     def _init_expression(self):
-        kv_stress = self.model.solid.forms['expr.kv_stress']
-        el_stress = self.model.solid.forms['expr.stress_elastic']
+        kv_stress = self.model.solid.residual.form.expressions['expr.kv_stress']
+        el_stress = self.model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
         S_dev = S - 1/3*ufl.tr(S)*ufl.Identity(3)
@@ -173,7 +173,7 @@ class ElasticStressField(BaseFieldMeasure):
     """
 
     def _init_expression(self):
-        forms = self.model.solid.forms
+        forms = self.model.solid.residual.form
         return forms['expr.stress_elastic']
 
     def assem(self, state, control, prop):
@@ -195,7 +195,7 @@ class ContactPressureField(BaseFieldMeasure):
         super().__init__(model, dx, fspace, **kwargs)
 
     def _init_expression(self):
-        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        tcontact = self.model.solid.residual.form['coeff.state.manual.tcontact']
         # `tcontact*tcontact` should be the square of contact pressure
         return ufl.inner(tcontact, tcontact)**0.5
 
@@ -210,8 +210,8 @@ class ViscousDissipationField(BaseFieldMeasure):
     """
 
     def _init_expression(self):
-        kv_stress = self.model.solid.forms['expr.kv_stress']
-        kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
+        kv_stress = self.model.solid.residual.form.expressions['expr.kv_stress']
+        kv_strain_rate = self.model.solid.residual.form.expressions['expr.kv_strain_rate']
         return ufl.inner(kv_stress, kv_strain_rate)
 
     def assem(self, state, control, prop):
@@ -225,7 +225,7 @@ class ContactAreaDensityField(BaseFieldMeasure):
     """
 
     def _init_expression(self):
-        tcontact = self.model.solid.forms['coeff.state.manual.tcontact']
+        tcontact = self.model.solid.residual.form['coeff.state.manual.tcontact']
         pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
         contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
 
@@ -244,14 +244,14 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
         # The default `dx` measure should be a surface measure rather than
         # volume measure as used in `BaseFieldMeasure`
         if dx is None:
-            dx = model.solid.forms['measure.ds_traction']
+            dx = model.solid.residual.form['measure.ds_traction']
 
         super().__init__(model, dx, fspace, **kwargs)
 
     def _init_expression(self):
-        forms = self.model.solid.forms
-        fluid_traction = forms['expr.fluid_traction']
-        velocity = forms['coeff.state.v1']
+        form = self.model.solid.residual.form
+        fluid_traction = form.expressions['expr.fluid_traction']
+        velocity = form['coeff.state.v1']
         return ufl.inner(fluid_traction, velocity)
 
     def assem(self, state, control, prop):
@@ -266,12 +266,12 @@ class XMomentum(BaseFieldMeasure):
         # The default `dx` measure should be a surface measure rather than
         # volume measure as used in `BaseFieldMeasure`
         if dx is None:
-            dx = model.solid.forms['measure.ds_traction']
+            dx = model.solid.residual.form['measure.ds_traction']
 
         super().__init__(model, dx, fspace, **kwargs)
 
     def _init_expression(self):
-        forms = self.model.solid.forms
+        forms = self.model.solid.form
         rho = forms['coeff.prop.rho']
         velocity = forms['coeff.state.v1']
         return ufl.inner(rho, velocity[0])
@@ -288,12 +288,12 @@ class YMomentum(BaseFieldMeasure):
         # The default `dx` measure should be a surface measure rather than
         # volume measure as used in `BaseFieldMeasure`
         if dx is None:
-            dx = model.solid.forms['measure.dx']
+            dx = model.solid.residual.measure('dx')
 
         super().__init__(model, dx, fspace, **kwargs)
 
     def _init_expression(self):
-        forms = self.model.solid.forms
+        forms = self.model.solid.residual.form
         rho = forms['coeff.prop.rho']
         velocity = forms['coeff.state.v1']
         return ufl.inner(rho, velocity[1])
@@ -334,7 +334,7 @@ class BaseFieldIntegralMeasure(BaseStateMeasure):
         super().__init__(model)
 
         if dx is None:
-            self.dx = self.model.solid.forms['measure.dx']
+            self.dx = self.model.solid.residual.measure('dx')
         else:
             self.dx = dx
 
@@ -359,8 +359,9 @@ class ViscousDissipationRate(BaseFieldIntegralMeasure):
     """
 
     def _init_expression(self):
-        kv_stress = self.model.solid.forms['expr.kv_stress']
-        kv_strain_rate = self.model.solid.forms['expr.kv_strain_rate']
+        residual = self.model.solid.residual
+        kv_stress = residual.form.expressions['expr.kv_stress']
+        kv_strain_rate = residual.form.expressions['expr.kv_strain_rate']
         return ufl.inner(kv_stress, kv_strain_rate)*self.dx
 
     def assem(self, state, control, prop):
@@ -484,8 +485,8 @@ class VertexGlottalWidth(BaseStateMeasure):
         # Get the DOF/vertex number corresponding to `vertex_name`
         if vertex_name is None:
             raise ValueError("`vertex_name` must be supplied")
-        vertlabel_to_id = self.model.solid.forms['mesh.vertex_label_to_id']
-        vert_mf = self.model.solid.forms['mesh.vertex_function']
+        vertlabel_to_id = self.model.solid.residual.mesh_function_label_to_value('vertex')
+        vert_mf = self.model.solid.residual.mesh_function('vertex')
         idx_vertex = vert_mf.where_equal(vertlabel_to_id[vertex_name])
         if len(idx_vertex) == 0:
             raise ValueError(f"No vertex named `{vertex_name}` found")
@@ -494,11 +495,11 @@ class VertexGlottalWidth(BaseStateMeasure):
         else:
             idx_vertex = idx_vertex[0]
 
-        vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.forms['fspace.vector'])
+        vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.residual.form['coeff.state.u1'].function_space())
         # Get the y-displacement DOF
         self.idx_dof = vert_to_vdof[2*idx_vertex+1]
 
-        self.XREF = self.model.solid.forms['fspace.scalar'].tabulate_dof_coordinates()
+        self.XREF = self.model.solid.residual.form['coeff.fsi.p1'].function_space().tabulate_dof_coordinates()
 
     def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
