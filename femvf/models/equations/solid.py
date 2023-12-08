@@ -22,8 +22,20 @@ FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
 ## Function space specification
 
 class BaseFunctionSpaceSpec:
+    """
+    Represents a `fenics` function space
 
-    def __init__(self, *spec, default_value=0):
+    Parameters
+    ----------
+    spec:
+        A tuple specifying the function space
+    default_value: int
+        The default value for the function
+    """
+
+    generate_function: Callable[[dfn.Mesh], Union[dfn.Constant, dfn.Function]]
+
+    def __init__(self, *spec, default_value: int=0):
         self._spec = spec
         self._default_value = default_value
 
@@ -35,27 +47,62 @@ class BaseFunctionSpaceSpec:
     def default_value(self) -> Any:
         return self._default_value
 
-    def generate_function(self, mesh: dfn.Mesh) -> Union[dfn.Constant, dfn.Function]:
-        raise NotImplementedError()
+    # def generate_function(self, mesh: dfn.Mesh) -> Union[dfn.Constant, dfn.Function]:
+    #     raise NotImplementedError()
 
 class FunctionSpaceSpec(BaseFunctionSpaceSpec):
+    """
+    Represents a `dolfin` function space
 
-    def __init__(self, elem_family, elem_degree, value_dim, default_value=0):
+    Parameters
+    ----------
+    elem_family:
+        The 'family' of the function space (see `dfn.cpp.function.FunctionSpace`)
+    elem_degree:
+        The 'degree' of the function space (see `dfn.cpp.function.FunctionSpace`)
+    value_dim:
+        The dimension of function value (see `dfn.cpp.function.FunctionSpace`)
+    default_value: int
+        The default value for the function
+    """
+
+    def __init__(
+            self,
+            elem_family: str, elem_degree: int,
+            value_dim: Union[Tuple[int, ...], str],
+            default_value: int=0
+        ):
         assert value_dim in {'vector', 'scalar'}
         super().__init__(elem_family, elem_degree, value_dim, default_value=default_value)
 
-    def generate_function(self, mesh) -> dfn.Function:
+    def generate_function(self, mesh: dfn.Mesh) -> dfn.Function:
         elem_family, elem_degree, value_dim = self.spec
+        # TODO: You should also handle shape tuple for the value
         if value_dim == 'vector':
             return dfn.Function(dfn.VectorFunctionSpace(mesh, elem_family, elem_degree))
         elif value_dim == 'scalar':
             return dfn.Function(dfn.FunctionSpace(mesh, elem_family, elem_degree))
+        else:
+            raise ValueError(f"Unknown `value_dim`, {value_dim}")
 
 class ConstantFunctionSpaceSpec(BaseFunctionSpaceSpec):
+    """
+    Represents a `dolfin.Constant`
 
-    def __init__(self, value_dim, default_value=0):
-        super().__init__(value_dim)
-        self._default_value = default_value
+    Parameters
+    ----------
+    value_dim:
+        The dimension of function value (see `dfn.cpp.function.FunctionSpace`)
+    default_value: int
+        The default value for the function
+    """
+
+    def __init__(
+            self,
+            value_dim: Union[Tuple[int, ...], str],
+            default_value: int=0
+        ):
+        super().__init__(value_dim, default_value=default_value)
 
     def generate_function(self, mesh: dfn.Mesh) -> dfn.Constant:
         value_dim, = self.spec
@@ -71,31 +118,45 @@ class ConstantFunctionSpaceSpec(BaseFunctionSpaceSpec):
                 )
             else:
                 raise ValueError()
-        elif isinstance(value_dim, int):
+        elif isinstance(value_dim, tuple):
             const = dfn.Constant(
-                value_dim*[0], mesh.ufl_cell()
+                value_dim, mesh.ufl_cell()
             )
             const.values()[:] = self.default_value
             return const
         else:
-            raise TypeError()
+            raise TypeError(f"Unknown `value_dim` type, {type(value_dim)}")
 
 def func_spec(elem_family, elem_degree, value_dim, default_value=0):
+    """
+    Return a `FunctionSpaceSpec`
+    """
     return FunctionSpaceSpec(elem_family, elem_degree, value_dim, default_value=default_value)
 
 def const_spec(value_dim, default_value=0):
+    """
+    Return a `ConstantFunctionSpaceSpec`
+    """
     return ConstantFunctionSpaceSpec(value_dim, default_value=default_value)
 
 ## Form class
 
-def set_fenics_function(function: Union[dfn.Function, dfn.Constant], value):
+def set_fenics_function(
+        function: Union[dfn.Function, dfn.Constant],
+        value
+    ) -> dfn.Function:
     """
-    Set a constant value for a general fenics function
+    Set a value for a `dfn.Function` or `dfn.Constant` instance
+
+    This is needed because, although both classes represent functions,
+    they have different methods access their underlying coefficient vectors.
     """
     if isinstance(function, dfn.Constant):
         function.values()[:] = value
     else:
         function.vector()[:] = value
+
+    return function
 
 class FenicsForm:
     """
@@ -103,8 +164,19 @@ class FenicsForm:
 
     Parameters
     ----------
-    functional: dfn.Form
-    coefficients: Mapping[str, dfn.Function]
+    form: dfn.Form
+        The 'dfn.Form' instance
+    coefficients: CoefficientMapping
+        A mapping from string labels to `dfn.Coefficient` instances used in
+        `form`
+
+    Attributes
+    ----------
+    form: dfn.Form
+        The 'dfn.Form' instance
+    coefficients: CoefficientMapping
+        A mapping from string labels to `dfn.Coefficient` instances used in
+        `form`
     """
 
     def __init__(self, form: dfn.Form, coefficients: CoefficientMapping):
@@ -227,11 +299,41 @@ def compare_function_space(space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpac
 
 class PredefinedForm(FenicsForm):
     """
-    A pre-defined linear functional has a pre-defined residual in the class
+    Represents a predefined `dfn.Form`
+
+    Class Attributes
+    ----------------
+    COEFFICIENT_SPEC: Mapping[str, BaseFunctionSpaceSpec]
+        A mapping defining all coefficients that are needed to create the form
+    MAKE_FORM: Callable[
+            [CoefficientMapping, dfn.Measure, dfn.Mesh],
+            dfn.Form
+        ]
+        A function that returns a `dfn.Form` instance using the coefficients
+        given in `COEFFICIENT_SPEC` and additional mesh information
+
+        Note that this function could use `dfn.Coefficient` instances that
+        are not defined in `COEFFICIENT_SPEC` as well, but you will be unable to
+        access these coefficients and modify their values using after the
+        form has been created.
+
+    Parameters
+    ----------
+    coefficients: CoefficientMapping
+        A mapping from string labels to `dfn.Coefficient` instances to be used
+        in the `dfn.Form` instance. These coefficient will be used when the
+        `dfn.Form` instance is created.
+    measure: dfn.Measure
+        The measure to use in the form
+    mesh: dfn.Mesh
+        The measure to use in the form
     """
 
     COEFFICIENT_SPEC: Mapping[str, BaseFunctionSpaceSpec] = {}
-    _make_residual: Callable[[CoefficientMapping, dfn.Measure, dfn.Mesh], dfn.Form]
+    MAKE_FORM: Callable[
+        [CoefficientMapping, dfn.Measure, dfn.Mesh],
+        dfn.Form
+    ]
 
     def __init__(self,
             coefficients: CoefficientMapping,
@@ -245,8 +347,8 @@ class PredefinedForm(FenicsForm):
             if key not in coefficients:
                 coefficients[key] = spec.generate_function(mesh)
 
-        residual = self._make_residual(coefficients, measure, mesh)
-        super().__init__(residual, coefficients)
+        form = self.MAKE_FORM(coefficients, measure, mesh)
+        super().__init__(form, coefficients)
 
 class InertialForm(PredefinedForm):
     """
@@ -258,7 +360,7 @@ class InertialForm(PredefinedForm):
         'coeff.prop.rho': func_spec('DG', 0, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['coeff.state.a1'].function_space())
 
         acc = coefficients['coeff.state.a1']
@@ -281,7 +383,7 @@ class IsotropicElasticForm(PredefinedForm):
         'coeff.prop.nu': const_spec('scalar', default_value=0.45)
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
         strain_test = strain_inf(vector_test)
@@ -308,7 +410,7 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
         'coeff.prop.k_swelling': func_spec('DG', 0, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
         strain_test = strain_inf(vector_test)
@@ -341,7 +443,7 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
         """
         Add an effect for isotropic elasticity with a swelling field
         """
@@ -389,7 +491,7 @@ class SurfacePressureForm(PredefinedForm):
         'coeff.fsi.p1': func_spec('CG', 1, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
 
         ds = measure
 
@@ -416,7 +518,7 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         'coeff.prop.kcontact': const_spec('scalar', 1.0)
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
 
         # The contact traction must be manually linked with displacements and penalty parameters!
         # These parameters are:
@@ -442,7 +544,7 @@ class IsotropicMembraneForm(PredefinedForm):
         'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh, large_def=False):
+    def MAKE_FORM(self, coefficients, measure, mesh, large_def=False):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
         # Define the 8th order projector to get the planar strain component
@@ -493,7 +595,7 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
         'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh, large_def=False):
+    def MAKE_FORM(self, coefficients, measure, mesh, large_def=False):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
         # Define the 8th order projector to get the planar strain component
@@ -543,7 +645,7 @@ class RayleighDampingForm(PredefinedForm):
         'coeff.prop.rayleigh_k': const_spec('scalar', 1.0)
     }
 
-    def _make_residual(self, coefficients, measure, mesh, large_def=False):
+    def MAKE_FORM(self, coefficients, measure, mesh, large_def=False):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
@@ -581,7 +683,7 @@ class KelvinVoigtForm(PredefinedForm):
         'coeff.prop.eta': func_spec('DG', 0, 'scalar')
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
@@ -613,7 +715,7 @@ class APForceForm(PredefinedForm):
         'coeff.prop.muscle_stress': func_spec('DG', 0, 'scalar'),
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
         u1, v1 = coefficients['coeff.state.u1'], coefficients['coeff.state.v1']
@@ -648,7 +750,7 @@ class ShapeForm(PredefinedForm):
         'coeff.prop.umesh': func_spec('CG', 1, 'vector')
     }
 
-    def _make_residual(self, coefficients, measure, mesh):
+    def MAKE_FORM(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['coeff.prop.umesh'].function_space())
         umesh = coefficients['coeff.prop.umesh']
         umesh_ufl = ufl.SpatialCoordinate(mesh)
