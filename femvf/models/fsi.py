@@ -96,16 +96,37 @@ def coupling_stuff(
     fl_states = [
         _state_from_dynamic_or_transient_model(fluid) for fluid in fluids
     ]
-    fl_state = bv.concatenate_with_prefix(fl_states, 'fluid')
 
     solid_area = dfn.Function(
         solid.residual.form['coeff.fsi.p1'].function_space()
     ).vector()
 
-    # n_flq = fl_states[0]['q'].size
-    # n_flp = fl_states[0]['p'].size
-    n_slp = solid.control['p'].size
-    n_slu = sl_state['u'].size
+    fsimaps = make_fsimaps(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+
+    ## Construct the derivative of the solid control w.r.t fluid state
+    dslcontrol_dflstate = make_dslcontrol_dflstate(solid.control, fl_states, fsimaps)
+    # assert dslcontrol_dflstate.bshape == ret_bshape
+
+    ## Construct the derivative of the fluid control w.r.t solid state
+    fl_controls = [fluid.control for fluid in fluids]
+    dflcontrol_dslstate = make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, ndim=solid.residual.mesh().topology().dim())
+
+    return fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate
+
+def make_fsimaps(
+        solid: SolidModel,
+        fluids: Union[List[FluidModel], FluidModel],
+        solid_fsi_dofs: Union[List[ArrayLike], ArrayLike],
+        fluid_fsi_dofs: Union[List[ArrayLike], ArrayLike]
+    ):
+    fl_states = [
+        _state_from_dynamic_or_transient_model(fluid) for fluid in fluids
+    ]
+    # fl_state = bv.concatenate_with_prefix(fl_states, 'fluid')
+
+    solid_area = dfn.Function(
+        solid.residual.form['coeff.fsi.p1'].function_space()
+    ).vector()
 
     fsimaps = tuple(
         FSIMap(
@@ -115,8 +136,10 @@ def coupling_stuff(
         )
         for fl_state, fluid_dofs, solid_dofs in zip(fl_states, fluid_fsi_dofs, solid_fsi_dofs)
     )
+    return fsimaps
 
-    ## Construct the derivative of the solid control w.r.t fluid state
+def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps, ndim=2):
+    n_slp = sl_control['p'].size
     dslp_dflq_coll = [
         subops.zero_mat(n_slp, _fl_state['q'].size) for _fl_state in fl_states
     ]
@@ -126,39 +149,41 @@ def coupling_stuff(
         for mat in [dslp_dflq, dslp_dflp]
     )
 
-    ret_bshape = solid.control.bshape + fl_state.bshape
+    fl_state = bv.concatenate_with_prefix(fl_states, 'fluid')
+    ret_bshape = sl_control.bshape + fl_state.bshape
     dslcontrol_dflstate = bm.BlockMatrix(
         mats,
-        shape=solid.control.shape+fl_state.shape,
-        labels=solid.control.labels+fl_state.labels
+        shape=sl_control.shape+fl_state.shape,
+        labels=sl_control.labels+fl_state.labels
     )
     assert dslcontrol_dflstate.bshape == ret_bshape
 
-    ## Construct the derivative of the fluid control w.r.t solid state
+def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, ndim=2):
+    n_slu = sl_state['u'].size
+    n_slarea = n_slu//ndim
+
     # To do this, first build the sensitivty of area wrt displacement:
-    # TODO: Many of the lines here are copy-pasted from `femvf.dynamical.coupled`
-    # and should be refactored to a seperate function
     dslarea_dslu = PETSc.Mat().createAIJ(
-        (n_slp, n_slu), nnz=2
+        (n_slarea, n_slu), nnz=2
     )
     for ii in range(dslarea_dslu.size[0]):
         # Each solid area is only sensitive to the y component of u, so
         # that's set here
         # TODO: can only set sensitivites for relevant DOFS; only DOFS on
         # the surface have an effect
-        dslarea_dslu.setValues([ii], [2*ii, 2*ii+1], [0, -2])
+        dslarea_dslu.setValues([ii], [ndim*ii, ndim*ii+1], [0, -2])
     dslarea_dslu.assemble()
 
     dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in fsimaps]
     dflarea_dslu_coll = [dflarea_dslarea*dslarea_dslu for dflarea_dslarea in dflarea_dslarea_coll]
-    fluid_control = bv.concatenate_with_prefix([fluid.control for fluid in fluids], 'fluid')
+    fluid_control = bv.concatenate_with_prefix(fl_controls, 'fluid')
     ret_bshape = fluid_control.bshape+sl_state.bshape
     mats = [
         subops.zero_mat(nrow, ncol) for nrow, ncol
         in itertools.product(*ret_bshape)
     ]
     # Set the block components `[f'fluid{ii}.area', 'u']`
-    labels = [f'fluid{ii}.area' for ii in range(len(fluids))]
+    labels = [f'fluid{ii}.area' for ii in range(len(fl_controls))]
     rows = [fluid_control.labels[0].index(label) for label in labels]
     ncol = sl_state.size
     col = sl_state.labels[0].index('u')
@@ -172,6 +197,3 @@ def coupling_stuff(
         labels=fluid_control.labels+sl_state.labels
     )
     assert dflcontrol_dslstate.bshape == ret_bshape
-
-    return fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate
-
