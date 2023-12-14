@@ -614,7 +614,10 @@ class IsotropicMembraneForm(PredefinedForm):
 
         # Define the 8th order projector to get the planar strain component
         facet_normal = ufl.FacetNormal(mesh)
-        n = ufl.as_tensor([facet_normal[0], facet_normal[1], 0.0])
+        if mesh.topology().dim() == 2:
+            n = ufl.as_tensor([facet_normal[0], facet_normal[1], 0.0])
+        else:
+            n = facet_normal
         nn = ufl.outer(n, n)
         ident = ufl.Identity(n.ufl_shape[0])
         project_pp = ufl.outer(ident-nn, ident-nn)
