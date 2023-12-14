@@ -22,7 +22,7 @@ from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from nonlineq import iterative_solve
 
 from ..equations import newmark
-from ..fsi import FSIMap, coupling_stuff
+from ..fsi import FSIMap, make_coupling_stuff
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 
 
@@ -84,7 +84,8 @@ class BaseTransientFSIModel(base.BaseTransientModel):
 
         ## FSI related stuff
 
-        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate = coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate = \
+            make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
         self._fsimaps = fsimaps
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate

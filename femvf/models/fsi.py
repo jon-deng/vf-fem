@@ -3,7 +3,7 @@ This module contains functionality for coupling fluid/solid domains
 """
 
 from typing import Union, List, Any
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 
 import itertools
 
@@ -18,24 +18,31 @@ class FSIMap:
     """
     Represents a mapping between two domains (fluid and solid)
 
-    This mapping involves a 1-to-1 correspondence between DOFs of vectors on the two domains
+    This mapping involves a 1-to-1 correspondence between DOFs of vectors on the
+    two domains.
+
+    To illustrate this, consider this example.
+    The solid domain has a pressure vector with `ndof_solid` coefficents while
+    the fluid domain has a pressure vector with `ndof_fluid` coefficients.
+    The vectors `fluid_dofs` and `solid_dofs` have the same size and specify
+    which elements of the fluid domain pressure vector map to which elements
+    of the solid domain pressure vector.
+
+    Parameters
+    ----------
+    ndof_fluid, ndof_solid : int
+        The number of DOFs for the FSI vectors on the fluid and solid domains
+    fluid_dofs, solid_dofs : NDArray[int]
+        arrays of corresponding dofs on the fluid and solid side domains
+    comm : None or PETSc.Comm
+        MPI communicator. Not really used here since I never run stuff in parallel.
     """
     def __init__(
             self,
             ndof_fluid: int, ndof_solid: int,
-            fluid_dofs: ArrayLike, solid_dofs: ArrayLike,
+            fluid_dofs: NDArray[int], solid_dofs: NDArray[int],
             comm=None
         ):
-        """
-        Parameters
-        ----------
-        ndof_fluid, ndof_solid : int
-            number of DOFS on the fluid and solid domains
-        fluid_dofs, solid_dofs : array
-            arrays of corresponding dofs on the fluid and solid side domains
-        comm : None or PETSc.Comm
-            MPI communicator. Not really used here since I never run stuff in parallel.
-        """
         self.N_FLUID = ndof_fluid
         self.N_SOLID = ndof_solid
 
@@ -83,12 +90,15 @@ def _state_from_dynamic_or_transient_model(model: Union[SolidModel, FluidModel])
     else:
         raise ValueError("Unknown `model` type")
 
-def coupling_stuff(
+def make_coupling_stuff(
         solid: SolidModel,
         fluids: Union[List[FluidModel], FluidModel],
-        solid_fsi_dofs: Union[List[ArrayLike], ArrayLike],
-        fluid_fsi_dofs: Union[List[ArrayLike], ArrayLike]
+        solid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]],
+        fluid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]]
     ):
+    """
+    Return coupling matrices, etc.
+    """
 
     # Load a solid and fluid state(s) vectors because these have different
     # attribute names between dynamical/transient model types
@@ -116,9 +126,12 @@ def coupling_stuff(
 def make_fsimaps(
         solid: SolidModel,
         fluids: Union[List[FluidModel], FluidModel],
-        solid_fsi_dofs: Union[List[ArrayLike], ArrayLike],
-        fluid_fsi_dofs: Union[List[ArrayLike], ArrayLike]
+        solid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]],
+        fluid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]]
     ):
+    """
+    Return `FSIMap` instances for multiple fluids coupled to a single solid domain
+    """
     fl_states = [
         _state_from_dynamic_or_transient_model(fluid) for fluid in fluids
     ]
@@ -139,6 +152,9 @@ def make_fsimaps(
     return fsimaps
 
 def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps, ndim=2):
+    """
+    Return the sensitivity of the solid control to fluid state vector
+    """
     n_slp = sl_control['p'].size
     dslp_dflq_coll = [
         subops.zero_mat(n_slp, _fl_state['q'].size) for _fl_state in fl_states
@@ -159,6 +175,9 @@ def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps, ndim=2):
     assert dslcontrol_dflstate.bshape == ret_bshape
 
 def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, ndim=2):
+    """
+    Return the sensitivity of the fluid control to solid state vector
+    """
     n_slu = sl_state['u'].size
     n_slarea = n_slu//ndim
 
