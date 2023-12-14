@@ -22,7 +22,7 @@ from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from nonlineq import iterative_solve
 
 from ..equations import newmark
-from ..fsi import FSIMap
+from ..fsi import FSIMap, coupling_stuff
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 
 
@@ -83,77 +83,12 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.prop = bv.concatenate([self.solid.prop, fluid_props, _self_properties])
 
         ## FSI related stuff
-        self._solid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
-        # self._dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
 
-        # n_flq = self.fluid.state0['q'].size
-        # n_flp = self.fluid.state0['p'].size
-        n_slp = self.solid.control['p'].size
-        n_slu = self.solid.state0['u'].size
-
-        self._fsimaps = tuple(
-            FSIMap(
-                fluid.state1['p'].size,
-                self._solid_area.size(),
-                fluid_dofs, solid_dofs
-            )
-            for fluid, fluid_dofs, solid_dofs in zip(fluids, fluid_fsi_dofs, solid_fsi_dofs)
-        )
-
-        ## Construct the derivative of the solid control w.r.t fluid state
-        dslp_dflq_coll = [subops.zero_mat(n_slp, fluid.state0['q'].size) for fluid in fluids]
-        dslp_dflp_coll = [fsimap.dsolid_dfluid for fsimap in self._fsimaps]
-        mats = tuple(
-            mat for dslp_dflq, dslp_dflp in zip(dslp_dflq_coll, dslp_dflp_coll)
-            for mat in [dslp_dflq, dslp_dflp]
-        )
-
-        ret_bshape = self.solid.control.bshape + fluid_state0.bshape
-        self._dslcontrol_dflstate = bm.BlockMatrix(
-            mats,
-            shape=self.solid.control.shape+fluid_state0.shape,
-            labels=self.solid.control.labels+fluid_state0.labels
-        )
-        assert self._dslcontrol_dflstate.bshape == ret_bshape
-
-        ## Construct the derivative of the fluid control w.r.t solid state
-        # To do this, first build the sensitivty of area wrt displacement:
-        # TODO: Many of the lines here are copy-pasted from `femvf.dynamical.coupled`
-        # and should be refactored to a seperate function
-        dslarea_dslu = PETSc.Mat().createAIJ(
-            (n_slp, n_slu), nnz=2
-        )
-        for ii in range(dslarea_dslu.size[0]):
-            # Each solid area is only sensitive to the y component of u, so
-            # that's set here
-            # TODO: can only set sensitivites for relevant DOFS; only DOFS on
-            # the surface have an effect
-            dslarea_dslu.setValues([ii], [2*ii, 2*ii+1], [0, -2])
-        dslarea_dslu.assemble()
-
-        dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in self.fsimaps]
-        dflarea_dslu_coll = [dflarea_dslarea*dslarea_dslu for dflarea_dslarea in dflarea_dslarea_coll]
-        fluid_control = bv.concatenate_with_prefix([fluid.control for fluid in fluids], 'fluid')
-        ret_bshape = fluid_control.bshape+self.solid.state0.bshape
-        mats = [
-            subops.zero_mat(nrow, ncol) for nrow, ncol
-            in itertools.product(*ret_bshape)
-        ]
-        # Set the block components `[f'fluid{ii}.area', 'u']`
-        labels = [f'fluid{ii}.area' for ii in range(len(self.fluids))]
-        rows = [fluid_control.labels[0].index(label) for label in labels]
-        ncol = self.solid.state0.size
-        col = solid.state0.labels[0].index('u')
-        for ii, dflarea_dslu in zip(rows, dflarea_dslu_coll):
-            mats[ii*ncol+col] = dflarea_dslu
-
-        # breakpoint()
-        self._dflcontrol_dslstate = bm.BlockMatrix(
-            mats,
-            shape=fluid_control.shape+self.solid.state0.shape,
-            labels=fluid_control.labels+self.solid.state0.labels
-        )
-        assert self._dflcontrol_dslstate.bshape == ret_bshape
+        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate = coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+        self._fsimaps = fsimaps
+        self._solid_area = solid_area
+        self._dflcontrol_dslstate = dflcontrol_dslstate
+        self._dslcontrol_dflstate = dslcontrol_dflstate
 
         # Make null `BlockMatrix`s relating fluid/solid states
         mats = [
