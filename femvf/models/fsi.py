@@ -114,14 +114,27 @@ def make_coupling_stuff(
     fsimaps = make_fsimaps(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
 
     ## Construct the derivative of the solid control w.r.t fluid state
-    dslcontrol_dflstate = make_dslcontrol_dflstate(solid.control, fl_states, fsimaps)
+    dslcontrol_dflstate = make_dslcontrol_dflstate(
+        solid.control, fl_states, fsimaps
+    )
     # assert dslcontrol_dflstate.bshape == ret_bshape
 
-    ## Construct the derivative of the fluid control w.r.t solid state
-    fl_controls = [fluid.control for fluid in fluids]
-    dflcontrol_dslstate = make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, ndim=solid.residual.mesh().topology().dim())
+    ## Construct the derivative of the fluid control w.r.t solid inputs
+    ndim = solid.residual.mesh().topology().dim()
+    n_u = sl_state['u'].size
+    n_area = n_u//ndim
+    dslarea_dslu = make_dslarea_dslu(n_area, n_u, ndim)
 
-    return fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate
+    fl_controls = [fluid.control for fluid in fluids]
+    dflcontrol_dslstate = make_dflcontrol_dslstate(
+        fl_controls, sl_state, fsimaps, dslarea_dslu
+    )
+
+    dflcontrol_dslprop = make_dflcontrol_dslprop(
+        fl_controls, solid.prop, fsimaps, dslarea_dslu
+    )
+
+    return (fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate, dflcontrol_dslprop)
 
 def make_fsimaps(
         solid: SolidModel,
@@ -151,7 +164,7 @@ def make_fsimaps(
     )
     return fsimaps
 
-def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps, ndim=2):
+def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps):
     """
     Return the sensitivity of the solid control to fluid state vector
     """
@@ -174,25 +187,11 @@ def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps, ndim=2):
     )
     assert dslcontrol_dflstate.bshape == ret_bshape
 
-def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, ndim=2):
+def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, dslarea_dslu):
     """
     Return the sensitivity of the fluid control to solid state vector
     """
-    n_slu = sl_state['u'].size
-    n_slarea = n_slu//ndim
-
     # To do this, first build the sensitivty of area wrt displacement:
-    dslarea_dslu = PETSc.Mat().createAIJ(
-        (n_slarea, n_slu), nnz=2
-    )
-    for ii in range(dslarea_dslu.size[0]):
-        # Each solid area is only sensitive to the y component of u, so
-        # that's set here
-        # TODO: can only set sensitivites for relevant DOFS; only DOFS on
-        # the surface have an effect
-        dslarea_dslu.setValues([ii], [ndim*ii, ndim*ii+1], [0, -2])
-    dslarea_dslu.assemble()
-
     dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in fsimaps]
     dflarea_dslu_coll = [dflarea_dslarea*dslarea_dslu for dflarea_dslarea in dflarea_dslarea_coll]
     fluid_control = bv.concatenate_with_prefix(fl_controls, 'fluid')
@@ -216,3 +215,48 @@ def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, ndim=2):
         labels=fluid_control.labels+sl_state.labels
     )
     assert dflcontrol_dslstate.bshape == ret_bshape
+
+def make_dflcontrol_dslprop(fl_controls, sl_prop, fsimaps, dslarea_dslu):
+    fl_control = bv.concatenate_with_prefix(fl_controls, prefix='fluid')
+    mats = [
+        subops.zero_mat(nrow, ncol)
+        for nrow, ncol
+        in itertools.product(
+            fl_control.bshape[0], sl_prop.bshape[0],
+        )
+    ]
+    if 'umesh' in sl_prop:
+        dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in fsimaps]
+        dflarea_dslu_coll = [
+            dflarea_dslarea*dslarea_dslu
+            for dflarea_dslarea in dflarea_dslarea_coll
+        ]
+
+        col_slu = sl_prop.labels[0].index('umesh')
+        for n, dflarea_dslu in enumerate(dflarea_dslu_coll):
+            row_flarea = fl_control.labels[0].index(f'fluid{n}.area')
+            mats[row_flarea][col_slu] = dflarea_dslu
+
+    dflcontrol_dslprop = bv.BlockMatrix(
+        mats,
+        shape=fl_control.shape+sl_prop.shape,
+        labels=fl_control.labels+sl_prop.labels
+    )
+    return dflcontrol_dslprop
+
+def make_dslarea_dslu(n_area, n_dis, ndim=2):
+    """
+    Return the sensitivity of the channel area to the displacement vector
+    """
+    # To do this, first build the sensitivty of area wrt displacement:
+    dslarea_dslu = PETSc.Mat().createAIJ(
+        (n_area, n_dis), nnz=2
+    )
+    for ii in range(dslarea_dslu.size[0]):
+        # Each solid area is only sensitive to the y component of u, so
+        # that's set here
+        # TODO: can only set sensitivites for relevant DOFS; only DOFS on
+        # the surface have an effect
+        dslarea_dslu.setValues([ii], [ndim*ii, ndim*ii+1], [0, -2])
+    dslarea_dslu.assemble()
+    return dslarea_dslu

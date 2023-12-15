@@ -83,13 +83,13 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.prop = bv.concatenate([self.solid.prop, fluid_props, _self_properties])
 
         ## FSI related stuff
-
-        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate = \
+        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate, dflcontrol_dslprops = \
             make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
         self._fsimaps = fsimaps
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate
         self._dslcontrol_dflstate = dslcontrol_dflstate
+        self._dflcontrol_dslprops = dflcontrol_dslprops
 
         # Make null `BlockMatrix`s relating fluid/solid states
         mats = [
