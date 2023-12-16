@@ -124,37 +124,15 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             fsimap.map_solid_to_fluid(self._solid_area, control['area'])
             fluid.set_control(control)
 
+    def _transfer_fluid_to_solid(self):
+        """
+        Update solid controls from the fluid state
+        """
         # map fluid pressure to solid pressure
         control = self.solid.control.copy()
         for fsimap, fluid in zip(self._fsimaps, self.fluids):
             fsimap.map_fluid_to_solid(fluid.state['p'], control['p'])
         self.solid.set_control(control)
-
-    # TODO: Remove this since it's only relevant for linearized dynamical model
-    def set_dstate(self, dstate):
-        self.dstate[:] = dstate
-        block_sizes = [model.dstate.size for model in self._models]
-        sub_states = bv.chunk(dstate, block_sizes)
-        for model, sub_state in zip(self._models, sub_states):
-            model.set_dstate(sub_state)
-
-        ## The below are needed to communicate FSI interactions
-        # map linearized state to linearized solid area
-        self.dsolid_area[:] = -2*(self.dstate['u'][1::2])
-
-        # map linearized solid area to fluid area
-        dfluid_control = self.fluid.dcontrol.copy()
-        dfluid_control['area'][:] = subops.mult_mat_vec(
-            self._dfluid_dsolid_scalar,
-            subops.convert_vec_to_petsc(self.dsolid_area))
-        self.fluid.set_dcontrol(dfluid_control)
-
-        # map linearized fluid pressure to solid pressure
-        dsolid_control = self.solid.control.copy()
-        dsolid_control['p'][:] = subops.mult_mat_vec(
-            self._dsolid_dfluid_scalar,
-            subops.convert_vec_to_petsc(self.fluid.dstate['p']))
-        self.solid.set_dcontrol(dsolid_control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
     # for the specialized 1D Bernoulli model so I've left it empty for now
@@ -164,14 +142,6 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         sub_states = bv.chunk(statet, block_sizes)
         for model, sub_state in zip(self._models, sub_states):
             model.set_statet(sub_state)
-
-    # TODO: Remove this since it's only relevant for linearized dynamical model
-    def set_dstatet(self, dstatet):
-        self.dstatet[:] = dstatet
-        block_sizes = [model.dstatet.size for model in self._models]
-        sub_states = bv.chunk(dstatet, block_sizes)
-        for model, sub_state in zip(self._models, sub_states):
-            model.set_dstatet(sub_state)
 
     def set_control(self, control):
         self.control[:] = control
@@ -313,17 +283,6 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         dflres_dg = bm.convert_subtype_to_petsc(bm.BlockMatrix(_mats, labels=self._fl_state.labels+self.control.labels))
         return bm.concatenate_mat([[dslres_dg], [dflres_dg]])
 
-    # TODO: Need to implement for optimization strategies
-    # def assem_dres_dprops(self):
-    #     dfsolid_dxsolid = self._models[0].assem_dres_dprops()
-    #     dfsolid_dxfluid =
-
-    #     dffluid_dxfluid = self._models[1].assem_dres_dprops()
-    #     dffluid_dxsolid =
-    #     bmats = [
-    #         [dfsolid_dxsolid, dfsolid_dxfluid],
-    #         [dffluid_dxsolid, dffluid_dxfluid]]
-    #     return bm.concatenate_mat(bmats)
 
 class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamicalFSIModel):
     """
