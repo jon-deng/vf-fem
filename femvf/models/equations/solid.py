@@ -194,7 +194,6 @@ class FenicsForm:
             expressions: Optional[CoefficientMapping]=None
         ):
 
-        assert expressions is not None
         self._form = form
         self._coefficients = coefficients
 
@@ -1331,7 +1330,11 @@ def modify_unary_linearized_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
     # Compute the total linearized residual
     new_form = reduce(operator.add, linearized_forms)
 
-    return FenicsForm(new_form, {**form.coefficients, **new_coefficients})
+    return FenicsForm(
+        new_form,
+        {**form.coefficients, **new_coefficients},
+        form.expressions
+    )
 
 ## Common functions
 

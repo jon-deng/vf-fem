@@ -85,7 +85,7 @@ FluidModel = Union[tfmd.Model, dfmd.Model]
 def _state_from_dynamic_or_transient_model(model: Union[SolidModel, FluidModel]):
     if isinstance(model, (tfmd.Model, tsmd.Model)):
         return model.state0
-    elif isinstance(model, (dfmd.Model, dsmd.Model)):
+    elif isinstance(model, (dfmd.Model, dfmd.LinearizedModel, dsmd.Model, dsmd.LinearizedModel)):
         return model.state
     else:
         raise ValueError("Unknown `model` type")
@@ -187,6 +187,8 @@ def make_dslcontrol_dflstate(sl_control, fl_states, fsimaps):
     )
     assert dslcontrol_dflstate.bshape == ret_bshape
 
+    return dslcontrol_dflstate
+
 def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, dslarea_dslu):
     """
     Return the sensitivity of the fluid control to solid state vector
@@ -215,6 +217,8 @@ def make_dflcontrol_dslstate(fl_controls, sl_state, fsimaps, dslarea_dslu):
         labels=fluid_control.labels+sl_state.labels
     )
     assert dflcontrol_dslstate.bshape == ret_bshape
+
+    return dflcontrol_dslstate
 
 def make_dflcontrol_dslprop(fl_controls, sl_prop, fsimaps, dslarea_dslu):
     fl_control = bv.concatenate_with_prefix(fl_controls, prefix='fluid')

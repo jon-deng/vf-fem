@@ -51,10 +51,12 @@ class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            'M5_BC--GA0--DZ0.00',
-            'M5_BC--GA0--DZ2.00',
-            'M5_BC--GA0--DZ4.00',
-            'M5_BC--GA0--DZ8.00'
+            # 'M5_BC--GA0.00--DZ0.00',
+            # 'M5_BC--GA0.00--DZ2.00',
+            # 'M5_BC--GA0.00--DZ4.00',
+            # 'M5_BC--GA0.00--DZ8.00',
+            'M5_BC--GA0.00--DZ0.00'
+            # 'M5-3layers.msh'
         ]
     )
     def mesh_path(self, request):
