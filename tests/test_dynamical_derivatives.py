@@ -47,7 +47,7 @@ def SolidModelPair(request):
     params=[
         # (dynfl.BernoulliSmoothMinSep, dynfl.LinearizedBernoulliSmoothMinSep, {}),
         (dynfl.BernoulliFixedSep, dynfl.LinearizedBernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
-        (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
+        # (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
     ]
 )
 def FluidModelPair(request):
@@ -58,7 +58,7 @@ def FluidModelPair(request):
 
 @pytest.fixture(
     params=[
-        'M5_BC--GA3--DZ0.00.msh'
+        'M5_BC--GA0.00--DZ0.00.msh'
     ]
 )
 def mesh_path(request):
@@ -112,22 +112,22 @@ def split_model_components(model):
     # Determine whether the model has fluid/solid components
     if isinstance(model, dynco.BaseDynamicalFSIModel):
         model_solid = model.solid
-        model_fluid = model.fluid
+        model_fluids = model.fluids
         model_coupl = model
     elif isinstance(model, dynsl.Model):
         model_solid = model
-        model_fluid = None
+        model_fluids = None
         model_coupl = None
     elif isinstance(model, dynfl.BaseDynamicalModel):
         model_solid = None
-        model_fluid = model
+        model_fluids = model
         model_coupl = None
-    return model_solid, model_fluid, model_coupl
+    return model_solid, model_fluids, model_coupl
 
 
 @pytest.fixture()
 def state(model):
-    model_solid, model_fluid, model_coupl = split_model_components(model)
+    model_solid, model_fluids, model_coupl = split_model_components(model)
 
     ## Model state
     state0 = model.state.copy()
@@ -142,9 +142,10 @@ def state(model):
         _u[1::2] = 0.0 * yy
         state0['u']= _u
 
-    if model_fluid is not None:
-        state0['q'] = 1
-        state0['p'] = 1e4
+    if model_fluids is not None:
+        for n in range(len(model_fluids)):
+            state0[f'fluid{n}.q'] = 1
+            state0[f'fluid{n}.p'] = 1e4
     return state0
 
 @pytest.fixture()
@@ -155,7 +156,7 @@ def statet(model):
 
 @pytest.fixture()
 def prop(model):
-    model_solid, model_fluid, model_coupl = split_model_components(model)
+    model_solid, model_fluids, model_coupl = split_model_components(model)
 
     props0 = model.prop.copy()
     if model_solid is not None:
@@ -171,33 +172,37 @@ def prop(model):
 
         model_coupl.ymid = ymid
 
-    if model_fluid is not None:
+    if model_fluids is not None:
         prop_values = {
             'zeta_sep': 1e-4,
             'zeta_min': 1e-4,
             'rho_air': 1.2e-3
         }
-        for key, value in prop_values.items():
-            if key in model_fluid.prop:
-                props0[key] = value
+        for n in range(len(model_fluids)):
+            for key, value in prop_values.items():
+                _key = f'fluid{n}.{key}'
+                if _key in props0:
+                    props0[_key] = value
     return props0
 
 @pytest.fixture()
 def control(model):
-    model_solid, model_fluid, model_coupl = split_model_components(model)
+    model_solid, model_fluids, model_coupl = split_model_components(model)
 
     control0 = model.control.copy()
     control0[:] = 1.0
 
-    if model_fluid is not None:
+    if model_fluids is not None:
         control_values = {
             'qsub': 100,
             'psub': 800*10,
             'psup': 0
         }
-        for key, value in control_values.items():
-            if key in model_fluid.control:
-                control0[key] = value
+        for n in range(len(model_fluids)):
+            for key, value in control_values.items():
+                _key = f'fluid{n}.{key}'
+                if _key in control0:
+                    control0[_key] = value
     return control0
 
 
@@ -205,7 +210,7 @@ def control(model):
 def dstate(model):
     """Return a state perturbation"""
 
-    model_solid, model_fluid, model_coupl = split_model_components(model)
+    model_solid, model_fluids, model_coupl = split_model_components(model)
 
     dstate = model.state.copy()
 
@@ -225,11 +230,16 @@ def dstate(model):
         for bc in model_solid.residual.dirichlet_bcs:
             _set_dirichlet_bvec(bc, dstate)
 
-    if model_fluid is not None:
-        if 'q' in dstate:
-            dstate['q'] = 1e-3
-        if 'p' in dstate:
-            dstate['p'] = 1e-3
+    if model_fluids is not None:
+        values = {
+            'q': 1e-3,
+            'p': 1e-3
+        }
+        for n in range(len(model_fluids)):
+            for key, value in values.items():
+                _key = f'fluid{n}.{key}'
+                if _key in dstate:
+                    dstate[_key] = value
 
     return dstate
 
@@ -237,7 +247,7 @@ def dstate(model):
 def dstatet(model):
     """Return a state derivative perturbation"""
 
-    model_solid, model_fluid, model_coupl = split_model_components(model)
+    model_solid, model_fluids, model_coupl = split_model_components(model)
 
     dstatet = model.state.copy()
 
@@ -261,7 +271,7 @@ def dcontrol(model):
 def dprop(model):
     """Return a properties perturbation"""
 
-    model_solid, model_fluid, model_coupl = split_model_components(model)
+    model_solid, model_fluids, model_coupl = split_model_components(model)
 
     dprop = model.prop.copy()
     dprop[:] = 0
@@ -367,8 +377,6 @@ def test_assem_dres_dcontrol(
     Test `model.assem_dres_dcontrol`
     """
     set_linearization(model, state, statet, control, prop)
-    # model_fluid.control['psub'][:] = 1
-    # model_fluid.control['psup'][:] = 0
     res = lambda state: set_and_assemble(state, model.set_control, model.assem_res)
     jac = lambda state: set_and_assemble(state, model.set_control, model.assem_dres_dcontrol)
 

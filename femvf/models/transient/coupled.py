@@ -22,47 +22,8 @@ from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from nonlineq import iterative_solve
 
 from ..equations import newmark
-from ..fsi import FSIMap
+from ..fsi import FSIMap, make_coupling_stuff
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
-
-def concatenate_bvec_with_prefix(bvecs: List[bv.BlockVector], prefix=''):
-    """
-    Concatenate a list of block vectors with a numbered prefix
-    """
-    labels = tuple(
-        f'{prefix}{n}.{label}' for n, bvec in enumerate(bvecs)
-        for label in bvec.labels[0]
-    )
-    return bv.concatenate_vec(
-        [bvec for bvec in bvecs], (labels,)
-    )
-
-T = TypeVar('T')
-def chunk(items: List[T], chunk_sizes: List[int]):
-    """
-    Split a list into several sublists with given sizes
-    """
-    if sum(chunk_sizes) != len(items):
-        raise ValueError(
-            f"Total number of chunks, {sum(chunk_sizes):d}, "
-            f"does not match total number of items, {len(items):d}"
-        )
-    else:
-        offsets = np.cumsum([0] + list(chunk_sizes))
-        chunks = [items[i_start:i_end] for i_start, i_end in zip(offsets[:-1], offsets[1:])]
-        return chunks
-
-T = TypeVar('T')
-def chunk_bvec(bvec: bv.BlockVector, chunk_sizes: List[int]):
-    """
-    Split a list into several sublists with given sizes
-    """
-    block_chunks = chunk(bvec.blocks, chunk_sizes)
-    label_chunks = chunk(bvec.labels[0], chunk_sizes)
-    return [
-        bv.BlockVector(block_chunk, labels=(label_chunk,))
-        for block_chunk, label_chunk in zip(block_chunks, label_chunks)
-    ]
 
 
 class BaseTransientFSIModel(base.BaseTransientModel):
@@ -107,92 +68,28 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.fluids = fluids
 
         ## Specify state, controls, and properties
-        fluid_state0 = concatenate_bvec_with_prefix([fluid.state0 for fluid in fluids], 'fluid')
-        fluid_state1 = concatenate_bvec_with_prefix([fluid.state1 for fluid in fluids], 'fluid')
-        self.state0 = bv.concatenate_vec([self.solid.state0, fluid_state0])
-        self.state1 = bv.concatenate_vec([self.solid.state1, fluid_state1])
+        fluid_state0 = bv.concatenate_with_prefix([fluid.state0 for fluid in fluids], 'fluid')
+        fluid_state1 = bv.concatenate_with_prefix([fluid.state1 for fluid in fluids], 'fluid')
+        self.state0 = bv.concatenate([self.solid.state0, fluid_state0])
+        self.state1 = bv.concatenate([self.solid.state1, fluid_state1])
         self.fluid_state0 = fluid_state0
         self.fluid_state1 = fluid_state1
 
         # The control is just the subglottal and supraglottal pressures
-        self.control = concatenate_bvec_with_prefix([fluid.control[1:] for fluid in self.fluids], 'fluid')
+        self.control = bv.concatenate_with_prefix([fluid.control[1:] for fluid in self.fluids], 'fluid')
 
         _self_properties = bv.BlockVector((np.array([1.0]),), (1,), (('ymid',),))
-        fluid_props = concatenate_bvec_with_prefix([fluid.prop for fluid in self.fluids], 'fluid')
-        self.prop = bv.concatenate_vec([self.solid.prop, fluid_props, _self_properties])
+        fluid_props = bv.concatenate_with_prefix([fluid.prop for fluid in self.fluids], 'fluid')
+        self.prop = bv.concatenate([self.solid.prop, fluid_props, _self_properties])
 
         ## FSI related stuff
-        self._solid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
-        # self._dsolid_area = dfn.Function(self.solid.forms['fspace.scalar']).vector()
-
-        # n_flq = self.fluid.state0['q'].size
-        # n_flp = self.fluid.state0['p'].size
-        n_slp = self.solid.control['p'].size
-        n_slu = self.solid.state0['u'].size
-
-        self._fsimaps = tuple(
-            FSIMap(
-                fluid.state1['p'].size,
-                self._solid_area.size(),
-                fluid_dofs, solid_dofs
-            )
-            for fluid, fluid_dofs, solid_dofs in zip(fluids, fluid_fsi_dofs, solid_fsi_dofs)
-        )
-
-        ## Construct the derivative of the solid control w.r.t fluid state
-        dslp_dflq_coll = [subops.zero_mat(n_slp, fluid.state0['q'].size) for fluid in fluids]
-        dslp_dflp_coll = [fsimap.dsolid_dfluid for fsimap in self._fsimaps]
-        mats = tuple(
-            mat for dslp_dflq, dslp_dflp in zip(dslp_dflq_coll, dslp_dflp_coll)
-            for mat in [dslp_dflq, dslp_dflp]
-        )
-
-        ret_bshape = self.solid.control.bshape + fluid_state0.bshape
-        self._dslcontrol_dflstate = bm.BlockMatrix(
-            mats,
-            shape=self.solid.control.shape+fluid_state0.shape,
-            labels=self.solid.control.labels+fluid_state0.labels
-        )
-        assert self._dslcontrol_dflstate.bshape == ret_bshape
-
-        ## Construct the derivative of the fluid control w.r.t solid state
-        # To do this, first build the sensitivty of area wrt displacement:
-        # TODO: Many of the lines here are copy-pasted from `femvf.dynamical.coupled`
-        # and should be refactored to a seperate function
-        dslarea_dslu = PETSc.Mat().createAIJ(
-            (n_slp, n_slu), nnz=2
-        )
-        for ii in range(dslarea_dslu.size[0]):
-            # Each solid area is only sensitive to the y component of u, so
-            # that's set here
-            # TODO: can only set sensitivites for relevant DOFS; only DOFS on
-            # the surface have an effect
-            dslarea_dslu.setValues([ii], [2*ii, 2*ii+1], [0, -2])
-        dslarea_dslu.assemble()
-
-        dflarea_dslarea_coll = [fsimap.dfluid_dsolid for fsimap in self.fsimaps]
-        dflarea_dslu_coll = [dflarea_dslarea*dslarea_dslu for dflarea_dslarea in dflarea_dslarea_coll]
-        fluid_control = concatenate_bvec_with_prefix([fluid.control for fluid in fluids], 'fluid')
-        ret_bshape = fluid_control.bshape+self.solid.state0.bshape
-        mats = [
-            subops.zero_mat(nrow, ncol) for nrow, ncol
-            in itertools.product(*ret_bshape)
-        ]
-        # Set the block components `[f'fluid{ii}.area', 'u']`
-        labels = [f'fluid{ii}.area' for ii in range(len(self.fluids))]
-        rows = [fluid_control.labels[0].index(label) for label in labels]
-        ncol = self.solid.state0.size
-        col = solid.state0.labels[0].index('u')
-        for ii, dflarea_dslu in zip(rows, dflarea_dslu_coll):
-            mats[ii*ncol+col] = dflarea_dslu
-
-        # breakpoint()
-        self._dflcontrol_dslstate = bm.BlockMatrix(
-            mats,
-            shape=fluid_control.shape+self.solid.state0.shape,
-            labels=fluid_control.labels+self.solid.state0.labels
-        )
-        assert self._dflcontrol_dslstate.bshape == ret_bshape
+        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate, dflcontrol_dslprops = \
+            make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+        self._fsimaps = fsimaps
+        self._solid_area = solid_area
+        self._dflcontrol_dslstate = dflcontrol_dslstate
+        self._dslcontrol_dflstate = dslcontrol_dflstate
+        self._dflcontrol_dslprops = dflcontrol_dslprops
 
         # Make null `BlockMatrix`s relating fluid/solid states
         mats = [
@@ -240,7 +137,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
             fluid.dt = value
 
     def set_ini_state(self, state):
-        sl_state, fl_state = chunk_bvec(
+        sl_state, fl_state = bv.chunk(
             state, (self.solid.state0.size, self.fluid_state0.size)
         )
 
@@ -248,7 +145,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self._set_ini_fluid_state(fl_state)
 
     def set_fin_state(self, state):
-        sl_state, fl_state = chunk_bvec(
+        sl_state, fl_state = bv.chunk(
             state, (self.solid.state1.size, self.fluid_state1.size)
         )
 
@@ -259,7 +156,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
         self.control[:] = control
 
         chunk_sizes = len(self.fluids)*[2]
-        control_chunks = chunk_bvec(self.control, chunk_sizes)
+        control_chunks = bv.chunk(self.control, chunk_sizes)
 
         for n, control in enumerate(control_chunks):
             for key, value in control.sub_items():
@@ -271,7 +168,7 @@ class BaseTransientFSIModel(base.BaseTransientModel):
 
         # The final `+ [1]` accounts for the 'ymid' property
         chunk_sizes = [model.prop.size for model in (self.solid,)+self.fluids] + [1]
-        prop_chunks = chunk_bvec(self.prop, chunk_sizes)[:-1]
+        prop_chunks = bv.chunk(self.prop, chunk_sizes)[:-1]
         prop_setters = [self.solid.set_prop] + [fluid.set_prop for fluid in self.fluids]
 
         for set_prop, prop in zip(prop_setters, prop_chunks):
@@ -312,7 +209,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         # the initial/previous fluid pressure
         sl_control = self.solid.control.copy()
         sl_control['p'] = 0
-        qp0_parts = chunk_bvec(qp0, tuple(fluid.state0.size for fluid in self.fluids))
+        qp0_parts = bv.chunk(qp0, tuple(fluid.state0.size for fluid in self.fluids))
         for fluid, fsimap, qp0_part in zip(self.fluids, self.fsimaps, qp0_parts):
             fluid.set_ini_state(qp0_part)
             fsimap.map_fluid_to_solid(qp0_part[1], sl_control.sub['p'])
@@ -320,7 +217,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 
     def _set_fin_fluid_state(self, qp1):
         """Set the final fluid state"""
-        qp1_parts = chunk_bvec(qp1, tuple(fluid.state1.size for fluid in self.fluids))
+        qp1_parts = bv.chunk(qp1, tuple(fluid.state1.size for fluid in self.fluids))
         for fluid, qp1_part in zip(self.fluids, qp1_parts):
             fluid.set_fin_state(qp1_part)
 
@@ -331,7 +228,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         """
         res_sl = self.solid.assem_res()
         res_fl = self.fluid.assem_res()
-        return bv.concatenate_vec((res_sl, res_fl))
+        return bv.concatenate((res_sl, res_fl))
 
     def assem_dres_dstate0(self):
         # TODO: Make this correct
@@ -349,7 +246,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
             [drsl_dxsl, drsl_dxfl],
             [drfl_dxsl, drfl_dxfl]
         ]
-        return bm.concatenate_mat(bmats)
+        return bm.concatenate(bmats)
 
     def assem_dres_dstate1(self):
         drsl_dxsl = self.solid.assem_dres_dstate0()
@@ -366,7 +263,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
             [drsl_dxsl, drsl_dxfl],
             [drfl_dxsl, drfl_dxfl]
         ]
-        return bm.concatenate_mat(bmats)
+        return bm.concatenate(bmats)
 
     # Forward solver methods
     def solve_state1(self, ini_state, options=None):
@@ -390,7 +287,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
             for ii, fluid_info in enumerate(fluids_solve_info)
         })
 
-        return bv.concatenate_vec([uva1]+qp1s, labels=self.state1.labels), step_info
+        return bv.concatenate([uva1]+qp1s, labels=self.state1.labels), step_info
 
     def solve_dres_dstate1(self, b):
         """
@@ -436,14 +333,14 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 class ImplicitFSIModel(BaseTransientFSIModel):
     ## These must be defined to properly exchange the forcing data between the solid and domains
     def _set_ini_fluid_state(self, qp0):
-        qp0_parts = chunk_bvec(qp0, tuple(fluid.state0.size for fluid in self.fluids))
+        qp0_parts = bv.chunk(qp0, tuple(fluid.state0.size for fluid in self.fluids))
         for fluid, qp0_part in zip(self.fluids, qp0_parts):
             fluid.set_ini_state(qp0_part)
 
     def _set_fin_fluid_state(self, qp1):
         sl_control = self.solid.control.copy()
         sl_control['p'] = 0
-        qp1_parts = chunk_bvec(qp1, tuple(fluid.state1.size for fluid in self.fluids))
+        qp1_parts = bv.chunk(qp1, tuple(fluid.state1.size for fluid in self.fluids))
         for fluid, fsimap, qp1_part in zip(self.fluids, self.fsimaps, qp1_parts):
             fluid.set_fin_state(qp1_part)
             fsimap.map_fluid_to_solid(qp1_part[1], sl_control.sub['p'])
@@ -470,7 +367,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         """
         res_sl = self.solid.assem_res()
         res_fl = self.fluid.assem_res()
-        return bv.concatenate_vec(res_sl, res_fl)
+        return bv.concatenate(res_sl, res_fl)
 
     def solve_state1(self, ini_state, options=None):
         """
@@ -493,7 +390,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
                 self._set_fin_solid_state(uva1)
                 qp1, fluid_info = self.fluid.solve_state1(qp1_0)
                 self._set_fin_fluid_state(qp1_0)
-                return bv.concatenate_vec((uva1, qp1))
+                return bv.concatenate((uva1, qp1))
 
             def assem_res():
                 return self.assem_res()
@@ -597,7 +494,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         adj_uva['u'][:] = adj_up[:adj_u_rhs.size()]
         adj_qp['p'][:] = adj_up[adj_u_rhs.size():]
 
-        return bv.concatenate_vec([adj_uva, adj_qp])
+        return bv.concatenate([adj_uva, adj_qp])
 
 class FSAIModel(BaseTransientFSIModel):
     """
@@ -608,14 +505,14 @@ class FSAIModel(BaseTransientFSIModel):
         self.fluid = fluid
         self.acoustic = acoustic
 
-        state = bv.concatenate_vec([solid.state0.copy(), fluid.state0.copy(), acoustic.state0.copy()])
+        state = bv.concatenate([solid.state0.copy(), fluid.state0.copy(), acoustic.state0.copy()])
         self.state0 = state
         self.state1 = state.copy()
 
         control = bv.BlockVector((np.array([1.0]),), labels=[('psub',)])
         self.control = control.copy()
 
-        self.prop = bv.concatenate_vec(
+        self.prop = bv.concatenate(
             [solid.prop, fluid.prop, acoustic.prop])
 
         self._dt = 1.0
@@ -738,7 +635,7 @@ class FSAIModel(BaseTransientFSIModel):
         res_sl = self.solid.res()
         res_fl = self.fluid.res()
         res_ac = self.acoustic.res()
-        return bv.concatenate_vec([res_sl, res_fl, res_ac])
+        return bv.concatenate([res_sl, res_fl, res_ac])
 
     def solve_state1(self, ini_state, newton_solver_prm=None):
         if newton_solver_prm is None:
@@ -783,7 +680,7 @@ class FSAIModel(BaseTransientFSIModel):
         fl_state1, fluid_info = self.fluid.solve_state1(self.fluid.state0)
 
         step_info = {'fluid_info': fluid_info, **info}
-        fin_state = bv.concatenate_vec([sl_state1, fl_state1, ac_state1])
+        fin_state = bv.concatenate([sl_state1, fl_state1, ac_state1])
 
         return fin_state, step_info
 
