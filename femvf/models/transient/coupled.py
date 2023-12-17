@@ -246,7 +246,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
             [drsl_dxsl, drsl_dxfl],
             [drfl_dxsl, drfl_dxfl]
         ]
-        return bm.concatenate_mat(bmats)
+        return bm.concatenate(bmats)
 
     def assem_dres_dstate1(self):
         drsl_dxsl = self.solid.assem_dres_dstate0()
@@ -263,7 +263,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
             [drsl_dxsl, drsl_dxfl],
             [drfl_dxsl, drfl_dxfl]
         ]
-        return bm.concatenate_mat(bmats)
+        return bm.concatenate(bmats)
 
     # Forward solver methods
     def solve_state1(self, ini_state, options=None):

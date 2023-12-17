@@ -188,7 +188,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         bmats = [
             [dslres_dslx, dslres_dflx],
             [dflres_dslx, dflres_dflx]]
-        return bm.concatenate_mat(bmats)
+        return bm.concatenate(bmats)
 
     def assem_dres_dstatet(self):
         # Because the fluid models is quasi-steady, there are no time varying FSI quantities
@@ -204,7 +204,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             [dslres_dslx, dslres_dflx],
             [dflres_dslx, dflres_dflx]
         ]
-        return bm.concatenate_mat(
+        return bm.concatenate(
             bmats, labels=(self.state.labels[0], self.state.labels[0])
         )
 
@@ -240,7 +240,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             for flsubvec in self._fl_state
             for propsubvec in self.solid.prop
         ]
-        dflres_dflcontrol = bm.concatenate_mat_diag(
+        dflres_dflcontrol = bm.concatenate_diag(
             [fluid.assem_dres_dcontrol() for fluid in self.fluids]
         )
         dflres_dslprops = bla.mult_mat_mat(
@@ -249,7 +249,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         )
 
         dflres_dflprops = bm.convert_subtype_to_petsc(
-            bm.concatenate_mat_diag(
+            bm.concatenate_diag(
                 [fluid.assem_dres_dprop() for fluid in self.fluids]
             )
         )
@@ -268,20 +268,20 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             [dslres_dslprops, dslres_dflprops, dslres_dymid],
             [dflres_dslprops, dflres_dflprops, dflres_dymid]
         ]
-        return bm.concatenate_mat(bmats)
+        return bm.concatenate(bmats)
 
     def assem_dres_dcontrol(self):
         _mats = [[subops.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
         dslres_dg = bm.BlockMatrix(_mats, labels=self.solid.state.labels+self.control.labels)
 
         # dflres_dflg = bm.convert_subtype_to_petsc(self.fluid.assem_dres_dcontrol())
-        dflres_dflg = bm.concatenate_mat_diag(
+        dflres_dflg = bm.concatenate_diag(
             [fluid.assem_dres_dcontrol() for fluid in self.fluids]
         )
         _mats = [[row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg]
         # breakpoint()
         dflres_dg = bm.convert_subtype_to_petsc(bm.BlockMatrix(_mats, labels=self._fl_state.labels+self.control.labels))
-        return bm.concatenate_mat([[dslres_dg], [dflres_dg]])
+        return bm.concatenate([[dslres_dg], [dflres_dg]])
 
 
 class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamicalFSIModel):
