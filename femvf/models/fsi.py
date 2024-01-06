@@ -237,9 +237,10 @@ def make_dflcontrol_dslprop(fl_controls, sl_prop, fsimaps, dslarea_dslu):
         ]
 
         col_slu = sl_prop.labels[0].index('umesh')
+        num_col = sl_prop.size
         for n, dflarea_dslu in enumerate(dflarea_dslu_coll):
             row_flarea = fl_control.labels[0].index(f'fluid{n}.area')
-            mats[row_flarea][col_slu] = dflarea_dslu
+            mats[row_flarea*num_col+col_slu] = dflarea_dslu
 
     dflcontrol_dslprop = bv.BlockMatrix(
         mats,
