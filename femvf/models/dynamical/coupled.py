@@ -109,6 +109,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             model.set_state(sub_state)
 
         self._transfer_solid_to_fluid()
+        self._transfer_fluid_to_solid()
 
     def _transfer_solid_to_fluid(self):
         """
