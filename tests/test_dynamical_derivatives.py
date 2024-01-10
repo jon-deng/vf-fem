@@ -134,12 +134,13 @@ def state(model):
 
     if model_solid is not None:
         # Make the initial displacement a pure shear motion
+        dim = model_solid.residual.mesh().topology().dim()
         xref = model_solid.XREF.copy()
-        xx = xref[:-1:2]
-        yy = xref[1::2]
+        xx = xref[:-1:dim]
+        yy = xref[1::dim]
         _u = np.zeros(state0['u'].shape)
-        _u[:-1:2] = 0.01*(yy/yy.max())
-        _u[1::2] = 0.0 * yy
+        _u[:-1:dim] = 0.01*(yy/yy.max())
+        _u[1::dim] = 0.0 * yy
         state0['u']= _u
 
     if model_fluids is not None:
@@ -164,7 +165,8 @@ def prop(model):
         props0['rho'] = 1.0
 
     if model_coupl is not None:
-        ymax = np.max(model_coupl.solid.XREF[1::2])
+        dim = model_solid.residual.mesh().topology().dim()
+        ymax = np.max(model_coupl.solid.XREF[1::dim])
         ygap = 0.01 # gap between VF and symmetry plane
         ymid = ymax + ygap
         ycontact = ymid - 0.1*ygap

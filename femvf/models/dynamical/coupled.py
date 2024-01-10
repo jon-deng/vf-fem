@@ -117,7 +117,11 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         """
         ## The below are needed to communicate FSI interactions
         # Set solid_area
-        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state.sub['u'])[1::2])
+        dim = self.solid.residual.mesh().topology().dim()
+        self._solid_area[:] = 2*(
+            self.prop['ymid'][0]
+            - (self.solid.XREF + self.solid.state.sub['u'])[1::dim]
+        )
 
         # map solid_area to fluid area
         for fsimap, fluid in zip(self._fsimaps, self.fluids):
@@ -339,7 +343,8 @@ class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamica
         """
         ## The below are needed to communicate FSI interactions
         # map linearized state to linearized solid area
-        self._dsolid_area[:] = -2*(self.dstate['u'][1::2])
+        dim = self.solid.residual.mesh().topology().dim()
+        self._dsolid_area[:] = -2*(self.dstate['u'][1::dim])
 
         # map linearized solid area to fluid area
         for fsimap, fluid in zip(self._fsimaps, self.fluids):

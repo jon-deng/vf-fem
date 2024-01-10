@@ -832,6 +832,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
         for n in idx_meas:
             u = f.get_state(n)[0]
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
+            # BUG: In 3D you need to account for 3 coordinates
             y_surf = xy_surf[1::2]
             # TODO: Fix this if you're going to use it
             # gw = smoothmin(y_surf, alpha=self.constants['smooth_min_alpha'])
@@ -847,6 +848,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
         # Get the initial locations of the nodes
         X_REF = model.get_ref_config().reshape(-1)
         DOF_SURFACE = solid.vert_to_vdof[model.fsi_verts].reshape(-1)
+        # BUG: In 3D you need to account for 3 coordinates
         Y_DOF = DOF_SURFACE[1::2]
         X_REF_SURFACE = X_REF[DOF_SURFACE]
 
@@ -862,6 +864,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
         if n_to_m[n] != -1:
             u = f.get_state(n)[0]
             xy_surf = X_REF_SURFACE + u[DOF_SURFACE]
+            # BUG: In 3D you need to account for 3 coordinates
             y_surf = xy_surf[1::2]
 
             duva['u'][Y_DOF] = dsmoothmin_df(y_surf, self.model.fluid.s_vertices, alpha=self.constants['smooth_min_alpha'])

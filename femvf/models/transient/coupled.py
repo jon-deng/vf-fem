@@ -198,7 +198,10 @@ class ExplicitFSIModel(BaseTransientFSIModel):
 
         # For explicit coupling, the final fluid area corresponds to the final solid deformation
         ndim = self.solid.residual.mesh().topology().dim()
-        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1.sub['u'])[1::ndim])
+        self._solid_area[:] = 2*(
+            self.prop['ymid'][0]
+            - (self.solid.XREF + self.solid.state1.sub['u'])[1::ndim]
+        )
         for n, (fluid, fsimap) in enumerate(zip(self.fluids, self.fsimaps)):
             fl_control = fluid.control.copy()
             fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
@@ -354,7 +357,11 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         self.solid.set_fin_state(uva1)
 
         # For both implicit/explicit coupling, the final fluid area corresponds to the final solid deformation
-        self._solid_area[:] = 2*(self.prop['ymid'][0] - (self.solid.XREF + self.solid.state1['u'])[1::2])
+        ndim = self.solid.residual.mesh().topology().dim()
+        self._solid_area[:] = 2*(
+            self.prop['ymid'][0]
+            - (self.solid.XREF + self.solid.state1['u'])[1::ndim]
+        )
         for n, (fluid, fsimap) in enumerate(zip(self.fluids, self.fsimaps)):
             fl_control = fluid.control
             fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
