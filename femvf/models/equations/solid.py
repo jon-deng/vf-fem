@@ -582,14 +582,22 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
 
     def MAKE_FORM(self, coefficients, measure, mesh):
 
-        # The contact traction must be manually linked with displacements and penalty parameters!
-        # These parameters are:
+        # NOTE: The contact traction must be manually linked with displacements
+        # and penalty parameters!
+        # This manual linking is done through the class
+        # `femvf.models.solid.NodalContactSolid`
+        # The relevant penalty parameters are:
         # `ycontact = coefficients['coeff.prop.ycontact']`
         # `ncontact = coefficients['coeff.prop.ncontact']`
         # `kcontact = coefficients['coeff.prop.kcontact']`
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.manual.tcontact'].function_space())
         tcontact = coefficients['coeff.state.manual.tcontact']
+
+        # Set a default y-dir contact surface direction
+        ncontact = coefficients['coeff.prop.ncontact'].values()
+        ncontact[1] = 1.0
+        coefficients['coeff.prop.ncontact'].assign(dfn.Constant(ncontact))
 
         expressions = {}
         return ufl.inner(tcontact, vector_test) * measure, expressions
