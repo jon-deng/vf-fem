@@ -206,7 +206,8 @@ class TractionShape(TransformFromModel):
     def __init__(
             self,
             model: Model,
-            lame_lambda=1.0, lame_mu=1.0
+            lame_lambda=1.0, lame_mu=1.0,
+            dirichlet_bcs=None
         ):
         super().__init__(model)
 
@@ -228,7 +229,6 @@ class TractionShape(TransformFromModel):
         # dF/dt : sensitivity of residual to medial surface tractions
         residual = model.solid.residual
         fspace = residual.form['coeff.prop.umesh'].function_space()
-        dirichlet_bcs = residual.dirichlet_bcs
         dx = residual.measure('dx')
         ds = residual.measure('ds')
 
@@ -264,6 +264,8 @@ class TractionShape(TransformFromModel):
             keep_diagonal=True
         )
 
+        if dirichlet_bcs == None:
+            dirichlet_bcs = residual.dirichlet_bcs
         for bc_dir in dirichlet_bcs:
             bc_dir.apply(mat_dF_du)
             bc_dir.zero_columns(mat_dF_du, tmesh.vector(), diagonal_value=1.0)
