@@ -451,8 +451,10 @@ class IsotropicElasticForm(PredefinedForm):
         set_fenics_function(nu, 0.45)
         stress_elastic = stress_isotropic(inf_strain, emod, nu)
 
-        expressions = {}
-        expressions['expr.stress_elastic'] = stress_elastic
+        expressions = {
+            'expr.stress_elastic': stress_elastic,
+            'expr.strain_energy': ufl.inner(stress_elastic, inf_strain)
+        }
         return ufl.inner(stress_elastic, strain_test) * measure, expressions
 
 class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
@@ -483,8 +485,10 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
         lame_mu = emod/2/(1+nu)
         stress_elastic = 2*lame_mu*inf_strain + k_swelling*(ufl.tr(inf_strain)-(v_swelling-1.0))*ufl.Identity(inf_strain.ufl_shape[0])
 
-        expressions = {}
-        expressions['expr.stress_elastic'] = stress_elastic
+        expressions = {
+            'expr.stress_elastic': stress_elastic,
+            'expr.strain_energy': ufl.inner(stress_elastic, inf_strain)
+        }
         return ufl.inner(stress_elastic, strain_test) * measure, expressions
         # return forms
 
@@ -527,20 +531,17 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         mhat = (m*(v-1) + 1)
         S = mhat*v**(1/3)*stress_isotropic(E_v, emod, nu)
 
-        expressions = {}
-        # NOTE: This should be true because this is a linear hyperelastic
-        # material
-        expressions['expr.strain_energy'] = ufl.inner(S, E)
-        # This converts the Green stress to Cauchy stress
         F = def_grad(u)
         J = ufl.det(F)
-        expressions['expr.stress_elastic'] = (1/J)*F*S*F.T
+        expressions = {
+            # NOTE: The terms around `S` convert PK2 to Cauchy stress
+            'expr.stress_elastic': (1/J)*F*S*F.T,
+            # NOTE: This should be true because this is a linear hyperelastic
+            # material
+            'expr.strain_energy': ufl.inner(S, E)
+        }
 
         return ufl.inner(S, DE) * dx, expressions
-
-        # # lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-        # # lame_mu = emod/2/(1+nu)
-        # return forms
 
 # Surface forcing forms
 
