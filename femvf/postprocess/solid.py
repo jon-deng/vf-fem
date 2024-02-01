@@ -174,7 +174,21 @@ class ElasticStressField(BaseFieldMeasure):
 
     def _init_expression(self):
         forms = self.model.solid.residual.form
-        return forms['expr.stress_elastic']
+        return forms.expressions['expr.stress_elastic']
+
+    def assem(self, state, control, prop):
+        return np.array(self.project()[:])
+
+@doc_field_measure_params
+class StrainEnergy(BaseFieldMeasure):
+    """
+    Return the elastic strain energy
+
+    """
+
+    def _init_expression(self):
+        forms = self.model.solid.residual.form
+        return forms.expressions['expr.strain_energy']
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
