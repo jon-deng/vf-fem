@@ -559,7 +559,6 @@ class IsotropicElasticSwellingForm(PredefinedForm):
 
         F = def_grad(u)
         J = ufl.det(F)
-        breakpoint()
         expressions = {
             # NOTE: The terms around `S` convert PK2 to Cauchy stress
             'expr.stress_elastic': (1/J)*F*S*F.T,
