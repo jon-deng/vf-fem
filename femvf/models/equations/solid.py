@@ -538,7 +538,9 @@ class IsotropicElasticSwellingForm(PredefinedForm):
             'expr.stress_elastic': (1/J)*F*S*F.T,
             # NOTE: This should be true because this is a linear hyperelastic
             # material
-            'expr.strain_energy': ufl.inner(S, E)
+            'expr.strain_energy': ufl.inner(S, E),
+            'expr.stress_elastic_PK2': S,
+            'expr.strain_green': E
         }
 
         return ufl.inner(S, DE) * dx, expressions
