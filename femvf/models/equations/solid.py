@@ -311,19 +311,6 @@ def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
         new_form_b = ufl.replace(form_b.form, {arg_b: arg_shared})
     new_form = new_form_a + new_form_b
 
-    # Link coefficients with the same key to a single shared `dfn.Function`
-    new_coefficients = {**form_a.coefficients, **form_b.coefficients}
-    duplicate_coeff_keys = set.intersection(set(form_a.keys()), set(form_b.keys()))
-    duplicate_coeffs = {
-        key: (form_a[key], form_b[key])
-        for key in list(duplicate_coeff_keys)
-    }
-    for key, (coeff_a, coeff_b) in duplicate_coeffs.items():
-        coeff_shared = get_shared_function(coeff_a, coeff_b)
-        new_form = ufl.replace(new_form, {coeff_a: coeff_shared})
-        new_form = ufl.replace(new_form, {coeff_b: coeff_shared})
-        new_coefficients[key] = coeff_shared
-
     # Sum any expressions with the same key
     new_expressions = {**form_a.expressions, **form_b.expressions}
     duplicate_expr_keys = set.intersection(
@@ -336,7 +323,46 @@ def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
     for key, (expr_a, expr_b) in duplicate_exprs.items():
         new_expressions[key] = expr_a+expr_b
 
+    # Link coefficients with the same key in forms and expressions to a single
+    # shared `dfn.Function`
+    def get_shared_coefficients(duplicate_coeffs):
+        shared_coefficients = {
+            coeff_key: get_shared_function(coeff_a, coeff_b)
+            for coeff_key, (coeff_a, coeff_b) in duplicate_coeffs.items()
+        }
+        return shared_coefficients
+
+    def update_coefficients(form_or_expr, duplicate_coeffs, shared_coefficients):
+        new_form_or_expr = form_or_expr
+        for coeff_key in duplicate_coeffs.keys():
+            coeff_a, coeff_b = duplicate_coeffs[coeff_key]
+            coeff_shared = shared_coefficients[coeff_key]
+            coeff_shared = get_shared_function(coeff_a, coeff_b)
+            new_form_or_expr = ufl.replace(
+                new_form_or_expr, {coeff_a: coeff_shared, coeff_b: coeff_shared}
+            )
+
+        return new_form_or_expr
+
+    new_coefficients = {**form_a.coefficients, **form_b.coefficients}
+    duplicate_coeff_keys = set.intersection(
+        set(form_a.keys()), set(form_b.keys())
+    )
+    duplicate_coeffs = {
+        key: (form_a[key], form_b[key])
+        for key in list(duplicate_coeff_keys)
+    }
+    shared_coeffs = get_shared_coefficients(duplicate_coeffs)
+    new_coefficients.update(shared_coeffs)
+    new_form = update_coefficients(new_form, duplicate_coeffs, shared_coeffs)
+
+    new_expressions = {
+        key: update_coefficients(expr, duplicate_coeffs, shared_coeffs)
+        for key, expr in new_expressions.items()
+    }
+
     return FenicsForm(new_form, new_coefficients, new_expressions)
+
 
 def mul_form(form: FenicsForm, scalar: float) -> FenicsForm:
     """
@@ -533,6 +559,7 @@ class IsotropicElasticSwellingForm(PredefinedForm):
 
         F = def_grad(u)
         J = ufl.det(F)
+        breakpoint()
         expressions = {
             # NOTE: The terms around `S` convert PK2 to Cauchy stress
             'expr.stress_elastic': (1/J)*F*S*F.T,
