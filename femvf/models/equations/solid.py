@@ -528,7 +528,9 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         S = mhat*v**(1/3)*stress_isotropic(E_v, emod, nu)
 
         expressions = {}
-        expressions['expr.strain_energy'] = ufl.inner(S, DE)
+        # NOTE: This should be true because this is a linear hyperelastic
+        # material
+        expressions['expr.strain_energy'] = ufl.inner(S, E)
         # This converts the Green stress to Cauchy stress
         F = def_grad(u)
         J = ufl.det(F)
