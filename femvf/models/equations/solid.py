@@ -17,8 +17,121 @@ from . import newmark, base
 from .uflcontinuum import *
 
 DfnFunction = Union[ufl.Constant, dfn.Function]
+FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
+FunctionSpace = Union[ufl.FunctionSpace, dfn.FunctionSpace]
+
 CoefficientMapping = Mapping[str, DfnFunction]
 FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
+
+## Utilities for handling Fenics functions
+
+# These are used to treat `ufl.Constant` and `dfn.Function` uniformly
+
+def set_fenics_function(
+        function: DfnFunction,
+        value
+    ) -> dfn.Function:
+    """
+    Set a value for a `dfn.Function` or `dfn.Constant` instance
+
+    This is needed because, although both classes represent functions,
+    they have different methods access their underlying coefficient vectors.
+    """
+    if isinstance(function, dfn.Constant):
+        function.values()[:] = value
+    elif isinstance(function, dfn.Function):
+        function.vector()[:] = value
+    else:
+        raise TypeError(f"Unknown type {type(function)}")
+
+    return function
+
+def function_space(function: FunctionLike) -> dfn.FunctionSpace:
+    """
+    Return the function space of a given function
+    """
+    if isinstance(function, dfn.Function):
+        space = function.function_space()
+    elif isinstance(function, dfn.Constant):
+        space = function.ufl_function_space()
+    elif isinstance(function, ufl.Argument):
+        space = function.function_space()
+    else:
+        raise TypeError(f"Unknown type {type(function)}")
+
+    return space
+
+# These are used to handle duplicate function spaces/functions
+
+def compare_function_space(
+        space_a: FunctionSpace,
+        space_b: FunctionSpace
+    ) -> bool:
+
+    both_are_ufl_function_space = (
+        isinstance(space_a, ufl.FunctionSpace)
+        and isinstance(space_b, ufl.FunctionSpace)
+    )
+    both_are_dfn_function_space = (
+        isinstance(space_a, dfn.FunctionSpace)
+        and isinstance(space_b, dfn.FunctionSpace)
+    )
+
+    if both_are_ufl_function_space:
+        return compare_ufl_function_space(space_a, space_b)
+    if both_are_dfn_function_space:
+        return compare_dfn_function_space(space_a, space_b)
+    else:
+        assert False
+        return False
+
+def compare_dfn_function_space(
+        space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace
+    ) -> bool:
+    """
+    Return if two function spaces are equivalent
+    """
+    if (
+            space_a.element().signature() == space_b.element().signature()
+            and space_a.mesh() == space_b.mesh()
+        ):
+        return True
+    else:
+        return False
+
+def compare_ufl_function_space(
+        space_a: ufl.FunctionSpace, space_b: ufl.FunctionSpace
+    ) -> bool:
+    """
+    Return if two function spaces are equivalent
+    """
+    if (
+            space_a.ufl_element() == space_b.ufl_element()
+            and space_a.ufl_domains() == space_b.ufl_domains()
+        ):
+        return True
+    else:
+        return False
+
+def get_shared_function(
+        function_a: FunctionLike, function_b: FunctionLike
+    ) -> FunctionLike:
+    """
+    Return a shared function space for two `fenics` objects
+    """
+    if type(function_a) != type(function_b):
+        raise TypeError("Functions must have the same type")
+
+    if compare_function_space(
+            function_space(function_a), function_space(function_b)
+        ):
+            # TODO: You could create a new function space for the shared function
+            shared_function = function_a
+            return shared_function
+    else:
+        raise ValueError(
+            "Functions have different function spaces."
+        )
 
 ## Function space specification
 
@@ -142,23 +255,6 @@ def const_spec(value_dim, default_value=0):
 
 ## Form class
 
-def set_fenics_function(
-        function: Union[dfn.Function, dfn.Constant],
-        value
-    ) -> dfn.Function:
-    """
-    Set a value for a `dfn.Function` or `dfn.Constant` instance
-
-    This is needed because, although both classes represent functions,
-    they have different methods access their underlying coefficient vectors.
-    """
-    if isinstance(function, dfn.Constant):
-        function.values()[:] = value
-    else:
-        function.vector()[:] = value
-
-    return function
-
 class FenicsForm:
     """
     Representation of a `dfn.Form` instance with associated coefficients
@@ -251,42 +347,6 @@ class FenicsForm:
     def __rmul__(self, other: float) -> 'FenicsForm':
         return mul_form(self, other)
 
-FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
-
-def compare_function_space(
-        space_a: dfn.FunctionSpace, space_b: dfn.FunctionSpace
-    ) -> bool:
-    """
-    Return if two function spaces are equivalent
-    """
-    if (
-            space_a.element().signature() == space_b.element().signature()
-            and space_a.mesh() == space_b.mesh()
-        ):
-        return True
-    else:
-        return False
-
-def get_shared_function(
-        function_a: FunctionLike, function_b: FunctionLike
-    ) -> FunctionLike:
-    """
-    Return a shared function space for two `fenics` objects
-    """
-    if type(function_a) != type(function_b):
-        raise TypeError("Functions must have the same type")
-
-    if compare_function_space(
-            function_a.function_space(), function_b.function_space()
-        ):
-            # TODO: You could create a new function space for the shared function
-            shared_function = function_a
-            return shared_function
-    else:
-        raise ValueError(
-            "Functions have different function spaces."
-        )
-
 def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
     """
     Return a new `FenicsForm` from a sum of other forms
@@ -362,7 +422,6 @@ def add_form(form_a: FenicsForm, form_b: FenicsForm) -> FenicsForm:
     }
 
     return FenicsForm(new_form, new_coefficients, new_expressions)
-
 
 def mul_form(form: FenicsForm, scalar: float) -> FenicsForm:
     """
