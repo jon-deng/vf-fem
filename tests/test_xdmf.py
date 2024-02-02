@@ -1,33 +1,70 @@
 """
-Playing around with making an xmf file to read results in paraview
+Playing around with making an XDMF file to read results in paraview
 
 Writes out vertex values from the statefile
 """
-# import os
-from os import path
 
-# import h5py
-# import numpy as np
-# import dolfin as dfn
-# import xml
+import pytest
 
+import os
+import numpy as np
+
+from femvf import statefile as sf
 from femvf.load import load_transient_fsi_model
-from femvf.solid import Rayleigh
-from femvf.fluid import Bernoulli
+from femvf.models.transient.solid import Rayleigh
+from femvf.models.transient.fluid import BernoulliAreaRatioSep
+from femvf.forward import integrate
 
 from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
 
-mesh_dir = '../meshes'
+@pytest.fixture()
+def mesh_path():
+    mesh_dir = '../meshes'
+    mesh_name = 'M5_BC--GA3--DZ0.00'
+    return os.path.join(mesh_dir, f'{mesh_name}.msh')
 
-mesh_base_filename = 'M5-3layers'
-mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
+@pytest.fixture()
+def model(mesh_path):
+    model = load_transient_fsi_model(
+        mesh_path, None, SolidType=Rayleigh, FluidType=BernoulliAreaRatioSep
+    )
 
-## Set the model and various simulation parameters (fluid/solid properties, time step etc.)
-model = load_transient_fsi_model(mesh_path, None, Solid=Rayleigh, Fluid=Bernoulli)
+    return model
 
-statefile_path = './test_forward.h5'
-visfile_path = './test_forward-vis.h5'
+@pytest.fixture()
+def state_controls_prop(model):
+    state = model.state0
+    state[:] = 0
 
-export_vertex_values(model, statefile_path, visfile_path)
+    prop = model.prop
+    prop['emod'][:] = 5e4
+    prop['rho'][:] = 1.0
+    prop.print_summary()
 
-write_xdmf(model, visfile_path)
+    control = model.control
+    for n in range(len(model.fluids)):
+        control[f'fluid{n}.psub'] = 500*10
+    control.print_summary()
+    # breakpoint()
+    return state, [control], prop
+
+@pytest.fixture()
+def state_fpath(model, state_controls_prop):
+    state_fpath = 'out/test_xdmf.h5'
+    with sf.StateFile(model, state_fpath, mode='w') as f:
+        state, controls, prop = state_controls_prop
+        integrate(
+            model, f,
+            state, controls, prop,
+            times=np.linspace(0, 1e-2, 10)
+        )
+
+    return state_fpath
+
+def test_write_xdmf(model, state_fpath):
+
+    visfile_path = './test_xdmf--export.h5'
+
+    with sf.StateFile(model, state_fpath, mode='r') as state_file:
+        export_vertex_values(model, state_file, visfile_path)
+    write_xdmf(model, visfile_path)

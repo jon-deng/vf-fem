@@ -15,7 +15,7 @@ import dolfin as dfn
 
 from .. import statefile as sf
 
-def export_vertex_values(model, statefile_path, export_path):
+def export_vertex_values(model, state_file, export_path, post_file=None):
     """
     Exports vertex values from a state file to another h5 file
     """
@@ -23,57 +23,76 @@ def export_vertex_values(model, statefile_path, export_path):
     if os.path.isfile(export_path):
         os.remove(export_path)
 
-    with sf.StateFile(model, statefile_path, mode='r') as fi:
-        with h5py.File(export_path, mode='w') as fo:
+    ## Input data
+    with h5py.File(export_path, mode='w') as fo:
 
-            ## Write the mesh and timing info out
-            fo.create_dataset('mesh/solid/coordinates', data=fi.file['mesh/solid/coordinates'])
-            fo.create_dataset('mesh/solid/connectivity', data=fi.file['mesh/solid/connectivity'])
+        ## Write the mesh and timing info out
+        fo.create_dataset(
+            'mesh/solid/coordinates',
+            data=state_file.file['mesh/solid/coordinates']
+        )
+        fo.create_dataset(
+            'mesh/solid/connectivity',
+            data=state_file.file['mesh/solid/connectivity']
+        )
 
-            fo.create_dataset('time', data=fi.file['time'])
+        fo.create_dataset('time', data=state_file.file['time'])
 
-            solid = model.solid
-            fspace_dg0 = solid.residual.form['coeff.fsi.p1'].function_space()
-            fspace_cg1 = solid.residual.form['coeff.state.u0'].function_space()
-            vert_to_sdof = dfn.vertex_to_dof_map(fspace_dg0)
-            vert_to_vdof = dfn.vertex_to_dof_map(fspace_cg1)
+        solid = model.solid
+        fspace_dg0 = dfn.FunctionSpace(solid.residual.mesh(), 'DG', 0)
+        fspace_cg1_scalar = solid.residual.form['coeff.fsi.p1'].function_space()
+        fspace_cg1_vector = solid.residual.form['coeff.state.u1'].function_space()
+        vert_to_sdof = dfn.vertex_to_dof_map(fspace_cg1_scalar)
+        vert_to_vdof = dfn.vertex_to_dof_map(fspace_cg1_vector)
 
-            ## Make empty functions to store vector values
-            scalar_func = dfn.Function(fspace_dg0)
-            vector_func = dfn.Function(fspace_cg1)
+        ## Make empty functions to store vector values
+        scalar_func = dfn.Function(fspace_cg1_scalar)
+        vector_func = dfn.Function(fspace_cg1_vector)
 
-            ## Prepare constant variables describing the shape
-            N_TIME = fi.size
-            N_VERT = solid.residual.mesh().num_vertices()
-            VECTOR_VALUE_SHAPE = tuple(vector_func.value_shape())
-            SCALAR_VALUE_SHAPE = tuple(scalar_func.value_shape())
+        ## Prepare constant variables describing the shape
+        N_TIME = state_file.size
+        N_VERT = solid.residual.mesh().num_vertices()
+        VECTOR_VALUE_SHAPE = tuple(vector_func.value_shape())
+        SCALAR_VALUE_SHAPE = tuple(scalar_func.value_shape())
 
-            ## Initialize solid/fluid state variables
-            vector_labels = ['state/u', 'state/v', 'state/a']
-            for label in vector_labels:
-                fo.create_dataset(label, shape=(N_TIME, N_VERT, *VECTOR_VALUE_SHAPE), dtype=np.float64)
+        ## Initialize solid/fluid state variables
+        vector_labels = ['state/u', 'state/v', 'state/a']
+        for label in vector_labels:
+            fo.create_dataset(
+                label, shape=(N_TIME, N_VERT, *VECTOR_VALUE_SHAPE),
+                dtype=np.float64
+            )
 
-            scalar_labels = ['p']
-            for label in scalar_labels:
-                fo.create_dataset(label, shape=(N_TIME, N_VERT, *SCALAR_VALUE_SHAPE), dtype=np.float64)
+        scalar_labels = ['p']
+        for label in scalar_labels:
+            fo.create_dataset(
+                label, shape=(N_TIME, N_VERT, *SCALAR_VALUE_SHAPE),
+                dtype=np.float64
+            )
 
-            ## Write solid/fluid state variables in vertex order
-            for ii in range(N_TIME):
-                state = fi.get_state(ii)
-                model.set_fin_state(state)
-                model.set_ini_state(state)
+        ## Write solid/fluid state variables in vertex order
+        for ii in range(N_TIME):
+            state = state_file.get_state(ii)
+            model.set_fin_state(state)
+            model.set_ini_state(state)
 
-                u, v, a = state['u'], state['v'], state['a']
-                for label, vector in zip(vector_labels, [u, v, a]):
-                    vector_func.vector()[:] = vector
-                    fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VECTOR_VALUE_SHAPE)
+            u, v, a = state['u'], state['v'], state['a']
+            for label, vector in zip(vector_labels, [u, v, a]):
+                vector_func.vector()[:] = vector
+                fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VECTOR_VALUE_SHAPE)
 
-                p = model.solid.control['p']
-                for label, scalar in zip(scalar_labels, [p]):
-                    scalar_func.vector()[:] = scalar
-                    fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *SCALAR_VALUE_SHAPE))
+            p = model.solid.control['p']
+            for label, scalar in zip(scalar_labels, [p]):
+                scalar_func.vector()[:] = scalar
+                fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *SCALAR_VALUE_SHAPE))
 
-            ## Write (q, p) vertex values (pressure only defined)
+        ## Write (q, p) vertex values (pressure only defined)
+
+        ## Write post-processed scalars
+        if post_file is not None:
+            labels = ['field.tavg_strain_energy', 'field.tavg_viscous_rate', 'field.vswell']
+            for label in labels:
+                fo[label] = post_file[label][:]
 
 def write_xdmf(model, h5file_path, xdmf_name=None):
     """
@@ -99,13 +118,136 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
         domain = SubElement(root, 'Domain')
 
+        # Grid for static data
+        grid = SubElement(domain, 'Grid', {'GridType': 'Uniform'})
+
+        # Handle options for 2D/3D meshes
+        mesh = model.solid.residual.mesh()
+        if mesh.topology().dim() == 3:
+            topology_type = 'Tetrahedron'
+            geometry_type = 'XYZ'
+        else:
+            topology_type = 'Triangle'
+            geometry_type = 'XY'
+
+        topo = SubElement(
+            grid, 'Topology', {
+                'TopologyType': topology_type,
+                'NumberOfElements': f'{N_CELL}'
+            }
+        )
+
+        conn = SubElement(
+            topo, 'DataItem', {
+                'Name': 'MeshConnectivity',
+                'ItemType': 'Uniform',
+                'NumberType': 'Int',
+                'Format': 'HDF',
+                'Dimensions': format_shape_tuple(f['mesh/solid/connectivity'].shape)
+            }
+        )
+        conn.text = f'{h5file_name}:/mesh/solid/connectivity'
+
+        geom = SubElement(grid, 'Geometry', {'GeometryType': geometry_type})
+
+        coords = SubElement(
+            geom, 'DataItem', {
+                'Name': 'MeshCoordinates',
+                'ItemType': 'Uniform',
+                'NumberType': 'Float',
+                'Precision': '8',
+                'Format': 'HDF',
+                'Dimensions': format_shape_tuple(f['mesh/solid/coordinates'].shape)
+            }
+        )
+        coords.text = f'{h5file_name}:/mesh/solid/coordinates'
+
+        for label in ['state/u']:
+            comp = SubElement(
+                grid, 'Attribute', {
+                    'Name': label,
+                    'AttributeType': 'Vector',
+                    'Center': 'Node'
+                }
+            )
+
+            data_subset = SubElement(
+                comp, 'DataItem', {
+                    'ItemType': 'HyperSlab',
+                    'NumberType': 'Float',
+                    'Precision': '8',
+                    'Format': 'HDF',
+                    'Dimensions': format_shape_tuple(f[label][0:0+1, ...].shape)
+                }
+            )
+
+            slice_sel = SubElement(
+                data_subset, 'DataItem', {
+                    'Dimensions': '3 3',
+                    'Format': 'XML'
+                }
+            )
+
+            slice_sel.text = (
+                f"{0} 0 0\n"
+                "1 1 1\n"
+                f"1 {format_shape_tuple(f[label].shape[-2:])}"
+            )
+
+            slice_data = SubElement(
+                data_subset, 'DataItem', {
+                    'Dimensions': format_shape_tuple(f[label].shape),
+                    'Format': 'HDF'
+                }
+            )
+            slice_data.text = f'{h5file_name}:{label}'
+
+        # scalar_labels = [
+        #     'field.tavg_viscous_rate', 'field.tavg_strain_energy', 'field.vswell'
+        # ]
+
+        # for label in scalar_labels:
+        #     comp = SubElement(
+        #         grid, 'Attribute', {
+        #             'Name': label,
+        #             'AttributeType': 'Scalar',
+        #             'Center': 'Cell'
+        #         }
+        #     )
+
+        #     slice = SubElement(
+        #         comp, 'DataItem', {
+        #             'ItemType': 'HyperSlab',
+        #             'NumberType': 'Float',
+        #             'Precision': '8',
+        #             'Format': 'HDF',
+        #             'Dimensions': format_shape_tuple(f[label].shape)
+        #         }
+        #     )
+
+        #     slice_sel = SubElement(
+        #         slice, 'DataItem', {
+        #             'Dimensions': '3 1',
+        #             'Format': 'XML'
+        #         }
+        #     )
+        #     slice_sel.text = f"0\n 1\n {f[label].shape[-1]}"
+
+        #     slice_data = SubElement(
+        #         slice, 'DataItem', {
+        #             'Dimensions': format_shape_tuple(f[label].shape),
+        #             'Format': 'HDF'
+        #         }
+        #     )
+        #     slice_data.text = f'{h5file_name}:{label}'
+
+        ## Temporal data
         temporal_grid = SubElement(
             domain, 'Grid', {
                 'GridType': 'Collection',
                 'CollectionType': 'Temporal'
             }
         )
-
         for ii in range(N_TIME):
             ## Make the grid (they always reference the same h5 dataset)
             grid = SubElement(temporal_grid, 'Grid', {'GridType': 'Uniform'})
