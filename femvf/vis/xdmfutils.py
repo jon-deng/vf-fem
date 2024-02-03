@@ -2,7 +2,7 @@
 Writes out vertex values from a statefile to xdmf
 """
 
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 
 import os
 from os import path
@@ -307,41 +307,9 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         coords.text = f'{h5file_name}:/mesh/solid/coordinates'
 
         for label in ['state/u']:
-            comp = SubElement(
-                grid, 'Attribute', {
-                    'Name': label,
-                    'AttributeType': 'Vector',
-                    'Center': 'Node'
-                }
+            add_xdmf_node_vector(
+                grid, label, h5file_path, f[label], (slice(0, 1), ...)
             )
-
-            data_subset = SubElement(
-                comp, 'DataItem', {
-                    'ItemType': 'HyperSlab',
-                    'NumberType': 'Float',
-                    'Precision': '8',
-                    'Format': 'HDF',
-                    'Dimensions': xdmf_shape(f[label][0:1, ...].shape)
-                }
-            )
-
-            shape = f[label].shape
-            slice_sel = SubElement(
-                data_subset, 'DataItem', {
-                    'Dimensions': f'3 {len(shape):d}',
-                    'Format': 'XML'
-                }
-            )
-            xdmf_array = XDMFArrayIndex(shape)
-            slice_sel.text = xdmf_array[0, ...]
-
-            slice_data = SubElement(
-                data_subset, 'DataItem', {
-                    'Dimensions': xdmf_shape(shape),
-                    'Format': 'HDF'
-                }
-            )
-            slice_data.text = f'{h5file_name}:{label}'
 
         # scalar_labels = [
         #     'field.tavg_viscous_rate', 'field.tavg_strain_energy', 'field.vswell'
@@ -505,41 +473,9 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
                 ## This assumes data is in vertex order
 
-                comp = SubElement(
-                    grid, 'Attribute', {
-                        'Name': label,
-                        'AttributeType': 'Vector',
-                        'Center': 'Node'
-                    }
+                comp = add_xdmf_node_vector(
+                    grid, label, h5file_name, f[label], (slice(ii, ii+1), ...)
                 )
-
-                data_subset = SubElement(
-                    comp, 'DataItem', {
-                        'ItemType': 'HyperSlab',
-                        'NumberType': 'Float',
-                        'Precision': '8',
-                        'Format': 'HDF',
-                        'Dimensions': xdmf_shape(f[label][ii:ii+1, ...].shape)
-                    }
-                )
-
-                shape = f[label].shape
-                slice_sel = SubElement(
-                    data_subset, 'DataItem', {
-                        'Dimensions': f'3 {len(shape):d}',
-                        'Format': 'XML'
-                    }
-                )
-                xdmf_array = XDMFArrayIndex(shape)
-                slice_sel.text = xdmf_array[ii:ii+1, ...]
-
-                slice_data = SubElement(
-                    data_subset, 'DataItem', {
-                        'Dimensions': xdmf_shape(f[label].shape),
-                        'Format': 'HDF'
-                    }
-                )
-                slice_data.text = f'{h5file_name}:{label}'
 
             # Write q, p data to xdmf
             scalar_labels = ['p']
@@ -553,7 +489,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                     }
                 )
 
-                slice = SubElement(
+                _slice = SubElement(
                     comp, 'DataItem', {
                         'ItemType': 'HyperSlab',
                         'NumberType': 'Float',
@@ -565,7 +501,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
                 shape = dataset.shape
                 slice_sel = SubElement(
-                    slice, 'DataItem', {
+                    _slice, 'DataItem', {
                         # NOTE: This represents 3 rows (start, stop, step)
                         # for each dimension (`ndim`)
                         'Dimensions': f'3 {len(shape):d}',
@@ -576,7 +512,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                 slice_sel.text = xdmf_array[ii:ii+1, ...]
 
                 slice_data = SubElement(
-                    slice, 'DataItem', {
+                    _slice, 'DataItem', {
                         'Dimensions': xdmf_shape(dataset.shape),
                         'Format': 'HDF'
                     }
@@ -595,3 +531,47 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         fxml.write(pretty_xml)
 
 
+def add_xdmf_node_vector(
+        grid: Element,
+        label: str,
+        dataset_fpath: str,
+        dataset: h5py.Dataset,
+        axis_indices: Optional[AxisIndices]=None
+    ):
+    comp = SubElement(
+        grid, 'Attribute', {
+            'Name': label,
+            'AttributeType': 'Vector',
+            'Center': 'Node'
+        }
+    )
+
+    shape = dataset.shape
+
+    data_subset = SubElement(
+        comp, 'DataItem', {
+            'ItemType': 'HyperSlab',
+            'NumberType': 'Float',
+            'Precision': '8',
+            'Format': 'HDF',
+            'Dimensions': xdmf_shape(dataset[axis_indices].shape)
+        }
+    )
+    slice_sel = SubElement(
+        data_subset, 'DataItem', {
+            'Dimensions': f'3 {len(shape):d}',
+            'Format': 'XML'
+        }
+    )
+    xdmf_array = XDMFArrayIndex(shape)
+    slice_sel.text = xdmf_array[axis_indices]
+
+    slice_data = SubElement(
+        data_subset, 'DataItem', {
+            'Dimensions': xdmf_shape(shape),
+            'Format': 'HDF'
+        }
+    )
+
+    slice_data.text = f'{dataset_fpath}:{dataset.name}'
+    return comp
