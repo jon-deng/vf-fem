@@ -267,44 +267,10 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
         # Handle options for 2D/3D meshes
         mesh = model.solid.residual.mesh()
-        if mesh.topology().dim() == 3:
-            topology_type = 'Tetrahedron'
-            geometry_type = 'XYZ'
-        else:
-            topology_type = 'Triangle'
-            geometry_type = 'XY'
+        mesh_dim = mesh.topology().dim()
 
-        topo = SubElement(
-            grid, 'Topology', {
-                'TopologyType': topology_type,
-                'NumberOfElements': f'{N_CELL}'
-            }
-        )
-
-        conn = SubElement(
-            topo, 'DataItem', {
-                'Name': 'MeshConnectivity',
-                'ItemType': 'Uniform',
-                'NumberType': 'Int',
-                'Format': 'HDF',
-                'Dimensions': xdmf_shape(f['mesh/solid/connectivity'].shape)
-            }
-        )
-        conn.text = f'{h5file_name}:/mesh/solid/connectivity'
-
-        geom = SubElement(grid, 'Geometry', {'GeometryType': geometry_type})
-
-        coords = SubElement(
-            geom, 'DataItem', {
-                'Name': 'MeshCoordinates',
-                'ItemType': 'Uniform',
-                'NumberType': 'Float',
-                'Precision': '8',
-                'Format': 'HDF',
-                'Dimensions': xdmf_shape(f['mesh/solid/coordinates'].shape)
-            }
-        )
-        coords.text = f'{h5file_name}:/mesh/solid/coordinates'
+        add_xdmf_grid_topology(grid, f, h5file_path, mesh_dim)
+        add_xdmf_grid_geometry(grid, f, h5file_path, mesh_dim)
 
         for label in ['state/u']:
             add_xdmf_node_vector(
@@ -463,6 +429,52 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
     with open(path.join(root_dir, xdmf_name), 'wb') as fxml:
         fxml.write(pretty_xml)
 
+def add_xdmf_grid_topology(grid: Element, f, h5file_name: str, mesh_dim=2):
+
+    if mesh_dim == 3:
+        topology_type = 'Tetrahedron'
+    else:
+        topology_type = 'Triangle'
+
+    N_CELL = f['mesh/solid/connectivity'].shape[0]
+
+    topo = SubElement(
+        grid, 'Topology', {
+            'TopologyType': topology_type,
+            'NumberOfElements': f'{N_CELL}'
+        }
+    )
+
+    conn = SubElement(
+        topo, 'DataItem', {
+            'Name': 'MeshConnectivity',
+            'ItemType': 'Uniform',
+            'NumberType': 'Int',
+            'Format': 'HDF',
+            'Dimensions': xdmf_shape(f['mesh/solid/connectivity'].shape)
+        }
+    )
+    conn.text = f'{h5file_name}:/mesh/solid/connectivity'
+
+def add_xdmf_grid_geometry(grid: Element, f, h5file_name: str, mesh_dim=2):
+    if mesh_dim == 3:
+        geometry_type = 'XYZ'
+    else:
+        geometry_type = 'XY'
+
+    geom = SubElement(grid, 'Geometry', {'GeometryType': geometry_type})
+
+    coords = SubElement(
+        geom, 'DataItem', {
+            'Name': 'MeshCoordinates',
+            'ItemType': 'Uniform',
+            'NumberType': 'Float',
+            'Precision': '8',
+            'Format': 'HDF',
+            'Dimensions': xdmf_shape(f['mesh/solid/coordinates'].shape)
+        }
+    )
+    coords.text = f'{h5file_name}:/mesh/solid/coordinates'
 
 def add_xdmf_node_vector(
         grid: Element,
