@@ -257,7 +257,12 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
         domain = SubElement(root, 'Domain')
 
         # Grid for static data
-        grid = SubElement(domain, 'Grid', {'GridType': 'Uniform'})
+        grid = SubElement(
+            domain, 'Grid', {
+                'GridType': 'Uniform',
+                'Name': 'Static'
+            }
+        )
 
         # Handle options for 2D/3D meshes
         mesh = model.solid.residual.mesh()
@@ -287,12 +292,18 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
         temporal_grid = SubElement(
             domain, 'Grid', {
                 'GridType': 'Collection',
-                'CollectionType': 'Temporal'
+                'CollectionType': 'Temporal',
+                'Name': 'Temporal'
             }
         )
         for ii in range(n_time):
             # Make the grid (they always reference the same h5 dataset)
-            grid = SubElement(temporal_grid, 'Grid', {'GridType': 'Uniform'})
+            grid = SubElement(
+                temporal_grid, 'Grid', {
+                    'GridType': 'Uniform',
+                    'Name': f'Time{ii:d}'
+                }
+            )
 
             time = SubElement(
                 grid, 'Time', {
