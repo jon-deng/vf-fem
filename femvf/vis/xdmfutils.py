@@ -238,7 +238,7 @@ def export_vertex_values(model, state_file, export_path, post_file=None):
             for label in labels:
                 fo[label] = post_file[label][:]
 
-def write_xdmf(model, h5file_path, xdmf_name=None):
+def write_xdmf(model, h5_path: str, xdmf_name=None):
     """
     Parameters
     ----------
@@ -246,10 +246,10 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         path to a file with exported vertex values
     """
 
-    root_dir = path.split(h5file_path)[0]
-    h5file_name = path.split(h5file_path)[1]
+    root_dir = path.split(h5_path)[0]
+    h5file_name = path.split(h5_path)[1]
 
-    with h5py.File(h5file_path, mode='r') as f:
+    with h5py.File(h5_path, mode='r') as f:
 
         root = Element('Xdmf')
         root.set('version', '2.0')
@@ -263,13 +263,13 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         mesh = model.solid.residual.mesh()
         mesh_dim = mesh.topology().dim()
 
-        add_xdmf_grid_topology(grid, f, h5file_path, mesh_dim)
-        add_xdmf_grid_geometry(grid, f, h5file_path, mesh_dim)
+        add_xdmf_grid_topology(grid, f, h5_path, mesh_dim)
+        add_xdmf_grid_geometry(grid, f, h5_path, mesh_dim)
 
         ## Write static data
         for label in ['state/u']:
             add_xdmf_array(
-                grid, label, h5file_path, f[label], (slice(0, 1), ...),
+                grid, label, h5_path, f[label], (slice(0, 1), ...),
                 value_type='vector', value_center='node'
             )
 
@@ -302,8 +302,8 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
             )
 
             # Set the mesh topology
-            add_xdmf_grid_topology(grid, f, h5file_path, mesh_dim)
-            add_xdmf_grid_geometry(grid, f, h5file_path, mesh_dim)
+            add_xdmf_grid_topology(grid, f, h5_path, mesh_dim)
+            add_xdmf_grid_geometry(grid, f, h5_path, mesh_dim)
 
             # Write u, v, a data to xdmf
             solid_labels = ['state/u', 'state/v', 'state/a']
@@ -318,7 +318,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
             scalar_labels = ['p']
             for label in scalar_labels:
                 add_xdmf_array(
-                    grid, label, h5file_path, f[label], (slice(ii, ii+1), ...),
+                    grid, label, h5_path, f[label], (slice(ii, ii+1), ...),
                     value_type='scalar', value_center='node'
                 )
 
