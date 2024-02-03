@@ -263,8 +263,8 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
         mesh = model.solid.residual.mesh()
         mesh_dim = mesh.topology().dim()
 
-        add_xdmf_grid_topology(grid, f, h5_fpath, mesh_dim)
-        add_xdmf_grid_geometry(grid, f, h5_fpath, mesh_dim)
+        add_xdmf_grid_topology(grid, h5_fpath, f['mesh/solid/connectivity'], mesh_dim)
+        add_xdmf_grid_geometry(grid, h5_fpath, f['mesh/solid/coordinates'], mesh_dim)
 
         ## Write static data
         for label in ['state/u']:
@@ -302,8 +302,8 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
             )
 
             # Set the mesh topology
-            add_xdmf_grid_topology(grid, f, h5_fpath, mesh_dim)
-            add_xdmf_grid_geometry(grid, f, h5_fpath, mesh_dim)
+            add_xdmf_grid_topology(grid, h5_fpath, f['mesh/solid/connectivity'], mesh_dim)
+            add_xdmf_grid_geometry(grid, h5_fpath, f['mesh/solid/coordinates'], mesh_dim)
 
             # Write u, v, a data to xdmf
             solid_labels = ['state/u', 'state/v', 'state/a']
@@ -333,14 +333,16 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
     with open(path.join(root_dir, xdmf_name), 'wb') as fxml:
         fxml.write(pretty_xml)
 
-def add_xdmf_grid_topology(grid: Element, f, h5file_name: str, mesh_dim=2):
+def add_xdmf_grid_topology(
+        grid: Element, h5_fpath: str, dataset: h5py.Dataset, mesh_dim=2
+    ):
 
     if mesh_dim == 3:
         topology_type = 'Tetrahedron'
     else:
         topology_type = 'Triangle'
 
-    N_CELL = f['mesh/solid/connectivity'].shape[0]
+    N_CELL = dataset.shape[0]
 
     topo = SubElement(
         grid, 'Topology', {
@@ -355,12 +357,14 @@ def add_xdmf_grid_topology(grid: Element, f, h5file_name: str, mesh_dim=2):
             'ItemType': 'Uniform',
             'NumberType': 'Int',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(f['mesh/solid/connectivity'].shape)
+            'Dimensions': xdmf_shape(dataset.shape)
         }
     )
-    conn.text = f'{h5file_name}:/mesh/solid/connectivity'
+    conn.text = f'{h5_fpath}:/mesh/solid/connectivity'
 
-def add_xdmf_grid_geometry(grid: Element, f, h5file_name: str, mesh_dim=2):
+def add_xdmf_grid_geometry(
+        grid: Element, h5_fpath: str, dataset: h5py.Dataset, mesh_dim=2
+    ):
     if mesh_dim == 3:
         geometry_type = 'XYZ'
     else:
@@ -375,10 +379,10 @@ def add_xdmf_grid_geometry(grid: Element, f, h5file_name: str, mesh_dim=2):
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(f['mesh/solid/coordinates'].shape)
+            'Dimensions': xdmf_shape(dataset.shape)
         }
     )
-    coords.text = f'{h5file_name}:/mesh/solid/coordinates'
+    coords.text = f'{h5_fpath}:{dataset.name}'
 
 def add_xdmf_array(
         grid: Element,
@@ -428,18 +432,24 @@ def add_xdmf_array(
     return comp
 
 def add_xdmf_finite_element_function(
-        grid, label,
-        family='CG', degree=1, cell='triangle'
+        grid: Element,
+        label: str,
+        h5_fpath: str,
+        dataset: h5py.Dataset,
+        dataset_dofmap: h5py.Dataset,
+        axis_indices: Optional[AxisIndices]=None,
+        elem_family='CG', elem_degree=1, elem_cell='triangle',
+        elem_value_type='vector'
     ):
     comp = SubElement(
         grid, 'Attribute', {
             'Name': label,
-            'AttributeType': 'Vector',
+            'AttributeType': elem_value_type,
             'Center': 'Other',
             'ItemType': 'FiniteElementFunction',
-            'ElementFamily': family,
-            'ElementDegree': degree,
-            'ElementCell': cell
+            'ElementFamily': elem_family,
+            'ElementDegree': elem_degree,
+            'ElementCell': elem_cell
         }
     )
 
@@ -449,10 +459,10 @@ def add_xdmf_finite_element_function(
             'ItemType': 'Uniform',
             'NumberType': 'Int',
             'Format': 'HDF',
-            'Dimensions': format_shape_tuple(f['dofmap/CG1'].shape)
+            'Dimensions': xdmf_shape(dataset_dofmap.shape)
         }
     )
-    dofmap.text = f'{h5file_name}:dofmap/CG1'
+    dofmap.text = f'{h5_fpath}:{dataset_dofmap.name}'
 
     data_subset = SubElement(
         comp, 'DataItem', {
@@ -460,26 +470,24 @@ def add_xdmf_finite_element_function(
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': format_shape_tuple(f[label][ii:ii+1, ...].shape)
+            'Dimensions': xdmf_shape(dataset[axis_indices].shape)
         }
     )
 
+    shape = dataset.shape
     slice_sel = SubElement(
         data_subset, 'DataItem', {
-            'Dimensions': '3 2',
+            'Dimensions': f'3 {len(shape)}',
             'Format': 'XML'
         }
     )
-    slice_sel.text = (
-        f"{ii} 0\n"
-        "1 1\n"
-        f"{ii+1} {f[label].shape[-1]}"
-    )
+    xdmf_array = XDMFArrayIndex(shape)
+    slice_sel.text = xdmf_array[axis_indices]
 
     slice_data = SubElement(
         data_subset, 'DataItem', {
-            'Dimensions': format_shape_tuple(f[label].shape),
+            'Dimensions': xdmf_shape(shape),
             'Format': 'HDF'
         }
     )
-    slice_data.text = f'{h5file_name}:{label}'
+    slice_data.text = f'{h5_fpath}:{label}'
