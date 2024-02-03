@@ -316,39 +316,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         # ]
 
         # for label in scalar_labels:
-        #     comp = SubElement(
-        #         grid, 'Attribute', {
-        #             'Name': label,
-        #             'AttributeType': 'Scalar',
-        #             'Center': 'Cell'
-        #         }
-        #     )
-
-        #     slice = SubElement(
-        #         comp, 'DataItem', {
-        #             'ItemType': 'HyperSlab',
-        #             'NumberType': 'Float',
-        #             'Precision': '8',
-        #             'Format': 'HDF',
-        #             'Dimensions': format_shape_tuple(f[label].shape)
-        #         }
-        #     )
-
-        #     slice_sel = SubElement(
-        #         slice, 'DataItem', {
-        #             'Dimensions': '3 1',
-        #             'Format': 'XML'
-        #         }
-        #     )
-        #     slice_sel.text = f"0\n 1\n {f[label].shape[-1]}"
-
-        #     slice_data = SubElement(
-        #         slice, 'DataItem', {
-        #             'Dimensions': format_shape_tuple(f[label].shape),
-        #             'Format': 'HDF'
-        #         }
-        #     )
-        #     slice_data.text = f'{h5file_name}:{label}'
+        #     add_xdmf_cell_scalar(grid, label, h5file_name, f[label], slice(None))
 
         ## Temporal data
         temporal_grid = SubElement(
@@ -553,6 +521,51 @@ def add_xdmf_node_scalar(
             'Name': label,
             'AttributeType': 'Scalar',
             'Center': 'Node'
+        }
+    )
+
+    shape = dataset.shape
+
+    data_subset = SubElement(
+        comp, 'DataItem', {
+            'ItemType': 'HyperSlab',
+            'NumberType': 'Float',
+            'Precision': '8',
+            'Format': 'HDF',
+            'Dimensions': xdmf_shape(dataset[axis_indices].shape)
+        }
+    )
+    slice_sel = SubElement(
+        data_subset, 'DataItem', {
+            'Dimensions': f'3 {len(shape):d}',
+            'Format': 'XML'
+        }
+    )
+    xdmf_array = XDMFArrayIndex(shape)
+    slice_sel.text = xdmf_array[axis_indices]
+
+    slice_data = SubElement(
+        data_subset, 'DataItem', {
+            'Dimensions': xdmf_shape(shape),
+            'Format': 'HDF'
+        }
+    )
+
+    slice_data.text = f'{dataset_fpath}:{dataset.name}'
+    return comp
+
+def add_xdmf_cell_scalar(
+        grid: Element,
+        label: str,
+        dataset_fpath: str,
+        dataset: h5py.Dataset,
+        axis_indices: Optional[AxisIndices]=None
+    ):
+    comp = SubElement(
+        grid, 'Attribute', {
+            'Name': label,
+            'AttributeType': 'Scalar',
+            'Center': 'Cell'
         }
     )
 
