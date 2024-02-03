@@ -251,12 +251,6 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
     with h5py.File(h5file_path, mode='r') as f:
 
-        N_TIME = f['state/u'].shape[0]
-        N_VERT = f['mesh/solid/coordinates'].shape[0]
-        N_CELL = f['mesh/solid/connectivity'].shape[0]
-
-        # breakpoint()
-
         root = Element('Xdmf')
         root.set('version', '2.0')
 
@@ -272,6 +266,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         add_xdmf_grid_topology(grid, f, h5file_path, mesh_dim)
         add_xdmf_grid_geometry(grid, f, h5file_path, mesh_dim)
 
+        ## Write static data
         for label in ['state/u']:
             add_xdmf_array(
                 grid, label, h5file_path, f[label], (slice(0, 1), ...),
@@ -281,22 +276,22 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
         # scalar_labels = [
         #     'field.tavg_viscous_rate', 'field.tavg_strain_energy', 'field.vswell'
         # ]
-
         # for label in scalar_labels:
         #     add_xdmf_array(
         #         grid, label, h5file_name, f[label], (slice(None),),
         #         value_type='scalar', value_center='cell'
         #     )
 
-        ## Temporal data
+        ## Write time-varying data
+        n_time = f['state/u'].shape[0]
         temporal_grid = SubElement(
             domain, 'Grid', {
                 'GridType': 'Collection',
                 'CollectionType': 'Temporal'
             }
         )
-        for ii in range(N_TIME):
-            ## Make the grid (they always reference the same h5 dataset)
+        for ii in range(n_time):
+            # Make the grid (they always reference the same h5 dataset)
             grid = SubElement(temporal_grid, 'Grid', {'GridType': 'Uniform'})
 
             time = SubElement(
@@ -306,29 +301,14 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                 }
             )
 
-            ## Set the mesh topology
-
-            # Handle options for 2D/3D meshes
-            mesh = model.solid.residual.mesh()
-            if mesh.topology().dim() == 3:
-                topology_type = 'Tetrahedron'
-                geometry_type = 'XYZ'
-            else:
-                topology_type = 'Triangle'
-                geometry_type = 'XY'
-
+            # Set the mesh topology
             add_xdmf_grid_topology(grid, f, h5file_path, mesh_dim)
             add_xdmf_grid_geometry(grid, f, h5file_path, mesh_dim)
 
-            ## Write u, v, a data to xdmf
+            # Write u, v, a data to xdmf
             solid_labels = ['state/u', 'state/v', 'state/a']
-            # solid_labels = []
             for label in solid_labels:
-
-                ## This assumes the data is the raw fenics data
-
-                ## This assumes data is in vertex order
-
+                # This assumes data is in vertex order
                 comp = add_xdmf_array(
                     grid, label, h5file_name, f[label], (slice(ii, ii+1), ...),
                     value_type='vector', value_center='node'
