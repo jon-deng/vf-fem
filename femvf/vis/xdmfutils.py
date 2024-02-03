@@ -313,37 +313,8 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                 topology_type = 'Triangle'
                 geometry_type = 'XY'
 
-            topo = SubElement(
-                grid, 'Topology', {
-                    'TopologyType': topology_type,
-                    'NumberOfElements': f'{N_CELL}'
-                }
-            )
-
-            conn = SubElement(
-                topo, 'DataItem', {
-                    'Name': 'MeshConnectivity',
-                    'ItemType': 'Uniform',
-                    'NumberType': 'Int',
-                    'Format': 'HDF',
-                    'Dimensions': xdmf_shape(f['mesh/solid/connectivity'].shape)
-                }
-            )
-            conn.text = f'{h5file_name}:/mesh/solid/connectivity'
-
-            geom = SubElement(grid, 'Geometry', {'GeometryType': geometry_type})
-
-            coords = SubElement(
-                geom, 'DataItem', {
-                    'Name': 'MeshCoordinates',
-                    'ItemType': 'Uniform',
-                    'NumberType': 'Float',
-                    'Precision': '8',
-                    'Format': 'HDF',
-                    'Dimensions': xdmf_shape(f['mesh/solid/coordinates'].shape)
-                }
-            )
-            coords.text = f'{h5file_name}:/mesh/solid/coordinates'
+            add_xdmf_grid_topology(grid, f, h5file_path, mesh_dim)
+            add_xdmf_grid_geometry(grid, f, h5file_path, mesh_dim)
 
             ## Write u, v, a data to xdmf
             solid_labels = ['state/u', 'state/v', 'state/a']
