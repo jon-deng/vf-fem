@@ -2,6 +2,8 @@
 Writes out vertex values from a statefile to xdmf
 """
 
+from typing import Union, Tuple
+
 import os
 from os import path
 
@@ -13,7 +15,149 @@ import h5py
 import numpy as np
 import dolfin as dfn
 
-from .. import statefile as sf
+# from .. import statefile as sf
+
+AxisSize = int
+Shape = Tuple[AxisSize, ...]
+
+AxisIndex = Union[int, slice, type(Ellipsis)]
+AxisIndices = Tuple[AxisIndex, ...]
+
+def xdmf_shape(shape: Shape) -> str:
+    """
+    Return a shape tuple as an XDMF string
+    """
+    return r' '.join(str(dim) for dim in shape)
+
+class XDMFArrayIndex:
+    """
+    Return XDMF slice strings from an array
+
+    Parameters
+    ----------
+    shape: Shape
+        The shape of the array
+    """
+
+    def __init__(self, shape: Shape):
+        self._shape = shape
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def ndim(self):
+        return len(self.shape)
+
+    @staticmethod
+    def expand_axis_indices(axis_indices: AxisIndices, ndim: int):
+        """
+        Expand any missing axis indices in an index tuple
+        """
+        if not isinstance(axis_indices, tuple):
+            axis_indices = (axis_indices,)
+
+        assert axis_indices.count(Ellipsis) < 2
+
+        if Ellipsis in axis_indices:
+            # This is the number of missing, explicit, axis indices
+            ndim_expand = ndim - len(axis_indices) + 1
+            # If an ellipsis exists, then add missing axis indices at the
+            # ellipsis
+            ii_split = axis_indices.index(Ellipsis)
+        else:
+            # This is the number of missing, explicit, axis indices
+            ndim_expand = ndim - len(axis_indices)
+            # If no ellipsis exists, then add missing axis indices starting at 0
+            ii_split = 0
+
+        # Here add `[:]` slices to all missing axis indices
+        expanded_axis_indices = (
+            axis_indices[:ii_split]
+            + ndim_expand*(slice(None),)
+            + axis_indices[ii_split+1:]
+        )
+        return expanded_axis_indices
+
+    @staticmethod
+    def get_start(axis_index: AxisIndex, axis_size: int):
+        """
+        Return the start of an axis index
+        """
+        if isinstance(axis_index, slice):
+            if axis_index.start is None:
+                start = 0
+            else:
+                start = axis_index.start
+        elif isinstance(axis_index, int):
+            start = axis_index
+        elif axis_index is Ellipsis:
+            raise TypeError("Invalid `Ellipsis` axis index")
+        return start
+
+    @staticmethod
+    def get_stop(axis_index: AxisIndex, axis_size: int):
+        """
+        Return the stop of an axis index
+        """
+        if isinstance(axis_index, slice):
+            if axis_index.stop is None:
+                stop = axis_size
+            else:
+                stop = axis_index.stop
+        elif isinstance(axis_index, int):
+            stop = axis_index + 1
+        elif axis_index is Ellipsis:
+            raise TypeError("Invalid `Ellipsis` axis index")
+        return stop
+
+    @staticmethod
+    def get_step(axis_index: AxisIndex, axis_size: int):
+        """
+        Return the step of an axis index
+        """
+        if isinstance(axis_index, slice):
+            if axis_index.step is None:
+                step = 1
+            else:
+                step = axis_index.step
+        elif isinstance(axis_index, int):
+            step = 1
+        elif axis_index is Ellipsis:
+            raise TypeError("Invalid `Ellipsis` axis index")
+        return step
+
+    def __getitem__(self, axis_indices: AxisIndices):
+        """
+        Return the XDMF array slice string representation of `index`
+        """
+        axis_indices = self.expand_axis_indices(axis_indices, self.ndim)
+
+        starts = [
+            str(self.get_start(axis_index, axis_size))
+            for axis_index, axis_size in zip(axis_indices, self.shape)
+        ]
+        stops = [
+            str(self.get_stop(axis_index, axis_size))
+            for axis_index, axis_size in zip(axis_indices, self.shape)
+        ]
+        steps = [
+            str(self.get_step(axis_index, axis_size))
+            for axis_index, axis_size in zip(axis_indices, self.shape)
+        ]
+        col_widths = [
+            max(len(start), len(stop), len(step))
+            for start, stop, step in zip(starts, stops, steps)
+        ]
+
+        row = ' '.join([f'{{:>{width}s}}' for width in col_widths])
+        return (
+            row.format(*starts) + '\n'
+            + row.format(*steps) + '\n'
+            + row.format(*stops)
+        )
+
 
 def export_vertex_values(model, state_file, export_path, post_file=None):
     """
@@ -143,7 +287,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                 'ItemType': 'Uniform',
                 'NumberType': 'Int',
                 'Format': 'HDF',
-                'Dimensions': format_shape_tuple(f['mesh/solid/connectivity'].shape)
+                'Dimensions': xdmf_shape(f['mesh/solid/connectivity'].shape)
             }
         )
         conn.text = f'{h5file_name}:/mesh/solid/connectivity'
@@ -157,7 +301,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                 'NumberType': 'Float',
                 'Precision': '8',
                 'Format': 'HDF',
-                'Dimensions': format_shape_tuple(f['mesh/solid/coordinates'].shape)
+                'Dimensions': xdmf_shape(f['mesh/solid/coordinates'].shape)
             }
         )
         coords.text = f'{h5file_name}:/mesh/solid/coordinates'
@@ -177,26 +321,23 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                     'NumberType': 'Float',
                     'Precision': '8',
                     'Format': 'HDF',
-                    'Dimensions': format_shape_tuple(f[label][0:0+1, ...].shape)
+                    'Dimensions': xdmf_shape(f[label][0:1, ...].shape)
                 }
             )
 
+            shape = f[label].shape
             slice_sel = SubElement(
                 data_subset, 'DataItem', {
-                    'Dimensions': '3 3',
+                    'Dimensions': f'3 {len(shape):d}',
                     'Format': 'XML'
                 }
             )
-
-            slice_sel.text = (
-                f"{0} 0 0\n"
-                "1 1 1\n"
-                f"1 {format_shape_tuple(f[label].shape[-2:])}"
-            )
+            xdmf_array = XDMFArrayIndex(shape)
+            slice_sel.text = xdmf_array[0, ...]
 
             slice_data = SubElement(
                 data_subset, 'DataItem', {
-                    'Dimensions': format_shape_tuple(f[label].shape),
+                    'Dimensions': xdmf_shape(shape),
                     'Format': 'HDF'
                 }
             )
@@ -283,7 +424,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                     'ItemType': 'Uniform',
                     'NumberType': 'Int',
                     'Format': 'HDF',
-                    'Dimensions': format_shape_tuple(f['mesh/solid/connectivity'].shape)
+                    'Dimensions': xdmf_shape(f['mesh/solid/connectivity'].shape)
                 }
             )
             conn.text = f'{h5file_name}:/mesh/solid/connectivity'
@@ -297,7 +438,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                     'NumberType': 'Float',
                     'Precision': '8',
                     'Format': 'HDF',
-                    'Dimensions': format_shape_tuple(f['mesh/solid/coordinates'].shape)
+                    'Dimensions': xdmf_shape(f['mesh/solid/coordinates'].shape)
                 }
             )
             coords.text = f'{h5file_name}:/mesh/solid/coordinates'
@@ -378,26 +519,23 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                         'NumberType': 'Float',
                         'Precision': '8',
                         'Format': 'HDF',
-                        'Dimensions': format_shape_tuple(f[label][ii:ii+1, ...].shape)
+                        'Dimensions': xdmf_shape(f[label][ii:ii+1, ...].shape)
                     }
                 )
 
+                shape = f[label].shape
                 slice_sel = SubElement(
                     data_subset, 'DataItem', {
-                        'Dimensions': '3 3',
+                        'Dimensions': f'3 {len(shape):d}',
                         'Format': 'XML'
                     }
                 )
-
-                slice_sel.text = (
-                    f"{ii} 0 0\n"
-                    "1 1 1\n"
-                    f"1 {format_shape_tuple(f[label].shape[-2:])}"
-                )
+                xdmf_array = XDMFArrayIndex(shape)
+                slice_sel.text = xdmf_array[ii:ii+1, ...]
 
                 slice_data = SubElement(
                     data_subset, 'DataItem', {
-                        'Dimensions': format_shape_tuple(f[label].shape),
+                        'Dimensions': xdmf_shape(f[label].shape),
                         'Format': 'HDF'
                     }
                 )
@@ -406,6 +544,7 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
             # Write q, p data to xdmf
             scalar_labels = ['p']
             for label in scalar_labels:
+                dataset = f[label]
                 comp = SubElement(
                     grid, 'Attribute', {
                         'Name': label,
@@ -420,21 +559,25 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
                         'NumberType': 'Float',
                         'Precision': '8',
                         'Format': 'HDF',
-                        'Dimensions': format_shape_tuple(f[label][ii:ii+1, ...].shape)
+                        'Dimensions': xdmf_shape(dataset[ii:ii+1, ...].shape)
                     }
                 )
 
+                shape = dataset.shape
                 slice_sel = SubElement(
                     slice, 'DataItem', {
-                        'Dimensions': '3 2',
+                        # NOTE: This represents 3 rows (start, stop, step)
+                        # for each dimension (`ndim`)
+                        'Dimensions': f'3 {len(shape):d}',
                         'Format': 'XML'
                     }
                 )
-                slice_sel.text = f"{ii} 0\n1 1\n1 {format_shape_tuple(f[label].shape[-1:])}"
+                xdmf_array = XDMFArrayIndex(shape)
+                slice_sel.text = xdmf_array[ii:ii+1, ...]
 
                 slice_data = SubElement(
                     slice, 'DataItem', {
-                        'Dimensions': format_shape_tuple(f[label].shape),
+                        'Dimensions': xdmf_shape(dataset.shape),
                         'Format': 'HDF'
                     }
                 )
@@ -451,8 +594,4 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
     with open(path.join(root_dir, xdmf_name), 'wb') as fxml:
         fxml.write(pretty_xml)
 
-def format_shape_tuple(shape):
-    """
-    Return an array shape tuple as an XDMF formatted string
-    """
-    return r' '.join(str(dim) for dim in shape)
+
