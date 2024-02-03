@@ -323,59 +323,6 @@ def write_xdmf(model, h5file_path, xdmf_name=None):
 
                 ## This assumes the data is the raw fenics data
 
-                # comp = SubElement(
-                #     grid, 'Attribute', {
-                #         'Name': label,
-                #         'AttributeType': 'Vector',
-                #         'Center': 'Other',
-                #         'ItemType': 'FiniteElementFunction',
-                #         'ElementFamily': 'CG',
-                #         'ElementDegree': '1',
-                #         'ElementCell': 'tetrahedron'
-                #     }
-                # )
-
-                # dofmap = SubElement(
-                #     comp, 'DataItem', {
-                #         'Name': 'dofmap',
-                #         'ItemType': 'Uniform',
-                #         'NumberType': 'Int',
-                #         'Format': 'HDF',
-                #         'Dimensions': format_shape_tuple(f['dofmap/CG1'].shape)
-                #     }
-                # )
-                # dofmap.text = f'{h5file_name}:dofmap/CG1'
-
-                # data_subset = SubElement(
-                #     comp, 'DataItem', {
-                #         'ItemType': 'HyperSlab',
-                #         'NumberType': 'Float',
-                #         'Precision': '8',
-                #         'Format': 'HDF',
-                #         'Dimensions': format_shape_tuple(f[label][ii:ii+1, ...].shape)
-                #     }
-                # )
-
-                # slice_sel = SubElement(
-                #     data_subset, 'DataItem', {
-                #         'Dimensions': '3 2',
-                #         'Format': 'XML'
-                #     }
-                # )
-                # slice_sel.text = (
-                #     f"{ii} 0\n"
-                #     "1 1\n"
-                #     f"{ii+1} {f[label].shape[-1]}"
-                # )
-
-                # slice_data = SubElement(
-                #     data_subset, 'DataItem', {
-                #         'Dimensions': format_shape_tuple(f[label].shape),
-                #         'Format': 'HDF'
-                #     }
-                # )
-                # slice_data.text = f'{h5file_name}:{label}'
-
                 ## This assumes data is in vertex order
 
                 comp = add_xdmf_node_vector(
@@ -581,3 +528,60 @@ def add_xdmf_cell_scalar(
 
     slice_data.text = f'{dataset_fpath}:{dataset.name}'
     return comp
+
+def add_xdmf_finite_element_function(
+        grid, label,
+        family='CG', degree=1, cell='triangle'
+    ):
+    comp = SubElement(
+        grid, 'Attribute', {
+            'Name': label,
+            'AttributeType': 'Vector',
+            'Center': 'Other',
+            'ItemType': 'FiniteElementFunction',
+            'ElementFamily': family,
+            'ElementDegree': degree,
+            'ElementCell': cell
+        }
+    )
+
+    dofmap = SubElement(
+        comp, 'DataItem', {
+            'Name': 'dofmap',
+            'ItemType': 'Uniform',
+            'NumberType': 'Int',
+            'Format': 'HDF',
+            'Dimensions': format_shape_tuple(f['dofmap/CG1'].shape)
+        }
+    )
+    dofmap.text = f'{h5file_name}:dofmap/CG1'
+
+    data_subset = SubElement(
+        comp, 'DataItem', {
+            'ItemType': 'HyperSlab',
+            'NumberType': 'Float',
+            'Precision': '8',
+            'Format': 'HDF',
+            'Dimensions': format_shape_tuple(f[label][ii:ii+1, ...].shape)
+        }
+    )
+
+    slice_sel = SubElement(
+        data_subset, 'DataItem', {
+            'Dimensions': '3 2',
+            'Format': 'XML'
+        }
+    )
+    slice_sel.text = (
+        f"{ii} 0\n"
+        "1 1\n"
+        f"{ii+1} {f[label].shape[-1]}"
+    )
+
+    slice_data = SubElement(
+        data_subset, 'DataItem', {
+            'Dimensions': format_shape_tuple(f[label].shape),
+            'Format': 'HDF'
+        }
+    )
+    slice_data.text = f'{h5file_name}:{label}'
