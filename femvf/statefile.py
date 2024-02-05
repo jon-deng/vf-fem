@@ -194,6 +194,10 @@ class StateFile:
             'mesh/solid/connectivity', cells.shape,
             data=cells, dtype=np.intp
         )
+        self.file.require_dataset(
+            'mesh/solid/dim', (),
+            data=solid.residual.mesh().topology().dim(), dtype=np.intp
+        )
 
         dofmaps = [solid.residual.form['coeff.state.u0'].function_space().dofmap()]
         for dofmap in dofmaps:

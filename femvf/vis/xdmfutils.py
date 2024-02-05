@@ -2,7 +2,7 @@
 Writes out vertex values from a statefile to xdmf
 """
 
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, List
 
 import os
 from os import path
@@ -171,6 +171,7 @@ def export_vertex_values(model, state_file, export_path, post_file=None):
     with h5py.File(export_path, mode='w') as fo:
 
         ## Write the mesh and timing info out
+        # TODO: Use consistents paths for storage
         fo.create_dataset(
             'mesh/solid/coordinates',
             data=state_file.file['mesh/solid/coordinates']
@@ -178,6 +179,10 @@ def export_vertex_values(model, state_file, export_path, post_file=None):
         fo.create_dataset(
             'mesh/solid/connectivity',
             data=state_file.file['mesh/solid/connectivity']
+        )
+        fo.create_dataset(
+            'mesh/solid/dim',
+            data=state_file.file['mesh/solid/dim']
         )
 
         fo.create_dataset('time', data=state_file.file['time'])
@@ -238,6 +243,7 @@ def export_vertex_values(model, state_file, export_path, post_file=None):
             for label in labels:
                 fo[label] = post_file[label][:]
 
+
 def write_xdmf(model, h5_fpath: str, xdmf_name=None):
     """
     Parameters
@@ -256,38 +262,23 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
 
         domain = SubElement(root, 'Domain')
 
-        # Grid for static data
-        grid = SubElement(
-            domain, 'Grid', {
-                'GridType': 'Uniform',
-                'Name': 'Static'
-            }
+        ## Add info for a static Grid
+        idxs = [(0, ...)]
+        dataset_keys = ['state/u']
+        value_types = ['vector']
+        value_centers = ['node']
+        datasets = [f[key] for key in dataset_keys]
+        dataset_descrs = [
+            dataset_descr
+            for dataset_descr in zip(datasets, value_types, value_centers)
+        ]
+        grid = add_xdmf_uniform_grid(
+            domain, 'Static',
+            h5_fpath, f['mesh/solid'],
+            h5_fpath, dataset_descrs, idxs
         )
 
-        # Handle options for 2D/3D meshes
-        mesh = model.solid.residual.mesh()
-        mesh_dim = mesh.topology().dim()
-
-        add_xdmf_grid_topology(grid, h5_fpath, f['mesh/solid/connectivity'], mesh_dim)
-        add_xdmf_grid_geometry(grid, h5_fpath, f['mesh/solid/coordinates'], mesh_dim)
-
-        ## Write static data
-        for label in ['state/u']:
-            add_xdmf_array(
-                grid, label, h5_fpath, f[label], (slice(0, 1), ...),
-                value_type='vector', value_center='node'
-            )
-
-        # scalar_labels = [
-        #     'field.tavg_viscous_rate', 'field.tavg_strain_energy', 'field.vswell'
-        # ]
-        # for label in scalar_labels:
-        #     add_xdmf_array(
-        #         grid, label, h5file_name, f[label], (slice(None),),
-        #         value_type='scalar', value_center='cell'
-        #     )
-
-        ## Write time-varying data
+        ## Add info for a time-varying Grid
         n_time = f['state/u'].shape[0]
         temporal_grid = SubElement(
             domain, 'Grid', {
@@ -297,41 +288,24 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
             }
         )
         for ii in range(n_time):
-            # Make the grid (they always reference the same h5 dataset)
-            grid = SubElement(
-                temporal_grid, 'Grid', {
-                    'GridType': 'Uniform',
-                    'Name': f'Time{ii:d}'
-                }
+            idxs = 3*[(ii, ...)] + [(ii, ...)]
+            dataset_keys = (
+                [f'state/{comp}' for comp in ['u', 'v', 'a']]
+                + ['p']
             )
-
-            time = SubElement(
-                grid, 'Time', {
-                    'TimeType': 'Single',
-                    'Value': f"{f['time'][ii]}"
-                }
+            value_types = (3*['vector'] + ['scalar'])
+            value_centers = (3*['node'] + ['node'])
+            datasets = [f[key] for key in dataset_keys]
+            dataset_descrs = [
+                dataset_descr
+                for dataset_descr in zip(datasets, value_types, value_centers)
+            ]
+            grid = add_xdmf_uniform_grid(
+                temporal_grid, f'Time{ii}',
+                h5_fpath, f['mesh/solid'],
+                h5_fpath, dataset_descrs, idxs,
+                time=f['time'][ii]
             )
-
-            # Set the mesh topology
-            add_xdmf_grid_topology(grid, h5_fpath, f['mesh/solid/connectivity'], mesh_dim)
-            add_xdmf_grid_geometry(grid, h5_fpath, f['mesh/solid/coordinates'], mesh_dim)
-
-            # Write u, v, a data to xdmf
-            solid_labels = ['state/u', 'state/v', 'state/a']
-            for label in solid_labels:
-                # This assumes data is in vertex order
-                comp = add_xdmf_array(
-                    grid, label, h5file_name, f[label], (slice(ii, ii+1), ...),
-                    value_type='vector', value_center='node'
-                )
-
-            # Write q, p data to xdmf
-            scalar_labels = ['p']
-            for label in scalar_labels:
-                add_xdmf_array(
-                    grid, label, h5_fpath, f[label], (slice(ii, ii+1), ...),
-                    value_type='scalar', value_center='node'
-                )
 
     ## Write the XDMF file
     lxml_root = etree.fromstring(ElementTree.tostring(root))
@@ -343,6 +317,51 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
 
     with open(path.join(root_dir, xdmf_name), 'wb') as fxml:
         fxml.write(pretty_xml)
+
+DatasetDescription = Tuple[h5py.Dataset, str, str]
+def add_xdmf_uniform_grid(
+        parent: Element,
+        grid_name: str,
+        mesh_h5_fpath: str, mesh_group: h5py.Group,
+        dataset_h5_fpath: str, dataset_descrs: List[DatasetDescription],
+        dataset_idxs: List[AxisIndices],
+        time: float=None
+    ):
+    grid = SubElement(
+        parent, 'Grid', {
+            'GridType': 'Uniform',
+            'Name': grid_name
+        }
+    )
+
+    if time is not None:
+        time = SubElement(
+            grid, 'Time', {
+                'TimeType': 'Single',
+                'Value': f"{time}"
+            }
+        )
+
+    # Write mesh info to grid
+    with h5py.File(mesh_h5_fpath, mode='r') as f:
+        mesh_dim = mesh_group['dim'][()]
+        add_xdmf_grid_topology(
+            grid, mesh_h5_fpath, mesh_group['connectivity'], mesh_dim
+        )
+        add_xdmf_grid_geometry(
+            grid, mesh_h5_fpath, mesh_group['coordinates'], mesh_dim
+        )
+
+    # Write arrays to grid
+    for (dataset, value_type, value_center), idx in zip(
+            dataset_descrs, dataset_idxs
+        ):
+        add_xdmf_grid_array(
+            grid, dataset.name, dataset_h5_fpath, dataset, idx,
+            value_type=value_type, value_center=value_center
+        )
+
+    return grid
 
 def add_xdmf_grid_topology(
         grid: Element, h5_fpath: str, dataset: h5py.Dataset, mesh_dim=2
@@ -395,7 +414,7 @@ def add_xdmf_grid_geometry(
     )
     coords.text = f'{h5_fpath}:{dataset.name}'
 
-def add_xdmf_array(
+def add_xdmf_grid_array(
         grid: Element,
         label: str,
         h5_fpath: str,
@@ -442,7 +461,7 @@ def add_xdmf_array(
     slice_data.text = f'{h5_fpath}:{dataset.name}'
     return comp
 
-def add_xdmf_finite_element_function(
+def add_xdmf_grid_finite_element_function(
         grid: Element,
         label: str,
         h5_fpath: str,
