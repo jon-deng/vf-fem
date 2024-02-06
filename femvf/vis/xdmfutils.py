@@ -15,13 +15,25 @@ import h5py
 import numpy as np
 import dolfin as dfn
 
+from femvf.models.transient.base import BaseTransientModel
+
 # from .. import statefile as sf
+
+Model = BaseTransientModel
 
 AxisSize = int
 Shape = Tuple[AxisSize, ...]
 
 AxisIndex = Union[int, slice, type(Ellipsis)]
 AxisIndices = Tuple[AxisIndex, ...]
+
+# This is a tuple consisting of:
+# an `h5py.Dataset` object containing the data
+# a string (eg. 'vector', 'scalar') indicating whether the data is vector/scalar
+# a string (eg. 'node', 'center') indicating where data is located
+XDMFValueType = str
+XDMFValueCenter = str
+DatasetDescription = Tuple[h5py.Dataset, XDMFValueType, XDMFValueCenter]
 
 def xdmf_shape(shape: Shape) -> str:
     """
@@ -244,16 +256,31 @@ def export_vertex_values(model, state_file, export_path, post_file=None):
                 fo[label] = post_file[label][:]
 
 
-def write_xdmf(model, h5_fpath: str, xdmf_name=None):
+def write_xdmf(
+        h5_fpath: str,
+        static_dataset_descrs: List[DatasetDescription]=None,
+        static_dataset_idxs: List[AxisIndices]=None,
+        temporal_dataset_descrs: List[DatasetDescription]=None,
+        temporal_dataset_idxs: List[AxisIndices]=None,
+        xdmf_fpath: Optional[str]=None
+    ):
     """
     Parameters
     ----------
     h5file_path : str
         path to a file with exported vertex values
     """
+    # Set default empty data sets
+    if static_dataset_descrs is None:
+        static_dataset_descrs = []
+    if static_dataset_idxs is None:
+        static_dataset_idxs = []
+    if temporal_dataset_descrs is None:
+        temporal_dataset_descrs = []
+    if temporal_dataset_idxs is None:
+        temporal_dataset_idxs = []
 
     root_dir = path.split(h5_fpath)[0]
-    h5file_name = path.split(h5_fpath)[1]
 
     with h5py.File(h5_fpath, mode='r') as f:
 
@@ -262,20 +289,11 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
 
         domain = SubElement(root, 'Domain')
 
-        ## Add info for a static Grid
-        idxs = [(0, ...)]
-        dataset_keys = ['state/u']
-        value_types = ['vector']
-        value_centers = ['node']
-        datasets = [f[key] for key in dataset_keys]
-        dataset_descrs = [
-            dataset_descr
-            for dataset_descr in zip(datasets, value_types, value_centers)
-        ]
+        ## Add info for a static grid
         grid = add_xdmf_uniform_grid(
             domain, 'Static',
             h5_fpath, f['mesh/solid'],
-            h5_fpath, dataset_descrs, idxs
+            h5_fpath, static_dataset_descrs, static_dataset_idxs
         )
 
         ## Add info for a time-varying Grid
@@ -288,22 +306,13 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
             }
         )
         for ii in range(n_time):
-            idxs = 3*[(ii, ...)] + [(ii, ...)]
-            dataset_keys = (
-                [f'state/{comp}' for comp in ['u', 'v', 'a']]
-                + ['p']
-            )
-            value_types = (3*['vector'] + ['scalar'])
-            value_centers = (3*['node'] + ['node'])
-            datasets = [f[key] for key in dataset_keys]
-            dataset_descrs = [
-                dataset_descr
-                for dataset_descr in zip(datasets, value_types, value_centers)
+            _temporal_dataset_idxs = [
+                (ii,)+idx for idx in temporal_dataset_idxs
             ]
             grid = add_xdmf_uniform_grid(
                 temporal_grid, f'Time{ii}',
                 h5_fpath, f['mesh/solid'],
-                h5_fpath, dataset_descrs, idxs,
+                h5_fpath, temporal_dataset_descrs, _temporal_dataset_idxs,
                 time=f['time'][ii]
             )
 
@@ -312,13 +321,13 @@ def write_xdmf(model, h5_fpath: str, xdmf_name=None):
     etree.indent(lxml_root, space="    ")
     pretty_xml = etree.tostring(lxml_root, pretty_print=True)
 
-    if xdmf_name is None:
-        xdmf_name = f'{path.splitext(h5file_name)[0]}.xdmf'
+    if xdmf_fpath is None:
+        h5file_name = path.split(h5_fpath)[1]
+        xdmf_fpath = f'{path.splitext(h5file_name)[0]}.xdmf'
 
-    with open(path.join(root_dir, xdmf_name), 'wb') as fxml:
+    with open(path.join(root_dir, xdmf_fpath), 'wb') as fxml:
         fxml.write(pretty_xml)
 
-DatasetDescription = Tuple[h5py.Dataset, str, str]
 def add_xdmf_uniform_grid(
         parent: Element,
         grid_name: str,

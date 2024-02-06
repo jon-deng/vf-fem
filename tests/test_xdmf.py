@@ -8,6 +8,7 @@ import pytest
 
 import os
 import numpy as np
+import h5py
 
 from femvf import statefile as sf
 from femvf.load import load_transient_fsi_model
@@ -63,8 +64,30 @@ def state_fpath(model, state_controls_prop):
 
 def test_write_xdmf(model, state_fpath):
 
-    visfile_path = './test_xdmf--export.h5'
+    visfile_fpath = './test_xdmf--export.h5'
+    xdmf_fpath = './test_xdmf--export.xdmf'
 
     with sf.StateFile(model, state_fpath, mode='r') as state_file:
-        export_vertex_values(model, state_file, visfile_path)
-    write_xdmf(model, visfile_path)
+        export_vertex_values(model, state_file, visfile_fpath)
+
+    with h5py.File(visfile_fpath, mode='r') as f:
+        static_dataset_descrs = [
+            (f['state/u'], 'vector', 'node')
+        ]
+        static_idxs = [
+            (0, ...)
+        ]
+        # temporal_dataset_descrs = None
+        # temporal_idxs = None
+        temporal_dataset_descrs = [
+            (f['state/u'], 'vector', 'node')
+        ]
+        temporal_idxs = len(temporal_dataset_descrs)*[
+            (slice(None),)
+        ]
+        write_xdmf(
+            visfile_fpath,
+            static_dataset_descrs, static_idxs,
+            temporal_dataset_descrs, temporal_idxs,
+            xdmf_fpath
+        )
