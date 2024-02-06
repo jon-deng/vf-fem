@@ -41,9 +41,9 @@ def xdmf_shape(shape: Shape) -> str:
     """
     return r' '.join(str(dim) for dim in shape)
 
-class XDMFArrayIndex:
+class XDMFArray:
     """
-    Return XDMF slice strings from an array
+    Represent an array as defined in the XDMF format
 
     Parameters
     ----------
@@ -55,11 +55,11 @@ class XDMFArrayIndex:
         self._shape = shape
 
     @property
-    def shape(self):
+    def shape(self) -> Shape:
         return self._shape
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         return len(self.shape)
 
     @staticmethod
@@ -67,29 +67,33 @@ class XDMFArrayIndex:
         """
         Expand any missing axis indices in an index tuple
         """
-        if not isinstance(axis_indices, tuple):
-            axis_indices = (axis_indices,)
-
         assert axis_indices.count(Ellipsis) < 2
 
+        # Here, we cut out a chunk `axis_indices[split_start:split_stop]`
+        # and insert default 'slice(None)' slices to fill any missing axis
+        # indices
         if Ellipsis in axis_indices:
             # This is the number of missing, explicit, axis indices
             ndim_expand = ndim - len(axis_indices) + 1
             # If an ellipsis exists, then add missing axis indices at the
             # ellipsis
-            ii_split = axis_indices.index(Ellipsis)
+            split_start = axis_indices.index(Ellipsis)
+            split_stop = split_start+1
         else:
             # This is the number of missing, explicit, axis indices
             ndim_expand = ndim - len(axis_indices)
-            # If no ellipsis exists, then add missing axis indices starting at 0
-            ii_split = 0
+            # If no ellipsis exists, then add missing axis indices to the end
+            split_start = len(axis_indices)
+            split_stop = len(axis_indices)
 
         # Here add `[:]` slices to all missing axis indices
         expanded_axis_indices = (
-            axis_indices[:ii_split]
+            axis_indices[:split_start]
             + ndim_expand*(slice(None),)
-            + axis_indices[ii_split+1:]
+            + axis_indices[split_stop:]
         )
+
+        assert len(expanded_axis_indices) == ndim
         return expanded_axis_indices
 
     @staticmethod
@@ -140,27 +144,31 @@ class XDMFArrayIndex:
             raise TypeError("Invalid `Ellipsis` axis index")
         return step
 
-    def __getitem__(self, axis_indices: AxisIndices):
-        """
-        Return the XDMF array slice string representation of `index`
-        """
+    def to_xdmf_slice(self, axis_indices: AxisIndices):
         axis_indices = self.expand_axis_indices(axis_indices, self.ndim)
 
         starts = [
             str(self.get_start(axis_index, axis_size))
             for axis_index, axis_size in zip(axis_indices, self.shape)
         ]
-        stops = [
-            str(self.get_stop(axis_index, axis_size))
-            for axis_index, axis_size in zip(axis_indices, self.shape)
-        ]
         steps = [
             str(self.get_step(axis_index, axis_size))
             for axis_index, axis_size in zip(axis_indices, self.shape)
         ]
+        stops = [
+            str(self.get_stop(axis_index, axis_size))
+            for axis_index, axis_size in zip(axis_indices, self.shape)
+        ]
+        return starts, steps, stops
+
+    def to_xdmf_slice_str(self, axis_indices: AxisIndices) -> str:
+        """
+        Return the XDMF array slice string representation of `index`
+        """
+        starts, steps, stops = self.to_xdmf_slice(axis_indices)
         col_widths = [
-            max(len(start), len(stop), len(step))
-            for start, stop, step in zip(starts, stops, steps)
+            max(len(start), len(step), len(stop))
+            for start, step, stop in zip(starts, steps, stops)
         ]
 
         row = ' '.join([f'{{:>{width}s}}' for width in col_widths])
@@ -306,6 +314,8 @@ def write_xdmf(
             }
         )
         for ii in range(n_time):
+            # Temporal dataset indices are assumed to apply to the non-time
+            # axes and the time axis is assumed to be the first one
             _temporal_dataset_idxs = [
                 (ii,)+idx for idx in temporal_dataset_idxs
             ]
@@ -457,8 +467,8 @@ def add_xdmf_grid_array(
             'Format': 'XML'
         }
     )
-    xdmf_array = XDMFArrayIndex(shape)
-    slice_sel.text = xdmf_array[axis_indices]
+    xdmf_array = XDMFArray(shape)
+    slice_sel.text = xdmf_array.to_xdmf_slice_str(axis_indices)
 
     slice_data = SubElement(
         data_subset, 'DataItem', {
@@ -520,8 +530,8 @@ def add_xdmf_grid_finite_element_function(
             'Format': 'XML'
         }
     )
-    xdmf_array = XDMFArrayIndex(shape)
-    slice_sel.text = xdmf_array[axis_indices]
+    xdmf_array = XDMFArray(shape)
+    slice_sel.text = xdmf_array.to_xdmf_slice_str(axis_indices)
 
     slice_data = SubElement(
         data_subset, 'DataItem', {

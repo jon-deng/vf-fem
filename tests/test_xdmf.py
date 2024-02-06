@@ -16,7 +16,7 @@ from femvf.models.transient.solid import Rayleigh
 from femvf.models.transient.fluid import BernoulliAreaRatioSep
 from femvf.forward import integrate
 
-from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
+from femvf.vis.xdmfutils import export_vertex_values, write_xdmf, XDMFArray
 
 @pytest.fixture()
 def mesh_path():
@@ -80,7 +80,10 @@ def test_write_xdmf(model, state_fpath):
         # temporal_dataset_descrs = None
         # temporal_idxs = None
         temporal_dataset_descrs = [
-            (f['state/u'], 'vector', 'node')
+            (f['state/u'], 'vector', 'node'),
+            (f['state/v'], 'vector', 'node'),
+            (f['state/a'], 'vector', 'node'),
+            (f['p'], 'scalar', 'node'),
         ]
         temporal_idxs = len(temporal_dataset_descrs)*[
             (slice(None),)
@@ -91,3 +94,17 @@ def test_write_xdmf(model, state_fpath):
             temporal_dataset_descrs, temporal_idxs,
             xdmf_fpath
         )
+
+
+class TestXDMFArray:
+
+    @pytest.fixture()
+    def shape(self):
+        return (5, 100)
+
+    @pytest.fixture()
+    def xdmf_array(self, shape):
+        return XDMFArray(shape)
+
+    def test_to_xdmf_slice(self, xdmf_array):
+        print(xdmf_array.to_xdmf_slice((0,)))
