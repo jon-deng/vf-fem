@@ -263,12 +263,13 @@ def export_vertex_values(model, state_file, export_path, post_file=None):
 
 
 def write_xdmf(
-        h5_fpath: str,
+        mesh_group: h5py.Group,
         static_dataset_descrs: List[DatasetDescription]=None,
         static_dataset_idxs: List[AxisIndices]=None,
+        time_dataset: h5py.Dataset=None,
         temporal_dataset_descrs: List[DatasetDescription]=None,
         temporal_dataset_idxs: List[AxisIndices]=None,
-        xdmf_fpath: Optional[str]=None
+        xdmf_name: Optional[str]=None
     ):
     """
     Parameters
@@ -286,24 +287,21 @@ def write_xdmf(
     if temporal_dataset_idxs is None:
         temporal_dataset_idxs = []
 
-    root_dir = path.split(h5_fpath)[0]
+    root = Element('Xdmf')
+    root.set('version', '2.0')
 
-    with h5py.File(h5_fpath, mode='r') as f:
+    domain = SubElement(root, 'Domain')
 
-        root = Element('Xdmf')
-        root.set('version', '2.0')
+    ## Add info for a static grid
+    grid = add_xdmf_uniform_grid(
+        domain, 'Static',
+        mesh_group,
+        static_dataset_descrs, static_dataset_idxs
+    )
 
-        domain = SubElement(root, 'Domain')
-
-        ## Add info for a static grid
-        grid = add_xdmf_uniform_grid(
-            domain, 'Static',
-            h5_fpath, f['mesh/solid'],
-            h5_fpath, static_dataset_descrs, static_dataset_idxs
-        )
-
-        ## Add info for a time-varying Grid
-        n_time = f['state/u'].shape[0]
+    ## Add info for a time-varying Grid
+    if time_dataset is not None:
+        n_time = time_dataset.size
         temporal_grid = SubElement(
             domain, 'Grid', {
                 'GridType': 'Collection',
@@ -319,9 +317,9 @@ def write_xdmf(
             ]
             grid = add_xdmf_uniform_grid(
                 temporal_grid, f'Time{ii}',
-                h5_fpath, f['mesh/solid'],
-                h5_fpath, temporal_dataset_descrs, _temporal_dataset_idxs,
-                time=f['time'][ii]
+                mesh_group,
+                temporal_dataset_descrs, _temporal_dataset_idxs,
+                time=time_dataset[ii]
             )
 
     ## Write the XDMF file
@@ -329,18 +327,20 @@ def write_xdmf(
     etree.indent(lxml_root, space="    ")
     pretty_xml = etree.tostring(lxml_root, pretty_print=True)
 
-    if xdmf_fpath is None:
-        h5file_name = path.split(h5_fpath)[1]
+    if xdmf_name is None:
+        h5file_name = path.split(mesh_group.file.filename)[-1]
         xdmf_fpath = f'{path.splitext(h5file_name)[0]}.xdmf'
+    else:
+        xdmf_fpath = f'{xdmf_name}.xdmf'
 
-    with open(path.join(root_dir, xdmf_fpath), 'wb') as fxml:
+    with open(xdmf_fpath, 'wb') as fxml:
         fxml.write(pretty_xml)
 
 def add_xdmf_uniform_grid(
         parent: Element,
         grid_name: str,
-        mesh_h5_fpath: str, mesh_group: h5py.Group,
-        dataset_h5_fpath: str, dataset_descrs: List[DatasetDescription],
+        mesh_group: h5py.Group,
+        dataset_descrs: List[DatasetDescription],
         dataset_idxs: List[AxisIndices],
         time: float=None
     ):
@@ -360,28 +360,27 @@ def add_xdmf_uniform_grid(
         )
 
     # Write mesh info to grid
-    with h5py.File(mesh_h5_fpath, mode='r') as f:
-        mesh_dim = mesh_group['dim'][()]
-        add_xdmf_grid_topology(
-            grid, mesh_h5_fpath, mesh_group['connectivity'], mesh_dim
-        )
-        add_xdmf_grid_geometry(
-            grid, mesh_h5_fpath, mesh_group['coordinates'], mesh_dim
-        )
+    mesh_dim = mesh_group['dim'][()]
+    add_xdmf_grid_topology(
+        grid, mesh_group['connectivity'], mesh_dim
+    )
+    add_xdmf_grid_geometry(
+        grid, mesh_group['coordinates'], mesh_dim
+    )
 
     # Write arrays to grid
     for (dataset, value_type, value_center), idx in zip(
             dataset_descrs, dataset_idxs
         ):
         add_xdmf_grid_array(
-            grid, dataset.name, dataset_h5_fpath, dataset, idx,
+            grid, dataset.name, dataset, idx,
             value_type=value_type, value_center=value_center
         )
 
     return grid
 
 def add_xdmf_grid_topology(
-        grid: Element, h5_fpath: str, dataset: h5py.Dataset, mesh_dim=2
+        grid: Element, dataset: h5py.Dataset, mesh_dim=2
     ):
 
     if mesh_dim == 3:
@@ -408,10 +407,10 @@ def add_xdmf_grid_topology(
             'Dimensions': xdmf_array.xdmf_shape
         }
     )
-    conn.text = f'{h5_fpath}:/mesh/solid/connectivity'
+    conn.text = f'{dataset.file.filename}:/mesh/solid/connectivity'
 
 def add_xdmf_grid_geometry(
-        grid: Element, h5_fpath: str, dataset: h5py.Dataset, mesh_dim=2
+        grid: Element, dataset: h5py.Dataset, mesh_dim=2
     ):
     if mesh_dim == 3:
         geometry_type = 'XYZ'
@@ -431,12 +430,11 @@ def add_xdmf_grid_geometry(
             'Dimensions': xdmf_array.xdmf_shape
         }
     )
-    coords.text = f'{h5_fpath}:{dataset.name}'
+    coords.text = f'{dataset.file.filename}:{dataset.name}'
 
 def add_xdmf_grid_array(
         grid: Element,
         label: str,
-        h5_fpath: str,
         dataset: h5py.Dataset,
         axis_indices: Optional[AxisIndices]=None,
         value_type='Vector',
@@ -478,13 +476,12 @@ def add_xdmf_grid_array(
         }
     )
 
-    slice_data.text = f'{h5_fpath}:{dataset.name}'
+    slice_data.text = f'{dataset.file.filename}:{dataset.name}'
     return comp
 
 def add_xdmf_grid_finite_element_function(
         grid: Element,
         label: str,
-        h5_fpath: str,
         dataset: h5py.Dataset,
         dataset_dofmap: h5py.Dataset,
         axis_indices: Optional[AxisIndices]=None,
@@ -513,7 +510,7 @@ def add_xdmf_grid_finite_element_function(
             'Dimensions': xdmf_array.xdmf_shape
         }
     )
-    dofmap.text = f'{h5_fpath}:{dataset_dofmap.name}'
+    dofmap.text = f'{dataset_dofmap.file.filename}:{dataset_dofmap.name}'
 
     xdmf_array = XDMFArray(dataset[axis_indices].shape)
     data_subset = SubElement(
@@ -542,4 +539,4 @@ def add_xdmf_grid_finite_element_function(
             'Format': 'HDF'
         }
     )
-    slice_data.text = f'{h5_fpath}:{label}'
+    slice_data.text = f'{dataset.file.filename}:{label}'
