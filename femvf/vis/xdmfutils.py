@@ -35,12 +35,6 @@ XDMFValueType = str
 XDMFValueCenter = str
 DatasetDescription = Tuple[h5py.Dataset, XDMFValueType, XDMFValueCenter]
 
-def xdmf_shape(shape: Shape) -> str:
-    """
-    Return a shape tuple as an XDMF string
-    """
-    return r' '.join(str(dim) for dim in shape)
-
 class XDMFArray:
     """
     Represent an array as defined in the XDMF format
@@ -57,6 +51,10 @@ class XDMFArray:
     @property
     def shape(self) -> Shape:
         return self._shape
+
+    @property
+    def xdmf_shape(self) -> str:
+        return r' '.join(str(dim) for dim in self.shape)
 
     @property
     def ndim(self) -> int:
@@ -400,13 +398,14 @@ def add_xdmf_grid_topology(
         }
     )
 
+    xdmf_array = XDMFArray(dataset.shape)
     conn = SubElement(
         topo, 'DataItem', {
             'Name': 'MeshConnectivity',
             'ItemType': 'Uniform',
             'NumberType': 'Int',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(dataset.shape)
+            'Dimensions': xdmf_array.xdmf_shape
         }
     )
     conn.text = f'{h5_fpath}:/mesh/solid/connectivity'
@@ -421,6 +420,7 @@ def add_xdmf_grid_geometry(
 
     geom = SubElement(grid, 'Geometry', {'GeometryType': geometry_type})
 
+    xdmf_array = XDMFArray(dataset.shape)
     coords = SubElement(
         geom, 'DataItem', {
             'Name': 'MeshCoordinates',
@@ -428,7 +428,7 @@ def add_xdmf_grid_geometry(
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(dataset.shape)
+            'Dimensions': xdmf_array.xdmf_shape
         }
     )
     coords.text = f'{h5_fpath}:{dataset.name}'
@@ -452,13 +452,14 @@ def add_xdmf_grid_array(
 
     shape = dataset.shape
 
+    xdmf_array = XDMFArray(dataset[axis_indices].shape)
     data_subset = SubElement(
         comp, 'DataItem', {
             'ItemType': 'HyperSlab',
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(dataset[axis_indices].shape)
+            'Dimensions': xdmf_array.xdmf_shape
         }
     )
     slice_sel = SubElement(
@@ -472,7 +473,7 @@ def add_xdmf_grid_array(
 
     slice_data = SubElement(
         data_subset, 'DataItem', {
-            'Dimensions': xdmf_shape(shape),
+            'Dimensions': xdmf_array.xdmf_shape,
             'Format': 'HDF'
         }
     )
@@ -502,24 +503,26 @@ def add_xdmf_grid_finite_element_function(
         }
     )
 
+    xdmf_array = XDMFArray(dataset_dofmap.shape)
     dofmap = SubElement(
         comp, 'DataItem', {
             'Name': 'dofmap',
             'ItemType': 'Uniform',
             'NumberType': 'Int',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(dataset_dofmap.shape)
+            'Dimensions': xdmf_array.xdmf_shape
         }
     )
     dofmap.text = f'{h5_fpath}:{dataset_dofmap.name}'
 
+    xdmf_array = XDMFArray(dataset[axis_indices].shape)
     data_subset = SubElement(
         comp, 'DataItem', {
             'ItemType': 'HyperSlab',
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_shape(dataset[axis_indices].shape)
+            'Dimensions': xdmf_array.xdmf_shape
         }
     )
 
@@ -535,7 +538,7 @@ def add_xdmf_grid_finite_element_function(
 
     slice_data = SubElement(
         data_subset, 'DataItem', {
-            'Dimensions': xdmf_shape(shape),
+            'Dimensions': xdmf_array.xdmf_shape,
             'Format': 'HDF'
         }
     )
