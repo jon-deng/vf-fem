@@ -18,6 +18,15 @@ from .base import BaseStateMeasure, BaseDerivedStateMeasure
 
 
 ### Field type post-processing functions
+
+class FSIPressure(BaseStateMeasure):
+    """
+    Return the glottal fluid pressure
+    """
+
+    def assem(self, state, control, prop):
+        return np.array(self.model.solid.control.sub['p'].copy())
+
 def doc_field_measure_params(G: 'BaseFieldMeasure'):
     """
     Add the parameters docstring to a `BaseFieldMeasure` subclass
