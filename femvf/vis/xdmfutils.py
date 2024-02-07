@@ -1,10 +1,9 @@
 """
-Writes out vertex values from a statefile to xdmf
+Utilities for creating XDMF files
 """
 
 from typing import Union, Tuple, Optional, List, Callable
 
-import os
 from os import path
 
 from xml.etree import ElementTree
@@ -177,13 +176,33 @@ class XDMFArray:
         )
 
 Format = Union[None, dfn.FunctionSpace]
-def export_vertex_values(
+def export_mesh_values(
         datasets: List[Union[h5py.Dataset, h5py.Group]],
         formats: List[Format],
         output_group: h5py.Group
     ):
     """
-    Exports vertex values from a state file to another h5 file
+    Export finite element and other data to mesh based data
+
+    Parameters
+    ----------
+    datasets: List[Union[h5py.Dataset, h5py.Group]]
+        A list of datasets
+    formats: List[Format]
+        A list of dataset formats
+
+        If the dataset format is `None`, the dataset is assumed to represent
+        raw array data. If the dataset format is `dfn.FunctionSpace`, the
+        dataset is assumed to represent finite-element data. In this case,
+        array values are extracted so that data is centred on mesh elements,
+        which can be plotted by Paraview.
+    output_group: h5py.Group
+        The group to export data to
+
+    Returns
+    -------
+    output_group: h5py.Group
+        The group to export data to
     """
     for dataset_or_group, format in zip(datasets, formats):
         if isinstance(dataset_or_group, h5py.Dataset):
@@ -195,6 +214,8 @@ def export_vertex_values(
             export_group(input_group, output_group.create_group(input_group.name))
         else:
             raise TypeError()
+
+    return output_group
 
 FormatDataset = Callable[[h5py.Dataset], np.ndarray]
 def make_format_dataset(
@@ -253,12 +274,42 @@ def write_xdmf(
         temporal_dataset_descrs: List[DatasetDescription]=None,
         temporal_dataset_idxs: List[AxisIndices]=None,
         xdmf_name: Optional[str]=None
-    ):
+    ) -> str:
     """
+    Create an XDMF file describing datasets
+
     Parameters
     ----------
-    h5file_path : str
-        path to a file with exported vertex values
+    mesh_group: h5py.Group
+        A group containing mesh information for the datasets
+    static_dataset_descrs: List[DatasetDescription]
+        A list of static datasets and info on how they are placed on the mesh
+
+        Each element of the list should be a tuple with the format
+        `(dataset, XDMFValueType, XDMFValueCenter)` ,
+        where:
+            - `dataset` is the `h5py.Dataset` containing the array values
+            - `XDMFValueType` is a string indicating the value dimension
+            ('scalar', 'vector', ...)
+            - `XDFMValueCenter` is a string indicating where values are located
+            on the mesh ('node', 'center', ...)
+    static_dataset_idxs: List[AxisIndices]
+        Indices into the datasets
+    time_dataset: h5py.Dataset
+        A dataset containing simulation times
+    temporal_dataset_descrs: List[DatasetDescription]
+        A list of temporal datasets and info on how they are placed on the mesh
+    temporal_dataset_idxs: List[AxisIndices]
+        Indices into the datasets
+    xdmf_name: Optional[str]
+        The name of the XDMF file
+
+        The name should be a simple string without path seperators.
+
+    Returns
+    -------
+    xdmf_fpath: str
+        The path of the XDMF file written
     """
     # Set default empty data sets
     if static_dataset_descrs is None:
@@ -318,6 +369,8 @@ def write_xdmf(
 
     with open(xdmf_fpath, 'wb') as fxml:
         fxml.write(pretty_xml)
+
+    return xdmf_fpath
 
 def add_xdmf_uniform_grid(
         parent: Element,

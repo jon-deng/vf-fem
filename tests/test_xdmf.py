@@ -16,7 +16,7 @@ from femvf.models.transient.solid import Rayleigh
 from femvf.models.transient.fluid import BernoulliAreaRatioSep
 from femvf.forward import integrate
 
-from femvf.vis.xdmfutils import export_vertex_values, write_xdmf, XDMFArray
+from femvf.vis.xdmfutils import export_mesh_values, write_xdmf, XDMFArray
 
 @pytest.fixture()
 def mesh_path():
@@ -81,7 +81,7 @@ def test_write_xdmf(model, state_fpath):
         formats += 3*[fspace_cg1_vector]
 
         with h5py.File(visfile_fpath, mode='w') as f:
-            export_vertex_values(datasets, formats, f)
+            export_mesh_values(datasets, formats, f)
 
     with h5py.File(visfile_fpath, mode='r') as f:
         static_dataset_descrs = [
