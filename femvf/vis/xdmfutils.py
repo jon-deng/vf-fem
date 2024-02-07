@@ -2,7 +2,7 @@
 Writes out vertex values from a statefile to xdmf
 """
 
-from typing import Union, Tuple, Optional, List
+from typing import Union, Tuple, Optional, List, Callable
 
 import os
 from os import path
@@ -176,90 +176,73 @@ class XDMFArray:
             + row.format(*stops)
         )
 
-
-def export_vertex_values(model, state_file, export_path, post_file=None):
+Format = Union[None, dfn.FunctionSpace]
+def export_vertex_values(
+        datasets: List[Union[h5py.Dataset, h5py.Group]],
+        formats: List[Format],
+        output_group: h5py.Group
+    ):
     """
     Exports vertex values from a state file to another h5 file
     """
-    solid = model.solid
-    if os.path.isfile(export_path):
-        os.remove(export_path)
+    for dataset_or_group, format in zip(datasets, formats):
+        if isinstance(dataset_or_group, h5py.Dataset):
+            dataset = dataset_or_group
+            format_dataset = make_format_dataset(format)
+            export_dataset(dataset, output_group, format_dataset=format_dataset)
+        elif isinstance(dataset_or_group, h5py.Group):
+            input_group = dataset_or_group
+            export_group(input_group, output_group.create_group(input_group.name))
+        else:
+            raise TypeError()
 
-    ## Input data
-    with h5py.File(export_path, mode='w') as fo:
-
-        ## Write the mesh and timing info out
-        # TODO: Use consistents paths for storage
-        fo.create_dataset(
-            'mesh/solid/coordinates',
-            data=state_file.file['mesh/solid/coordinates']
-        )
-        fo.create_dataset(
-            'mesh/solid/connectivity',
-            data=state_file.file['mesh/solid/connectivity']
-        )
-        fo.create_dataset(
-            'mesh/solid/dim',
-            data=state_file.file['mesh/solid/dim']
-        )
-
-        fo.create_dataset('time', data=state_file.file['time'])
-
-        solid = model.solid
-        fspace_dg0 = dfn.FunctionSpace(solid.residual.mesh(), 'DG', 0)
-        fspace_cg1_scalar = solid.residual.form['coeff.fsi.p1'].function_space()
-        fspace_cg1_vector = solid.residual.form['coeff.state.u1'].function_space()
-        vert_to_sdof = dfn.vertex_to_dof_map(fspace_cg1_scalar)
-        vert_to_vdof = dfn.vertex_to_dof_map(fspace_cg1_vector)
-
-        ## Make empty functions to store vector values
-        scalar_func = dfn.Function(fspace_cg1_scalar)
-        vector_func = dfn.Function(fspace_cg1_vector)
-
-        ## Prepare constant variables describing the shape
-        N_TIME = state_file.size
-        N_VERT = solid.residual.mesh().num_vertices()
-        VECTOR_VALUE_SHAPE = tuple(vector_func.value_shape())
-        SCALAR_VALUE_SHAPE = tuple(scalar_func.value_shape())
-
-        ## Initialize solid/fluid state variables
-        vector_labels = ['state/u', 'state/v', 'state/a']
-        for label in vector_labels:
-            fo.create_dataset(
-                label, shape=(N_TIME, N_VERT, *VECTOR_VALUE_SHAPE),
-                dtype=np.float64
+FormatDataset = Callable[[h5py.Dataset], np.ndarray]
+def make_format_dataset(
+        data_format: Union[dfn.FunctionSpace, None]
+    ) -> FormatDataset:
+    if isinstance(data_format, dfn.FunctionSpace):
+        vert_to_dof = dfn.vertex_to_dof_map(data_format)
+        value_dim = data_format.num_sub_spaces()
+        def format_dataset(dataset: h5py.Dataset):
+            array = dataset[()][..., vert_to_dof]
+            new_shape = (
+                array.shape[:-1] + (array.shape[-1]//value_dim,) + (value_dim,)
             )
+            array = np.reshape(array, new_shape)
+            return array
+    else:
+        def format_dataset(dataset: h5py.Dataset):
+            return dataset[()]
+    return format_dataset
 
-        scalar_labels = ['p']
-        for label in scalar_labels:
-            fo.create_dataset(
-                label, shape=(N_TIME, N_VERT, *SCALAR_VALUE_SHAPE),
-                dtype=np.float64
+def export_dataset(
+        input_dataset: h5py.Dataset,
+        output_group: h5py.Group, output_dataset_name=None,
+        format_dataset=None
+    ):
+    if output_dataset_name is None:
+        output_dataset_name = input_dataset.name
+    if format_dataset is None:
+        format_dataset = lambda x: x
+
+    dataset = output_group.create_dataset(
+        output_dataset_name, data=format_dataset(input_dataset)
+    )
+    return dataset
+
+def export_group(
+        input_group: h5py.Group,
+        output_group: h5py.Group,
+        idx=None
+    ):
+
+    for key, dataset in input_group.items():
+        if isinstance(dataset, h5py.Dataset):
+            export_dataset(
+                dataset, output_group, output_dataset_name=key,
+                format_dataset=idx
             )
-
-        ## Write solid/fluid state variables in vertex order
-        for ii in range(N_TIME):
-            state = state_file.get_state(ii)
-            model.set_fin_state(state)
-            model.set_ini_state(state)
-
-            u, v, a = state['u'], state['v'], state['a']
-            for label, vector in zip(vector_labels, [u, v, a]):
-                vector_func.vector()[:] = vector
-                fo[label][ii, ...] = vector_func.vector()[vert_to_vdof].reshape(-1, *VECTOR_VALUE_SHAPE)
-
-            p = model.solid.control['p']
-            for label, scalar in zip(scalar_labels, [p]):
-                scalar_func.vector()[:] = scalar
-                fo[label][ii, ...] = scalar_func.vector()[vert_to_sdof].reshape((-1, *SCALAR_VALUE_SHAPE))
-
-        ## Write (q, p) vertex values (pressure only defined)
-
-        ## Write post-processed scalars
-        if post_file is not None:
-            labels = ['field.tavg_strain_energy', 'field.tavg_viscous_rate', 'field.vswell']
-            for label in labels:
-                fo[label] = post_file[label][:]
+    return output_group
 
 
 def write_xdmf(

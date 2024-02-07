@@ -40,13 +40,12 @@ def state_controls_prop(model):
     prop = model.prop
     prop['emod'][:] = 5e4
     prop['rho'][:] = 1.0
-    prop.print_summary()
+    # prop.print_summary()
 
     control = model.control
     for n in range(len(model.fluids)):
         control[f'fluid{n}.psub'] = 500*10
-    control.print_summary()
-    # breakpoint()
+    # control.print_summary()
     return state, [control], prop
 
 @pytest.fixture()
@@ -68,7 +67,21 @@ def test_write_xdmf(model, state_fpath):
     xdmf_name = 'test_xdmf--export'
 
     with sf.StateFile(model, state_fpath, mode='r') as state_file:
-        export_vertex_values(model, state_file, visfile_fpath)
+        datasets = [
+            state_file.file['mesh/solid'],
+            state_file.file['time'],
+        ]
+        formats = [None, None]
+
+        fspace_cg1_vector = (
+            model.solid.residual.form['coeff.state.u1'].function_space()
+        )
+        vector_labels = ['state/u', 'state/v', 'state/a']
+        datasets += [state_file.file[label] for label in vector_labels]
+        formats += 3*[fspace_cg1_vector]
+
+        with h5py.File(visfile_fpath, mode='w') as f:
+            export_vertex_values(datasets, formats, f)
 
     with h5py.File(visfile_fpath, mode='r') as f:
         static_dataset_descrs = [
@@ -77,13 +90,13 @@ def test_write_xdmf(model, state_fpath):
         static_idxs = [
             (0, ...)
         ]
-        # temporal_dataset_descrs = None
-        # temporal_idxs = None
+        temporal_dataset_descrs = None
+        temporal_idxs = None
         temporal_dataset_descrs = [
             (f['state/u'], 'vector', 'node'),
             (f['state/v'], 'vector', 'node'),
             (f['state/a'], 'vector', 'node'),
-            (f['p'], 'scalar', 'node'),
+            # (f['p'], 'scalar', 'node'),
         ]
         temporal_idxs = len(temporal_dataset_descrs)*[
             (slice(None),)
