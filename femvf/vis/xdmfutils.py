@@ -211,7 +211,7 @@ def export_mesh_values(
             export_dataset(dataset, output_group, format_dataset=format_dataset)
         elif isinstance(dataset_or_group, h5py.Group):
             input_group = dataset_or_group
-            export_group(input_group, output_group.create_group(input_group.name))
+            export_group(input_group, output_group.require_group(input_group.name))
         else:
             raise TypeError()
 
@@ -222,10 +222,37 @@ def make_format_dataset(
         data_format: Union[dfn.FunctionSpace, None]
     ) -> FormatDataset:
     if isinstance(data_format, dfn.FunctionSpace):
-        vert_to_dof = dfn.vertex_to_dof_map(data_format)
-        value_dim = data_format.num_sub_spaces()
+        function_space: dfn.FunctionSpace = data_format
+        dofmap = function_space.dofmap()
+        mesh = function_space.mesh()
+
+        # Plot CG spaces on mesh vertices and DG space in the mesh interior
+        is_cg_space = (
+            function_space.ufl_element().family()
+            in ('Lagrange', 'CG')
+        )
+        is_dg_space = (
+            function_space.ufl_element().family()
+            in ('Discontinuous Lagrange', 'DG')
+        )
+        if is_cg_space:
+            mesh_ent_dofs = np.arange(mesh.num_vertices())
+            ent_dim = 0
+        elif is_dg_space:
+            mesh_ent_dofs = np.arange(mesh.num_cells())
+            ent_dim = function_space.ufl_element().cell().topological_dimension()
+            ent_dim = mesh.topology().dim()
+        else:
+            raise ValueError()
+        mesh_to_dof = np.array(
+            dofmap.entity_dofs(mesh, ent_dim, mesh_ent_dofs)
+        )
+
+        # This determines whether the function space is vector/scalar and
+        # how many components
+        value_dim = max(function_space.num_sub_spaces(), 1)
         def format_dataset(dataset: h5py.Dataset):
-            array = dataset[()][..., vert_to_dof]
+            array = dataset[()][..., mesh_to_dof]
             new_shape = (
                 array.shape[:-1] + (array.shape[-1]//value_dim,) + (value_dim,)
             )
