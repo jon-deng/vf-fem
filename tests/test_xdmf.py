@@ -64,7 +64,7 @@ def state_fpath(model, state_controls_prop):
 def test_write_xdmf(model, state_fpath):
 
     visfile_fpath = './test_xdmf--export.h5'
-    xdmf_name = 'test_xdmf--export'
+    xdmf_path = 'test_xdmf--export.xdmf'
 
     with sf.StateFile(model, state_fpath, mode='r') as state_file:
         datasets = [
@@ -106,7 +106,7 @@ def test_write_xdmf(model, state_fpath):
             static_dataset_descrs, static_idxs,
             f['time'],
             temporal_dataset_descrs, temporal_idxs,
-            xdmf_name
+            xdmf_path
         )
 
 
