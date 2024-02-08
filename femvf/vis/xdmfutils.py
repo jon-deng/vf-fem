@@ -309,7 +309,7 @@ def write_xdmf(
         time_dataset: h5py.Dataset=None,
         temporal_dataset_descrs: List[DatasetDescription]=None,
         temporal_dataset_idxs: List[AxisIndices]=None,
-        xdmf_name: Optional[str]=None
+        xdmf_fpath: Optional[str]=None
     ) -> str:
     """
     Create an XDMF file describing datasets
@@ -337,10 +337,8 @@ def write_xdmf(
         A list of temporal datasets and info on how they are placed on the mesh
     temporal_dataset_idxs: List[AxisIndices]
         Indices into the datasets
-    xdmf_name: Optional[str]
-        The name of the XDMF file
-
-        The name should be a simple string without path seperators.
+    xdmf_fpath: Optional[str]
+        The path to the XDMF file
 
     Returns
     -------
@@ -362,11 +360,17 @@ def write_xdmf(
 
     domain = SubElement(root, 'Domain')
 
+    if xdmf_fpath is None:
+        xdmf_basename = path.splitext(path.basename(mesh_group.file.filename))[0]
+        xdmf_fpath = f'{xdmf_basename}.xdmf'
+    xdmf_dir, xdmf_basename = path.split(xdmf_fpath)
+
     ## Add info for a static grid
     grid = add_xdmf_uniform_grid(
         domain, 'Static',
         mesh_group,
-        static_dataset_descrs, static_dataset_idxs
+        static_dataset_descrs, static_dataset_idxs,
+        xdmf_dir=xdmf_dir
     )
 
     ## Add info for a time-varying Grid
@@ -389,7 +393,7 @@ def write_xdmf(
                 temporal_grid, f'Time{ii}',
                 mesh_group,
                 temporal_dataset_descrs, _temporal_dataset_idxs,
-                time=time_dataset[ii]
+                time=time_dataset[ii], xdmf_dir=xdmf_dir
             )
 
     ## Write the XDMF file
@@ -397,11 +401,6 @@ def write_xdmf(
     etree.indent(lxml_root, space="    ")
     pretty_xml = etree.tostring(lxml_root, pretty_print=True)
 
-    if xdmf_name is None:
-        h5file_name = path.split(mesh_group.file.filename)[-1]
-        xdmf_fpath = f'{path.splitext(h5file_name)[0]}.xdmf'
-    else:
-        xdmf_fpath = f'{xdmf_name}.xdmf'
 
     with open(xdmf_fpath, 'wb') as fxml:
         fxml.write(pretty_xml)
@@ -414,7 +413,8 @@ def add_xdmf_uniform_grid(
         mesh_group: h5py.Group,
         dataset_descrs: List[DatasetDescription],
         dataset_idxs: List[AxisIndices],
-        time: float=None
+        time: float=None,
+        xdmf_dir: str='.'
     ):
     grid = SubElement(
         parent, 'Grid', {
@@ -434,10 +434,10 @@ def add_xdmf_uniform_grid(
     # Write mesh info to grid
     mesh_dim = mesh_group['dim'][()]
     add_xdmf_grid_topology(
-        grid, mesh_group['connectivity'], mesh_dim
+        grid, mesh_group['connectivity'], mesh_dim, xdmf_dir=xdmf_dir
     )
     add_xdmf_grid_geometry(
-        grid, mesh_group['coordinates'], mesh_dim
+        grid, mesh_group['coordinates'], mesh_dim, xdmf_dir=xdmf_dir
     )
 
     # Write arrays to grid
@@ -446,13 +446,14 @@ def add_xdmf_uniform_grid(
         ):
         add_xdmf_grid_array(
             grid, dataset.name, dataset, idx,
-            value_type=value_type, value_center=value_center
+            value_type=value_type, value_center=value_center,
+            xdmf_dir=xdmf_dir
         )
 
     return grid
 
 def add_xdmf_grid_topology(
-        grid: Element, dataset: h5py.Dataset, mesh_dim=2
+        grid: Element, dataset: h5py.Dataset, mesh_dim=2, xdmf_dir='.'
     ):
 
     if mesh_dim == 3:
@@ -479,10 +480,13 @@ def add_xdmf_grid_topology(
             'Dimensions': xdmf_array.xdmf_shape
         }
     )
-    conn.text = f'{dataset.file.filename}:/mesh/solid/connectivity'
+    conn.text = (
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
+        f':{dataset.name}'
+    )
 
 def add_xdmf_grid_geometry(
-        grid: Element, dataset: h5py.Dataset, mesh_dim=2
+        grid: Element, dataset: h5py.Dataset, mesh_dim=2, xdmf_dir='.'
     ):
     if mesh_dim == 3:
         geometry_type = 'XYZ'
@@ -502,7 +506,10 @@ def add_xdmf_grid_geometry(
             'Dimensions': xdmf_array.xdmf_shape
         }
     )
-    coords.text = f'{dataset.file.filename}:{dataset.name}'
+    coords.text = (
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
+        f':{dataset.name}'
+    )
 
 def add_xdmf_grid_array(
         grid: Element,
@@ -510,7 +517,8 @@ def add_xdmf_grid_array(
         dataset: h5py.Dataset,
         axis_indices: Optional[AxisIndices]=None,
         value_type='Vector',
-        value_center='Node'
+        value_center='Node',
+        xdmf_dir='.'
     ):
     comp = SubElement(
         grid, 'Attribute', {
@@ -548,7 +556,10 @@ def add_xdmf_grid_array(
         }
     )
 
-    slice_data.text = f'{dataset.file.filename}:{dataset.name}'
+    slice_data.text = (
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
+        f':{dataset.name}'
+    )
     return comp
 
 def add_xdmf_grid_finite_element_function(
@@ -558,7 +569,8 @@ def add_xdmf_grid_finite_element_function(
         dataset_dofmap: h5py.Dataset,
         axis_indices: Optional[AxisIndices]=None,
         elem_family='CG', elem_degree=1, elem_cell='triangle',
-        elem_value_type='vector'
+        elem_value_type='vector',
+        xdmf_dir='.'
     ):
     comp = SubElement(
         grid, 'Attribute', {
@@ -611,4 +623,7 @@ def add_xdmf_grid_finite_element_function(
             'Format': 'HDF'
         }
     )
-    slice_data.text = f'{dataset.file.filename}:{label}'
+    slice_data.text = (
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
+        f':{dataset.name}'
+    )
