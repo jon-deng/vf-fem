@@ -179,7 +179,8 @@ Format = Union[None, dfn.FunctionSpace]
 def export_mesh_values(
         datasets: List[Union[h5py.Dataset, h5py.Group]],
         formats: List[Format],
-        output_group: h5py.Group
+        output_group: h5py.Group,
+        output_names: Optional[List[str]]=None
     ):
     """
     Export finite element and other data to mesh based data
@@ -204,14 +205,22 @@ def export_mesh_values(
     output_group: h5py.Group
         The group to export data to
     """
-    for dataset_or_group, format in zip(datasets, formats):
+    if output_names is None:
+        output_names = [dataset.name for dataset in datasets]
+
+    for dataset_or_group, format, output_name in zip(datasets, formats, output_names):
         if isinstance(dataset_or_group, h5py.Dataset):
             dataset = dataset_or_group
             format_dataset = make_format_dataset(format)
-            export_dataset(dataset, output_group, format_dataset=format_dataset)
+            export_dataset(
+                dataset, output_group,
+                output_dataset_name=output_name, format_dataset=format_dataset
+            )
         elif isinstance(dataset_or_group, h5py.Group):
             input_group = dataset_or_group
-            export_group(input_group, output_group.require_group(input_group.name))
+            export_group(
+                input_group, output_group.require_group(output_name)
+            )
         else:
             raise TypeError()
 
