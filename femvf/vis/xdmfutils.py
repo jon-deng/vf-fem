@@ -141,38 +141,45 @@ class XDMFArray:
             raise TypeError("Invalid `Ellipsis` axis index")
         return step
 
-    def to_xdmf_slice(self, axis_indices: AxisIndices):
+    def to_hyperslab(self, axis_indices: AxisIndices):
         axis_indices = self.expand_axis_indices(axis_indices, self.ndim)
 
-        starts = [
-            str(self.get_start(axis_index, axis_size))
+        starts = tuple(
+            self.get_start(axis_index, axis_size)
             for axis_index, axis_size in zip(axis_indices, self.shape)
-        ]
-        steps = [
-            str(self.get_step(axis_index, axis_size))
+        )
+        steps = tuple(
+            self.get_step(axis_index, axis_size)
             for axis_index, axis_size in zip(axis_indices, self.shape)
-        ]
-        stops = [
-            str(self.get_stop(axis_index, axis_size))
+        )
+        stops = tuple(
+            self.get_stop(axis_index, axis_size)
             for axis_index, axis_size in zip(axis_indices, self.shape)
-        ]
-        return starts, steps, stops
+        )
+        counts = tuple(
+            (stop-start)//step
+            for start, stop, step in zip(starts, stops, steps)
+        )
+        return starts, steps, counts
 
-    def to_xdmf_slice_str(self, axis_indices: AxisIndices) -> str:
+    def to_xdmf_hyperslab_str(self, axis_indices: AxisIndices) -> str:
         """
         Return the XDMF array slice string representation of `index`
         """
-        starts, steps, stops = self.to_xdmf_slice(axis_indices)
+        starts, steps, counts = self.to_hyperslab(axis_indices)
+        starts = [str(start) for start in starts]
+        steps = [str(step) for step in steps]
+        counts = [str(count) for count in counts]
         col_widths = [
             max(len(start), len(step), len(stop))
-            for start, step, stop in zip(starts, steps, stops)
+            for start, step, stop in zip(starts, steps, counts)
         ]
 
         row = ' '.join([f'{{:>{width}s}}' for width in col_widths])
         return (
             row.format(*starts) + '\n'
             + row.format(*steps) + '\n'
-            + row.format(*stops)
+            + row.format(*counts)
         )
 
 Format = Union[None, dfn.FunctionSpace]
@@ -547,7 +554,7 @@ def add_xdmf_grid_array(
         }
     )
     xdmf_array = XDMFArray(shape)
-    slice_sel.text = xdmf_array.to_xdmf_slice_str(axis_indices)
+    slice_sel.text = xdmf_array.to_xdmf_hyperslab_str(axis_indices)
 
     slice_data = SubElement(
         data_subset, 'DataItem', {
@@ -615,7 +622,7 @@ def add_xdmf_grid_finite_element_function(
         }
     )
     xdmf_array = XDMFArray(shape)
-    slice_sel.text = xdmf_array.to_xdmf_slice_str(axis_indices)
+    slice_sel.text = xdmf_array.to_xdmf_hyperslab_str(axis_indices)
 
     slice_data = SubElement(
         data_subset, 'DataItem', {
