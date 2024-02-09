@@ -1,14 +1,15 @@
 """
-Playing around with making an XDMF file to read results in paraview
+Playing around with making an XDMF file to read results in paraviewos
 
 Writes out vertex values from the statefile
 """
 
 import pytest
 
-import os
+from os import path
 import numpy as np
 import h5py
+import dolfin as dfn
 
 from femvf import statefile as sf
 from femvf.load import load_transient_fsi_model
@@ -17,12 +18,14 @@ from femvf.models.transient.fluid import BernoulliAreaRatioSep
 from femvf.forward import integrate
 
 from femvf.vis.xdmfutils import export_mesh_values, write_xdmf, XDMFArray
+from femvf.postprocess.base import TimeSeries
+from femvf.postprocess import solid as slpost
 
 @pytest.fixture()
 def mesh_path():
     mesh_dir = '../meshes'
     mesh_name = 'M5_BC--GA3--DZ0.00'
-    return os.path.join(mesh_dir, f'{mesh_name}.msh')
+    return path.join(mesh_dir, f'{mesh_name}.msh')
 
 @pytest.fixture()
 def model(mesh_path):
@@ -63,27 +66,46 @@ def state_fpath(model, state_controls_prop):
 
 def test_write_xdmf(model, state_fpath):
 
-    visfile_fpath = './test_xdmf--export.h5'
+    post_path = f'{path.splitext(state_fpath)[0]}--post.h5'
+    with (
+            h5py.File(post_path, mode='w') as post_file,
+            sf.StateFile(model, state_fpath, mode='r') as state_file
+        ):
+        post_file['time.field.p'] = TimeSeries(slpost.FSIPressure(model))(state_file)
+
+    xdmf_data_path = './test_xdmf--export.h5'
     xdmf_path = 'test_xdmf--export.xdmf'
 
-    with sf.StateFile(model, state_fpath, mode='r') as state_file:
+    with (
+            h5py.File(state_fpath, mode='r') as state_file,
+            h5py.File(post_path, mode='r') as post_file
+        ):
         datasets = [
-            state_file.file['mesh/solid'],
-            state_file.file['time'],
+            state_file['mesh/solid'],
+            state_file['time'],
         ]
         formats = [None, None]
+        labels = ['mesh/solid', 'time']
 
+        mesh = model.solid.residual.mesh()
         fspace_cg1_vector = (
             model.solid.residual.form['coeff.state.u1'].function_space()
         )
         vector_labels = ['state/u', 'state/v', 'state/a']
-        datasets += [state_file.file[label] for label in vector_labels]
-        formats += 3*[fspace_cg1_vector]
+        datasets += [state_file[label] for label in vector_labels]
+        formats += len(vector_labels)*[fspace_cg1_vector]
+        labels += vector_labels
 
-        with h5py.File(visfile_fpath, mode='w') as f:
+        fspace_cg1_scalar = dfn.FunctionSpace(mesh, 'CG', 1)
+        scalar_labels = ['time.field.p']
+        datasets += [post_file[label] for label in scalar_labels]
+        formats += len(scalar_labels)*[fspace_cg1_scalar]
+        labels += scalar_labels
+
+        with h5py.File(xdmf_data_path, mode='w') as f:
             export_mesh_values(datasets, formats, f)
 
-    with h5py.File(visfile_fpath, mode='r') as f:
+    with h5py.File(xdmf_data_path, mode='r') as f:
         static_dataset_descrs = [
             (f['state/u'], 'vector', 'node')
         ]
@@ -96,7 +118,7 @@ def test_write_xdmf(model, state_fpath):
             (f['state/u'], 'vector', 'node'),
             (f['state/v'], 'vector', 'node'),
             (f['state/a'], 'vector', 'node'),
-            # (f['p'], 'scalar', 'node'),
+            (f['time.field.p'], 'scalar', 'node'),
         ]
         temporal_idxs = len(temporal_dataset_descrs)*[
             (slice(None),)
