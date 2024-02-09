@@ -41,8 +41,8 @@ class BaseStateMeasure:
         model = self.model
 
         for vec, setter in zip(
-                (prop, control, state),
-                (model.set_prop, model.set_control, model.set_fin_state)
+                (prop, control, state, state),
+                (model.set_prop, model.set_control, model.set_fin_state, model.set_ini_state)
             ):
             if vec is not None:
                 setter(vec)
