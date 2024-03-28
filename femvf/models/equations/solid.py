@@ -1,5 +1,9 @@
 """
 Contains definitions of different solid model forms
+
+References
+----------
+[Gou2016] Gou, K., Pence, T.J. Hyperelastic modeling of swelling in fibrous soft tissue with application to tracheal angioedema. J. Math. Biol. 72, 499-526 (2016). https://doi.org/10.1007/s00285-015-0893-0
 """
 
 from typing import Tuple, Mapping, Callable, Union, Any, Optional
@@ -615,6 +619,62 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         # approximation with slope `m`
         mhat = (m*(v-1) + 1)
         S = mhat*v**(1/3)*stress_isotropic(E_v, emod, nu)
+
+        F = def_grad(u)
+        J = ufl.det(F)
+        expressions = {
+            # NOTE: The terms around `S` convert PK2 to Cauchy stress
+            'expr.stress_elastic': (1/J)*F*S*F.T,
+            # NOTE: This should be true because this is a linear hyperelastic
+            # material
+            'expr.strain_energy': ufl.inner(S, E),
+            'expr.stress_elastic_PK2': S,
+            'expr.strain_green': E
+        }
+
+        return ufl.inner(S, DE) * dx, expressions
+
+class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
+    """
+    Linear functional representing an isotropic elastic stress with swelling
+
+    The strain energy function is modified by a power law
+    """
+
+    COEFFICIENT_SPEC = {
+        'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
+        'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
+        'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar')
+    }
+
+    def MAKE_FORM(self, coefficients, measure, mesh):
+        """
+        Add an effect for isotropic elasticity with a swelling field
+        """
+        dx = measure
+
+        u = coefficients['coeff.state.u1']
+
+        vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
+        DE = strain_lin_green_lagrange(u, vector_test)
+        E = strain_green_lagrange(u)
+
+        emod = coefficients['coeff.prop.emod']
+        nu = dfn.Constant(0.45)
+        v = coefficients['coeff.prop.v_swelling']
+        v.vector()[:] = 1.0
+        m = coefficients['coeff.prop.m_swelling']
+        m.vector()[:] = 0.0
+
+        E_v = v**(-2/3)*E + 1/2*(v**(-2/3)-1)*ufl.Identity(3)
+        # Here `mbar_v` corresponds to the scaling function 'm(v)/v' [Gou2016]
+        # I used 'm(v)/v' (instead of 'm(v)') so that the coefficient
+        # `'coeff.prop.m_swelling'` will correspond to the linear stiffness
+        # change used for `IsotropicElasticSwellingForm` at no swelling
+        mbar_v = v**m
+        S = mbar_v*v**(1/3)*stress_isotropic(E_v, emod, nu)
 
         F = def_grad(u)
         J = ufl.det(F)
@@ -1318,6 +1378,34 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
             InertialForm({}, dx, mesh)
             + IsotropicMembraneForm({}, traction_ds, mesh)
             + IsotropicElasticSwellingForm({}, dx, mesh)
+            + KelvinVoigtForm({}, dx, mesh)
+            - SurfacePressureForm({}, traction_ds, mesh)
+            - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+        )
+        return form
+
+class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
+
+    def _make_functional(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: list[dfn.MeshFunction],
+            mesh_functions_label_to_value: list[Mapping[str, int]],
+            fsi_facet_labels: list[str],
+            fixed_facet_labels: list[str]
+        ):
+        dx, ds, traction_ds = _process_measures(
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels
+        )
+
+        form = (
+            InertialForm({}, dx, mesh)
+            + IsotropicMembraneForm({}, traction_ds, mesh)
+            + IsotropicElasticSwellingPowerLawForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
             - SurfacePressureForm({}, traction_ds, mesh)
             - ManualSurfaceContactTractionForm({}, traction_ds, mesh)

@@ -410,6 +410,13 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedModel):
             mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
         )
 
+class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedModel):
+
+    def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):
+        return solid.SwellingPowerLawKelvinVoigtWEpitheliumNoShape(
+            mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels
+        )
+
 class LinearizedSwellingKelvinVoigtWEpitheliumNoShape(PredefinedLinearizedModel):
 
     def _make_residual(self, mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels):

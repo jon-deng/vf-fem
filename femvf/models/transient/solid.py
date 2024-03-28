@@ -613,6 +613,21 @@ class SwellingKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
             fsi_facet_labels, fixed_facet_labels
         )
 
+class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
+
+    def _make_residual(
+            self,
+            mesh: dfn.Mesh,
+            mesh_functions: Tuple[dfn.MeshFunction],
+            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+            fsi_facet_labels: Tuple[str],
+            fixed_facet_labels: Tuple[str]
+        ) -> solid.FenicsResidual:
+        return solid.SwellingPowerLawKelvinVoigtWEpitheliumNoShape(
+            mesh, mesh_functions, mesh_functions_label_to_value,
+            fsi_facet_labels, fixed_facet_labels
+        )
+
 class Approximate3DKelvinVoigt(NodalContactSolid):
 
     def _make_residual(
