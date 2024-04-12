@@ -13,6 +13,18 @@ In order to run this package you will need to install:
   - `scipy`
   - `pandas`
   - `matplotlib`
+  - `jupyter`
+  - `h5py`
+- Utilities
+  - `ipython` (not strictly needed but useful)
+  - `meshio`
+  - `lxml`
+  - `pyvista`
+- FEniCS dependencies
+  - `pybind11`
+  - `cython`
+  - `mpi4py`
+  - `sympy`
 - Numerical linear algebra software
   - `PETSc` and `petsc4py` (https://petsc.org/release/)
   - `BlockArray` (https://github.com/jon-deng/block-array)
