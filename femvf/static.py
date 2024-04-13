@@ -22,6 +22,7 @@ be linked to u1.
 from typing import Tuple, Mapping, Any
 
 import dolfin as dfn
+import ufl
 import numpy as np
 
 from blockarray import blockmat as bm, blockvec as bv
@@ -68,7 +69,7 @@ def static_solid_configuration(
         control: bv.BlockVector,
         prop: bv.BlockVector,
         state=None,
-        linear_solver: str='manual'
+        solver: str='manual'
     ) -> Tuple[bv.BlockVector, Info]:
     """
     Return the static state for a solid model
@@ -79,38 +80,50 @@ def static_solid_configuration(
     elif isinstance(model, dynbase.BaseDynamicalModel):
         is_tra_model = False
     else:
-        raise ValueError()
+        raise TypeError(f"Unknown `model` type {type(model)}")
 
-    # Set the initial guess u=0 and constants (v, a) = (0, 0)
+    # Create a variable to store the solution
+    if is_tra_model:
+        state_n = model.state0.copy()
+    else:
+        state_n = model.state.copy()
+
+    # Create a zero state (useful for initial guesses)
+    zero_state = state_n.copy()
+    zero_state[:] = 0
+
+    # Set the initial guess (u, v, a = 0) if one isn't provided
     if state is None:
-        if is_tra_model:
-            state_n = model.state.copy()
-        else:
-            state_n = model.state0.copy()
         state_n[:] = 0.0
     else:
-        state_n = state
+        state_n[:] = state
 
-    if is_tra_model:
-        model.set_fin_state(state_n)
-        model.set_ini_state(state_n)
-    else:
-        model.set_state(state_n)
     model.set_control(control)
     model.set_prop(prop)
 
-    if linear_solver == 'manual':
-        def iterative_subproblem(x_n):
-            model.residual.form['coeff.state.u1'].vector()[:] = x_n
-            dx = model.residual.form['coeff.state.u1'].vector()
-
-            jac = dfn.derivative(
-                model.residual.form.form,
-                model.residual.form['coeff.state.u1']
+    if solver == 'manual':
+        # Here use the non-linear governing residual to solve
+        # For a transient model, the residual contains initial condition effects
+        # and to get rid of these effects we can create a new residual where
+        # 'coeff.state.u0' always matches 'coeff.state.u1'
+        form = model.residual.form
+        if is_tra_model:
+            model.set_ini_state(zero_state)
+            res_form = ufl.replace(
+                form.form, {form['coeff.state.u0']: form['coeff.state.u1']}
             )
+        else:
+            res_form = form.form
+
+        jac = dfn.derivative(
+            res_form, form['coeff.state.u1']
+        )
+        def iterative_subproblem(x_n):
+            form['coeff.state.u1'].vector()[:] = x_n
+            dx = form['coeff.state.u1'].vector()
 
             def assem_res():
-                res = dfn.assemble(model.residual.form.form)
+                res = dfn.assemble(res_form)
                 for bc in model.residual.dirichlet_bcs:
                     bc.apply(res)
                 return res
@@ -128,9 +141,10 @@ def static_solid_configuration(
             return res_n.norm('l2')
 
         u_0 = model.residual.form['coeff.state.u1'].vector().copy()
+        u_0 = state_n.sub['u']
         u, info = nonlineq.newton_solve(u_0, iterative_subproblem, norm=norm)
         state_n['u'] = u
-    elif linear_solver == 'automatic':
+    elif solver == 'automatic':
         jac = dfn.derivative(
             model.residual.form.form,
             model.residual.form['coeff.state.u1']
@@ -145,7 +159,7 @@ def static_solid_configuration(
         state_n['u'] = model.state1['u']
         info = {}
     else:
-        raise ValueError(f"Unknown `linear_solver`: '{linear_solver}'")
+        raise ValueError(f"Unknown `solver`: '{solver}'")
 
     return state_n, info
 
