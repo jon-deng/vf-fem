@@ -520,6 +520,7 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
     @pytest.fixture(
         params=[
             (None, None, {}),
+            (dynfl.BernoulliFixedSep, dynfl.LinearizedBernoulliFixedSep, {'separation_vertex_label': 'separation-inf'})
         ]
     )
     def FluidModelPair(self, request):
