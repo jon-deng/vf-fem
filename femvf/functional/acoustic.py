@@ -19,6 +19,7 @@ compute the sensitivity with respect to.
 from .base import AbstractFunctional
 from blockarray import blockvec
 
+
 class AcousticFunctional(AbstractFunctional):
     """
     This class provides an interface/method to define basic solid functionals
@@ -26,11 +27,16 @@ class AcousticFunctional(AbstractFunctional):
     To define a new FluidFunctional you need to implement the `eval`, `eval_du` ... `eval_dp`,
     `form_definitions` methods.
     """
+
     def __init__(self, model):
         super().__init__(model, ())
 
     def eval_dstate(self, f, n):
-        vecs = [self.model.solid.state0.copy(), self.model.fluid.state0.copy(), self.eval_dac_state(f, n)]
+        vecs = [
+            self.model.solid.state0.copy(),
+            self.model.fluid.state0.copy(),
+            self.eval_dac_state(f, n),
+        ]
         return vec.concatenate_vec(vecs)
 
     def eval_dprops(self, f):
@@ -50,22 +56,24 @@ class AcousticFunctional(AbstractFunctional):
     def eval_dac_props(self, f):
         raise NotImplementedError
 
+
 class RmsRadiatedPressure(AcousticFunctional):
     """The norm of the final flow rate"""
+
     def eval(self, f):
         # dt must be a constant for acoustic simulations
         dt = self.model.dt
-        T = (f.size-1)*dt
+        T = (f.size - 1) * dt
 
         # compute the mean-square using trapezoidal integration
         prad_ms = 0
-        for n in range(f.size-1):
+        for n in range(f.size - 1):
             prad_a = f.get_state(n)['pref'][-1]
-            prad_b = f.get_state(n+1)['pref'][-1]
+            prad_b = f.get_state(n + 1)['pref'][-1]
 
-            prad_ms += (prad_a**2 + prad_b**2)/2 * dt
+            prad_ms += (prad_a**2 + prad_b**2) / 2 * dt
 
-        return (prad_ms/T)**0.5
+        return (prad_ms / T) ** 0.5
 
     def eval_dac_state(self, f, n):
         prad_rms = self(f)
@@ -75,13 +83,13 @@ class RmsRadiatedPressure(AcousticFunctional):
 
         dprad_ms = 0
         prad_n = f.get_state(n)['pref'][-1]
-        if n == 0 or n == f.size-1:
+        if n == 0 or n == f.size - 1:
             dprad_ms = prad_n * dt
         else:
-            dprad_ms = 2*prad_n*dt
+            dprad_ms = 2 * prad_n * dt
 
         dac = self.model.acoustic.state0.copy()
-        dac['pref'][-1] = 0.5*prad_ms**-0.5 * dprad_ms
+        dac['pref'][-1] = 0.5 * prad_ms**-0.5 * dprad_ms
 
         return dac
 
@@ -96,43 +104,45 @@ class RmsRadiatedPressure(AcousticFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class AcousticPower(AcousticFunctional):
     """The norm of the final flow rate"""
+
     def eval(self, f):
         # dt must be a constant for acoustic simulations
         prop = f.get_prop()
         RHO, CSPEED = prop['rho_air'][0], prop['soundspeed'][0]
         AMOUTH = prop['area'][-1]
-        ZMOUTH = RHO*CSPEED/AMOUTH
+        ZMOUTH = RHO * CSPEED / AMOUTH
         dt = self.model.dt
-        T = (f.size-1)*dt
+        T = (f.size - 1) * dt
 
         # Compute the average power using trapezoidal integration
         work = 0
-        for n in range(f.size-1):
+        for n in range(f.size - 1):
             prad0 = f.get_state(n)['pref'][-1]
             fmouth0 = f.get_state(n)['pinc'][-2]
             bmouth0 = f.get_state(n)['pref'][-2]
 
-            power0 = prad0*(fmouth0-bmouth0)/ZMOUTH
+            power0 = prad0 * (fmouth0 - bmouth0) / ZMOUTH
 
-            prad1 = f.get_state(n+1)['pref'][-1]
-            fmouth1 = f.get_state(n+1)['pinc'][-2]
-            bmouth1 = f.get_state(n+1)['pref'][-2]
+            prad1 = f.get_state(n + 1)['pref'][-1]
+            fmouth1 = f.get_state(n + 1)['pinc'][-2]
+            bmouth1 = f.get_state(n + 1)['pref'][-2]
 
-            power1 = prad1*(fmouth1-bmouth1)/ZMOUTH
+            power1 = prad1 * (fmouth1 - bmouth1) / ZMOUTH
 
-            work += (power1 + power0)/2 * dt
+            work += (power1 + power0) / 2 * dt
 
-        return work/T
+        return work / T
 
     def eval_dac_state(self, f, n):
         prop = f.get_prop()
         RHO, CSPEED = prop['rho_air'], prop['soundspeed']
         AMOUTH = prop['area'][-1]
-        ZMOUTH = RHO*CSPEED/AMOUTH
+        ZMOUTH = RHO * CSPEED / AMOUTH
         dt = self.model.dt
-        T = (f.size-1)*dt
+        T = (f.size - 1) * dt
 
         # Compute the average power using trapezoidal integration
         work = 0
@@ -142,20 +152,20 @@ class AcousticPower(AcousticFunctional):
         bmouth = f.get_state(n)['pref'][-2]
         # power = prad*(fmouth-bmouth)/ZMOUTH
         # work += (power1 + power0)/2 * dt
-        dwork_dprad = (fmouth-bmouth)/ZMOUTH/2*dt
-        dwork_dfmouth = prad/ZMOUTH/2*dt
-        dwork_dbmouth = -prad/ZMOUTH/2*dt
+        dwork_dprad = (fmouth - bmouth) / ZMOUTH / 2 * dt
+        dwork_dfmouth = prad / ZMOUTH / 2 * dt
+        dwork_dbmouth = -prad / ZMOUTH / 2 * dt
 
         dac = self.model.acoustic.state0.copy()
         dac[:] = 0.0
         if n > 0:
-            dac['pref'][-1] += dwork_dprad/T
-            dac['pinc'][-2] += dwork_dfmouth/T
-            dac['pref'][-2] += dwork_dbmouth/T
-        if n < f.size-1:
-            dac['pref'][-1] += dwork_dprad/T
-            dac['pinc'][-2] += dwork_dfmouth/T
-            dac['pref'][-2] += dwork_dbmouth/T
+            dac['pref'][-1] += dwork_dprad / T
+            dac['pinc'][-2] += dwork_dfmouth / T
+            dac['pref'][-2] += dwork_dbmouth / T
+        if n < f.size - 1:
+            dac['pref'][-1] += dwork_dprad / T
+            dac['pinc'][-2] += dwork_dfmouth / T
+            dac['pref'][-2] += dwork_dbmouth / T
         return dac
 
     def eval_dac_props(self, f):

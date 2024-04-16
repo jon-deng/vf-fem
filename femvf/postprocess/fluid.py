@@ -4,6 +4,7 @@ This module contains definitions of functionals over the fluid state.
 
 from .base import transform_to_make_signals, BaseStateMeasure
 
+
 class SeparationPoint(BaseStateMeasure):
 
     def __init_measure_context__(self, *args, **kwargs):

@@ -4,10 +4,12 @@
 
 import numpy as np
 
+
 def make_residuals(model):
     MODEL_ATTR_NAMES = ('solid', 'fluid', 'acoustic')
-    SUB_MODELS = tuple([getattr(model, name) for name in MODEL_ATTR_NAMES
-                        if hasattr(model, name)])
+    SUB_MODELS = tuple(
+        [getattr(model, name) for name in MODEL_ATTR_NAMES if hasattr(model, name)]
+    )
 
     def residuals(ini_state, fin_state, control, dt, prop):
         model.set_ini_state(ini_state)

@@ -14,6 +14,7 @@ Matrix = Union[subops.DfnMatrix, subops.GenericSubarray, subops.PETScMatrix]
 BlockVec = bv.BlockVector[Vector]
 BlockMat = bm.BlockMatrix[Matrix]
 
+
 class BaseTransientModel:
     """
     This object represents the equations defining a system over one time step.
@@ -29,6 +30,7 @@ class BaseTransientModel:
     Derivatives of F w.r.t u1, u0, g, p, dt and adjoint of those operators should all be
     defined.
     """
+
     ## Parameter setting functions
 
     @property
@@ -80,9 +82,7 @@ class BaseTransientModel:
         prop: BlockVec
             The properties to set
         """
-        raise NotImplementedError(
-            f"Subclass {type(self)} must implement this function"
-        )
+        raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
     ## Residual and sensitivity methods
     def assem_res(self) -> BlockVec:
@@ -117,10 +117,8 @@ class BaseTransientModel:
 
     ## Solver methods
     def solve_state1(
-            self,
-            state1: BlockVec,
-            options: Optional[Mapping[str, Any]]
-        ) -> Tuple[BlockVec, Mapping[str, Any]]:
+        self, state1: BlockVec, options: Optional[Mapping[str, Any]]
+    ) -> Tuple[BlockVec, Mapping[str, Any]]:
         """
         Solve for the final state for the time step
 

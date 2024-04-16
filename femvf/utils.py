@@ -1,6 +1,7 @@
 """
 Utility functions that don't have another place to go
 """
+
 import os
 from os import path
 from time import perf_counter
@@ -12,22 +13,33 @@ from . import statefile as sf
 import numpy as np
 
 
-def line_search(hs, model,
-                ini_state, controls, prop, times,
-                dstate, dcontrols, dprop, dtimes,
-                filepath='temp.h5'):
+def line_search(
+    hs,
+    model,
+    ini_state,
+    controls,
+    prop,
+    times,
+    dstate,
+    dcontrols,
+    dprop,
+    dtimes,
+    filepath='temp.h5',
+):
     if path.exists(filepath):
         os.remove(filepath)
 
     for n, h in enumerate(hs):
         ## Increment the inputs for the provided step
-        state_n = ini_state + h*dstate
+        state_n = ini_state + h * dstate
 
-        controls_n = [control+h*dcontrol for control, dcontrol in zip(controls, dcontrols)]
+        controls_n = [
+            control + h * dcontrol for control, dcontrol in zip(controls, dcontrols)
+        ]
 
-        prop_n = prop + h*dprop
+        prop_n = prop + h * dprop
 
-        times_n = times + h*dtimes
+        times_n = times + h * dtimes
 
         ## Run simulations at the step
         runtime_start = perf_counter()
@@ -44,6 +56,7 @@ def line_search(hs, model,
 
     return filepath
 
+
 def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
     """
     Returns a parameterized line search for parameterization `p` in direction `dp`.
@@ -54,7 +67,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
     p_n = p.copy()
     for n, h in enumerate(hs):
         # Increment all the properties along the search direction
-        p_n.vector[:] = p.vector + h*dp.vector
+        p_n.vector[:] = p.vector + h * dp.vector
 
         uva_n, solid_props_n, fluid_props_n, times_n = p_n.convert()
 
@@ -73,6 +86,7 @@ def line_search_p(hs, model, p, dp, coupling='explicit', filepath='temp.h5'):
                 pickle.dump(info, f)
 
     return filepath
+
 
 def functional_on_line_search(hs, functional, model, filepath):
     functionals = list()

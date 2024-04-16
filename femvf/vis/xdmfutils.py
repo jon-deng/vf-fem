@@ -34,6 +34,7 @@ XDMFValueType = str
 XDMFValueCenter = str
 DatasetDescription = Tuple[h5py.Dataset, XDMFValueType, XDMFValueCenter]
 
+
 class XDMFArray:
     """
     Represent an array as defined in the XDMF format
@@ -75,7 +76,7 @@ class XDMFArray:
             # If an ellipsis exists, then add missing axis indices at the
             # ellipsis
             split_start = axis_indices.index(Ellipsis)
-            split_stop = split_start+1
+            split_stop = split_start + 1
         else:
             # This is the number of missing, explicit, axis indices
             ndim_expand = ndim - len(axis_indices)
@@ -86,7 +87,7 @@ class XDMFArray:
         # Here add `[:]` slices to all missing axis indices
         expanded_axis_indices = (
             axis_indices[:split_start]
-            + ndim_expand*(slice(None),)
+            + ndim_expand * (slice(None),)
             + axis_indices[split_stop:]
         )
 
@@ -157,8 +158,7 @@ class XDMFArray:
             for axis_index, axis_size in zip(axis_indices, self.shape)
         )
         counts = tuple(
-            (stop-start)//step
-            for start, stop, step in zip(starts, stops, steps)
+            (stop - start) // step for start, stop, step in zip(starts, stops, steps)
         )
         return starts, steps, counts
 
@@ -177,18 +177,19 @@ class XDMFArray:
 
         row = ' '.join([f'{{:>{width}s}}' for width in col_widths])
         return (
-            row.format(*starts) + '\n'
-            + row.format(*steps) + '\n'
-            + row.format(*counts)
+            row.format(*starts) + '\n' + row.format(*steps) + '\n' + row.format(*counts)
         )
 
+
 Format = Union[None, dfn.FunctionSpace]
+
+
 def export_mesh_values(
-        datasets: List[Union[h5py.Dataset, h5py.Group]],
-        formats: List[Format],
-        output_group: h5py.Group,
-        output_names: Optional[List[str]]=None
-    ):
+    datasets: List[Union[h5py.Dataset, h5py.Group]],
+    formats: List[Format],
+    output_group: h5py.Group,
+    output_names: Optional[List[str]] = None,
+):
     """
     Export finite element and other data to mesh based data
 
@@ -220,36 +221,34 @@ def export_mesh_values(
             dataset = dataset_or_group
             format_dataset = make_format_dataset(format)
             export_dataset(
-                dataset, output_group,
-                output_dataset_name=output_name, format_dataset=format_dataset
+                dataset,
+                output_group,
+                output_dataset_name=output_name,
+                format_dataset=format_dataset,
             )
         elif isinstance(dataset_or_group, h5py.Group):
             input_group = dataset_or_group
-            export_group(
-                input_group, output_group.require_group(output_name)
-            )
+            export_group(input_group, output_group.require_group(output_name))
         else:
             raise TypeError()
 
     return output_group
 
+
 FormatDataset = Callable[[h5py.Dataset], np.ndarray]
-def make_format_dataset(
-        data_format: Union[dfn.FunctionSpace, None]
-    ) -> FormatDataset:
+
+
+def make_format_dataset(data_format: Union[dfn.FunctionSpace, None]) -> FormatDataset:
     if isinstance(data_format, dfn.FunctionSpace):
         function_space: dfn.FunctionSpace = data_format
         dofmap = function_space.dofmap()
         mesh = function_space.mesh()
 
         # Plot CG spaces on mesh vertices and DG space in the mesh interior
-        is_cg_space = (
-            function_space.ufl_element().family()
-            in ('Lagrange', 'CG')
-        )
-        is_dg_space = (
-            function_space.ufl_element().family()
-            in ('Discontinuous Lagrange', 'DG')
+        is_cg_space = function_space.ufl_element().family() in ('Lagrange', 'CG')
+        is_dg_space = function_space.ufl_element().family() in (
+            'Discontinuous Lagrange',
+            'DG',
         )
         if is_cg_space:
             mesh_ent_dofs = np.arange(mesh.num_vertices())
@@ -260,30 +259,34 @@ def make_format_dataset(
             ent_dim = mesh.topology().dim()
         else:
             raise ValueError()
-        mesh_to_dof = np.array(
-            dofmap.entity_dofs(mesh, ent_dim, mesh_ent_dofs)
-        )
+        mesh_to_dof = np.array(dofmap.entity_dofs(mesh, ent_dim, mesh_ent_dofs))
 
         # This determines whether the function space is vector/scalar and
         # how many components
         value_dim = max(function_space.num_sub_spaces(), 1)
+
         def format_dataset(dataset: h5py.Dataset):
             array = dataset[()][..., mesh_to_dof]
             new_shape = (
-                array.shape[:-1] + (array.shape[-1]//value_dim,) + (value_dim,)
+                array.shape[:-1] + (array.shape[-1] // value_dim,) + (value_dim,)
             )
             array = np.reshape(array, new_shape)
             return array
+
     else:
+
         def format_dataset(dataset: h5py.Dataset):
             return dataset[()]
+
     return format_dataset
 
+
 def export_dataset(
-        input_dataset: h5py.Dataset,
-        output_group: h5py.Group, output_dataset_name=None,
-        format_dataset=None
-    ):
+    input_dataset: h5py.Dataset,
+    output_group: h5py.Group,
+    output_dataset_name=None,
+    format_dataset=None,
+):
     if output_dataset_name is None:
         output_dataset_name = input_dataset.name
     if format_dataset is None:
@@ -294,30 +297,26 @@ def export_dataset(
     )
     return dataset
 
-def export_group(
-        input_group: h5py.Group,
-        output_group: h5py.Group,
-        idx=None
-    ):
+
+def export_group(input_group: h5py.Group, output_group: h5py.Group, idx=None):
 
     for key, dataset in input_group.items():
         if isinstance(dataset, h5py.Dataset):
             export_dataset(
-                dataset, output_group, output_dataset_name=key,
-                format_dataset=idx
+                dataset, output_group, output_dataset_name=key, format_dataset=idx
             )
     return output_group
 
 
 def write_xdmf(
-        mesh_group: h5py.Group,
-        static_dataset_descrs: List[DatasetDescription]=None,
-        static_dataset_idxs: List[AxisIndices]=None,
-        time_dataset: h5py.Dataset=None,
-        temporal_dataset_descrs: List[DatasetDescription]=None,
-        temporal_dataset_idxs: List[AxisIndices]=None,
-        xdmf_fpath: Optional[str]=None
-    ) -> str:
+    mesh_group: h5py.Group,
+    static_dataset_descrs: List[DatasetDescription] = None,
+    static_dataset_idxs: List[AxisIndices] = None,
+    time_dataset: h5py.Dataset = None,
+    temporal_dataset_descrs: List[DatasetDescription] = None,
+    temporal_dataset_idxs: List[AxisIndices] = None,
+    xdmf_fpath: Optional[str] = None,
+) -> str:
     """
     Create an XDMF file describing datasets
 
@@ -374,33 +373,38 @@ def write_xdmf(
 
     ## Add info for a static grid
     grid = add_xdmf_uniform_grid(
-        domain, 'Static',
+        domain,
+        'Static',
         mesh_group,
-        static_dataset_descrs, static_dataset_idxs,
-        xdmf_dir=xdmf_dir
+        static_dataset_descrs,
+        static_dataset_idxs,
+        xdmf_dir=xdmf_dir,
     )
 
     ## Add info for a time-varying Grid
     if time_dataset is not None:
         n_time = time_dataset.size
         temporal_grid = SubElement(
-            domain, 'Grid', {
+            domain,
+            'Grid',
+            {
                 'GridType': 'Collection',
                 'CollectionType': 'Temporal',
-                'Name': 'Temporal'
-            }
+                'Name': 'Temporal',
+            },
         )
         for ii in range(n_time):
             # Temporal dataset indices are assumed to apply to the non-time
             # axes and the time axis is assumed to be the first one
-            _temporal_dataset_idxs = [
-                (ii,)+idx for idx in temporal_dataset_idxs
-            ]
+            _temporal_dataset_idxs = [(ii,) + idx for idx in temporal_dataset_idxs]
             grid = add_xdmf_uniform_grid(
-                temporal_grid, f'Time{ii}',
+                temporal_grid,
+                f'Time{ii}',
                 mesh_group,
-                temporal_dataset_descrs, _temporal_dataset_idxs,
-                time=time_dataset[ii], xdmf_dir=xdmf_dir
+                temporal_dataset_descrs,
+                _temporal_dataset_idxs,
+                time=time_dataset[ii],
+                xdmf_dir=xdmf_dir,
             )
 
     ## Write the XDMF file
@@ -408,60 +412,51 @@ def write_xdmf(
     etree.indent(lxml_root, space="    ")
     pretty_xml = etree.tostring(lxml_root, pretty_print=True)
 
-
     with open(xdmf_fpath, 'wb') as fxml:
         fxml.write(pretty_xml)
 
     return xdmf_fpath
 
+
 def add_xdmf_uniform_grid(
-        parent: Element,
-        grid_name: str,
-        mesh_group: h5py.Group,
-        dataset_descrs: List[DatasetDescription],
-        dataset_idxs: List[AxisIndices],
-        time: float=None,
-        xdmf_dir: str='.'
-    ):
-    grid = SubElement(
-        parent, 'Grid', {
-            'GridType': 'Uniform',
-            'Name': grid_name
-        }
-    )
+    parent: Element,
+    grid_name: str,
+    mesh_group: h5py.Group,
+    dataset_descrs: List[DatasetDescription],
+    dataset_idxs: List[AxisIndices],
+    time: float = None,
+    xdmf_dir: str = '.',
+):
+    grid = SubElement(parent, 'Grid', {'GridType': 'Uniform', 'Name': grid_name})
 
     if time is not None:
-        time = SubElement(
-            grid, 'Time', {
-                'TimeType': 'Single',
-                'Value': f"{time}"
-            }
-        )
+        time = SubElement(grid, 'Time', {'TimeType': 'Single', 'Value': f"{time}"})
 
     # Write mesh info to grid
     mesh_dim = mesh_group['dim'][()]
     add_xdmf_grid_topology(
         grid, mesh_group['connectivity'], mesh_dim, xdmf_dir=xdmf_dir
     )
-    add_xdmf_grid_geometry(
-        grid, mesh_group['coordinates'], mesh_dim, xdmf_dir=xdmf_dir
-    )
+    add_xdmf_grid_geometry(grid, mesh_group['coordinates'], mesh_dim, xdmf_dir=xdmf_dir)
 
     # Write arrays to grid
-    for (dataset, value_type, value_center), idx in zip(
-            dataset_descrs, dataset_idxs
-        ):
+    for (dataset, value_type, value_center), idx in zip(dataset_descrs, dataset_idxs):
         add_xdmf_grid_array(
-            grid, dataset.name, dataset, idx,
-            value_type=value_type, value_center=value_center,
-            xdmf_dir=xdmf_dir
+            grid,
+            dataset.name,
+            dataset,
+            idx,
+            value_type=value_type,
+            value_center=value_center,
+            xdmf_dir=xdmf_dir,
         )
 
     return grid
 
+
 def add_xdmf_grid_topology(
-        grid: Element, dataset: h5py.Dataset, mesh_dim=2, xdmf_dir='.'
-    ):
+    grid: Element, dataset: h5py.Dataset, mesh_dim=2, xdmf_dir='.'
+):
 
     if mesh_dim == 3:
         topology_type = 'Tetrahedron'
@@ -471,30 +466,31 @@ def add_xdmf_grid_topology(
     N_CELL = dataset.shape[0]
 
     topo = SubElement(
-        grid, 'Topology', {
-            'TopologyType': topology_type,
-            'NumberOfElements': f'{N_CELL}'
-        }
+        grid,
+        'Topology',
+        {'TopologyType': topology_type, 'NumberOfElements': f'{N_CELL}'},
     )
 
     xdmf_array = XDMFArray(dataset.shape)
     conn = SubElement(
-        topo, 'DataItem', {
+        topo,
+        'DataItem',
+        {
             'Name': 'MeshConnectivity',
             'ItemType': 'Uniform',
             'NumberType': 'Int',
             'Format': 'HDF',
-            'Dimensions': xdmf_array.xdmf_shape
-        }
+            'Dimensions': xdmf_array.xdmf_shape,
+        },
     )
     conn.text = (
-        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
-        f':{dataset.name}'
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}' f':{dataset.name}'
     )
 
+
 def add_xdmf_grid_geometry(
-        grid: Element, dataset: h5py.Dataset, mesh_dim=2, xdmf_dir='.'
-    ):
+    grid: Element, dataset: h5py.Dataset, mesh_dim=2, xdmf_dir='.'
+):
     if mesh_dim == 3:
         geometry_type = 'XYZ'
     else:
@@ -504,133 +500,130 @@ def add_xdmf_grid_geometry(
 
     xdmf_array = XDMFArray(dataset.shape)
     coords = SubElement(
-        geom, 'DataItem', {
+        geom,
+        'DataItem',
+        {
             'Name': 'MeshCoordinates',
             'ItemType': 'Uniform',
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_array.xdmf_shape
-        }
+            'Dimensions': xdmf_array.xdmf_shape,
+        },
     )
     coords.text = (
-        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
-        f':{dataset.name}'
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}' f':{dataset.name}'
     )
 
+
 def add_xdmf_grid_array(
-        grid: Element,
-        label: str,
-        dataset: h5py.Dataset,
-        axis_indices: Optional[AxisIndices]=None,
-        value_type='Vector',
-        value_center='Node',
-        xdmf_dir='.'
-    ):
+    grid: Element,
+    label: str,
+    dataset: h5py.Dataset,
+    axis_indices: Optional[AxisIndices] = None,
+    value_type='Vector',
+    value_center='Node',
+    xdmf_dir='.',
+):
     comp = SubElement(
-        grid, 'Attribute', {
-            'Name': label,
-            'AttributeType': value_type,
-            'Center': value_center
-        }
+        grid,
+        'Attribute',
+        {'Name': label, 'AttributeType': value_type, 'Center': value_center},
     )
 
     shape = dataset.shape
 
     xdmf_array = XDMFArray(dataset[axis_indices].shape)
     data_subset = SubElement(
-        comp, 'DataItem', {
+        comp,
+        'DataItem',
+        {
             'ItemType': 'HyperSlab',
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_array.xdmf_shape
-        }
+            'Dimensions': xdmf_array.xdmf_shape,
+        },
     )
     slice_sel = SubElement(
-        data_subset, 'DataItem', {
-            'Dimensions': f'3 {len(shape):d}',
-            'Format': 'XML'
-        }
+        data_subset, 'DataItem', {'Dimensions': f'3 {len(shape):d}', 'Format': 'XML'}
     )
     xdmf_array = XDMFArray(shape)
     slice_sel.text = xdmf_array.to_xdmf_hyperslab_str(axis_indices)
 
     slice_data = SubElement(
-        data_subset, 'DataItem', {
-            'Dimensions': xdmf_array.xdmf_shape,
-            'Format': 'HDF'
-        }
+        data_subset, 'DataItem', {'Dimensions': xdmf_array.xdmf_shape, 'Format': 'HDF'}
     )
 
     slice_data.text = (
-        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
-        f':{dataset.name}'
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}' f':{dataset.name}'
     )
     return comp
 
+
 def add_xdmf_grid_finite_element_function(
-        grid: Element,
-        label: str,
-        dataset: h5py.Dataset,
-        dataset_dofmap: h5py.Dataset,
-        axis_indices: Optional[AxisIndices]=None,
-        elem_family='CG', elem_degree=1, elem_cell='triangle',
-        elem_value_type='vector',
-        xdmf_dir='.'
-    ):
+    grid: Element,
+    label: str,
+    dataset: h5py.Dataset,
+    dataset_dofmap: h5py.Dataset,
+    axis_indices: Optional[AxisIndices] = None,
+    elem_family='CG',
+    elem_degree=1,
+    elem_cell='triangle',
+    elem_value_type='vector',
+    xdmf_dir='.',
+):
     comp = SubElement(
-        grid, 'Attribute', {
+        grid,
+        'Attribute',
+        {
             'Name': label,
             'AttributeType': elem_value_type,
             'Center': 'Other',
             'ItemType': 'FiniteElementFunction',
             'ElementFamily': elem_family,
             'ElementDegree': elem_degree,
-            'ElementCell': elem_cell
-        }
+            'ElementCell': elem_cell,
+        },
     )
 
     xdmf_array = XDMFArray(dataset_dofmap.shape)
     dofmap = SubElement(
-        comp, 'DataItem', {
+        comp,
+        'DataItem',
+        {
             'Name': 'dofmap',
             'ItemType': 'Uniform',
             'NumberType': 'Int',
             'Format': 'HDF',
-            'Dimensions': xdmf_array.xdmf_shape
-        }
+            'Dimensions': xdmf_array.xdmf_shape,
+        },
     )
     dofmap.text = f'{dataset_dofmap.file.filename}:{dataset_dofmap.name}'
 
     xdmf_array = XDMFArray(dataset[axis_indices].shape)
     data_subset = SubElement(
-        comp, 'DataItem', {
+        comp,
+        'DataItem',
+        {
             'ItemType': 'HyperSlab',
             'NumberType': 'Float',
             'Precision': '8',
             'Format': 'HDF',
-            'Dimensions': xdmf_array.xdmf_shape
-        }
+            'Dimensions': xdmf_array.xdmf_shape,
+        },
     )
 
     shape = dataset.shape
     slice_sel = SubElement(
-        data_subset, 'DataItem', {
-            'Dimensions': f'3 {len(shape)}',
-            'Format': 'XML'
-        }
+        data_subset, 'DataItem', {'Dimensions': f'3 {len(shape)}', 'Format': 'XML'}
     )
     xdmf_array = XDMFArray(shape)
     slice_sel.text = xdmf_array.to_xdmf_hyperslab_str(axis_indices)
 
     slice_data = SubElement(
-        data_subset, 'DataItem', {
-            'Dimensions': xdmf_array.xdmf_shape,
-            'Format': 'HDF'
-        }
+        data_subset, 'DataItem', {'Dimensions': xdmf_array.xdmf_shape, 'Format': 'HDF'}
     )
     slice_data.text = (
-        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}'
-        f':{dataset.name}'
+        f'{path.relpath(dataset.file.filename, start=xdmf_dir)}' f':{dataset.name}'
     )

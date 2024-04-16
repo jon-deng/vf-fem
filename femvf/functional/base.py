@@ -1,7 +1,9 @@
 """
 Implements some basic math operations tha can be used to combine functionals into new functionals.
 """
+
 import numpy as np
+
 
 def new_statefile(self, f):
     """
@@ -14,10 +16,12 @@ def new_statefile(self, f):
 
     return statefile_updated
 
+
 def update_cache(func):
     """
     Return a decorated instance method that updates a cache attribute on new input files
     """
+
     def wrapped_func(self, f, *args, **kwargs):
         """
         Reruns the `eval` function if the passed in file instance is different from what was last
@@ -30,6 +34,7 @@ def update_cache(func):
         return func(self, f, *args, **kwargs)
 
     return wrapped_func
+
 
 class AbstractFunctional:
     """
@@ -60,6 +65,7 @@ class AbstractFunctional:
         A dictionary of cached values. These are specific to the functional and values are likely
         to be cached if they are needed to compute sensitivities and are expensive to compute.
     """
+
     # TODO : The code for functionals is quite hard to follow.
     # Rethink what are the basic things that are required. Not all the things in __init__
     # are likely needed so you can get rid of irrelevant stuff
@@ -74,6 +80,7 @@ class AbstractFunctional:
         self.funcs = tuple(funcs)
 
         import copy
+
         self.constants = copy.deepcopy(type(self).default_constants)
 
         # A cache of other quantities
@@ -194,6 +201,7 @@ class AbstractFunctional:
     def __rpow__(self, other):
         return power(other, self)
 
+
 ## Math operations on functions
 def add(funa, funb):
     """
@@ -204,6 +212,7 @@ def add(funa, funb):
 
     return Sum(funa.model, funa, funb)
 
+
 def sub(funa, funb):
     """
     Add functionals
@@ -213,11 +222,13 @@ def sub(funa, funb):
 
     return Sum(funa.model, funa, mul(-1.0, funb))
 
+
 def mul(funa, funb):
     funa, funb = _convert_float(funa, funb)
     _validate(funa, funb)
 
     return Product(funa.model, funa, funb)
+
 
 def power(funa, funb):
     funa, funb = _convert_float(funa, funb)
@@ -228,12 +239,14 @@ def power(funa, funb):
     else:
         return Power(funa.model, funa, funb)
 
+
 def _validate(*funs):
     _model = funs[0].model
 
     for fun in funs[1:]:
         if fun.model != _model:
             raise ValueError("Functionals must use the same model")
+
 
 def _convert_float(funa, funb):
     """
@@ -258,6 +271,7 @@ class Sum(AbstractFunctional):
     """
     A functional representing a + b, where a and b are functionals
     """
+
     def __init__(self, model, funa, funb):
         super().__init__(model, funa, funb)
 
@@ -286,10 +300,12 @@ class Sum(AbstractFunctional):
     def eval_dt0(self, f, n):
         return self._sum_drule(*self.funcs, 'dt0', f, n)
 
+
 class Product(AbstractFunctional):
     """
     A functional representing a * b, where a and b are functionals
     """
+
     def __init__(self, model, funa, funb):
         super().__init__(model, funa, funb)
 
@@ -305,7 +321,7 @@ class Product(AbstractFunctional):
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
 
-        return da*b + a*db
+        return da * b + a * db
 
     def eval_dstate(self, f, n):
         return self._product_drule(*self.funcs, 'dstate', f, n)
@@ -319,10 +335,12 @@ class Product(AbstractFunctional):
     def eval_dt0(self, f, n):
         return self._product_drule(*self.funcs, 'dt0', f, n)
 
+
 class Power(AbstractFunctional):
     """
     A functional representing a ** b, where a and b are functionals
     """
+
     def eval(self, f):
         funa, funb = self.funcs
         return funa(f) ** funb(f)
@@ -335,8 +353,8 @@ class Power(AbstractFunctional):
         a, b = funa(args[0]), funb(args[0])
         da, db = dfuna(*args), dfunb(*args)
 
-        assert a > 0 # This is not defined if a < 0
-        return b*a**(b-1)*da + np.log(a)*a**b*db
+        assert a > 0  # This is not defined if a < 0
+        return b * a ** (b - 1) * da + np.log(a) * a**b * db
 
     def eval_dstate(self, f, n):
         return self._power_drule(*self.funcs, 'dstate', f, n)
@@ -350,10 +368,12 @@ class Power(AbstractFunctional):
     def eval_dt0(self, f, n):
         return self._power_drule(*self.funcs, 'dt0', f, n)
 
+
 class ScalarPower(AbstractFunctional):
     """
     A functional representing a ** b, where a is a functional and b a scalar
     """
+
     def eval(self, f):
         funa, funb = self.funcs
         a, b = funa(f), funb(f)
@@ -368,7 +388,7 @@ class ScalarPower(AbstractFunctional):
         da = dfuna(*args)
         # db = dfunb(*args)
 
-        return b*a**(b-1) * da
+        return b * a ** (b - 1) * da
 
     def eval_dstate(self, f, n):
         return self._scalarpower_drule(*self.funcs, 'dstate', f, n)
@@ -382,14 +402,14 @@ class ScalarPower(AbstractFunctional):
     def eval_dt0(self, f, n):
         return self._scalarpower_drule(*self.funcs, 'dt0', f, n)
 
+
 class Scalar(AbstractFunctional):
     """
     Functional that always evaluates to a constant scalar
     """
+
     func_types = ()
-    default_constants = {
-        'value': 0.0
-    }
+    default_constants = {'value': 0.0}
 
     def __init__(self, model, val):
         self._val = val

@@ -1,6 +1,7 @@
 import ufl
 import dolfin as dfn
 
+
 class CachedFormAssembler:
     """
     Assembles a bilinear form using a cached sparsity pattern

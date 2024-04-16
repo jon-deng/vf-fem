@@ -25,6 +25,7 @@ from blockarray import blockvec as vec
 from .base import AbstractFunctional
 from ..models.solid import form_inf_strain, Solid
 
+
 class SolidFunctional(AbstractFunctional):
     """
     This class provides an interface/method to define basic solid functionals
@@ -35,6 +36,7 @@ class SolidFunctional(AbstractFunctional):
     you can access them. Then you need to implement the `eval`, `eval_du` ... `eval_dp`,
     `form_definitions` methods.
     """
+
     def __init__(self, model):
         super().__init__(model, ())
 
@@ -75,6 +77,7 @@ class SolidFunctional(AbstractFunctional):
                 vecs.append(getattr(self.model, attr).prop.copy())
         return vec.concatenate_vec(vecs)
 
+
 class PeriodicError(SolidFunctional):
     r"""
     SolidFunctional that measures the periodicity of a simulation
@@ -83,6 +86,7 @@ class PeriodicError(SolidFunctional):
     .. math:: \int_\Omega ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 \, dx ,
     where :math:T is the period.
     """
+
     func_types = ()
     default_constants = {'alpha': 1e3}
 
@@ -96,9 +100,9 @@ class PeriodicError(SolidFunctional):
         forms['a_0'] = dfn.Function(solid.vector_fspace)
         forms['a_N'] = dfn.Function(solid.vector_fspace)
 
-        res_u = forms['u_N']-forms['u_0']
-        res_v = forms['v_N']-forms['v_0']
-        res_a = forms['a_N']-forms['a_0']
+        res_u = forms['u_N'] - forms['u_0']
+        res_v = forms['v_N'] - forms['v_0']
+        res_a = forms['a_N'] - forms['a_0']
 
         # forms['alpha'] = dfn.Constant(1.0)
 
@@ -106,35 +110,55 @@ class PeriodicError(SolidFunctional):
         forms['resv'] = ufl.inner(res_v, res_v) * ufl.dx
         forms['resa'] = ufl.inner(res_a, res_a) * ufl.dx
 
-        forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], solid.vector_trial)
-        forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], solid.vector_trial)
+        forms['dresu_du_0'] = ufl.derivative(
+            forms['resu'], forms['u_0'], solid.vector_trial
+        )
+        forms['dresu_du_N'] = ufl.derivative(
+            forms['resu'], forms['u_N'], solid.vector_trial
+        )
 
-        forms['dresv_dv_0'] = ufl.derivative(forms['resv'], forms['v_0'], solid.vector_trial)
-        forms['dresv_dv_N'] = ufl.derivative(forms['resv'], forms['v_N'], solid.vector_trial)
+        forms['dresv_dv_0'] = ufl.derivative(
+            forms['resv'], forms['v_0'], solid.vector_trial
+        )
+        forms['dresv_dv_N'] = ufl.derivative(
+            forms['resv'], forms['v_N'], solid.vector_trial
+        )
 
-        forms['dresa_da_0'] = ufl.derivative(forms['resa'], forms['a_0'], solid.vector_trial)
-        forms['dresa_da_N'] = ufl.derivative(forms['resa'], forms['a_N'], solid.vector_trial)
+        forms['dresa_da_0'] = ufl.derivative(
+            forms['resa'], forms['a_0'], solid.vector_trial
+        )
+        forms['dresa_da_N'] = ufl.derivative(
+            forms['resa'], forms['a_N'], solid.vector_trial
+        )
         return forms
 
     def eval(self, f):
         alphau = self.constants['alpha']
-        self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], self.forms['a_0'].vector()[:] = f.get_state(0)[:3]
-        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], self.forms['a_N'].vector()[:] = f.get_state(f.size-1)[:3]
+        (
+            self.forms['u_0'].vector()[:],
+            self.forms['v_0'].vector()[:],
+            self.forms['a_0'].vector()[:],
+        ) = f.get_state(0)[:3]
+        (
+            self.forms['u_N'].vector()[:],
+            self.forms['v_N'].vector()[:],
+            self.forms['a_N'].vector()[:],
+        ) = f.get_state(f.size - 1)[:3]
         erru = dfn.assemble(self.forms['resu'])
         errv = dfn.assemble(self.forms['resv'])
         erra = dfn.assemble(self.forms['resa'])
         # print(alphau**2*erru, errv)
-        return alphau**2*erru + errv + erra
+        return alphau**2 * erru + errv + erra
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
         alphau = self.constants['alpha']
         if n == 0:
-            duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
+            duva[0][:] = alphau**2 * dfn.assemble(self.forms['dresu_du_0'])
             duva[1][:] = dfn.assemble(self.forms['dresv_dv_0'])
             duva[2][:] = dfn.assemble(self.forms['dresa_da_0'])
-        elif n == f.size-1:
-            duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_N'])
+        elif n == f.size - 1:
+            duva[0][:] = alphau**2 * dfn.assemble(self.forms['dresu_du_N'])
             duva[1][:] = dfn.assemble(self.forms['dresv_dv_N'])
             duva[2][:] = dfn.assemble(self.forms['dresa_da_N'])
         return duva
@@ -150,6 +174,7 @@ class PeriodicError(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class ComponentPeriodicError(SolidFunctional):
     r"""
     SolidFunctional that measures the periodicity of a single state component
@@ -158,24 +183,30 @@ class ComponentPeriodicError(SolidFunctional):
     .. math:: \int_\Omega ||u(T)-u(0)||_2^2 + ||v(T)-v(0)||_2^2 \, dx ,
     where :math:T is the period.
     """
+
     IDX_COMP = -1
+
     @staticmethod
     def form_definitions(solid):
         forms = {}
         forms['u_0'] = dfn.Function(solid.vector_fspace)
         forms['u_N'] = dfn.Function(solid.vector_fspace)
 
-        res_u = forms['u_N']-forms['u_0']
+        res_u = forms['u_N'] - forms['u_0']
 
         forms['resu'] = ufl.inner(res_u, res_u) * ufl.dx
 
-        forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], solid.vector_trial)
-        forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], solid.vector_trial)
+        forms['dresu_du_0'] = ufl.derivative(
+            forms['resu'], forms['u_0'], solid.vector_trial
+        )
+        forms['dresu_du_N'] = ufl.derivative(
+            forms['resu'], forms['u_N'], solid.vector_trial
+        )
         return forms
 
     def eval(self, f):
-        self.forms['u_0'].vector()[:]= f.get_state(0)[self.IDX_COMP]
-        self.forms['u_N'].vector()[:]= f.get_state(f.size-1)[self.IDX_COMP]
+        self.forms['u_0'].vector()[:] = f.get_state(0)[self.IDX_COMP]
+        self.forms['u_N'].vector()[:] = f.get_state(f.size - 1)[self.IDX_COMP]
         erru = dfn.assemble(self.forms['resu'])
         return erru
 
@@ -183,7 +214,7 @@ class ComponentPeriodicError(SolidFunctional):
         duva = self.solid.state0.copy()
         if n == 0:
             duva[self.IDX_COMP][:] = dfn.assemble(self.forms['dresu_du_0'])
-        elif n == f.size-1:
+        elif n == f.size - 1:
             duva[self.IDX_COMP][:] = dfn.assemble(self.forms['dresu_du_N'])
         return duva
 
@@ -198,14 +229,18 @@ class ComponentPeriodicError(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class UPeriodicError(ComponentPeriodicError):
     IDX_COMP = 0
+
 
 class VPeriodicError(ComponentPeriodicError):
     IDX_COMP = 1
 
+
 class APeriodicError(ComponentPeriodicError):
     IDX_COMP = 2
+
 
 class PeriodicEnergyError(SolidFunctional):
     r"""
@@ -215,20 +250,22 @@ class PeriodicEnergyError(SolidFunctional):
     .. math:: \int_\Omega ||u(T)-u(0)||_K^2 + ||v(T)-v(0)||_M^2 \, dx ,
     where :math:T is the period.
     """
+
     func_types = ()
     default_constants = {'alpha': 1.0}
 
     @staticmethod
     def form_definitions(solid):
         from ..solid import biform_m, biform_k
+
         forms = {}
         forms['u_0'] = dfn.Function(solid.vector_fspace)
         forms['u_N'] = dfn.Function(solid.vector_fspace)
         forms['v_0'] = dfn.Function(solid.vector_fspace)
         forms['v_N'] = dfn.Function(solid.vector_fspace)
 
-        res_u = forms['u_N']-forms['u_0']
-        res_v = forms['v_N']-forms['v_0']
+        res_u = forms['u_N'] - forms['u_0']
+        res_v = forms['v_N'] - forms['v_0']
         rho = solid.forms['coeff.prop.rho']
         emod = solid.forms['coeff.prop.emod']
         nu = solid.forms['coeff.prop.nu']
@@ -236,12 +273,20 @@ class PeriodicEnergyError(SolidFunctional):
         forms['resu'] = biform_k(res_u, res_u, emod, nu)
         forms['resv'] = biform_m(res_v, res_v, rho)
 
-        forms['dresu_du_0'] = ufl.derivative(forms['resu'], forms['u_0'], solid.vector_trial)
-        forms['dresu_du_N'] = ufl.derivative(forms['resu'], forms['u_N'], solid.vector_trial)
+        forms['dresu_du_0'] = ufl.derivative(
+            forms['resu'], forms['u_0'], solid.vector_trial
+        )
+        forms['dresu_du_N'] = ufl.derivative(
+            forms['resu'], forms['u_N'], solid.vector_trial
+        )
         forms['dresu_demod'] = ufl.derivative(forms['resu'], emod, solid.scalar_trial)
 
-        forms['dresv_dv_0'] = ufl.derivative(forms['resv'], forms['v_0'], solid.vector_trial)
-        forms['dresv_dv_N'] = ufl.derivative(forms['resv'], forms['v_N'], solid.vector_trial)
+        forms['dresv_dv_0'] = ufl.derivative(
+            forms['resv'], forms['v_0'], solid.vector_trial
+        )
+        forms['dresv_dv_N'] = ufl.derivative(
+            forms['resv'], forms['v_N'], solid.vector_trial
+        )
         return forms
 
     def eval(self, f):
@@ -249,22 +294,24 @@ class PeriodicEnergyError(SolidFunctional):
 
         self.model.set_solid_props(f.get_solid_props(0))
         self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], _ = f.get_state(0)
-        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
+        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(
+            f.size - 1
+        )
 
         erru = dfn.assemble(self.forms['resu'])
         errv = dfn.assemble(self.forms['resv'])
-        print(alphau**2*erru, errv)
-        return alphau**2*erru + errv
+        print(alphau**2 * erru, errv)
+        return alphau**2 * erru + errv
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
 
         alphau = self.constants['alpha']
         if n == 0:
-            duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_0'])
+            duva[0][:] = alphau**2 * dfn.assemble(self.forms['dresu_du_0'])
             duva[1][:] = dfn.assemble(self.forms['dresv_dv_0'])
-        elif n == f.size-1:
-            duva[0][:] = alphau**2*dfn.assemble(self.forms['dresu_du_N'])
+        elif n == f.size - 1:
+            duva[0][:] = alphau**2 * dfn.assemble(self.forms['dresu_du_N'])
             duva[1][:] = dfn.assemble(self.forms['dresv_dv_N'])
         return duva
 
@@ -276,10 +323,12 @@ class PeriodicEnergyError(SolidFunctional):
 
         self.model.set_solid_props(f.get_solid_props(0))
         self.forms['u_0'].vector()[:], self.forms['v_0'].vector()[:], _ = f.get_state(0)
-        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(f.size-1)
+        self.forms['u_N'].vector()[:], self.forms['v_N'].vector()[:], _ = f.get_state(
+            f.size - 1
+        )
 
         derru_demod = dfn.assemble(self.forms['dresu_demod'])
-        dsolid['emod'][:] = alphau**2*derru_demod
+        dsolid['emod'][:] = alphau**2 * derru_demod
 
         return dsolid
 
@@ -289,12 +338,14 @@ class PeriodicEnergyError(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class FinalDisplacementNorm(SolidFunctional):
     r"""
     Return the l2 norm of displacement at the final time
 
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
+
     func_types = ()
     default_constants = {}
 
@@ -308,14 +359,14 @@ class FinalDisplacementNorm(SolidFunctional):
         return forms
 
     def eval(self, f):
-        self.forms['u'].vector()[:] = f.get_state(f.size-1)[0]
+        self.forms['u'].vector()[:] = f.get_state(f.size - 1)[0]
 
         return dfn.assemble(self.forms['res'])
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
 
-        if n == f.size-1:
+        if n == f.size - 1:
             self.forms['u'].vector()[:] = f.get_state(n)[0]
             duva['u'][:] = dfn.assemble(self.forms['dres_du'])
 
@@ -332,12 +383,14 @@ class FinalDisplacementNorm(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class FinalVelocityNorm(SolidFunctional):
     r"""
     Return the l2 norm of velocity at the final time
 
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
+
     func_types = ()
     default_constants = {}
 
@@ -351,14 +404,14 @@ class FinalVelocityNorm(SolidFunctional):
         return forms
 
     def eval(self, f):
-        self.forms['v'].vector()[:] = f.get_state(f.size-1)[1]
+        self.forms['v'].vector()[:] = f.get_state(f.size - 1)[1]
 
         return dfn.assemble(self.forms['res'])
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
 
-        if n == f.size-1:
+        if n == f.size - 1:
             self.forms['v'].vector()[:] = f.get_state(n)[1]
             duva['v'][:] = dfn.assemble(self.forms['dres_dv'])
 
@@ -375,12 +428,14 @@ class FinalVelocityNorm(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class FinalSurfaceDisplacementNorm(SolidFunctional):
     r"""
     Return the l2 norm of displacement at the final time
 
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
+
     func_types = ()
     default_constants = {}
 
@@ -389,20 +444,22 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
         solid = solid
         forms = {}
         forms['u'] = dfn.Function(solid.vector_fspace)
-        forms['res'] = ufl.inner(forms['u'], forms['u']) * solid.ds(solid.facet_label_to_id['pressure'])
+        forms['res'] = ufl.inner(forms['u'], forms['u']) * solid.ds(
+            solid.facet_label_to_id['pressure']
+        )
 
         forms['dres_du'] = ufl.derivative(forms['res'], forms['u'], solid.vector_trial)
         return forms
 
     def eval(self, f):
-        self.forms['u'].vector()[:] = f.get_state(f.size-1)[0]
+        self.forms['u'].vector()[:] = f.get_state(f.size - 1)[0]
 
         return dfn.assemble(self.forms['res'])
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
 
-        if n == f.size-1:
+        if n == f.size - 1:
             self.forms['u'].vector()[:] = f.get_state(n)[0]
             duva['u'][:] = dfn.assemble(self.forms['dres_du'])
 
@@ -419,6 +476,7 @@ class FinalSurfaceDisplacementNorm(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 ## Energy functionals
 class ElasticEnergyDifference(SolidFunctional):
     func_types = ()
@@ -427,6 +485,7 @@ class ElasticEnergyDifference(SolidFunctional):
     @staticmethod
     def form_definitions(solid):
         from ..solid import biform_k
+
         forms = {}
 
         emod = solid.forms['coeff.prop.emod']
@@ -442,8 +501,12 @@ class ElasticEnergyDifference(SolidFunctional):
         forms['u_fin'] = u_fin
         forms['en_elastic_ini'] = en_elastic_ini
         forms['en_elastic_fin'] = en_elastic_fin
-        forms['den_elastic_ini_du'] = dfn.derivative(en_elastic_ini, u_ini, solid.vector_trial)
-        forms['den_elastic_fin_du'] = dfn.derivative(en_elastic_fin, u_fin, solid.vector_trial)
+        forms['den_elastic_ini_du'] = dfn.derivative(
+            en_elastic_ini, u_ini, solid.vector_trial
+        )
+        forms['den_elastic_fin_du'] = dfn.derivative(
+            en_elastic_fin, u_fin, solid.vector_trial
+        )
 
         forms['den_elastic_ini_demod'] = dfn.derivative(en_elastic_ini, emod)
         forms['den_elastic_fin_demod'] = dfn.derivative(en_elastic_fin, emod)
@@ -459,11 +522,11 @@ class ElasticEnergyDifference(SolidFunctional):
 
         en_elastic_ini = dfn.assemble(self.forms['en_elastic_ini'])
         en_elastic_fin = dfn.assemble(self.forms['en_elastic_fin'])
-        return (en_elastic_fin - en_elastic_ini)**2
+        return (en_elastic_fin - en_elastic_ini) ** 2
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
-        if n == 0 or n == f.size-1:
+        if n == 0 or n == f.size - 1:
             u_ini_vec = f.get_state(0)[0]
             u_fin_vec = f.get_state(-1)[0]
 
@@ -478,10 +541,12 @@ class ElasticEnergyDifference(SolidFunctional):
             den_elastic_fin_du = dfn.assemble(self.forms['den_elastic_fin_du'])
 
             # out = (en_elastic_fin - en_elastic_ini)**2
-            if n == f.size-1:
-                duva[0][:] = 2*(en_elastic_fin - en_elastic_ini) * den_elastic_fin_du
+            if n == f.size - 1:
+                duva[0][:] = 2 * (en_elastic_fin - en_elastic_ini) * den_elastic_fin_du
             elif n == 0:
-                duva[0][:] = 2*(en_elastic_fin - en_elastic_ini)*-1*den_elastic_ini_du
+                duva[0][:] = (
+                    2 * (en_elastic_fin - en_elastic_ini) * -1 * den_elastic_ini_du
+                )
 
         return duva
 
@@ -502,7 +567,11 @@ class ElasticEnergyDifference(SolidFunctional):
         den_elastic_ini_demod = dfn.assemble(self.forms['den_elastic_ini_demod'])
         den_elastic_fin_demod = dfn.assemble(self.forms['den_elastic_fin_demod'])
         # out = (en_elastic_fin - en_elastic_ini)**2
-        demod = 2*(en_elastic_fin - en_elastic_ini)*(den_elastic_fin_demod - den_elastic_ini_demod)
+        demod = (
+            2
+            * (en_elastic_fin - en_elastic_ini)
+            * (den_elastic_fin_demod - den_elastic_ini_demod)
+        )
         dsolid['emod'][:] = demod
 
         return dsolid
@@ -513,14 +582,14 @@ class ElasticEnergyDifference(SolidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class KV3DDampingWork(SolidFunctional):
     """
     Returns the work dissipated in the tissue due to damping
     """
+
     func_types = ()
-    default_constants = {
-        'n_start': 0
-    }
+    default_constants = {'n_start': 0}
 
     @staticmethod
     def form_definitions(solid):
@@ -529,13 +598,17 @@ class KV3DDampingWork(SolidFunctional):
         # Load some ufl forms from the solid model
         v1 = solid.forms['coeff.state.v1']
         eta = solid.forms['coeff.prop.eta']
-        uant, upos = dfn.Function(solid.vector_fspace), dfn.Function(solid.vector_fspace)
+        uant, upos = dfn.Function(solid.vector_fspace), dfn.Function(
+            solid.vector_fspace
+        )
 
-        d2v_dz2 = (uant - 2*v1 + upos) / solid.forms['coeff.prop.length']**2
+        d2v_dz2 = (uant - 2 * v1 + upos) / solid.forms['coeff.prop.length'] ** 2
 
         forms = {}
-        forms['damping_power'] = (ufl.inner(eta*form_inf_strain(v1), form_inf_strain(v1))
-                                  + ufl.inner(-0.5*eta*d2v_dz2, v1)) * ufl.dx
+        forms['damping_power'] = (
+            ufl.inner(eta * form_inf_strain(v1), form_inf_strain(v1))
+            + ufl.inner(-0.5 * eta * d2v_dz2, v1)
+        ) * ufl.dx
         forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
         forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
         return forms
@@ -551,12 +624,12 @@ class KV3DDampingWork(SolidFunctional):
         time = f.get_times()
         self.model.set_fin_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
-        for ii in range(N_START+1, N_STATE):
+        for ii in range(N_START + 1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_fin_state(f.get_state(ii))
 
             power_right = dfn.assemble(self.forms['damping_power'])
-            res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
+            res += (power_left + power_right) / 2 * (time[ii] - time[ii - 1])
             power_left = power_right
 
         return res
@@ -574,10 +647,10 @@ class KV3DDampingWork(SolidFunctional):
 
             if n > N_START:
                 # Add the sensitivity to `v` from the left intervals right integration point
-                duva['v'][:] += 0.5*dpower_dvn*(time[n] - time[n-1])
-            if n < N_STATE-1:
+                duva['v'][:] += 0.5 * dpower_dvn * (time[n] - time[n - 1])
+            if n < N_STATE - 1:
                 # Add the sensitivity to `v` from the right intervals left integration point
-                duva['v'][:] += 0.5*dpower_dvn*(time[n+1] - time[n])
+                duva['v'][:] += 0.5 * dpower_dvn * (time[n + 1] - time[n])
 
         return duva
 
@@ -593,11 +666,13 @@ class KV3DDampingWork(SolidFunctional):
         time = f.get_times()
         self.model.set_params_fromfile(f, 0)
         dpower_left_deta = dfn.assemble(self.forms['ddamping_power_deta'])
-        for ii in range(N_START+1, N_STATE):
+        for ii in range(N_START + 1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_params_fromfile(f, ii)
             dpower_right_deta = dfn.assemble(self.forms['ddamping_power_deta'])
-            dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
+            dwork_deta += (
+                (dpower_left_deta + dpower_right_deta) / 2 * (time[ii] - time[ii - 1])
+            )
 
         dsolid['eta'][:] = dwork_deta
         return dsolid
@@ -611,28 +686,28 @@ class KV3DDampingWork(SolidFunctional):
         ddt = 0
         N_START = N_START = self.constants['n_start']
         N_STATE = f.size
-        if n >= N_START+1:
+        if n >= N_START + 1:
             # Calculate damped work over n-1 -> n
             # time = f.get_times()
 
-            self.model.set_params_fromfile(f, n-1)
+            self.model.set_params_fromfile(f, n - 1)
             power_left = dfn.assemble(self.forms['damping_power'])
 
             self.model.set_params_fromfile(f, n)
             power_right = dfn.assemble(self.forms['damping_power'])
             # res += (power_left+power_right)/2 * (time[n]-time[n-1])
-            ddt = (power_left+power_right)/2
+            ddt = (power_left + power_right) / 2
 
         return ddt
+
 
 class KVDampingWork(SolidFunctional):
     """
     Returns the work dissipated in the tissue due to damping
     """
+
     func_types = ()
-    default_constants = {
-        'n_start': 0
-    }
+    default_constants = {'n_start': 0}
 
     @staticmethod
     def form_definitions(solid):
@@ -643,7 +718,9 @@ class KVDampingWork(SolidFunctional):
         eta = solid.forms['coeff.prop.eta']
 
         forms = {}
-        forms['damping_power'] = ufl.inner(eta*form_inf_strain(v1), form_inf_strain(v1)) * ufl.dx
+        forms['damping_power'] = (
+            ufl.inner(eta * form_inf_strain(v1), form_inf_strain(v1)) * ufl.dx
+        )
         forms['ddamping_power_dv'] = dfn.derivative(forms['damping_power'], v1)
         forms['ddamping_power_deta'] = dfn.derivative(forms['damping_power'], eta)
         return forms
@@ -660,12 +737,12 @@ class KVDampingWork(SolidFunctional):
 
         self.model.set_fin_state(f.get_state(N_START))
         power_left = dfn.assemble(self.forms['damping_power'])
-        for ii in range(N_START+1, N_STATE):
+        for ii in range(N_START + 1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_fin_state(f.get_state(ii))
 
             power_right = dfn.assemble(self.forms['damping_power'])
-            res += (power_left+power_right)/2 * (time[ii]-time[ii-1])
+            res += (power_left + power_right) / 2 * (time[ii] - time[ii - 1])
             power_left = power_right
 
         return res
@@ -682,10 +759,10 @@ class KVDampingWork(SolidFunctional):
 
             if n > N_START:
                 # Add the sensitivity to `v` from the left intervals right integration point
-                duva['v'][:] += 0.5*dpower_dvn*(time[n] - time[n-1])
-            if n < N_STATE-1:
+                duva['v'][:] += 0.5 * dpower_dvn * (time[n] - time[n - 1])
+            if n < N_STATE - 1:
                 # Add the sensitivity to `v` from the right intervals left integration point
-                duva['v'][:] += 0.5*dpower_dvn*(time[n+1] - time[n])
+                duva['v'][:] += 0.5 * dpower_dvn * (time[n + 1] - time[n])
 
         return duva
 
@@ -701,11 +778,13 @@ class KVDampingWork(SolidFunctional):
         time = f.get_times()
         self.model.set_params_fromfile(f, 0)
         dpower_left_deta = dfn.assemble(self.forms['ddamping_power_deta'])
-        for ii in range(N_START+1, N_STATE):
+        for ii in range(N_START + 1, N_STATE):
             # Set form coefficients to represent the equation from state ii to ii+1
             self.model.set_params_fromfile(f, ii)
             dpower_right_deta = dfn.assemble(self.forms['ddamping_power_deta'])
-            dwork_deta += (dpower_left_deta + dpower_right_deta)/2 * (time[ii]-time[ii-1])
+            dwork_deta += (
+                (dpower_left_deta + dpower_right_deta) / 2 * (time[ii] - time[ii - 1])
+            )
 
         dsolid['eta'][:] = dwork_deta
         return dsolid
@@ -719,24 +798,26 @@ class KVDampingWork(SolidFunctional):
         ddt = 0
         N_START = N_START = self.constants['n_start']
         N_STATE = f.size
-        if n >= N_START+1:
+        if n >= N_START + 1:
             # Calculate damped work over n-1 -> n
             # time = f.get_times()
 
-            self.model.set_params_fromfile(f, n-1)
+            self.model.set_params_fromfile(f, n - 1)
             power_left = dfn.assemble(self.forms['damping_power'])
 
             self.model.set_params_fromfile(f, n)
             power_right = dfn.assemble(self.forms['damping_power'])
             # res += (power_left+power_right)/2 * (time[n]-time[n-1])
-            ddt = (power_left+power_right)/2
+            ddt = (power_left + power_right) / 2
 
         return ddt
+
 
 class RayleighDampingWork(SolidFunctional):
     """
     Represent the strain work dissipated in the tissue due to damping
     """
+
     func_types = ()
     default_constants = {}
 
@@ -756,11 +837,18 @@ class RayleighDampingWork(SolidFunctional):
         v0 = solid.forms['coeff.state.v0']
 
         from ..solid import biform_m, biform_k
-        forms = {}
-        forms['damping_power'] = ray_m*biform_m(v0, v0, rho) + ray_k*biform_k(v0, v0, emod, nu)
 
-        forms['ddamping_power_dv'] = ufl.derivative(forms['damping_power'], v0, vector_trial)
-        forms['ddamping_power_demod'] = ufl.derivative(forms['damping_power'], emod, scalar_trial)
+        forms = {}
+        forms['damping_power'] = ray_m * biform_m(v0, v0, rho) + ray_k * biform_k(
+            v0, v0, emod, nu
+        )
+
+        forms['ddamping_power_dv'] = ufl.derivative(
+            forms['damping_power'], v0, vector_trial
+        )
+        forms['ddamping_power_demod'] = ufl.derivative(
+            forms['damping_power'], emod, scalar_trial
+        )
         return forms
 
     def eval(self, f):
@@ -768,9 +856,9 @@ class RayleighDampingWork(SolidFunctional):
         N_STATE = f.size
 
         res = 0
-        for ii in range(N_START, N_STATE-1):
+        for ii in range(N_START, N_STATE - 1):
             # Set form coefficients to represent the equation from state ii to ii+1
-            self.model.set_iter_params_fromfile(f, ii+1)
+            self.model.set_iter_params_fromfile(f, ii + 1)
             res += dfn.assemble(self.forms['damping_power']) * self.solid.dt
 
         return res
@@ -785,7 +873,9 @@ class RayleighDampingWork(SolidFunctional):
         dsolid = self.solid.prop.copy()
         dsolid[:] = 0.0
 
-        dsolid['emod'][:] = dfn.assemble(self.forms['ddamping_power_demod']) * self.solid.dt
+        dsolid['emod'][:] = (
+            dfn.assemble(self.forms['ddamping_power_demod']) * self.solid.dt
+        )
         return dsolid
 
     def eval_dt0(self, f, n):
@@ -806,16 +896,15 @@ class RayleighDampingWork(SolidFunctional):
 
         return ddt
 
+
 ## Glottal width functionals
 class GlottalWidthErrorNorm(SolidFunctional):
     """
     Represents the difference between a measured vs model glottal width
     """
+
     func_types = ()
-    default_constants = {
-        'gw_meas': 0.0,
-        'smooth_min_alpha': -2000.0
-    }
+    default_constants = {'gw_meas': 0.0, 'smooth_min_alpha': -2000.0}
 
     def eval(self, f):
         raise NotImplementedError("Need to fix this")
@@ -839,7 +928,7 @@ class GlottalWidthErrorNorm(SolidFunctional):
             gw = 0.0
             gw_model.append(gw)
 
-        return np.sum((np.array(gw_model) - self.constants['gw_meas'])**2)
+        return np.sum((np.array(gw_model) - self.constants['gw_meas']) ** 2)
 
     def eval_dsl_state(self, f, n):
         duva = self.solid.state0.copy()
@@ -867,7 +956,11 @@ class GlottalWidthErrorNorm(SolidFunctional):
             # BUG: In 3D you need to account for 3 coordinates
             y_surf = xy_surf[1::2]
 
-            duva['u'][Y_DOF] = dsmoothmin_df(y_surf, self.model.fluid.s_vertices, alpha=self.constants['smooth_min_alpha'])
+            duva['u'][Y_DOF] = dsmoothmin_df(
+                y_surf,
+                self.model.fluid.s_vertices,
+                alpha=self.constants['smooth_min_alpha'],
+            )
 
         return duva
 

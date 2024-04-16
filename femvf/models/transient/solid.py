@@ -21,6 +21,7 @@ from ..equations import newmark
 from ..equations import solid
 from ..assemblyutils import CachedFormAssembler
 
+
 def depack_form_coefficient_function(form_coefficient):
     """
     Return the coefficient `Function` instance from a `forms` dict value
@@ -36,21 +37,28 @@ def depack_form_coefficient_function(form_coefficient):
         coefficient = form_coefficient
     return coefficient
 
+
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
     prop_labels = [
-        form_name.split('.')[-1] for form_name in forms.keys()
-        if 'coeff.prop' == form_name[:len('coeff.prop')]
+        form_name.split('.')[-1]
+        for form_name in forms.keys()
+        if 'coeff.prop' == form_name[: len('coeff.prop')]
     ]
     vecs = []
     for prop_label in prop_labels:
-        coefficient = depack_form_coefficient_function(forms['coeff.prop.'+prop_label])
+        coefficient = depack_form_coefficient_function(
+            forms['coeff.prop.' + prop_label]
+        )
 
         # Generally the size of the vector comes directly from the property;
         # i.e. constants are size 1, scalar fields have size matching number of dofs, etc.
         # The time step `dt` is a special case since it is size 1 but is specificied as a field as
         # a workaround in order to take derivatives
-        if isinstance(coefficient, dfn.function.constant.Constant) or prop_label == 'dt':
+        if (
+            isinstance(coefficient, dfn.function.constant.Constant)
+            or prop_label == 'dt'
+        ):
             vec = np.ones(coefficient.values().size)
             vec[:] = coefficient.values()
         else:
@@ -68,9 +76,8 @@ class Model(base.BaseTransientModel):
     """
     Class representing the discretized governing equations of a solid
     """
-    def __init__(
-            self, residual: solid.FenicsResidual
-        ):
+
+    def __init__(self, residual: solid.FenicsResidual):
 
         self._residual = residual
 
@@ -84,9 +91,15 @@ class Model(base.BaseTransientModel):
         v1 = self.residual.form['coeff.state.v1']
         a1 = self.residual.form['coeff.state.a1']
 
-        self.state0 = BlockVector((u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')])
-        self.state1 = BlockVector((u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')])
-        self.control = BlockVector((self.residual.form['coeff.fsi.p1'].vector(),), labels=[('p',)])
+        self.state0 = BlockVector(
+            (u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')]
+        )
+        self.state1 = BlockVector(
+            (u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')]
+        )
+        self.control = BlockVector(
+            (self.residual.form['coeff.fsi.p1'].vector(),), labels=[('p',)]
+        )
         self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
 
@@ -95,7 +108,9 @@ class Model(base.BaseTransientModel):
             for key, biform in bilinear_forms.items()
             if 'form.' in key
         }
-        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(self.residual.form.form)
+        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(
+            self.residual.form.form
+        )
 
     @property
     def residual(self) -> solid.FenicsResidual:
@@ -107,7 +122,11 @@ class Model(base.BaseTransientModel):
         function_space = self.residual.form['coeff.state.u1'].function_space()
         n_subspace = function_space.num_sub_spaces()
 
-        xref[:] = function_space.tabulate_dof_coordinates()[::n_subspace, :].reshape(-1).copy()
+        xref[:] = (
+            function_space.tabulate_dof_coordinates()[::n_subspace, :]
+            .reshape(-1)
+            .copy()
+        )
         return xref
 
     @property
@@ -164,7 +183,7 @@ class Model(base.BaseTransientModel):
         """
         for key, value in prop.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = self.residual.form['coeff.prop.'+key]
+            coefficient = self.residual.form['coeff.prop.' + key]
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
@@ -181,9 +200,9 @@ class Model(base.BaseTransientModel):
             fspace = self.residual.form['coeff.state.u1'].function_space()
             ref_mesh_coord = self.residual.ref_mesh_coords
             VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
-            dmesh_coords = np.array(
-                u_mesh_coeff.vector()[VERT_TO_VDOF]
-            ).reshape(ref_mesh_coord.shape)
+            dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(
+                ref_mesh_coord.shape
+            )
             mesh_coord = ref_mesh_coord + dmesh_coords
             mesh.coordinates()[:] = mesh_coord
 
@@ -196,7 +215,7 @@ class Model(base.BaseTransientModel):
         values = [
             self.cached_form_assemblers['form.un.f1'].assemble(),
             v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt),
-            a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt)
+            a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
         ]
         res[:] = values
         for bc in self.residual.dirichlet_bcs:
@@ -219,11 +238,7 @@ class Model(base.BaseTransientModel):
         dfa_du = dfn.PETScMatrix(diag_mat(N, 1))
         dfa_dv = dfn.PETScMatrix(zero_mat(N, N))
         dfa_da = dfn.PETScMatrix(diag_mat(N, 1))
-        return (
-            dfu_du, dfu_dv, dfu_da,
-            dfv_du, dfv_dv, dfv_da,
-            dfa_du, dfa_dv, dfa_da
-        )
+        return (dfu_du, dfu_dv, dfu_da, dfv_du, dfv_dv, dfv_da, dfa_du, dfa_dv, dfa_da)
 
     def assem_dres_dstate1(self):
         # BUG: Applying BCs to a tensor (`dfn.PETScMatrix()`) then
@@ -232,24 +247,32 @@ class Model(base.BaseTransientModel):
         # tensor it applies on
         dfu_du = dfn.assemble(
             self.cached_form_assemblers['form.bi.df1_du1'].form,
-            tensor=dfn.PETScMatrix()
+            tensor=dfn.PETScMatrix(),
         )
         # dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
         for bc in self.residual.dirichlet_bcs:
             bc.apply(dfu_du)
 
-        (_, dfu_dv, dfu_da,
-        dfv_du, dfv_dv, dfv_da,
-        dfa_du, dfa_dv, dfa_da) = self._const_assem_dres_dstate1
+        (_, dfu_dv, dfu_da, dfv_du, dfv_dv, dfv_da, dfa_du, dfa_dv, dfa_da) = (
+            self._const_assem_dres_dstate1
+        )
         dfv_du = -newmark.newmark_v_du1(self.dt) * dfv_du
         dfa_du = -newmark.newmark_a_du1(self.dt) * dfa_du
 
         submats = [
-            dfu_du, dfu_dv, dfu_da,
-            dfv_du, dfv_dv, dfv_da,
-            dfa_du, dfa_dv, dfa_da
+            dfu_du,
+            dfu_dv,
+            dfu_da,
+            dfv_du,
+            dfv_dv,
+            dfv_da,
+            dfa_du,
+            dfa_dv,
+            dfa_da,
         ]
-        return BlockMatrix(submats, shape=(3, 3), labels=2*self.state1.labels, check_bshape=False)
+        return BlockMatrix(
+            submats, shape=(3, 3), labels=2 * self.state1.labels, check_bshape=False
+        )
 
     def assem_dres_dstate0(self):
         assert len(self.state1.bshape) == 1
@@ -271,11 +294,17 @@ class Model(base.BaseTransientModel):
         dfa_da = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_da0(self.dt)))
 
         submats = [
-            dfu_du, dfu_dv, dfu_da,
-            dfv_du, dfv_dv, dfv_da,
-            dfa_du, dfa_dv, dfa_da
+            dfu_du,
+            dfu_dv,
+            dfu_da,
+            dfv_du,
+            dfv_dv,
+            dfv_da,
+            dfa_du,
+            dfa_dv,
+            dfa_da,
         ]
-        return BlockMatrix(submats, shape=(3, 3), labels=2*self.state1.labels)
+        return BlockMatrix(submats, shape=(3, 3), labels=2 * self.state1.labels)
 
     def assem_dres_dcontrol(self):
         N = self.state1.bshape[0][0]
@@ -286,11 +315,8 @@ class Model(base.BaseTransientModel):
         dfu_dcontrol = self.cached_form_assemblers['form.bi.df1_dp1'].assemble()
         dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
 
-        submats = [
-            [dfu_dcontrol],
-            [dfv_dcontrol]
-        ]
-        return BlockMatrix(submats, labels=self.state1.labels+self.control.labels)
+        submats = [[dfu_dcontrol], [dfv_dcontrol]]
+        return BlockMatrix(submats, labels=self.state1.labels + self.control.labels)
 
     def assem_dres_dprops(self):
         raise NotImplementedError("Not implemented yet!")
@@ -301,6 +327,7 @@ class Model(base.BaseTransientModel):
             options = DEFAULT_NEWTON_SOLVER_PRM
 
         x = state1.copy()
+
         def linearized_subproblem(state):
             """
             Return a solver and residual corresponding to the linearized subproblem
@@ -316,9 +343,12 @@ class Model(base.BaseTransientModel):
             def solve(res):
                 dres_dstate1 = self.assem_dres_dstate1()
                 return self.solve_dres_dstate1(dres_dstate1, x, res)
+
             return assem_res, solve
 
-        state_n, solve_info = newton_solve(state1, linearized_subproblem, params=options)
+        state_n, solve_info = newton_solve(
+            state1, linearized_subproblem, params=options
+        )
         return state_n, solve_info
 
     def solve_dres_dstate1(self, dres_dstate1, x, b):
@@ -339,8 +369,8 @@ class Model(base.BaseTransientModel):
 
         xu = x.sub['u']
         dfn.solve(dfu1_du1, xu, bu, 'petsc')
-        x['v'][:] = bv - dfv1_du1*xu
-        x['a'][:] = ba - dfa1_du1*xu
+        x['v'][:] = bv - dfv1_du1 * xu
+        x['a'][:] = ba - dfa1_du1 * xu
 
         return x
 
@@ -362,25 +392,26 @@ class Model(base.BaseTransientModel):
         x.sub['a'][:] = ba
         x.sub['v'][:] = bv
 
-        rhs_u = bu - (dfv_du*b['v'] + dfa_du*b['a'])
+        rhs_u = bu - (dfv_du * b['v'] + dfa_du * b['a'])
         dfn.solve(dfu_du, x['u'], rhs_u, 'petsc')
         return x
 
+
 class PredefinedModel(Model):
     def __init__(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ):
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ):
         residual = self._make_residual(
             mesh,
             mesh_functions,
             mesh_functions_label_to_value,
             fsi_facet_labels,
-            fixed_facet_labels
+            fixed_facet_labels,
         )
 
         new_form = solid.modify_newmark_time_discretization(residual.form)
@@ -390,19 +421,20 @@ class PredefinedModel(Model):
             mesh_functions,
             mesh_functions_label_to_value,
             fsi_facet_labels,
-            fixed_facet_labels
+            fixed_facet_labels,
         )
         super().__init__(new_residual)
 
     def _make_residual(
-                self,
-                mesh: dfn.Mesh,
-                mesh_functions: Tuple[dfn.MeshFunction],
-                mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-                fsi_facet_labels: Tuple[str],
-                fixed_facet_labels: Tuple[str]
-            ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         raise NotImplementedError()
+
 
 class NodalContactSolid(PredefinedModel):
     """
@@ -412,20 +444,22 @@ class NodalContactSolid(PredefinedModel):
     """
 
     def _make_residual(
-                self,
-                mesh: dfn.Mesh,
-                mesh_functions: Tuple[dfn.MeshFunction],
-                mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-                fsi_facet_labels: Tuple[str],
-                fixed_facet_labels: Tuple[str]
-            ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         raise NotImplementedError()
 
     def set_fin_state(self, state):
         # This sets the 'standard' state variables u/v/a
         super().set_fin_state(state)
 
-        self.residual.form['coeff.state.manual.tcontact'].vector()[:] = self._contact_traction(state.sub['u'])
+        self.residual.form['coeff.state.manual.tcontact'].vector()[:] = (
+            self._contact_traction(state.sub['u'])
+        )
 
     def assem_dres_dstate1(self):
         dres_dstate1 = super().assem_dres_dstate1()
@@ -442,24 +476,34 @@ class NodalContactSolid(PredefinedModel):
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
 
         ndim = self.residual.form['coeff.state.u0'].ufl_shape[0]
-        gap = np.dot((XREF+u)[:].reshape(-1, ndim), ncontact) - ycontact
-        tcontact = (-solid.pressure_contact_cubic_penalty(gap, kcontact)[:, None]*ncontact).reshape(-1).copy()
+        gap = np.dot((XREF + u)[:].reshape(-1, ndim), ncontact) - ycontact
+        tcontact = (
+            (-solid.pressure_contact_cubic_penalty(gap, kcontact)[:, None] * ncontact)
+            .reshape(-1)
+            .copy()
+        )
         return tcontact
 
     def _assem_dresu_du_contact(self, adjoint=False):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = None
         if adjoint:
-            dfu2_dtcontact = self.cached_form_assemblers['form.bi.df1uva_dtcontact_adj'].assemble()
+            dfu2_dtcontact = self.cached_form_assemblers[
+                'form.bi.df1uva_dtcontact_adj'
+            ].assemble()
         else:
-            dfu2_dtcontact = self.cached_form_assemblers['form.bi.df1uva_dtcontact'].assemble()
+            dfu2_dtcontact = self.cached_form_assemblers[
+                'form.bi.df1uva_dtcontact'
+            ].assemble()
 
         XREF = self.XREF
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
         ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
         u1 = self.residual.form['coeff.state.u1'].vector()
         ncontact = self.residual.form['coeff.prop.ncontact'].values()
-        gap = np.dot((XREF+u1)[:].reshape(-1, ncontact.shape[-1]), ncontact) - ycontact
+        gap = (
+            np.dot((XREF + u1)[:].reshape(-1, ncontact.shape[-1]), ncontact) - ycontact
+        )
         dgap_du = ncontact
 
         # FIXME: This code below only works if n is aligned with the x/y axes.
@@ -468,7 +512,7 @@ class NodalContactSolid(PredefinedModel):
         # reduces to a diagonal if n is aligned with a coordinate axis.
         dtcontact_du2 = self.residual.form['coeff.state.u1'].vector().copy()
         dpcontact_dgap, _ = solid.dform_cubic_penalty_pressure(gap, kcontact)
-        dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None]*dgap_du).reshape(-1))
+        dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None] * dgap_du).reshape(-1))
 
         if adjoint:
             dfu2_dtcontact.mat().diagonalScale(dtcontact_du2.vec(), None)
@@ -484,17 +528,21 @@ class Rayleigh(NodalContactSolid):
     """
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.Rayleigh(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class KelvinVoigt(NodalContactSolid):
     """
@@ -502,32 +550,40 @@ class KelvinVoigt(NodalContactSolid):
     """
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.KelvinVoigt(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class KelvinVoigtWEpithelium(NodalContactSolid):
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.KelvinVoigtWEpithelium(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class KelvinVoigtWShape(NodalContactSolid):
     """
@@ -535,17 +591,21 @@ class KelvinVoigtWShape(NodalContactSolid):
     """
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.KelvinVoigtWShape(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class IncompSwellingKelvinVoigt(NodalContactSolid):
     """
@@ -553,17 +613,21 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
     """
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.IncompSwellingKelvinVoigt(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class SwellingKelvinVoigt(NodalContactSolid):
     """
@@ -571,74 +635,93 @@ class SwellingKelvinVoigt(NodalContactSolid):
     """
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.SwellingKelvinVoigt(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class SwellingKelvinVoigtWEpithelium(NodalContactSolid):
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.SwellingKelvinVoigtWEpithelium(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class SwellingKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.SwellingKelvinVoigtWEpitheliumNoShape(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.SwellingPowerLawKelvinVoigtWEpitheliumNoShape(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )
+
 
 class Approximate3DKelvinVoigt(NodalContactSolid):
 
     def _make_residual(
-            self,
-            mesh: dfn.Mesh,
-            mesh_functions: Tuple[dfn.MeshFunction],
-            mesh_functions_label_to_value: Tuple[Mapping[str, int]],
-            fsi_facet_labels: Tuple[str],
-            fixed_facet_labels: Tuple[str]
-        ) -> solid.FenicsResidual:
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
         return solid.Approximate3DKelvinVoigt(
-            mesh, mesh_functions, mesh_functions_label_to_value,
-            fsi_facet_labels, fixed_facet_labels
+            mesh,
+            mesh_functions,
+            mesh_functions_label_to_value,
+            fsi_facet_labels,
+            fixed_facet_labels,
         )

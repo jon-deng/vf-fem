@@ -5,6 +5,7 @@ Post-processing functionality for primarily solid models
 from typing import Optional, Callable
 
 import numpy as np
+
 # import matplotlib.pyplot as plt
 # import scipy.signal as sig
 
@@ -19,6 +20,7 @@ from .base import BaseStateMeasure, BaseDerivedStateMeasure
 
 ### Field type post-processing functions
 
+
 class FSIPressure(BaseStateMeasure):
     """
     Return the glottal fluid pressure
@@ -27,13 +29,13 @@ class FSIPressure(BaseStateMeasure):
     def assem(self, state, control, prop):
         return np.array(self.model.solid.control.sub['p'].copy())
 
+
 def doc_field_measure_params(G: 'BaseFieldMeasure'):
     """
     Add the parameters docstring to a `BaseFieldMeasure` subclass
     """
 
-    param_doc = \
-    """
+    param_doc = """
     Parameters
     ----------
     dx : dfn.Measure
@@ -44,6 +46,7 @@ def doc_field_measure_params(G: 'BaseFieldMeasure'):
     G.__doc__ = G.__doc__ + param_doc
     return G
 
+
 @doc_field_measure_params
 class BaseFieldMeasure(BaseStateMeasure):
     """
@@ -52,13 +55,14 @@ class BaseFieldMeasure(BaseStateMeasure):
     Note field quantities are variable over space.
 
     """
+
     def __init__(
-            self,
-            model: BaseTransientModel,
-            dx: Optional[dfn.Measure]=None,
-            fspace: Optional[dfn.FunctionSpace]=None,
-            **kwargs
-        ):
+        self,
+        model: BaseTransientModel,
+        dx: Optional[dfn.Measure] = None,
+        fspace: Optional[dfn.FunctionSpace] = None,
+        **kwargs,
+    ):
         super().__init__(model)
         if fspace is None:
             self.fspace = dfn.FunctionSpace(self.model.solid.residual.mesh(), 'DG', 0)
@@ -79,12 +83,14 @@ class BaseFieldMeasure(BaseStateMeasure):
     def assem(self, state, control, prop):
         raise NotImplementedError("Method must be implemented by subclasses")
 
+
 @doc_field_measure_params
 class StressI1Field(BaseFieldMeasure):
     """
     Return the first invariant of the stress field
 
     """
+
     def _init_expression(self):
         model = self.model
         kv_stress = model.solid.residual.form.expressions['expr.kv_stress']
@@ -96,6 +102,7 @@ class StressI1Field(BaseFieldMeasure):
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class StressI2Field(BaseFieldMeasure):
@@ -112,10 +119,11 @@ class StressI2Field(BaseFieldMeasure):
         S = el_stress + kv_stress
 
         # This is the second invariant (I2)
-        return 1/2*(ufl.tr(S)**2-ufl.tr(S*S))
+        return 1 / 2 * (ufl.tr(S) ** 2 - ufl.tr(S * S))
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class StressI3Field(BaseFieldMeasure):
@@ -137,6 +145,7 @@ class StressI3Field(BaseFieldMeasure):
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
+
 @doc_field_measure_params
 class StressHydrostaticField(BaseFieldMeasure):
     """
@@ -150,10 +159,11 @@ class StressHydrostaticField(BaseFieldMeasure):
         el_stress = self.model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
-        return -1/3*ufl.tr(S)
+        return -1 / 3 * ufl.tr(S)
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class StressVonMisesField(BaseFieldMeasure):
@@ -167,12 +177,13 @@ class StressVonMisesField(BaseFieldMeasure):
         el_stress = self.model.solid.residual.form.expressions['expr.stress_elastic']
         S = el_stress + kv_stress
 
-        S_dev = S - 1/3*ufl.tr(S)*ufl.Identity(3)
-        j2 = 0.5*ufl.tr(S_dev*S_dev)
-        return (3*j2)**(1/2)
+        S_dev = S - 1 / 3 * ufl.tr(S) * ufl.Identity(3)
+        j2 = 0.5 * ufl.tr(S_dev * S_dev)
+        return (3 * j2) ** (1 / 2)
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class ElasticStressField(BaseFieldMeasure):
@@ -188,6 +199,7 @@ class ElasticStressField(BaseFieldMeasure):
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
+
 @doc_field_measure_params
 class StrainEnergy(BaseFieldMeasure):
     """
@@ -201,6 +213,7 @@ class StrainEnergy(BaseFieldMeasure):
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class ContactPressureField(BaseFieldMeasure):
@@ -220,10 +233,11 @@ class ContactPressureField(BaseFieldMeasure):
     def _init_expression(self):
         tcontact = self.model.solid.residual.form['coeff.state.manual.tcontact']
         # `tcontact*tcontact` should be the square of contact pressure
-        return ufl.inner(tcontact, tcontact)**0.5
+        return ufl.inner(tcontact, tcontact) ** 0.5
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class ViscousDissipationField(BaseFieldMeasure):
@@ -234,11 +248,14 @@ class ViscousDissipationField(BaseFieldMeasure):
 
     def _init_expression(self):
         kv_stress = self.model.solid.residual.form.expressions['expr.kv_stress']
-        kv_strain_rate = self.model.solid.residual.form.expressions['expr.kv_strain_rate']
+        kv_strain_rate = self.model.solid.residual.form.expressions[
+            'expr.kv_strain_rate'
+        ]
         return ufl.inner(kv_stress, kv_strain_rate)
 
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
+
 
 @doc_field_measure_params
 class ContactAreaDensityField(BaseFieldMeasure):
@@ -249,7 +266,9 @@ class ContactAreaDensityField(BaseFieldMeasure):
 
     def _init_expression(self):
         tcontact = self.model.solid.residual.form['coeff.state.manual.tcontact']
-        pcontact = ufl.inner(tcontact, tcontact)**0.5 # should be square of contact pressure
+        pcontact = (
+            ufl.inner(tcontact, tcontact) ** 0.5
+        )  # should be square of contact pressure
         contact_indicator = ufl.conditional(ufl.operators.ne(pcontact, 0.0), 1.0, 0.0)
 
         return contact_indicator
@@ -257,12 +276,14 @@ class ContactAreaDensityField(BaseFieldMeasure):
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
+
 @doc_field_measure_params
 class FluidTractionPowerDensity(BaseFieldMeasure):
     """
     Return the power density due to fluid traction
 
     """
+
     def __init__(self, model, dx=None, fspace=None, **kwargs):
         # The default `dx` measure should be a surface measure rather than
         # volume measure as used in `BaseFieldMeasure`
@@ -280,11 +301,13 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
+
 @doc_field_measure_params
 class XMomentum(BaseFieldMeasure):
     """
     Return x-momentum
     """
+
     def __init__(self, model, dx=None, fspace=None, **kwargs):
         # The default `dx` measure should be a surface measure rather than
         # volume measure as used in `BaseFieldMeasure`
@@ -302,11 +325,13 @@ class XMomentum(BaseFieldMeasure):
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
+
 @doc_field_measure_params
 class YMomentum(BaseFieldMeasure):
     """
     Return y-momentum
     """
+
     def __init__(self, model, dx=None, fspace=None, **kwargs):
         # The default `dx` measure should be a surface measure rather than
         # volume measure as used in `BaseFieldMeasure`
@@ -324,14 +349,14 @@ class YMomentum(BaseFieldMeasure):
     def assem(self, state, control, prop):
         return np.array(self.project()[:])
 
+
 ### Field integral type
 def doc_field_integral_measure_params(G: 'BaseFieldIntegralMeasure'):
     """
     Add the parameters docstring to a `BaseFieldIntegralMeasure` subclass
     """
 
-    param_doc = \
-    """
+    param_doc = """
     Parameters
     ----------
     dx : dfn.Measure
@@ -339,6 +364,7 @@ def doc_field_integral_measure_params(G: 'BaseFieldIntegralMeasure'):
     """
     G.__doc__ = G.__doc__ + param_doc
     return G
+
 
 @doc_field_integral_measure_params
 class BaseFieldIntegralMeasure(BaseStateMeasure):
@@ -349,11 +375,7 @@ class BaseFieldIntegralMeasure(BaseStateMeasure):
 
     """
 
-    def __init__(
-            self,
-            model: BaseTransientModel,
-            dx: Optional[dfn.Measure]=None
-        ):
+    def __init__(self, model: BaseTransientModel, dx: Optional[dfn.Measure] = None):
         super().__init__(model)
 
         if dx is None:
@@ -374,6 +396,7 @@ class BaseFieldIntegralMeasure(BaseStateMeasure):
         """
         raise NotImplementedError("Child classes must implement this method")
 
+
 @doc_field_integral_measure_params
 class ViscousDissipationRate(BaseFieldIntegralMeasure):
     """
@@ -385,12 +408,14 @@ class ViscousDissipationRate(BaseFieldIntegralMeasure):
         residual = self.model.solid.residual
         kv_stress = residual.form.expressions['expr.kv_stress']
         kv_strain_rate = residual.form.expressions['expr.kv_strain_rate']
-        return ufl.inner(kv_stress, kv_strain_rate)*self.dx
+        return ufl.inner(kv_stress, kv_strain_rate) * self.dx
 
     def assem(self, state, control, prop):
         return dfn.assemble(self.expression)
 
+
 ### Field statistics post-processing functions
+
 
 class FieldStats(BaseDerivedStateMeasure):
     """
@@ -401,6 +426,7 @@ class FieldStats(BaseDerivedStateMeasure):
     field: BaseFieldMeasure
         The field post-processing function to return statistics from
     """
+
     def __init__(self, field: BaseFieldMeasure):
         super().__init__(field)
 
@@ -410,14 +436,11 @@ class FieldStats(BaseDerivedStateMeasure):
         dx = self.func.dx
         expr = self.func.expression
 
-        expr_total = expr*dx
-        expr_vol = 1*dx
-        dtype = np.dtype([
-            ('max', float),
-            ('min', float),
-            ('avg', float),
-            ('total', float)
-        ])
+        expr_total = expr * dx
+        expr_vol = 1 * dx
+        dtype = np.dtype(
+            [('max', float), ('min', float), ('avg', float), ('total', float)]
+        )
         return expr_total, expr_vol, dtype
 
     def assem(self, state, control, prop):
@@ -425,11 +448,12 @@ class FieldStats(BaseDerivedStateMeasure):
         total = dfn.assemble(self.expr_total)
         vol = dfn.assemble(self.expr_vol)
         return np.array(
-            (field_vec.max(), field_vec.min(), total/vol, total),
-            dtype=self.dtype
+            (field_vec.max(), field_vec.min(), total / vol, total), dtype=self.dtype
         )
 
+
 ### Custom post-processing functions that don't fit nicely into any type
+
 
 class MeanGlottalWidth(BaseStateMeasure):
     """
@@ -445,8 +469,9 @@ class MeanGlottalWidth(BaseStateMeasure):
         fluids = [fluid for fluid in self.model.fluids]
         # This gets the glottal width for each 1D fluid channel
         fluid_areas = [np.min(fluid.control['area']) for fluid in fluids]
-        area_min = sum(fluid_areas)/len(fluid_areas)
+        area_min = sum(fluid_areas) / len(fluid_areas)
         return area_min
+
 
 class MidpointGlottalWidth(BaseStateMeasure):
     """
@@ -460,14 +485,15 @@ class MidpointGlottalWidth(BaseStateMeasure):
     def assem(self, state, control, prop):
 
         if len(self.model.fluids) % 2 == 1:
-            idxs_mid = [(len(self.model.fluids)-1)/2+1]
+            idxs_mid = [(len(self.model.fluids) - 1) / 2 + 1]
         else:
-            idxs_mid = [len(self.model.fluids)/2+ii for ii in range(-1, 1)]
+            idxs_mid = [len(self.model.fluids) / 2 + ii for ii in range(-1, 1)]
 
         fluids = [self.models.fluids[ii] for ii in idxs_mid]
         fluid_areas = [np.min(fluid.control['area']) for fluid in fluids]
-        area_min = sum(fluid_areas)/len(fluid_areas)
+        area_min = sum(fluid_areas) / len(fluid_areas)
         return area_min
+
 
 class MinGlottalWidthFromSolid(BaseStateMeasure):
     """
@@ -486,9 +512,10 @@ class MinGlottalWidthFromSolid(BaseStateMeasure):
     def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1.sub['u'][:]
         ndim = self.model.solid.residual.mesh().topology().dim()
-        widths = 2*(self.model.prop['ymid'] - xcur[1::ndim])
+        widths = 2 * (self.model.prop['ymid'] - xcur[1::ndim])
         gw = np.min(widths)
         return gw
+
 
 class VertexGlottalWidth(BaseStateMeasure):
     """
@@ -502,13 +529,15 @@ class VertexGlottalWidth(BaseStateMeasure):
         The name of the vertex
     """
 
-    def __init__(self, model: BaseTransientModel, vertex_name: Optional[str]=None):
+    def __init__(self, model: BaseTransientModel, vertex_name: Optional[str] = None):
         super().__init__(model)
 
         # Get the DOF/vertex number corresponding to `vertex_name`
         if vertex_name is None:
             raise ValueError("`vertex_name` must be supplied")
-        vertlabel_to_id = self.model.solid.residual.mesh_function_label_to_value('vertex')
+        vertlabel_to_id = self.model.solid.residual.mesh_function_label_to_value(
+            'vertex'
+        )
         vert_mf = self.model.solid.residual.mesh_function('vertex')
         idx_vertex = vert_mf.where_equal(vertlabel_to_id[vertex_name])
         if len(idx_vertex) == 0:
@@ -518,22 +547,29 @@ class VertexGlottalWidth(BaseStateMeasure):
         else:
             idx_vertex = idx_vertex[0]
 
-        vert_to_vdof = dfn.vertex_to_dof_map(self.model.solid.residual.form['coeff.state.u1'].function_space())
+        vert_to_vdof = dfn.vertex_to_dof_map(
+            self.model.solid.residual.form['coeff.state.u1'].function_space()
+        )
         # Get the y-displacement DOF
-        self.idx_dof = vert_to_vdof[2*idx_vertex+1]
+        self.idx_dof = vert_to_vdof[2 * idx_vertex + 1]
 
-        self.XREF = self.model.solid.residual.form['coeff.fsi.p1'].function_space().tabulate_dof_coordinates()
+        self.XREF = (
+            self.model.solid.residual.form['coeff.fsi.p1']
+            .function_space()
+            .tabulate_dof_coordinates()
+        )
 
     def assem(self, state, control, prop):
         xcur = self.XREF.reshape(-1) + self.model.state1['u'][:]
-        return 2*(self.model.prop['ymid'][0] - xcur[self.idx_dof])
+        return 2 * (self.model.prop['ymid'][0] - xcur[self.idx_dof])
+
 
 def make_project(
-        expr: ufl.core.expr.Expr,
-        fspace: dfn.FunctionSpace,
-        dx: dfn.Measure,
-        vec: Optional[dfn.PETScVector]=None
-    ) -> Callable[[], dfn.PETScVector]:
+    expr: ufl.core.expr.Expr,
+    fspace: dfn.FunctionSpace,
+    dx: dfn.Measure,
+    vec: Optional[dfn.PETScVector] = None,
+) -> Callable[[], dfn.PETScVector]:
     """
     Project an expression onto the function space w.r.t the measure
 
@@ -550,7 +586,7 @@ def make_project(
     """
     trial = dfn.TrialFunction(fspace)
     test = dfn.TestFunction(fspace)
-    A = dfn.assemble(trial*test*dx, keep_diagonal=True, tensor=dfn.PETScMatrix())
+    A = dfn.assemble(trial * test * dx, keep_diagonal=True, tensor=dfn.PETScMatrix())
     A.ident_zeros()
 
     ksp = PETSc.KSP().create()
@@ -561,7 +597,7 @@ def make_project(
     pc = ksp.getPC()
     pc.setType(pc.Type.LU)
 
-    lhs_expr = expr*test*dx
+    lhs_expr = expr * test * dx
 
     bvec = dfn.PETScVector()
     if vec is None:
@@ -581,4 +617,5 @@ def make_project(
 
         # dfn.solve(A, x, b, 'lu')
         return x
+
     return project

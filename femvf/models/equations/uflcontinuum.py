@@ -5,6 +5,7 @@ Continuum operations implemented in UFL
 import ufl
 import dolfin as dfn
 
+
 def stress_isotropic(strain, emod, nu):
     """
     Returns the Cauchy stress for a small-strain displacement field
@@ -18,9 +19,12 @@ def stress_isotropic(strain, emod, nu):
     nu : float
         Poisson's ratio
     """
-    lame_lambda = emod*nu/(1+nu)/(1-2*nu)
-    lame_mu = emod/2/(1+nu)
-    return 2*lame_mu*strain + lame_lambda*ufl.tr(strain)*ufl.Identity(strain.ufl_shape[0])
+    lame_lambda = emod * nu / (1 + nu) / (1 - 2 * nu)
+    lame_mu = emod / 2 / (1 + nu)
+    return 2 * lame_mu * strain + lame_lambda * ufl.tr(strain) * ufl.Identity(
+        strain.ufl_shape[0]
+    )
+
 
 def def_grad(u):
     """
@@ -34,12 +38,11 @@ def def_grad(u):
     spp = ufl.grad(u)
     if u.geometric_dimension() == 2:
         return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
+            [[spp[0, 0], spp[0, 1], 0], [spp[1, 0], spp[1, 1], 0], [0, 0, 0]]
         ) + ufl.Identity(3)
     else:
         return spp + ufl.Identity(3)
+
 
 def def_cauchy_green(u):
     """
@@ -51,7 +54,8 @@ def def_cauchy_green(u):
         Trial displacement field
     """
     dgrad = def_grad(u)
-    return dgrad.T*dgrad
+    return dgrad.T * dgrad
+
 
 def strain_green_lagrange(u):
     """
@@ -63,7 +67,8 @@ def strain_green_lagrange(u):
         Trial displacement field
     """
     C = def_cauchy_green(u)
-    return 1/2*(C - ufl.Identity(3))
+    return 1 / 2 * (C - ufl.Identity(3))
+
 
 def strain_inf(u):
     """
@@ -74,15 +79,14 @@ def strain_inf(u):
     u : dfn.TrialFunction, ufl.Argument
         Trial displacement field
     """
-    spp = 1/2 * (ufl.grad(u) + ufl.grad(u).T)
+    spp = 1 / 2 * (ufl.grad(u) + ufl.grad(u).T)
     if u.geometric_dimension() == 2:
         return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
+            [[spp[0, 0], spp[0, 1], 0], [spp[1, 0], spp[1, 1], 0], [0, 0, 0]]
         )
     else:
         return spp
+
 
 def strain_lin_green_lagrange(u, du):
     """
@@ -98,6 +102,7 @@ def strain_lin_green_lagrange(u, du):
     E = strain_green_lagrange(u)
     return ufl.derivative(E, u, du)
 
+
 def strain_lin2_green_lagrange(u0, u):
     """
     Returns the double linearized Green-Lagrange strain tensor
@@ -109,15 +114,14 @@ def strain_lin2_green_lagrange(u0, u):
     u : dfn.TrialFunction, ufl.Argument
         Trial displacement field
     """
-    spp = 1/2*(ufl.grad(u).T*ufl.grad(u0) + ufl.grad(u0).T*ufl.grad(u))
+    spp = 1 / 2 * (ufl.grad(u).T * ufl.grad(u0) + ufl.grad(u0).T * ufl.grad(u))
     if u0.geometric_dimension() == 2:
         return ufl.as_tensor(
-            [[spp[0, 0], spp[0, 1], 0],
-            [spp[1, 0], spp[1, 1], 0],
-            [        0,         0, 0]]
+            [[spp[0, 0], spp[0, 1], 0], [spp[1, 0], spp[1, 1], 0], [0, 0, 0]]
         )
     else:
         return spp
+
 
 def pressure_contact_penalty(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
     """
@@ -136,15 +140,17 @@ def pressure_contact_penalty(xref, u, k, ycoll, n=dfn.Constant([0.0, 1.0])):
     n : dfn.Constant
         Contact plane normal, facing away from the vocal folds
     """
-    gap = ufl.dot(xref+u, n) - ycoll
+    gap = ufl.dot(xref + u, n) - ycoll
     positive_gap = (gap + abs(gap)) / 2
 
     # Uncomment/comment the below lines to choose between exponential or quadratic penalty springs
-    return -k*positive_gap**3
+    return -k * positive_gap**3
+
 
 def pressure_contact_quad_penalty(gap, kcoll):
     positive_gap = (gap + abs(gap)) / 2
-    return kcoll*positive_gap**2
+    return kcoll * positive_gap**2
+
 
 def traction_pressure(p, u, n):
     """
@@ -156,9 +162,12 @@ def traction_pressure(p, u, n):
     n : facet outer normal
     """
     deformation_gradient = ufl.grad(u) + ufl.Identity(2)
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+    deformation_cofactor = (
+        ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+    )
 
-    return -p*deformation_cofactor*n
+    return -p * deformation_cofactor * n
+
 
 def pullback_area_normal(u, n):
     """
@@ -170,6 +179,8 @@ def pullback_area_normal(u, n):
     n : facet outer normal
     """
     deformation_gradient = ufl.grad(u) + ufl.Identity(u.ufl_shape[0])
-    deformation_cofactor = ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+    deformation_cofactor = (
+        ufl.det(deformation_gradient) * ufl.inv(deformation_gradient).T
+    )
 
-    return deformation_cofactor*n
+    return deformation_cofactor * n

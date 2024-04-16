@@ -19,18 +19,19 @@ from ..fsi import make_coupling_stuff
 
 # pylint: disable=missing-function-docstring
 
+
 class BaseDynamicalFSIModel(BaseDynamicalModel):
     """
     Class representing a fluid-solid coupled dynamical system
     """
 
     def __init__(
-            self,
-            solid: Model,
-            fluids: Union[List[Model], Model],
-            solid_fsi_dofs: Union[List[NDArray], NDArray],
-            fluid_fsi_dofs: Union[List[NDArray], NDArray]
-        ):
+        self,
+        solid: Model,
+        fluids: Union[List[Model], Model],
+        solid_fsi_dofs: Union[List[NDArray], NDArray],
+        fluid_fsi_dofs: Union[List[NDArray], NDArray],
+    ):
         if isinstance(fluids, list):
             fluids = tuple(fluids)
             fluid_fsi_dofs = tuple(fluid_fsi_dofs)
@@ -44,27 +45,23 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         self.solid = solid
         self.fluids = fluids
 
-        self._models = (self.solid,) +  tuple(self.fluids)
+        self._models = (self.solid,) + tuple(self.fluids)
 
         _to_petsc = bv.convert_subtype_to_petsc
         self._fl_state = bv.concatenate_with_prefix(
             [_to_petsc(fluid.state) for fluid in fluids], 'fluid'
         )
-        self.state = bv.concatenate(
-            [_to_petsc(solid.state), self._fl_state]
-        )
+        self.state = bv.concatenate([_to_petsc(solid.state), self._fl_state])
 
         self._fl_statet = bv.concatenate_with_prefix(
             [_to_petsc(fluid.statet) for fluid in fluids], 'fluid'
         )
-        self.statet = bv.concatenate(
-            [_to_petsc(solid.statet), self._fl_statet]
-        )
+        self.statet = bv.concatenate([_to_petsc(solid.statet), self._fl_statet])
 
         # This selects only psub and psup from the fluid control
         self._fl_control = bv.concatenate_with_prefix(
             [_to_petsc(fluid.control[['psub', 'psup']]) for fluid in fluids],
-            prefix='fluid'
+            prefix='fluid',
         )
         self.control = self._fl_control
 
@@ -73,15 +70,21 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             [_to_petsc(fluid.prop) for fluid in fluids], 'fluid'
         )
         self.prop = bv.concatenate(
-            [_to_petsc(solid.prop),
+            [
+                _to_petsc(solid.prop),
                 self._fl_prop,
-                bv.convert_subtype_to_petsc(_ymid_props)
+                bv.convert_subtype_to_petsc(_ymid_props),
             ]
         )
 
         ## -- FSI --
-        fsimaps, solid_area, dflcontrol_dslstate, dslcontrol_dflstate, dflcontrol_dslprops = \
-            make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+        (
+            fsimaps,
+            solid_area,
+            dflcontrol_dslstate,
+            dslcontrol_dflstate,
+            dflcontrol_dslprops,
+        ) = make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
         self._fsimaps = fsimaps
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate
@@ -96,7 +99,10 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         ]
         self._null_dslstate_dflstate = bm.BlockMatrix(mats)
         mats = [
-            [subops.zero_mat(flvec.size, slvec.size) for slvec in self.solid.state.blocks]
+            [
+                subops.zero_mat(flvec.size, slvec.size)
+                for slvec in self.solid.state.blocks
+            ]
             for flvec in self._fl_state.blocks
         ]
         self._null_dflstate_dslstate = bm.BlockMatrix(mats)
@@ -118,9 +124,8 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         ## The below are needed to communicate FSI interactions
         # Set solid_area
         dim = self.solid.residual.mesh().topology().dim()
-        self._solid_area[:] = 2*(
-            self.prop['ymid'][0]
-            - (self.solid.XREF + self.solid.state.sub['u'])[1::dim]
+        self._solid_area[:] = 2 * (
+            self.prop['ymid'][0] - (self.solid.XREF + self.solid.state.sub['u'])[1::dim]
         )
 
         # map solid_area to fluid area
@@ -173,28 +178,23 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
 
     def assem_res(self):
         return bv.concatenate(
-            [bv.convert_subtype_to_petsc(model.assem_res())
-                for model in self._models
-            ]
+            [bv.convert_subtype_to_petsc(model.assem_res()) for model in self._models]
         )
 
     def assem_dres_dstate(self):
         dslres_dslx = bm.convert_subtype_to_petsc(self.solid.assem_dres_dstate())
         dslres_dflx = bla.mult_mat_mat(
             bm.convert_subtype_to_petsc(self.solid.assem_dres_dcontrol()),
-            self._dslcontrol_dflstate
+            self._dslcontrol_dflstate,
         )
 
         # TODO: This probably won't work in 3D since there would be multiple fluid models
         dflres_dflx = bm.convert_subtype_to_petsc(self._models[1].assem_dres_dstate())
         dflres_dslx = bla.mult_mat_mat(
             bm.convert_subtype_to_petsc(self._models[1].assem_dres_dcontrol()),
-            self._dflcontrol_dslstate
+            self._dflcontrol_dslstate,
         )
-        bmats = [
-            [dslres_dslx, dslres_dflx],
-            [dflres_dslx, dflres_dflx]
-        ]
+        bmats = [[dslres_dslx, dslres_dflx], [dflres_dslx, dflres_dflx]]
         return bm.concatenate(bmats)
 
     def assem_dres_dstatet(self):
@@ -207,10 +207,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         dflres_dflx = bm.convert_subtype_to_petsc(self._models[1].assem_dres_dstatet())
         # dffluid_dxsolid = self._models[1].assem_dres_dcontrolt() * self.dflcontrolt_dslstatet
         dflres_dslx = bm.convert_subtype_to_petsc(self._null_dflstate_dslstate)
-        bmats = [
-            [dslres_dslx, dslres_dflx],
-            [dflres_dslx, dflres_dflx]
-        ]
+        bmats = [[dslres_dslx, dslres_dflx], [dflres_dslx, dflres_dflx]]
         return bm.concatenate(
             bmats, labels=(self.state.labels[0], self.state.labels[0])
         )
@@ -227,8 +224,8 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         ]
         dslres_dflprops = bm.BlockMatrix(
             submats,
-            shape=self.solid.state.f_shape+self._fl_prop.f_shape,
-            labels=self.solid.state.labels+self._fl_prop.labels
+            shape=self.solid.state.f_shape + self._fl_prop.f_shape,
+            labels=self.solid.state.labels + self._fl_prop.labels,
         )
 
         submats = [
@@ -237,8 +234,8 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         ]
         dslres_dymid = bm.BlockMatrix(
             submats,
-            shape=self.solid.state.shape+(1,),
-            labels=self.solid.state.labels+(('ymid',),)
+            shape=self.solid.state.shape + (1,),
+            labels=self.solid.state.labels + (('ymid',),),
         )
 
         ## Fluid residual sensitivities
@@ -246,14 +243,11 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             [fluid.assem_dres_dcontrol() for fluid in self.fluids]
         )
         dflres_dslprops = bla.mult_mat_mat(
-            bm.convert_subtype_to_petsc(dflres_dflcontrol),
-            self._dflcontrol_dslprops
+            bm.convert_subtype_to_petsc(dflres_dflcontrol), self._dflcontrol_dslprops
         )
 
         dflres_dflprops = bm.convert_subtype_to_petsc(
-            bm.concatenate_diag(
-                [fluid.assem_dres_dprop() for fluid in self.fluids]
-            )
+            bm.concatenate_diag([fluid.assem_dres_dprop() for fluid in self.fluids])
         )
 
         submats = [
@@ -262,60 +256,83 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         ]
         dflres_dymid = bm.BlockMatrix(
             submats,
-            shape=self._fl_state.f_shape+(1,),
-            labels=self._fl_state.labels+(('ymid',),)
+            shape=self._fl_state.f_shape + (1,),
+            labels=self._fl_state.labels + (('ymid',),),
         )
 
         bmats = [
             [dslres_dslprops, dslres_dflprops, dslres_dymid],
-            [dflres_dslprops, dflres_dflprops, dflres_dymid]
+            [dflres_dslprops, dflres_dflprops, dflres_dymid],
         ]
         return bm.concatenate(bmats)
 
     def assem_dres_dcontrol(self):
-        _mats = [[subops.zero_mat(m, n) for n in self.control.bshape[0]] for m in self.solid.state.bshape[0]]
-        dslres_dg = bm.BlockMatrix(_mats, labels=self.solid.state.labels+self.control.labels)
+        _mats = [
+            [subops.zero_mat(m, n) for n in self.control.bshape[0]]
+            for m in self.solid.state.bshape[0]
+        ]
+        dslres_dg = bm.BlockMatrix(
+            _mats, labels=self.solid.state.labels + self.control.labels
+        )
 
         # dflres_dflg = bm.convert_subtype_to_petsc(self.fluid.assem_dres_dcontrol())
         dflres_dflg = bm.concatenate_diag(
             [fluid.assem_dres_dcontrol() for fluid in self.fluids]
         )
-        _mats = [[row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg]
+        _mats = [
+            [row[kk] for kk in range(1, dflres_dflg.shape[1])] for row in dflres_dflg
+        ]
         # breakpoint()
-        dflres_dg = bm.convert_subtype_to_petsc(bm.BlockMatrix(_mats, labels=self._fl_state.labels+self.control.labels))
+        dflres_dg = bm.convert_subtype_to_petsc(
+            bm.BlockMatrix(_mats, labels=self._fl_state.labels + self.control.labels)
+        )
         return bm.concatenate([[dslres_dg], [dflres_dg]])
 
 
-class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamicalFSIModel):
+class BaseLinearizedDynamicalFSIModel(
+    BaseLinearizedDynamicalModel, BaseDynamicalFSIModel
+):
     """
     Class representing a fluid-solid coupled dynamical system
     """
 
-    def __init__(self,
-            solid: LinearizedModel,
-            fluids: [List[LinearizedModel]],
-            solid_fsi_dofs, fluid_fsi_dofs
-        ):
+    def __init__(
+        self,
+        solid: LinearizedModel,
+        fluids: [List[LinearizedModel]],
+        solid_fsi_dofs,
+        fluid_fsi_dofs,
+    ):
         super().__init__(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
 
         self.dstate = bv.concatenate(
-            [bv.convert_subtype_to_petsc(self.solid.dstate),
+            [
+                bv.convert_subtype_to_petsc(self.solid.dstate),
                 bv.concatenate_with_prefix(
-                    [bv.convert_subtype_to_petsc(fluid.dstate) for fluid in self.fluids],
-                    prefix='fluid'
-                )
+                    [
+                        bv.convert_subtype_to_petsc(fluid.dstate)
+                        for fluid in self.fluids
+                    ],
+                    prefix='fluid',
+                ),
             ]
         )
         self.dstatet = bv.concatenate(
-            [bv.convert_subtype_to_petsc(self.solid.dstatet),
+            [
+                bv.convert_subtype_to_petsc(self.solid.dstatet),
                 bv.concatenate_with_prefix(
-                    [bv.convert_subtype_to_petsc(fluid.dstatet) for fluid in self.fluids],
-                    prefix='fluid'
-                )
+                    [
+                        bv.convert_subtype_to_petsc(fluid.dstatet)
+                        for fluid in self.fluids
+                    ],
+                    prefix='fluid',
+                ),
             ]
         )
 
-        self._dsolid_area = dfn.Function(self.solid.residual.form['coeff.fsi.p1'].function_space()).vector()
+        self._dsolid_area = dfn.Function(
+            self.solid.residual.form['coeff.fsi.p1'].function_space()
+        ).vector()
 
     def set_dstate(self, dstate):
         self.dstate[:] = dstate
@@ -341,14 +358,13 @@ class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamica
         ## The below are needed to communicate FSI interactions
         # map linearized state to linearized solid area
         dim = self.solid.residual.mesh().topology().dim()
-        self._dsolid_area[:] = -2*(self.dstate['u'][1::dim])
+        self._dsolid_area[:] = -2 * (self.dstate['u'][1::dim])
 
         # map linearized solid area to fluid area
         for fsimap, fluid in zip(self._fsimaps, self.fluids):
             dfl_control = fluid.dcontrol.copy()
             dfl_control['area'][:] = subops.mult_mat_vec(
-                fsimap.dfluid_dsolid,
-                subops.convert_vec_to_petsc(self._dsolid_area)
+                fsimap.dfluid_dsolid, subops.convert_vec_to_petsc(self._dsolid_area)
             )
             fluid.set_dcontrol(dfl_control)
 
@@ -360,8 +376,7 @@ class BaseLinearizedDynamicalFSIModel(BaseLinearizedDynamicalModel, BaseDynamica
         dsolid_control = self.solid.control.copy()
         for fsimap, fluid in zip(self._fsimaps, self.fluids):
             dsolid_control['p'][:] = subops.mult_mat_vec(
-                fsimap.dsolid_dfluid,
-                subops.convert_vec_to_petsc(fluid.dstate['p'])
+                fsimap.dsolid_dfluid, subops.convert_vec_to_petsc(fluid.dstate['p'])
             )
         self.solid.set_dcontrol(dsolid_control)
 

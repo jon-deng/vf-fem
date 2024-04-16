@@ -15,9 +15,11 @@ from .models.equations import solid
 ## Functions for loading `dfn.Mesh` objects from other mesh formats
 MeshFunctions = List[dfn.MeshFunction]
 MeshFunctionMaps = List[Mapping[str, int]]
+
+
 def load_fenics_gmsh(
-        mesh_path: str, overwrite_xdmf: bool=False
-    ) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
+    mesh_path: str, overwrite_xdmf: bool = False
+) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
     """
     Return a `dfn.mesh` and mesh function info from a gmsh '.msh' file
 
@@ -54,7 +56,7 @@ def load_fenics_gmsh(
                 mio_mesh.points[:, :2],
                 mio_mesh.cells,
                 cell_data=mio_mesh.cell_data,
-                field_data=mio_mesh.field_data
+                field_data=mio_mesh.field_data,
             )
 
     # First load some basic information about the mesh and check compatibility
@@ -63,7 +65,7 @@ def load_fenics_gmsh(
     cell_dims = [_dim_from_type(cell_type) for cell_type in cell_types]
 
     max_dim = max(cell_dims)
-    for dim in range(max_dim+1):
+    for dim in range(max_dim + 1):
         if cell_dims.count(max_dim) > 1:
             # TODO: This limitation happens because FEniCS requires 1 '.xdmf'
             # file per mesh of given dimension
@@ -84,15 +86,14 @@ def load_fenics_gmsh(
         path.join(mesh_dir, f'{split_mesh_name}.xdmf')
         for split_mesh_name in split_mesh_names
     ]
-    for (split_path_n, mesh_n) in zip(split_mesh_paths, split_meshes):
+    for split_path_n, mesh_n in zip(split_mesh_paths, split_meshes):
         if not path.isfile(split_path_n):
             mio.write(split_path_n, mesh_n)
         elif overwrite_xdmf:
             mio.write(split_path_n, mesh_n)
         else:
             warnings.warn(
-                "Loading 'gmsh' mesh from existing '.xdmf' files.",
-                category=UserWarning
+                "Loading 'gmsh' mesh from existing '.xdmf' files.", category=UserWarning
             )
 
     # Read the highest-dimensional mesh as the base dolfin mesh,
@@ -103,8 +104,7 @@ def load_fenics_gmsh(
 
     # Create `MeshValueCollection`s for each split cell block
     vcs = [
-        dfn.MeshValueCollection('size_t', dfn_mesh, cell_dim)
-        for cell_dim in cell_dims
+        dfn.MeshValueCollection('size_t', dfn_mesh, cell_dim) for cell_dim in cell_dims
     ]
     for vc, split_mesh_path in zip(vcs, split_mesh_paths):
         with dfn.XDMFFile(split_mesh_path) as f:
@@ -115,7 +115,7 @@ def load_fenics_gmsh(
     # are None
     _mfs = [dfn.MeshFunction('size_t', dfn_mesh, vc) for vc in vcs]
     dim_to_mf = {mf.dim(): mf for mf in _mfs}
-    mfs = [dim_to_mf[dim] if dim in dim_to_mf else None for dim in range(max_dim+1)]
+    mfs = [dim_to_mf[dim] if dim in dim_to_mf else None for dim in range(max_dim + 1)]
 
     # Load mappings of 'field data' These associate labels to mesh function values
     entities_label_to_id = [
@@ -124,10 +124,11 @@ def load_fenics_gmsh(
             for key, (value, entity_dim) in mio_mesh.field_data.items()
             if entity_dim == dim
         }
-        for dim in range(max_dim+1)
+        for dim in range(max_dim + 1)
     ]
 
     return dfn_mesh, tuple(mfs), tuple(entities_label_to_id)
+
 
 def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
     """
@@ -147,14 +148,12 @@ def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
         mio.Mesh(
             mesh.points,
             [cellblock],
-            cell_data={
-                key: [arrays[n]]
-                for key, arrays in mesh.cell_data.items()
-            }
+            cell_data={key: [arrays[n]] for key, arrays in mesh.cell_data.items()},
         )
         for n, cellblock in enumerate(mesh.cells)
     ]
     return meshes
+
 
 def _dim_from_type(cell_type: str) -> int:
     """
@@ -173,11 +172,10 @@ def _dim_from_type(cell_type: str) -> int:
     else:
         raise ValueError(f"Unknown cell type {cell_type}")
 
+
 # Load a mesh from the FEniCS .xml format
 # This format is no longer updated/promoted by FEniCS
-def load_fenics_xml(
-        mesh_path: str
-    ) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
+def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
     """
     Return a `dfn.mesh` and mesh function info from a FEniCS '.xml' file
 
@@ -200,7 +198,7 @@ def load_fenics_xml(
         corresponding integer values in the mesh function.
     """
     base_path, ext = path.splitext(mesh_path)
-    facet_function_path = base_path +  '_facet_region.xml'
+    facet_function_path = base_path + '_facet_region.xml'
     cell_function_path = base_path + '_physical_region.xml'
     msh_function_path = base_path + '.msh'
 
@@ -211,9 +209,16 @@ def load_fenics_xml(
     facet_function = dfn.MeshFunction('size_t', mesh, facet_function_path)
     cell_function = dfn.MeshFunction('size_t', mesh, cell_function_path)
 
-    vertexlabel_to_id, facetlabel_to_id, celllabel_to_id = _parse_msh2_physical_groups(msh_function_path)
+    vertexlabel_to_id, facetlabel_to_id, celllabel_to_id = _parse_msh2_physical_groups(
+        msh_function_path
+    )
 
-    return mesh, (None, facet_function, cell_function), (vertexlabel_to_id, facetlabel_to_id, celllabel_to_id)
+    return (
+        mesh,
+        (None, facet_function, cell_function),
+        (vertexlabel_to_id, facetlabel_to_id, celllabel_to_id),
+    )
+
 
 def _parse_msh2_physical_groups(mesh_path: str) -> MeshFunctionMaps:
     """
@@ -259,29 +264,41 @@ def _parse_msh2_physical_groups(mesh_path: str) -> MeshFunctionMaps:
                 celllabel_to_id[name] = val
     return vertexlabel_to_id, facetlabel_to_id, celllabel_to_id
 
+
 ## Functions for getting z-slices from a 3D mesh
+
 
 def extract_zplane_facets(mesh, z=0.0):
     """
     Return all facets on a z-normal plane
     """
     facets = [
-        facet for facet in dfn.facets(mesh)
+        facet
+        for facet in dfn.facets(mesh)
         if np.isclose(np.abs(np.dot(facet.normal().array(), [0, 0, 1])), 1.0)
         and np.isclose(facet.midpoint().array()[-1], z)
     ]
 
     return facets
 
+
 def extract_edges_from_facets(facets, facet_function, facet_values):
     """
     Return all edges from facets that lie on a particular facet value
     """
     edges = [
-        edge for facet in facets for edge in dfn.edges(facet)
-        if any([any(facet_function[facet] == x for x in facet_values) for facet in dfn.facets(edge)])
+        edge
+        for facet in facets
+        for edge in dfn.edges(facet)
+        if any(
+            [
+                any(facet_function[facet] == x for x in facet_values)
+                for facet in dfn.facets(edge)
+            ]
+        )
     ]
     return edges
+
 
 ## Functions for sorting medial surface coordinates in a stream-wise manner
 # This is needed for getting 1D fluid model coordinates
@@ -295,8 +312,13 @@ def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
     It is assumed that the beginning of the stream is at the leftmost x-coordinate
     """
     assert isinstance(f_edges, (list, tuple))
-    edges = [n_edge for n_edge, f_edge in enumerate(edge_function.array()) if f_edge in set(f_edges)]
+    edges = [
+        n_edge
+        for n_edge, f_edge in enumerate(edge_function.array())
+        if f_edge in set(f_edges)
+    ]
     return sort_edge_vertices(mesh, edges)
+
 
 def sort_edge_vertices(mesh, edge_indices):
     """
@@ -313,22 +335,22 @@ def sort_edge_vertices(mesh, edge_indices):
 
     return surface_coordinates[:, 0], surface_coordinates[:, 1], vertices[idx_sort]
 
+
 def vertices_from_edges(mesh, edge_indices):
     """
     Return vertices associates with a set of edges
     """
-    edge_to_vertex = np.array([
-        [vertex.index() for vertex in dfn.vertices(edge)]
-        for edge in dfn.edges(mesh)
-    ])
+    edge_to_vertex = np.array(
+        [[vertex.index() for vertex in dfn.vertices(edge)] for edge in dfn.edges(mesh)]
+    )
 
     vertices = np.unique(edge_to_vertex[edge_indices].reshape(-1))
     return vertices
 
+
 def sort_vertices_by_nearest_neighbours(
-        vertex_coordinates: np.ndarray,
-        origin: np.ndarray=None
-    ) -> np.ndarray:
+    vertex_coordinates: np.ndarray, origin: np.ndarray = None
+) -> np.ndarray:
     """
     Return a permutation that sorts point in succesive order starting from an origin
 
@@ -355,24 +377,23 @@ def sort_vertices_by_nearest_neighbours(
     # a 1D edge chain
     origin = np.zeros(vertex_coordinates.shape[-1]) if origin is None else origin
     # Determine the very first coordinate
-    idx_sort = [np.argmin(np.linalg.norm(vertex_coordinates-origin, axis=-1))]
+    idx_sort = [np.argmin(np.linalg.norm(vertex_coordinates - origin, axis=-1))]
 
     while len(idx_sort) < vertex_coordinates.shape[0]:
         # Calculate array of distances to every other coordinate
         vector_distances = vertex_coordinates - vertex_coordinates[idx_sort[-1]]
-        distances = np.sum(vector_distances**2, axis=-1)**0.5
+        distances = np.sum(vector_distances**2, axis=-1) ** 0.5
         distances[idx_sort] = np.nan
 
         idx_sort.append(np.nanargmin(distances))
 
     return np.array(idx_sort)
 
+
 ## Functions for getting vertices from mesh regions
 def verts_from_mesh_func(
-        mesh: dfn.Mesh,
-        mesh_func: dfn.MeshFunction,
-        mesh_func_value: int
-    ) -> np.ndarray:
+    mesh: dfn.Mesh, mesh_func: dfn.MeshFunction, mesh_func_value: int
+) -> np.ndarray:
     """
     Return all vertices associated with a mesh region
 
@@ -401,16 +422,18 @@ def verts_from_mesh_func(
 
     return np.unique(verts)
 
+
 # TODO: Could add functions mimicking the `dofs_from_mesh_func` set of functions
 # below, if you end up using this a lot
 
+
 ## Functions for getting DOFs from mesh regions
 def dofs_from_mesh_func(
-        mesh: dfn.Mesh,
-        mesh_func: dfn.MeshFunction,
-        mesh_func_value: int,
-        dofmap: dfn.DofMap
-    ) -> np.ndarray:
+    mesh: dfn.Mesh,
+    mesh_func: dfn.MeshFunction,
+    mesh_func_value: int,
+    dofmap: dfn.DofMap,
+) -> np.ndarray:
     """
     Return all DOFs associated with a mesh region
 
@@ -442,12 +465,13 @@ def dofs_from_mesh_func(
 
     return np.unique(dofs)
 
+
 def process_meshlabel_to_dofs(
-        mesh: dfn.Mesh,
-        mesh_func: dfn.MeshFunction,
-        label_to_meshfunc: Mapping[str, int],
-        dofmap: dfn.DofMap
-    ) -> Mapping[str, np.ndarray]:
+    mesh: dfn.Mesh,
+    mesh_func: dfn.MeshFunction,
+    label_to_meshfunc: Mapping[str, int],
+    dofmap: dfn.DofMap,
+) -> Mapping[str, np.ndarray]:
     """
     Return a mapping from mesh region labels to associated DOFs
 
@@ -474,9 +498,10 @@ def process_meshlabel_to_dofs(
 
     return label_to_dofs
 
+
 def process_celllabel_to_dofs_from_residual(
-        residual: solid.FenicsResidual, dofmap: dfn.DofMap
-    ) -> Mapping[str, np.ndarray]:
+    residual: solid.FenicsResidual, dofmap: dfn.DofMap
+) -> Mapping[str, np.ndarray]:
     """
     Return a mapping from mesh region labels to associated DOFs
 
@@ -496,6 +521,4 @@ def process_celllabel_to_dofs_from_residual(
     mesh = residual.mesh()
     cell_func = residual.mesh_function('cell')
     cell_label_to_id = residual.mesh_function_label_to_value('cell')
-    return process_meshlabel_to_dofs(
-        mesh, cell_func, cell_label_to_id, dofmap
-    )
+    return process_meshlabel_to_dofs(mesh, cell_func, cell_label_to_id, dofmap)

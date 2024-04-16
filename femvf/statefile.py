@@ -17,6 +17,7 @@ from blockarray import blockvec as bv
 
 from .models.transient.base import BaseTransientModel
 
+
 class StateFile:
     r"""
     An HDF5 file containing the history of states in a transient model simulation
@@ -65,22 +66,20 @@ class StateFile:
     # - when a `StateFile` is being read (mode='r' or 'a') you don't need
     # any of those, although it is convenient to have them
     def __init__(
-            self,
-            model: BaseTransientModel,
-            fname: Union[str, h5py.Group],
-            mode: str='r',
-            NCHUNK: int=100,
-            **kwargs
-        ):
+        self,
+        model: BaseTransientModel,
+        fname: Union[str, h5py.Group],
+        mode: str = 'r',
+        NCHUNK: int = 100,
+        **kwargs,
+    ):
         self.model: BaseTransientModel = model
         if isinstance(fname, str):
             self.file = h5py.File(fname, mode=mode, **kwargs)
         elif isinstance(fname, h5py.Group):
             self.file = fname
         else:
-            raise TypeError(
-                f"`fname` must be `str` or `h5py.Group` not {type(fname)}"
-            )
+            raise TypeError(f"`fname` must be `str` or `h5py.Group` not {type(fname)}")
         self.NCHUNK = NCHUNK
 
         # Create the root group and initilizae the data layout
@@ -96,10 +95,14 @@ class StateFile:
             # h5py is supposed to do this caching but I found that each dataset read call in h5py
             # has a lot of overhead so I made this cache instead
             for name in model.state0.keys():
-                self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(self.file[f'state/{name}'])
+                self.dset_chunk_cache[f'state/{name}'] = DatasetChunkCache(
+                    self.file[f'state/{name}']
+                )
 
             for name in model.control.keys():
-                self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(self.file[f'control/{name}'])
+                self.dset_chunk_cache[f'control/{name}'] = DatasetChunkCache(
+                    self.file[f'control/{name}']
+                )
 
     ## Functions mimicking the `h5py.File` interface
     def __enter__(self):
@@ -162,14 +165,21 @@ class StateFile:
         Initializes the layout of the state file.
         """
         self.file.require_dataset(
-            'time', (self.size,), maxshape=(None,), chunks=(self.NCHUNK,),
-            dtype=np.float64, exact=False
+            'time',
+            (self.size,),
+            maxshape=(None,),
+            chunks=(self.NCHUNK,),
+            dtype=np.float64,
+            exact=False,
         )
 
         if 'meas_indices' not in self.file:
             self.file.create_dataset(
-                'meas_indices', (0,),
-                maxshape=(None,), chunks=(self.NCHUNK,), dtype=np.intp
+                'meas_indices',
+                (0,),
+                maxshape=(None,),
+                chunks=(self.NCHUNK,),
+                dtype=np.intp,
             )
         self.init_mesh()
 
@@ -187,23 +197,23 @@ class StateFile:
         coords = solid.residual.mesh().coordinates()
         cells = solid.residual.mesh().cells()
         self.file.require_dataset(
-            'mesh/solid/coordinates', coords.shape,
-            data=coords, dtype=np.float64
+            'mesh/solid/coordinates', coords.shape, data=coords, dtype=np.float64
         )
         self.file.require_dataset(
-            'mesh/solid/connectivity', cells.shape,
-            data=cells, dtype=np.intp
+            'mesh/solid/connectivity', cells.shape, data=cells, dtype=np.intp
         )
         self.file.require_dataset(
-            'mesh/solid/dim', (),
-            data=solid.residual.mesh().topology().dim(), dtype=np.intp
+            'mesh/solid/dim',
+            (),
+            data=solid.residual.mesh().topology().dim(),
+            dtype=np.intp,
         )
 
         dofmaps = [solid.residual.form['coeff.state.u0'].function_space().dofmap()]
         for dofmap in dofmaps:
-            dofmap_array = np.array([
-                dofmap.cell_dofs(idx_cell) for idx_cell in range(cells.shape[0])
-            ])
+            dofmap_array = np.array(
+                [dofmap.cell_dofs(idx_cell) for idx_cell in range(cells.shape[0])]
+            )
             self.file.require_dataset(
                 'dofmap/CG1', dofmap_array.shape, data=dofmap_array, dtype=np.intp
             )
@@ -221,9 +231,11 @@ class StateFile:
         bvec = self.model.state0
         for name, ndof in zip(bvec.labels[0], bvec.bshape[0]):
             state_group.require_dataset(
-                name, (self.size, ndof),
-                maxshape=(None, ndof), chunks=(self.NCHUNK, ndof),
-                dtype=np.float64
+                name,
+                (self.size, ndof),
+                maxshape=(None, ndof),
+                chunks=(self.NCHUNK, ndof),
+                dtype=np.float64,
             )
 
     def init_control(self):
@@ -232,9 +244,11 @@ class StateFile:
         bvec = self.model.control
         for name, ndof in zip(bvec.labels[0], bvec.bshape[0]):
             control_group.require_dataset(
-                name, (self.size, ndof),
-                maxshape=(None, ndof), chunks=(self.NCHUNK, ndof),
-                dtype=np.float64
+                name,
+                (self.size, ndof),
+                maxshape=(None, ndof),
+                chunks=(self.NCHUNK, ndof),
+                dtype=np.float64,
             )
 
     def init_prop(self):
@@ -248,8 +262,11 @@ class StateFile:
         solver_info_group = self.file.require_group('solver_info')
         for key in ['num_iter', 'rel_err', 'abs_err']:
             solver_info_group.require_dataset(
-                key, (self.size,),
-                dtype=np.float64, maxshape=(None,), chunks=(self.NCHUNK,)
+                key,
+                (self.size,),
+                dtype=np.float64,
+                maxshape=(None,),
+                chunks=(self.NCHUNK,),
             )
 
     ## Functions for writing by appending
@@ -263,14 +280,14 @@ class StateFile:
         state_group = self.file['state']
         for name, value in state.items():
             dset = state_group[name]
-            dset.resize(dset.shape[0]+1, axis=0)
+            dset.resize(dset.shape[0] + 1, axis=0)
             dset[-1, :] = value
 
     def append_control(self, control: bv.BlockVector):
         control_group = self.file['control']
         for name, value in control.items():
             dset = control_group[name]
-            dset.resize(dset.shape[0]+1, axis=0)
+            dset.resize(dset.shape[0] + 1, axis=0)
             dset[-1] = value
 
     def append_prop(self, properties: bv.BlockVector):
@@ -297,7 +314,7 @@ class StateFile:
             Time to append
         """
         dset = self.file['time']
-        dset.resize(dset.shape[0]+1, axis=0)
+        dset.resize(dset.shape[0] + 1, axis=0)
         dset[-1] = time
 
     def append_meas_index(self, index: int):
@@ -309,13 +326,13 @@ class StateFile:
         index : int
         """
         dset = self.file['meas_indices']
-        dset.resize(dset.shape[0]+1, axis=0)
+        dset.resize(dset.shape[0] + 1, axis=0)
         dset[-1] = index
 
     def append_solver_info(self, solver_info: Mapping[str, Any]):
         solver_info_group = self.file['solver_info']
         for key, dset in solver_info_group.items():
-            dset.resize(dset.shape[0]+1, axis=0)
+            dset.resize(dset.shape[0] + 1, axis=0)
             if key in solver_info:
                 dset[-1] = solver_info[key]
             else:
@@ -374,8 +391,8 @@ class StateFile:
         """
         control = self.model.control.copy()
         num_controls = self.file[f'control/{control.keys()[0]}'].size
-        if n > num_controls-1:
-            n = num_controls-1
+        if n > num_controls - 1:
+            n = num_controls - 1
 
         for key, vec in control.items():
             value = self.dset_chunk_cache[f'control/{key}'].get(n)
@@ -399,7 +416,9 @@ class StateFile:
 
     def get_solver_info(self, n) -> Mapping[str, np.ndarray]:
         solver_info_group = self.file['solver_info']
-        solver_info = {key: solver_info_group[key][n] for key in solver_info_group.keys()}
+        solver_info = {
+            key: solver_info_group[key][n] for key in solver_info_group.keys()
+        }
         return solver_info
 
     ## Functions for writing/modifying specific indices
@@ -417,6 +436,7 @@ class StateFile:
         for label, value in zip(state.keys(), state.vecs):
             self.file[label][n] = value
 
+
 # TODO: Test whether this cache improves performance or not; you made this when
 # you didn't know how exactly to test `h5py` performace
 # also `h5py` is supposed to cache datasets by chunks already anyway
@@ -430,7 +450,7 @@ class DatasetChunkCache:
     already loaded in a chunk will use the data from the cached chunk instead of reading again.
     """
 
-    def __init__(self, dset: h5py.Dataset, num_chunks: int=1):
+    def __init__(self, dset: h5py.Dataset, num_chunks: int = 1):
         # Don't allow scalar datasets
         assert len(dset.shape) > 0
 
@@ -459,6 +479,7 @@ class DatasetChunkCache:
         def wrapped(self, m: int):
             m = self._convert_neg_to_pos_index(m)
             return func(self, m)
+
         return wrapped
 
     @_dec_handle_neg_index
@@ -469,14 +490,14 @@ class DatasetChunkCache:
         m : int
             Index along the chunk dimension
         """
-        m_chunk = m//self.chunk_size
+        m_chunk = m // self.chunk_size
 
         if m_chunk in self.cache:
             self.cache.move_to_end(m_chunk, last=False)
         else:
             self.load(m)
 
-        m_local = m - m_chunk*self.chunk_size
+        m_local = m - m_chunk * self.chunk_size
         return self.cache[m_chunk][m_local, ...].copy()
 
     @_dec_handle_neg_index
@@ -489,13 +510,13 @@ class DatasetChunkCache:
         m : int
             Index along the chunk dimension
         """
-        m_chunk = m//self.chunk_size
+        m_chunk = m // self.chunk_size
 
         if len(self.cache) == self.num_chunks:
             self.cache.popitem(last=True)
 
-        m_start = m_chunk*self.chunk_size
-        m_end = min((m_chunk+1)*self.chunk_size, self.dset.shape[0])
+        m_start = m_chunk * self.chunk_size
+        m_end = min((m_chunk + 1) * self.chunk_size, self.dset.shape[0])
         self.cache[m_chunk] = self.dset[m_start:m_end, ...]
 
         assert len(self.cache) <= self.num_chunks

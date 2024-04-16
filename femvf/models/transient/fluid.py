@@ -5,17 +5,19 @@ TODO: Change smoothing parameters to all be expressed in units of length
 (all the smoothing parameters have a smoothing effect that occurs over a small length.
 The smaller the length, the sharper the smoothing. )
 """
+
 from numpy.typing import ArrayLike
 import jax
 
 from blockarray import blockvec as bla
 from . import base
 
-from ..jaxutils import (blockvec_to_dict, flatten_nested_dict)
+from ..jaxutils import blockvec_to_dict, flatten_nested_dict
 
 from ..equations import fluid
 
 ## 1D Bernoulli approximation codes
+
 
 class Model(base.BaseTransientModel):
 
@@ -23,28 +25,23 @@ class Model(base.BaseTransientModel):
         res, (state, control, prop) = residual.res, residual.res_args
 
         self._res = jax.jit(res)
-        self._dres = (
-            lambda state, control, prop, tangents:
-                jax.jvp(res, (state, control, prop), tangents)[1]
-        )
+        self._dres = lambda state, control, prop, tangents: jax.jvp(
+            res, (state, control, prop), tangents
+        )[1]
 
-        self.state0 = bla.BlockVector(
-            list(state.values()), labels=[list(state.keys())]
-        )
+        self.state0 = bla.BlockVector(list(state.values()), labels=[list(state.keys())])
         self.state1 = self.state0.copy()
 
         self.control = bla.BlockVector(
             list(control.values()), labels=[list(control.keys())]
         )
 
-        self.prop = bla.BlockVector(
-            list(prop.values()), labels=[list(prop.keys())]
-        )
+        self.prop = bla.BlockVector(list(prop.values()), labels=[list(prop.keys())])
 
         self.primals = (
             blockvec_to_dict(self.state1),
             blockvec_to_dict(self.control),
-            blockvec_to_dict(self.prop)
+            blockvec_to_dict(self.prop),
         )
 
     @property
@@ -100,6 +97,7 @@ class Model(base.BaseTransientModel):
         info = {}
         return self.state1 - self.assem_res(), info
 
+
 class PredefinedModel(Model):
     def __init__(self, mesh: ArrayLike, *args, **kwargs):
         residual = self._make_residual(mesh, *args, **kwargs)
@@ -107,6 +105,7 @@ class PredefinedModel(Model):
 
     def _make_residual(self, mesh: ArrayLike, *args, **kwargs):
         raise NotImplementedError("Subclasses must implement this method")
+
 
 class BernoulliSmoothMinSep(PredefinedModel):
     """
@@ -116,6 +115,7 @@ class BernoulliSmoothMinSep(PredefinedModel):
     def _make_residual(self, mesh):
         return fluid.BernoulliSmoothMinSep(mesh)
 
+
 class BernoulliFixedSep(PredefinedModel):
     """
     Bernoulli fluid model with separation at the minimum
@@ -123,6 +123,7 @@ class BernoulliFixedSep(PredefinedModel):
 
     def _make_residual(self, mesh, idx_sep=0):
         return fluid.BernoulliFixedSep(mesh, idx_sep=idx_sep)
+
 
 class BernoulliAreaRatioSep(PredefinedModel):
     """

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 from . import constants
 
+
 def triangulation(model):
     """
     Returns a triangulation for a mesh.
@@ -25,6 +26,7 @@ def triangulation(model):
     triangu = tri.Triangulation(xy[..., 0], xy[..., 1], triangles=model.mesh.cells())
 
     return triangu
+
 
 def init_figure(model, fluid_props):
     """
@@ -46,7 +48,7 @@ def init_figure(model, fluid_props):
 
     axs[1, 0].set_xlim(-0.2, 1.4, auto=False)
     p_sub = fluid_props['p_sub'] / constants.PASCAL_TO_CGS
-    axs[1, 0].set_ylim(-0.25*p_sub, 1.1*p_sub, auto=False)
+    axs[1, 0].set_ylim(-0.25 * p_sub, 1.1 * p_sub, auto=False)
 
     axs[1, 0].set_ylabel("Surface pressure [Pa]")
 
@@ -57,6 +59,7 @@ def init_figure(model, fluid_props):
         ax.set_axis_off()
 
     return fig, axs
+
 
 def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     """
@@ -78,11 +81,15 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     axs[0, 0].clear()
     delta_xy = x[0].vector()[model.solid.vert_to_vdof.reshape(-1)].reshape(-1, 2)
     xy_current = model.mesh.coordinates() + delta_xy
-    triangulation = tri.Triangulation(xy_current[:, 0], xy_current[:, 1],
-                                      triangles=model.mesh.cells())
-    mappable = axs[0, 0].tripcolor(triangulation,
-                                   solid_props['elastic_modulus'][model.vert_to_sdof],
-                                   edgecolors='k', shading='flat')
+    triangulation = tri.Triangulation(
+        xy_current[:, 0], xy_current[:, 1], triangles=model.mesh.cells()
+    )
+    mappable = axs[0, 0].tripcolor(
+        triangulation,
+        solid_props['elastic_modulus'][model.vert_to_sdof],
+        edgecolors='k',
+        shading='flat',
+    )
     fig.colorbar(mappable, cax=axs[0, 1])
     axs[0, 1].set_ylabel('[kPa]')
 
@@ -101,7 +108,9 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     axs[0, 0].axhline(y=model.ycontact.values()[0], ls='-.', lw=0.5)
 
     pressure_profile = axs[1, 0].lines[0]
-    pressure_profile.set_data(xy_surface[:, 0], fluid_info['pressure']/constants.PASCAL_TO_CGS)
+    pressure_profile.set_data(
+        xy_surface[:, 0], fluid_info['pressure'] / constants.PASCAL_TO_CGS
+    )
     axs[1, 0].set_xlim(-0.2, 1.8, auto=False)
 
     gw = fluid_props['y_midline'] - np.amax(xy_current[:, 1])
@@ -110,10 +119,11 @@ def update_figure(fig, axs, model, t, x, fluid_info, solid_props, fluid_props):
     ydata = np.concatenate((line.get_ydata(), [gw]), axis=0)
     line.set_data(xdata, ydata)
 
-    axs[2, 0].set_xlim(0, np.maximum(1.2*t, 0.01))
+    axs[2, 0].set_xlim(0, np.maximum(1.2 * t, 0.01))
     axs[2, 0].set_ylim(0, 0.03)
 
     return fig, axs
+
 
 def plot_grad(model):
     ## Plot the gradient
@@ -121,23 +131,27 @@ def plot_grad(model):
 
     ax.set_aspect('equal')
     coords = model.get_ref_config()
-    triangulation = tri.Triangulation(coords[:, 0], coords[:, 1], triangles=model.mesh.cells())
+    triangulation = tri.Triangulation(
+        coords[:, 0], coords[:, 1], triangles=model.mesh.cells()
+    )
 
     ax.set_xlim(-0.1, 0.7, auto=False)
     ax.set_ylim(-0.1, 0.7)
 
     ax.axhline(y=model.y_midline, ls='-.')
-    ax.axhline(y=model.y_midline-model.collision_eps, ls='-.', lw=0.5)
+    ax.axhline(y=model.y_midline - model.collision_eps, ls='-.', lw=0.5)
 
     ax.set_title('Gradient')
 
-    mappable = ax.tripcolor(triangulation, gradient[model.vert_to_sdof],
-                            edgecolors='k', shading='flat')
+    mappable = ax.tripcolor(
+        triangulation, gradient[model.vert_to_sdof], edgecolors='k', shading='flat'
+    )
     coords_fixed = coords[model.fixed_vertices]
     ax.plot(coords_fixed[:, 0], coords_fixed[:, 1], color='C1')
 
     fig.colorbar(mappable, ax=ax)
 
     plt.show()
+
 
 # def write_vertex_values(function):

@@ -15,6 +15,7 @@ import numpy as np
 
 from blockarray import blockvec as vec
 
+
 def integrate(model, f, dfin_state):
     """
     Given a list of adjoint output state vectors, x^n (n>1), integrate the adjoint model
@@ -47,12 +48,12 @@ def integrate(model, f, dfin_state):
 
     ## Loop through states for adjoint computation
     # Initialize the adj rhs
-    adj_state1 = dfin_state(f, N-1)
+    adj_state1 = dfin_state(f, N - 1)
     dres1 = None
-    for ii in range(N-1, 0, -1):
+    for ii in range(N - 1, 0, -1):
         ## Linearize the model about time step `ii`
-        dt1 = times[ii] - times[ii-1]
-        state0, state1 = f.get_state(ii-1), f.get_state(ii)
+        dt1 = times[ii] - times[ii - 1]
+        state0, state1 = f.get_state(ii - 1), f.get_state(ii)
         control1 = f.get_control(ii)
 
         model.set_ini_state(state0)
@@ -65,12 +66,14 @@ def integrate(model, f, dfin_state):
 
         # Update adjoint output variables using the adjoint
         # this logic assumes the last control applies over all remaining time steps (which is correct)
-        adj_controls[min(ii, len(adj_controls)-1)] -= model.apply_dres_dcontrol_adj(dres1)
+        adj_controls[min(ii, len(adj_controls) - 1)] -= model.apply_dres_dcontrol_adj(
+            dres1
+        )
         adj_props -= model.apply_dres_dp_adj(dres1)
         adj_dt.insert(0, -model.apply_dres_ddt_adj(dres1))
 
         # Update the RHS for the next iteration
-        adj_state1 = dfin_state(f, ii-1) - model.apply_dres_dstate0_adj(dres1)
+        adj_state1 = dfin_state(f, ii - 1) - model.apply_dres_dstate0_adj(dres1)
 
     ## Compute adjoint input variables
     adj_ini_state = adj_state1
@@ -88,6 +91,7 @@ def integrate(model, f, dfin_state):
     adj_times = vec.BlockVector((adj_times,), labels=(('times',),))
 
     return adj_ini_state, adj_controls, adj_props, adj_times
+
 
 def integrate_grad(model, f, functional):
     """

@@ -4,7 +4,8 @@ Definitions of newmark, time discretization scheme
 Units are in CGS
 """
 
-def newmark_v(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
+
+def newmark_v(u, u0, v0, a0, dt, gamma=1 / 2, beta=1 / 4):
     """
     Returns the Newmark method velocity update.
 
@@ -21,30 +22,39 @@ def newmark_v(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     -------
     v1
     """
-    return gamma/beta/dt*(u-u0) - (gamma/beta-1.0)*v0 - dt*(gamma/2.0/beta-1.0)*a0
+    return (
+        gamma / beta / dt * (u - u0)
+        - (gamma / beta - 1.0) * v0
+        - dt * (gamma / 2.0 / beta - 1.0) * a0
+    )
 
-def newmark_v_du1(dt, gamma=1/2, beta=1/4):
+
+def newmark_v_du1(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_v`"""
-    return gamma/beta/dt
+    return gamma / beta / dt
 
-def newmark_v_du0(dt, gamma=1/2, beta=1/4):
+
+def newmark_v_du0(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_v`"""
-    return -gamma/beta/dt
+    return -gamma / beta / dt
 
-def newmark_v_dv0(dt, gamma=1/2, beta=1/4):
+
+def newmark_v_dv0(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_v`"""
-    return - (gamma/beta-1.0)
+    return -(gamma / beta - 1.0)
 
-def newmark_v_da0(dt, gamma=1/2, beta=1/4):
+
+def newmark_v_da0(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_v`"""
-    return - dt*(gamma/2.0/beta-1.0)
+    return -dt * (gamma / 2.0 / beta - 1.0)
 
-def newmark_v_dt(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
+
+def newmark_v_dt(u, u0, v0, a0, dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_v`"""
-    return -gamma/beta/dt**2*(u-u0) - (gamma/2.0/beta-1.0)*a0
+    return -gamma / beta / dt**2 * (u - u0) - (gamma / 2.0 / beta - 1.0) * a0
 
 
-def newmark_a(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
+def newmark_a(u, u0, v0, a0, dt, gamma=1 / 2, beta=1 / 4):
     """
     Returns the Newmark method acceleration update.
 
@@ -60,30 +70,35 @@ def newmark_a(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
     -------
     a1
     """
-    return 1/beta/dt**2*(u-u0-dt*v0) - (1/2/beta-1)*a0
+    return 1 / beta / dt**2 * (u - u0 - dt * v0) - (1 / 2 / beta - 1) * a0
 
-def newmark_a_du1(dt, gamma=1/2, beta=1/4):
+
+def newmark_a_du1(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_a`"""
-    return 1.0/beta/dt**2
+    return 1.0 / beta / dt**2
 
-def newmark_a_du0(dt, gamma=1/2, beta=1/4):
+
+def newmark_a_du0(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_a`"""
-    return -1.0/beta/dt**2
+    return -1.0 / beta / dt**2
 
-def newmark_a_dv0(dt, gamma=1/2, beta=1/4):
+
+def newmark_a_dv0(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_a`"""
-    return -1.0/beta/dt
+    return -1.0 / beta / dt
 
-def newmark_a_da0(dt, gamma=1/2, beta=1/4):
+
+def newmark_a_da0(dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_a`"""
-    return -(1/2/beta-1)
+    return -(1 / 2 / beta - 1)
 
-def newmark_a_dt(u, u0, v0, a0, dt, gamma=1/2, beta=1/4):
+
+def newmark_a_dt(u, u0, v0, a0, dt, gamma=1 / 2, beta=1 / 4):
     """See `newmark_a`"""
-    return -2/beta/dt**3 * (u-u0-dt*v0) + 1/beta/dt**2 * (-v0)
+    return -2 / beta / dt**3 * (u - u0 - dt * v0) + 1 / beta / dt**2 * (-v0)
 
 
-def newmark_error_estimate(a1, a0, dt, beta=1/4):
+def newmark_error_estimate(a1, a0, dt, beta=1 / 4):
     """
     Return an estimate of the truncation error in `u` over the step.
 
@@ -110,4 +125,4 @@ def newmark_error_estimate(a1, a0, dt, beta=1/4):
     dfn.Vector()
         An estimate of the error in :math:`u_{n+1}`
     """
-    return 0.5*dt**2*(2*beta - 1/3)*(a1-a0)
+    return 0.5 * dt**2 * (2 * beta - 1 / 3) * (a1 - a0)

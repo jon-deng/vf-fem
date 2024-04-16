@@ -76,11 +76,7 @@ class Transform:
         """
         raise NotImplementedError()
 
-    def apply_vjp(
-            self,
-            x: bv.BlockVector,
-            hy: bv.BlockVector
-        ) -> bv.BlockVector:
+    def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
         """
         Map a dual vector `hy` to a dual vector `hx` at the point `x`
 
@@ -96,11 +92,7 @@ class Transform:
         """
         raise NotImplementedError()
 
-    def apply_jvp(
-            self,
-            x: bv.BlockVector,
-            dx: bv.BlockVector
-        ) -> bv.BlockVector:
+    def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
         """
         Map a differential input vector `dx` to an output vector `dy` at the point `x`
 
@@ -122,6 +114,7 @@ class Transform:
     def __rmul__(self, other):
         return TransformComposition(other, self)
 
+
 class TransformComposition(Transform):
     """
     A composition of two `Transform` instances
@@ -141,11 +134,7 @@ class TransformComposition(Transform):
         trans1, trans2 = self._transforms
         return trans2.apply(trans1.apply(x))
 
-    def apply_vjp(
-            self,
-            x: bv.BlockVector,
-            hy: bv.BlockVector
-        ) -> bv.BlockVector:
+    def apply_vjp(self, x: bv.BlockVector, hy: bv.BlockVector) -> bv.BlockVector:
         trans1, trans2 = self._transforms
 
         x1 = x
@@ -161,11 +150,7 @@ class TransformComposition(Transform):
 
         return hx1
 
-    def apply_jvp(
-            self,
-            x: bv.BlockVector,
-            dx: bv.BlockVector
-        ) -> bv.BlockVector:
+    def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
         trans1, trans2 = self._transforms
 
         x1 = x
@@ -190,28 +175,21 @@ class TransformFromModel(Transform):
 
     Note that subclasses have to supply a `self._x` attribute
     """
-    def __init__(
-            self,
-            model: Model
-        ):
+
+    def __init__(self, model: Model):
         self.model = model
 
         # NOTE: Subclasses have to supply a `self._x` attribute
         _y_vec = ba.zeros(model.prop.bshape)
-        self._y = bv.BlockVector(
-            _y_vec.sub_blocks, labels=model.prop.labels
-        )
+        self._y = bv.BlockVector(_y_vec.sub_blocks, labels=model.prop.labels)
+
 
 class TractionShape(TransformFromModel):
     """
     Map a surface traction to mesh displacement
     """
-    def __init__(
-            self,
-            model: Model,
-            lame_lambda=1.0, lame_mu=1.0,
-            dirichlet_bcs=None
-        ):
+
+    def __init__(self, model: Model, lame_lambda=1.0, lame_mu=1.0, dirichlet_bcs=None):
         super().__init__(model)
 
         # The input vector simply renames the mesh displacement vector
@@ -240,31 +218,31 @@ class TractionShape(TransformFromModel):
             ds(int(facet_label_to_id[facet_label]))
             for facet_label in residual.fsi_facet_labels
         ]
-        ds_traction = reduce(lambda x, y: x+y, ds_traction_surfaces)
+        ds_traction = reduce(lambda x, y: x + y, ds_traction_surfaces)
 
         tmesh = dfn.Function(fspace)
         trial = dfn.TrialFunction(fspace)
         test = dfn.TestFunction(fspace)
 
         lmbda, mu = dfn.Constant(lame_lambda), dfn.Constant(lame_mu)
-        trial_strain = 1/2*(ufl.grad(trial) + ufl.grad(trial).T)
-        test_strain = 1/2*(ufl.grad(test) + ufl.grad(test).T)
+        trial_strain = 1 / 2 * (ufl.grad(trial) + ufl.grad(trial).T)
+        test_strain = 1 / 2 * (ufl.grad(test) + ufl.grad(test).T)
         dim = trial_strain.ufl_shape[0]
-        form_dF_du = ufl.inner(
-            2*mu*trial_strain + lmbda*ufl.tr(trial_strain)*ufl.Identity(dim),
-            test_strain
-        ) * dx
+        form_dF_du = (
+            ufl.inner(
+                2 * mu * trial_strain
+                + lmbda * ufl.tr(trial_strain) * ufl.Identity(dim),
+                test_strain,
+            )
+            * dx
+        )
         mat_dF_du = dfn.assemble(
-            form_dF_du,
-            tensor=dfn.PETScMatrix(),
-            keep_diagonal=True
+            form_dF_du, tensor=dfn.PETScMatrix(), keep_diagonal=True
         )
 
-        form_dF_dt = ufl.inner(trial, test)*ds_traction
+        form_dF_dt = ufl.inner(trial, test) * ds_traction
         mat_dF_dt = dfn.assemble(
-            form_dF_dt,
-            tensor=dfn.PETScMatrix(),
-            keep_diagonal=True
+            form_dF_dt, tensor=dfn.PETScMatrix(), keep_diagonal=True
         )
 
         if dirichlet_bcs == None:
@@ -333,7 +311,7 @@ class TractionShape(TransformFromModel):
 
         hF = self.tmesh.vector()
         dfn.solve(self.mat_dF_du, hF, humesh, 'lu')
-        hx_dict['tmesh'][:] = self.mat_dF_dt*hF
+        hx_dict['tmesh'][:] = self.mat_dF_dt * hF
         return dict_to_bvec(hx_dict, self.x.labels)
 
     def apply_jvp(self, x: bv.BlockVector, dx: bv.BlockVector) -> bv.BlockVector:
@@ -374,9 +352,11 @@ class JaxTransform(Transform):
     """
 
     def __init__(
-            self,
-            x_y_map: Tuple[bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]],
-        ):
+        self,
+        x_y_map: Tuple[
+            bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]
+        ],
+    ):
         x, y, map = x_y_map
 
         self._x = bv.convert_subtype_to_numpy(x)
@@ -403,7 +383,7 @@ class JaxTransform(Transform):
         hy_dict = bvec_to_dict(_hy)
 
         _, vjp_fun = jax.vjp(self.map, x_dict)
-        hx_dict, = vjp_fun(hy_dict)
+        (hx_dict,) = vjp_fun(hy_dict)
         hx_dict = jax_to_numpy_dict(hx_dict)
         return dict_to_bvec(hx_dict, self.x.labels)
 
@@ -423,11 +403,7 @@ class JaxTransformFromModel(JaxTransform):
     which uses `jax` to create output vector
     """
 
-    def __init__(
-            self,
-            model: Model,
-            **kwargs
-        ):
+    def __init__(self, model: Model, **kwargs):
         super().__init__()
         x_y_map = self.make_x_y_map(model, **kwargs)
         super().__init__(x_y_map)
@@ -439,6 +415,7 @@ class JaxTransformFromModel(JaxTransform):
         """
         raise NotImplementedError()
 
+
 class LayerModuli(JaxTransformFromModel):
 
     @staticmethod
@@ -446,10 +423,11 @@ class LayerModuli(JaxTransformFromModel):
         ## Get the mapping from labelled cell regions to DOFs
         cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_residual(
             model.solid.residual,
-            model.solid.residual.form['coeff.prop.emod'].function_space()
+            model.solid.residual.form['coeff.prop.emod'].function_space(),
         )
 
         y_dict = bvec_to_dict(model.prop)
+
         def map(x):
 
             emod = jnp.zeros(y_dict['emod'].size, copy=True)
@@ -459,7 +437,7 @@ class LayerModuli(JaxTransformFromModel):
 
                 weight_region = jnp.zeros(emod.shape)
                 weight_region = weight_region.at[dofs][:] = layer_stiffness
-                emod_region = layer_stiffness*weight_region
+                emod_region = layer_stiffness * weight_region
 
                 emod = emod + emod_region
                 weight = weight + weight_region
@@ -481,9 +459,7 @@ class JaxTransformFromX(JaxTransform):
     Map `BlockVector`s between two spaces
     """
 
-    def __init__(
-            self, x: bv.BlockVector, **kwargs
-        ):
+    def __init__(self, x: bv.BlockVector, **kwargs):
         y, map = self.make_y_map(x, **kwargs)
         super().__init__((x, y, map))
 
@@ -493,6 +469,7 @@ class JaxTransformFromX(JaxTransform):
         Return a `jax` function that performs the map
         """
         raise NotImplementedError()
+
 
 class Identity(JaxTransformFromX):
 
@@ -505,11 +482,10 @@ class Identity(JaxTransformFromX):
 
         return y, map
 
+
 class ConstantSubset(JaxTransformFromX):
 
-    def __init__(
-            self, x: bv.BlockVector, const_vals=None
-        ):
+    def __init__(self, x: bv.BlockVector, const_vals=None):
         super().__init__(x, const_vals=const_vals)
 
     @staticmethod
@@ -523,8 +499,11 @@ class ConstantSubset(JaxTransformFromX):
             Return the x->y mapping
             """
             y = {
-                key: const_vals[key]*np.ones(value.shape) if key in const_vals
-                else value
+                key: (
+                    const_vals[key] * np.ones(value.shape)
+                    if key in const_vals
+                    else value
+                )
                 for key, value in x.items()
             }
             return y
@@ -532,11 +511,10 @@ class ConstantSubset(JaxTransformFromX):
         y = x.copy()
         return y, map
 
+
 class Scale(JaxTransformFromX):
 
-    def __init__(
-            self, x: bv.BlockVector, scale=None
-        ):
+    def __init__(self, x: bv.BlockVector, scale=None):
         super().__init__(x, scale=scale)
 
     @staticmethod
@@ -550,7 +528,7 @@ class Scale(JaxTransformFromX):
             """
             Return the x->y mapping
             """
-            y = {key: scale[key]*x_sub for key, x_sub in x.items()}
+            y = {key: scale[key] * x_sub for key, x_sub in x.items()}
             return y
 
         y = x.copy()
@@ -563,9 +541,7 @@ class JaxTransformFromY(JaxTransform):
     Map `BlockVector`s between two spaces
     """
 
-    def __init__(
-            self, y: bv.BlockVector, **kwargs
-        ):
+    def __init__(self, y: bv.BlockVector, **kwargs):
         x, map = self.make_x_map(y, **kwargs)
         super().__init__((x, y, map))
 
@@ -576,11 +552,10 @@ class JaxTransformFromY(JaxTransform):
         """
         raise NotImplementedError()
 
+
 class ExtractSubset(JaxTransformFromY):
 
-    def __init__(
-            self, y: bv.BlockVector, keys_to_extract=None
-        ):
+    def __init__(self, y: bv.BlockVector, keys_to_extract=None):
 
         _const_vals = bvec_to_dict(y.copy())
         super().__init__(y, keys_to_extract=keys_to_extract, const_vals=_const_vals)
@@ -596,34 +571,30 @@ class ExtractSubset(JaxTransformFromY):
         x = bv.BlockVector(
             [np.array(y[key]) for key in keys_to_extract],
             shape=(len(keys_to_extract),),
-            labels=(keys_to_extract,)
+            labels=(keys_to_extract,),
         )
 
         def map(x):
             y = {
-                key:
-                x[key] if key in x
-                else value
-                for key, value in const_vals.items()
+                key: x[key] if key in x else value for key, value in const_vals.items()
             }
             return y
 
         return x, map
 
+
 def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
 
+
 def dict_to_bvec(
-        y: Mapping[str, np.ndarray],
-        labels: Optional[typing.MultiLabels]=None
-    ) -> bv.BlockVector:
+    y: Mapping[str, np.ndarray], labels: Optional[typing.MultiLabels] = None
+) -> bv.BlockVector:
     if labels is None:
-        labels = (tuple(y.keys()), )
+        labels = (tuple(y.keys()),)
     subvecs = [y[label] for label in labels[0]]
     return bv.BlockVector(subvecs, labels=labels)
 
+
 def jax_to_numpy_dict(dict: Mapping[str, NDArray]):
-    return {
-        key: np.array(value)
-        for key, value in dict.items()
-    }
+    return {key: np.array(value) for key, value in dict.items()}

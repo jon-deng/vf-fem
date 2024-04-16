@@ -10,6 +10,7 @@ import scipy.signal as sig
 from .base import AbstractFunctional
 from blockarray import blockvec as vec
 
+
 class FluidFunctional(AbstractFunctional):
     """
     This class provides an interface/method to define basic fluid functionals
@@ -17,6 +18,7 @@ class FluidFunctional(AbstractFunctional):
     To define a new FluidFunctional you need to implement the `eval`, `eval_du` ... `eval_dp`,
     `form_definitions` methods.
     """
+
     def __init__(self, model):
         super().__init__(model, ())
 
@@ -45,24 +47,26 @@ class FluidFunctional(AbstractFunctional):
     def eval_dfl_props(self, f):
         raise NotImplementedError
 
+
 class FinalPressureNorm(FluidFunctional):
     r"""
     Return the l2 norm of pressure at the final time
 
     This returns :math:`\sum{||\vec{u}||}_2`.
     """
+
     def eval(self, f):
         # self.model.set_params_fromfile(f, f.size-1)
-        state = f.get_state(f.size-1)
+        state = f.get_state(f.size - 1)
 
-        return np.linalg.norm(state['p'])**2
+        return np.linalg.norm(state['p']) ** 2
 
     def eval_dfl_state(self, f, n):
         dqp = self.model.fluid.state0.copy()
 
-        if n == f.size-1:
+        if n == f.size - 1:
             state = f.get_state(n)
-            dqp['p'][:] = 2*state['p']
+            dqp['p'][:] = 2 * state['p']
 
         return dqp
 
@@ -77,18 +81,20 @@ class FinalPressureNorm(FluidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class FinalFlowRateNorm(FluidFunctional):
     """The norm of the final flow rate"""
+
     def eval(self, f):
         # breakpoint()
-        qp = f.get_state(f.size-1)[3:5]
+        qp = f.get_state(f.size - 1)[3:5]
 
         return qp['q'][0]
 
     def eval_dfl_state(self, f, n):
         dqp = self.model.fluid.state0.copy()
 
-        if n == f.size-1:
+        if n == f.size - 1:
             # qp = f.get_state(n)[3:5]
             dqp['q'][:] = 1.0
 
@@ -105,10 +111,12 @@ class FinalFlowRateNorm(FluidFunctional):
     def eval_ddt(self, f, n):
         return 0.0
 
+
 class AvgSubglottalPower(FluidFunctional):
     """
     Return the average subglottal power input
     """
+
     def __init__(self, model):
         super().__init__(model)
 
@@ -120,18 +128,18 @@ class AvgSubglottalPower(FluidFunctional):
         times = f.get_times()
 
         work = 0
-        for ii in range(N_START+1, N_STATE):
+        for ii in range(N_START + 1, N_STATE):
             # Set form coefficients to represent the equation mapping state ii->ii+1
-            state0 = f.get_state(ii-1)
+            state0 = f.get_state(ii - 1)
             state1 = f.get_state(ii)
 
             q0, psub0 = state0['q'][0], state0['p'][0]
             q1, psub1 = state1['q'][0], state1['p'][0]
-            dt = times[ii] - times[ii-1]
+            dt = times[ii] - times[ii - 1]
 
-            work += 0.5*(q0*psub0+q1*psub1)*dt
+            work += 0.5 * (q0 * psub0 + q1 * psub1) * dt
 
-        return work/(times[N_STATE-1]-times[N_START])
+        return work / (times[N_STATE - 1] - times[N_START])
 
     def eval_dfl_state(self, f, n):
         dqp = self.model.fluid.state0.copy()
@@ -147,17 +155,17 @@ class AvgSubglottalPower(FluidFunctional):
 
             # derivative from 'left' quadrature interval
             if n != N_START:
-                dt = times[n] - times[n-1]
-                dqp['q'][:] += 0.5*psub*dt
-                dqp['p'][0] += 0.5*q*dt
+                dt = times[n] - times[n - 1]
+                dqp['q'][:] += 0.5 * psub * dt
+                dqp['p'][0] += 0.5 * q * dt
 
             # derivative from 'right' quadrature interval
-            if n != N_STATE-1:
-                dt = times[n+1] - times[n]
-                dqp['q'][:] += 0.5*psub*dt
-                dqp['p'][0] += 0.5*q*dt
+            if n != N_STATE - 1:
+                dt = times[n + 1] - times[n]
+                dqp['q'][:] += 0.5 * psub * dt
+                dqp['p'][0] += 0.5 * q * dt
 
-            dqp = dqp/(times[N_STATE-1] - times[N_START])
+            dqp = dqp / (times[N_STATE - 1] - times[N_START])
 
         return dqp
 
@@ -178,33 +186,36 @@ class AvgSubglottalPower(FluidFunctional):
         def power(n):
             psub_n = f.get_control(n)['psub'][0]
             qn = f.get_state(n)['q'][0]
-            return qn*psub_n
+            return qn * psub_n
 
         if n > N_START:
             # dt = f.get_time(n) - f.get_time(n-1)
             # work = 0.5*(power(n-1)+power(n))*dt
-            ddt += 0.5*(power(n-1)+power(n))
+            ddt += 0.5 * (power(n - 1) + power(n))
 
         return ddt
+
 
 class AvgAcousticPower(FluidFunctional):
     """
     Return the mean acoustic power.
     """
+
     def __init__(self, model):
         super().__init__(model)
         self.constants = {
             'n_start': 0,
             # The constants below are density, sound speed, and piston radius (mouth opening)
             'rho': 0.001225,
-            'c': 350*1e2,
+            'c': 350 * 1e2,
             'a': 0.5,
-            'tukey_alpha': 0.05}
+            'tukey_alpha': 0.05,
+        }
 
     def eval(self, f):
         ## Load the flow rate vector
         n_start = self.constants['n_start']
-        n_final = f.size-1
+        n_final = f.size - 1
 
         time = f.get_times()[n_start:n_final]
 
@@ -212,11 +223,11 @@ class AvgAcousticPower(FluidFunctional):
 
         ## Multiply the flow rate vector data by a tukey window
         tukey_window = sig.tukey(q.size, alpha=self.constants['tukey_alpha'])
-        qw = tukey_window*q
+        qw = tukey_window * q
 
         ## Calculate the DFT of flow rate
         dft_qw = np.fft.fft(qw, n=qw.size)
-        dft_freq = np.fft.fftfreq(qw.size, d=time[1]-time[0])
+        dft_freq = np.fft.fftfreq(qw.size, d=time[1] - time[0])
 
         ## Calculate the normalized radiation impedance, which is
         # complex pressure/flow rate (rather than complex pressure/velocity)
@@ -224,18 +235,18 @@ class AvgAcousticPower(FluidFunctional):
         c = self.constants['c']
         a = self.constants['a']
 
-        k = 2*np.pi*dft_freq/c
-        z = 1/2*(k*a)**2 + 1j*8*k*a/3/np.pi
-        z_radiation = z * rho*c/(np.pi*a**2)
+        k = 2 * np.pi * dft_freq / c
+        z = 1 / 2 * (k * a) ** 2 + 1j * 8 * k * a / 3 / np.pi
+        z_radiation = z * rho * c / (np.pi * a**2)
 
         ## Compute power spectral density of acoustic power
         # psd_acoustic = np.real(z_radiation) * (dft_q * np.conj(dft_q))
-        psd_acoustic = np.real(z_radiation) * np.abs(dft_qw)**2
+        psd_acoustic = np.real(z_radiation) * np.abs(dft_qw) ** 2
 
         # By Plancherel's theorem
         # sum(p[k] q*[k]) = 1/N sum(P[k] Q*[k])
         # Divide by the number of power samples to get the average power
-        res = np.sum(psd_acoustic)/qw.size/qw.size
+        res = np.sum(psd_acoustic) / qw.size / qw.size
         return res
 
     def eval_dfl_state(self, f, n):
@@ -243,7 +254,7 @@ class AvgAcousticPower(FluidFunctional):
 
         ## Load the flow rate
         n_start = self.constants['n_start']
-        n_final = f.size-1
+        n_final = f.size - 1
 
         time = f.get_times()[n_start:n_final]
 
@@ -259,20 +270,20 @@ class AvgAcousticPower(FluidFunctional):
         a = self.constants['a']
 
         dft_q_tukey = np.fft.fft(q_tukey, n=q.size)
-        dft_freq = np.fft.fftfreq(q.size, d=time[1]-time[0])
+        dft_freq = np.fft.fftfreq(q.size, d=time[1] - time[0])
 
-        k = 2*np.pi*dft_freq/c
-        z = 1/2*(k*a)**2 + 1j*8*k*a/3/np.pi
-        z_rad = z * rho*c/(np.pi*a**2)
+        k = 2 * np.pi * dft_freq / c
+        z = 1 / 2 * (k * a) ** 2 + 1j * 8 * k * a / 3 / np.pi
+        z_rad = z * rho * c / (np.pi * a**2)
 
         ## Calculate the needed derivative terms (if applicable)
         N = q.size
-        n_ = n-n_start
+        n_ = n - n_start
         # breakpoint()
         if n_ >= 0 and n_ < q.size:
             # dft_q[n_] = sum(dft_factor * q)
             # psd_acoustic = np.real(z_radiation) * np.abs(dft_q_tukey)**2
-            dft_factor = np.exp(1j*2*np.pi*n_*np.arange(N)/N)
+            dft_factor = np.exp(1j * 2 * np.pi * n_ * np.arange(N) / N)
             dpsd_dq_tukey = np.real(z_rad) * 2 * np.real(dft_q_tukey * dft_factor)
             dpsd_dq = dpsd_dq_tukey * tukey_window[n_]
 

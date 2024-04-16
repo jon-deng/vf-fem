@@ -10,16 +10,17 @@ import numpy as jnp
 
 from blockarray import blockvec as vec
 
+
 class Acoustic1D(base.BaseTransientModel):
     def __init__(self, num_tube):
-        assert num_tube%2 == 0
+        assert num_tube % 2 == 0
 
         # self._dt = 0.0
 
         # pinc (interlaced f1, b2 partial pressures) are incident pressures
         # pref (interlaced b1, f2 partial pressures) are reflected pressures
-        pinc = np.zeros((num_tube//2 + 1)*2)
-        pref = np.zeros((num_tube//2 + 1)*2)
+        pinc = np.zeros((num_tube // 2 + 1) * 2)
+        pref = np.zeros((num_tube // 2 + 1) * 2)
         self.state0 = vec.BlockVector((pinc, pref), labels=[('pinc', 'pref')])
 
         self.state1 = self.state0.copy()
@@ -31,13 +32,16 @@ class Acoustic1D(base.BaseTransientModel):
         length = np.ones(1)
         area = np.ones(num_tube)
         gamma = np.ones(num_tube)
-        rho = 1.225*1e-3*np.ones(1)
-        c = 340*100*np.ones(1)
+        rho = 1.225 * 1e-3 * np.ones(1)
+        c = 340 * 100 * np.ones(1)
         rrad = np.ones(1)
         lrad = np.ones(1)
         self.prop = vec.BlockVector(
             (length, area, gamma, rho, c, rrad, lrad),
-            labels=[('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad')])
+            labels=[
+                ('length', 'area', 'proploss', 'rhoac', 'soundspeed', 'rrad', 'lrad')
+            ],
+        )
 
     ## Setting parameters of the acoustic model
     @property
@@ -45,7 +49,7 @@ class Acoustic1D(base.BaseTransientModel):
         NTUBE = self.prop['area'].size
         length = self.prop['length'][0]
         C = self.prop['soundspeed'][0]
-        return (2*length/NTUBE) / C
+        return (2 * length / NTUBE) / C
 
     @dt.setter
     def dt(self, value):
@@ -82,10 +86,11 @@ class Acoustic1D(base.BaseTransientModel):
             ret[:] = 0.0
         return ret
 
+
 class WRAnalog(Acoustic1D):
     @property
     def z(self):
-        return self.prop['rhoac']*self.prop['soundspeed']/self.prop['area']
+        return self.prop['rhoac'] * self.prop['soundspeed'] / self.prop['area']
 
     def set_prop(self, prop):
         super().set_prop(prop)
@@ -108,9 +113,9 @@ class WRAnalog(Acoustic1D):
         L = self.prop['lrad'][0]
 
         # Formula given by Story and Flanagan (equations 2.103 and 2.104 from Story's thesis)
-        PISTON_RAD = np.sqrt(area[-1]/np.pi)
-        R = 128/(9*np.pi**2)
-        L = 16/dt*PISTON_RAD/(3*np.pi*cspeed)
+        PISTON_RAD = np.sqrt(area[-1] / np.pi)
+        R = 128 / (9 * np.pi**2)
+        L = 16 / dt * PISTON_RAD / (3 * np.pi * cspeed)
 
         NUM_TUBE = area.size
 
@@ -124,7 +129,9 @@ class WRAnalog(Acoustic1D):
         gamma1 = np.concatenate([[1.0], gamma[1::2]])
         gamma2 = np.concatenate([gamma[:-1:2], [1.0]])
 
-        self.reflect, self.reflect00, self.inputq = wra(dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=R, L=L)
+        self.reflect, self.reflect00, self.inputq = wra(
+            dt, a1, a2, gamma1, gamma2, NUM_TUBE, cspeed, rho, R=R, L=L
+        )
 
     ## Solver functions
     def solve_state1(self):
@@ -164,17 +171,17 @@ class WRAnalog(Acoustic1D):
         b[:] = 0.0
         return b
 
+
 def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
-    """
-    """
-    assert gamma1.size == N//2+1
-    assert gamma2.size == N//2+1
+    """ """
+    assert gamma1.size == N // 2 + 1
+    assert gamma2.size == N // 2 + 1
 
-    assert a1.size == N//2+1
-    assert a2.size == N//2+1
+    assert a1.size == N // 2 + 1
+    assert a2.size == N // 2 + 1
 
-    z1 = RHO*C/a1
-    z2 = RHO*C/a2
+    z1 = RHO * C / a1
+    z2 = RHO * C / a2
 
     def inputq(q, pinc):
         q = jnp.squeeze(q)
@@ -184,15 +191,14 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         f1, b2 = pinc[0], pinc[1]
         b2 = gamma * b2
 
-        f2 = z*q + b2
+        f2 = z * q + b2
         b1 = b2 + f2 - f1
         return jnp.array([b1, f2])
 
     def dinputq(q, bi, z, gamma):
         dfr_dq = z
-        dfr_dbi = gamma*1.0
+        dfr_dbi = gamma * 1.0
         return dfr_dq, dfr_dbi
-
 
     def radiation(pinc, pinc_prev, pref_prev):
         gamma = gamma1[-1]
@@ -202,35 +208,38 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         f1 = gamma * f1
 
-        _a1 = -R+L-R*L
-        _a2 = -R-L + R*L
+        _a1 = -R + L - R * L
+        _a2 = -R - L + R * L
 
-        _b1 = -R+L + R*L
-        _b2 = R+L + R*L
+        _b1 = -R + L + R * L
+        _b2 = R + L + R * L
 
-        b1 = 1/_b2*(f1*_a2 + f1prev*_a1 + b1prev*_b1)
-        f2 = 1/_b2*(f2prev*_b1 + f1*(_b2+_a2) + f1prev*(_a1-_b1))
+        b1 = 1 / _b2 * (f1 * _a2 + f1prev * _a1 + b1prev * _b1)
+        f2 = 1 / _b2 * (f2prev * _b1 + f1 * (_b2 + _a2) + f1prev * (_a1 - _b1))
         return jnp.array([b1, f2])
 
     def dradiation(f1, f1prev, b1prev, f2prev, gamma):
-        _a1 = -R+L-R*L
-        _a2 = -R-L + R*L
+        _a1 = -R + L - R * L
+        _a2 = -R - L + R * L
 
-        _b1 = -R+L + R*L
-        _b2 = R+L + R*L
+        _b1 = -R + L + R * L
+        _b2 = R + L + R * L
 
-        df2_df1 = gamma*(1/_b2)*(_b2+_a2)
-        df2_df1prev = gamma*(1/_b2)*(_a1-_b1)
+        df2_df1 = gamma * (1 / _b2) * (_b2 + _a2)
+        df2_df1prev = gamma * (1 / _b2) * (_a1 - _b1)
         df2_db1prev = 0.0
-        df2_df2prev = gamma*(1/_b2)*(_b1)
+        df2_df2prev = gamma * (1 / _b2) * (_b1)
 
-        db1_df1 = gamma*(1/_b2)*(_a2)
-        db1_df1prev = gamma*(1/_b2)*(_a1)
-        db1_db1prev = gamma*(1/_b2)*(_b1)
+        db1_df1 = gamma * (1 / _b2) * (_a2)
+        db1_df1prev = gamma * (1 / _b2) * (_a1)
+        db1_db1prev = gamma * (1 / _b2) * (_b1)
         db1_df2prev = 0.0
-        return (df2_df1, df2_df1prev, df2_db1prev, df2_df2prev), \
-               (db1_df1, db1_df1prev, db1_db1prev, db1_df2prev)
-
+        return (df2_df1, df2_df1prev, df2_db1prev, df2_df2prev), (
+            db1_df1,
+            db1_df1prev,
+            db1_db1prev,
+            db1_df2prev,
+        )
 
     def reflect00(pinc, pinc_prev, pref_prev, q):
         # Note that int, inp, rad refer to interior, input, and radiation junction
@@ -240,10 +249,10 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         f1 = gamma1 * f1
         b2 = gamma2 * b2
 
-        r1 = (z2-z1)/(z2+z1)
+        r1 = (z2 - z1) / (z2 + z1)
 
-        f2int = (f1 + (f1-b2)*r1)[1:-1]
-        b1int = (b2 + (f1-b2)*r1)[1:-1]
+        f2int = (f1 + (f1 - b2) * r1)[1:-1]
+        b1int = (b2 + (f1 - b2) * r1)[1:-1]
         pref_int = jnp.stack([b1int, f2int], axis=-1).reshape(-1)
 
         ## Input boundary
@@ -260,13 +269,13 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         return pref
 
     def dreflect00(f1, b2, f1prev, b2prev, b1prev, f2prev, q):
-        r1 = (z2-z1)/(z2+z1)
+        r1 = (z2 - z1) / (z2 + z1)
 
-        df2_df1 = gamma1*(1 + r1)
-        df2_db2 = gamma2*(-r1)
+        df2_df1 = gamma1 * (1 + r1)
+        df2_db2 = gamma2 * (-r1)
 
-        db1_df1 = gamma1*(r1)
-        db1_db2 = gamma2*(1 - r1)
+        db1_df1 = gamma1 * (r1)
+        db1_db2 = gamma2 * (1 - r1)
 
         ## Input boundary
         df2_dq, df2_db2[0] = dinputq(q, b2[0], z2[0], gamma2[0])
@@ -298,8 +307,24 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
         df2_db1prev[-1] = df2_dbmprev
         df2_df2prev[-1] = df2_dfradprev
 
-        df2 = (df2_df1, df2_db2, df2_df1prev, df2_db1prev, df2_df2prev, df2_db2prev, df2_dq)
-        db1 = (db1_df1, db1_db2, db1_df1prev, db1_db1prev, db1_df2prev, db1_db2prev, db1_dq)
+        df2 = (
+            df2_df1,
+            df2_db2,
+            df2_df1prev,
+            df2_db1prev,
+            df2_df2prev,
+            df2_db2prev,
+            df2_dq,
+        )
+        db1 = (
+            db1_df1,
+            db1_db2,
+            db1_df1prev,
+            db1_db1prev,
+            db1_df2prev,
+            db1_db2prev,
+            db1_dq,
+        )
         return db1, df2
 
     def reflect05(pinc):
@@ -314,21 +339,21 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
         f1 = gamma1_ * f1
         b2 = gamma2_ * b2
-        r = (z2_-z1_)/(z2_+z1_)
+        r = (z2_ - z1_) / (z2_ + z1_)
 
-        b1 = b2 + (f1-b2)*r
-        f2 = f1 + (f1-b2)*r
+        b1 = b2 + (f1 - b2) * r
+        f2 = f1 + (f1 - b2) * r
         pref = jnp.stack([b1, f2], axis=-1).reshape(-1)
         return pref
 
     def dreflect05(f1, b2, gamma1, gamma2, z1, z2):
-        r = (z2-z1)/(z2+z1)
+        r = (z2 - z1) / (z2 + z1)
 
-        df2_df1 = (1.0 + r)*gamma1
-        df2_db2 = (-r)*gamma2
+        df2_df1 = (1.0 + r) * gamma1
+        df2_db2 = (-r) * gamma2
 
-        db1_df1 = (r)*gamma1
-        db1_db2 = (1.0-r)*gamma2
+        db1_df1 = (r) * gamma1
+        db1_db2 = (1.0 - r) * gamma2
         return (db1_df1, db1_db2), (df2_df1, df2_db2)
 
     # @jax.jit
@@ -396,6 +421,7 @@ def wra(dt, a1, a2, gamma1, gamma2, N, C, RHO, R=1.0, L=1.0):
 
     return reflect, reflect00, inputq
 
+
 def input_and_output_impedance(model, n=2**12):
     """
     Return the input and output impedances
@@ -408,7 +434,7 @@ def input_and_output_impedance(model, n=2**12):
     control = model.control.copy()
     control[:] = 0.0
 
-    times = np.arange(0, n)*model.dt
+    times = np.arange(0, n) * model.dt
 
     qinp = np.zeros(n)
     pinp, pout = np.zeros(n), np.zeros(n)
@@ -425,23 +451,59 @@ def input_and_output_impedance(model, n=2**12):
 
         state0 = state1
 
-    zinp = np.fft.fft(pinp)/np.fft.fft(qinp)
-    zout = np.fft.fft(pout)/np.fft.fft(qinp)
+    zinp = np.fft.fft(pinp) / np.fft.fft(qinp)
+    zout = np.fft.fft(pout) / np.fft.fft(qinp)
     return zinp, zout
+
 
 ## Common Area Function Definitions
 # The 44-section neutral area function proposed by Story (2005)
 NEUTRAL_FS = 44.1e3
-NEUTRAL_AREA = (np.pi/4)*np.array(
-    [0.636, 0.561, 0.561, 0.550,
-     0.598, 0.895, 1.187, 1.417,
-     1.380, 1.273, 1.340, 1.399,
-     1.433, 1.506, 1.493, 1.473,
-     1.499, 1.529, 1.567, 1.601,
-     1.591, 1.547, 1.570, 1.546,
-     1.532, 1.496, 1.429, 1.425,
-     1.496, 1.608, 1.668, 1.757,
-     1.842, 1.983, 2.073, 2.123,
-     2.194, 2.175, 2.009, 1.785,
-     1.675, 1.539, 1.405, 1.312]
-    )**2
+NEUTRAL_AREA = (np.pi / 4) * np.array(
+    [
+        0.636,
+        0.561,
+        0.561,
+        0.550,
+        0.598,
+        0.895,
+        1.187,
+        1.417,
+        1.380,
+        1.273,
+        1.340,
+        1.399,
+        1.433,
+        1.506,
+        1.493,
+        1.473,
+        1.499,
+        1.529,
+        1.567,
+        1.601,
+        1.591,
+        1.547,
+        1.570,
+        1.546,
+        1.532,
+        1.496,
+        1.429,
+        1.425,
+        1.496,
+        1.608,
+        1.668,
+        1.757,
+        1.842,
+        1.983,
+        2.073,
+        2.123,
+        2.194,
+        2.175,
+        2.009,
+        1.785,
+        1.675,
+        1.539,
+        1.405,
+        1.312,
+    ]
+) ** 2
