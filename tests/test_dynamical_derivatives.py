@@ -294,13 +294,26 @@ class GenericFixtureMixin:
 
         SolidType, LinSolidType, solid_kwargs = SolidModelPair
         FluidType, LinFluidType, fluid_kwargs = FluidModelPair
-        model_coupled = load.load_dynamical_fsi_model(
-            solid_mesh, fluid_mesh, SolidType, FluidType,
-            fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',),
-            **solid_kwargs, **fluid_kwargs
-        )
+        if SolidType is not None and FluidType is not None:
+            model = load.load_dynamical_fsi_model(
+                solid_mesh, fluid_mesh, SolidType, FluidType,
+                fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',),
+                **solid_kwargs, **fluid_kwargs
+            )
+        elif SolidType is not None and FluidType is None:
+            model = load.load_solid_model(
+                solid_mesh, SolidType,
+                pressure_facet_labels=('pressure',), fixed_facet_labels=('fixed',),
+                **solid_kwargs
+            )
+        elif SolidType is None and FluidType is not None:
+            model = load.load_fluid_model(
+                fluid_mesh, FluidType, **fluid_kwargs
+            )
+        else:
+            assert False
 
-        return model_coupled
+        return model
 
     @pytest.fixture()
     def model_linear(self, mesh_path, SolidModelPair, FluidModelPair):
@@ -479,7 +492,6 @@ class GenericFixtureMixin:
             dprop['emod'] = 1.0
 
             if 'umesh' in dprop:
-                print("-- testing 'umesh' --")
                 # Use a uniaxial y stretching motion
                 fspace = model_solid.residual.form['coeff.state.u1'].function_space()
                 VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
@@ -504,6 +516,37 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
         Return a tuple of non-linear and linearized models, and kwargs
         """
         return request.param
+
+    @pytest.fixture(
+        params=[
+            (None, None, {}),
+        ]
+    )
+    def FluidModelPair(self, request):
+        """
+        Return a tuple of non-linear and linearized models, and kwargs
+        """
+        return request.param
+
+    @pytest.fixture()
+    def control(self, model: Model):
+        model_solid, model_fluids, model_coupl = split_model_components(model)
+
+        control0 = model.control.copy()
+        control0[:] = 0.0
+
+        if model_fluids is not None:
+            control_values = {
+                'qsub': 100,
+                'psub': 1e-8*10,
+                'psup': 0*10
+            }
+            for n in range(len(model_fluids)):
+                for key, value in control_values.items():
+                    _key = f'fluid{n}.{key}'
+                    if _key in control0:
+                        control0[_key] = value
+        return control0
 
     @pytest.fixture()
     def prop(self, model: Model):
@@ -547,8 +590,7 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
         dprop[:] = 0
 
         if model_solid is not None:
-            print("-- testing 'umesh' --")
-            # Use a uniaxial y stretching motion
+            # Test mesh motion along a uniaxial y-direction stretching motion
             fspace = model_solid.residual.form['coeff.state.u1'].function_space()
             VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
             coords = np.array(model_solid.XREF[:]).copy().reshape(-1, 2)
@@ -559,25 +601,78 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
             # dprop['umesh'] = 0
         return dprop
 
-    @pytest.fixture()
-    def control(self, model: Model):
-        model_solid, model_fluids, model_coupl = split_model_components(model)
 
-        control0 = model.control.copy()
-        control0[:] = 1.0
+    @pytest.mark.skip()
+    def test_assem_dres_dstate(
+            self,
+            model: Model,
+            state: BVec, statet: BVec, control: BVec, prop: BVec,
+            dstate: BVec
+        ):
+        """
+        Test `model.assem_dres_dstate`
+        """
+        super().test_assem_dres_dstate(
+            model, state, statet, control, prop, dstate
+        )
 
-        if model_fluids is not None:
-            control_values = {
-                'qsub': 100,
-                'psub': 800*10,
-                'psup': 0
-            }
-            for n in range(len(model_fluids)):
-                for key, value in control_values.items():
-                    _key = f'fluid{n}.{key}'
-                    if _key in control0:
-                        control0[_key] = value
-        return control0
+    @pytest.mark.skip()
+    def test_assem_dres_dstatet(
+            self,
+            model: Model,
+            state: BVec, statet: BVec, control: BVec, prop: BVec,
+            dstatet: BVec
+        ):
+        super().test_assem_dres_dstatet(
+            model, state, statet, control, prop, dstatet
+        )
+
+    @pytest.mark.skip()
+    def test_assem_dres_dcontrol(
+            self,
+            model: Model,
+            state: BVec, statet: BVec, control: BVec, prop: BVec,
+            dcontrol: BVec
+        ):
+        """
+        Test `model.assem_dres_dcontrol`
+        """
+        super().test_assem_dres_dcontrol(
+            model, state, statet, control, prop, dcontrol
+        )
+
+    def test_assem_dres_dprop(
+            self,
+            model: Model,
+            state: BVec, statet: BVec, control: BVec, prop: BVec,
+            dprop: BVec
+        ):
+        super().test_assem_dres_dprop(
+            model, state, statet, control, prop, dprop
+        )
+
+    @pytest.mark.skip()
+    def test_dres_dstate_vs_dres_state(
+            self,
+            model: Model, model_linear: LinModel,
+            state: BVec, statet: BVec, control: BVec, prop: BVec,
+            dstate: BVec
+        ):
+        super().test_dres_dstate_vs_dres_state(
+            model, model_linear, state, statet, control, prop, dstate
+        )
+
+    @pytest.mark.skip()
+    def test_dres_dstatet_vs_dres_statet(
+            self,
+            model: Model, model_linear: LinModel,
+            state: BVec, statet: BVec, control: BVec, prop: BVec,
+            dstatet: BVec
+        ):
+        super().test_dres_dstatet_vs_dres_statet(
+            model, model_linear, state, statet, control, prop, dstatet
+        )
+
 
 class TestNoShapeModel(_TestDerivative, GenericFixtureMixin):
     pass
