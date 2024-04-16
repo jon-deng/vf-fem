@@ -976,8 +976,6 @@ class APForceForm(PredefinedForm):
 class ShapeForm(PredefinedForm):
     """
     Linear functional that just adds a shape parameter
-
-    TODO: This doesn't really work anymore after I updated the form class
     """
 
     COEFFICIENT_SPEC = {
@@ -989,14 +987,14 @@ class ShapeForm(PredefinedForm):
         umesh = coefficients['coeff.prop.umesh']
         umesh_ufl = ufl.SpatialCoordinate(mesh)
 
-        # NOTE: To find the sensitivity w.r.t shape, UFL actually uses the parameters
-        # `ufl.SpatialCoordinate(mesh)`
-        # This doesn't have an associated function/vector of values so both are included
-        # here
-        # The code has to manually account for 'coeff.prop' cases that have both a
-        # function/vector and ufl coefficient instance
-        # forms['coeff.prop.umesh'] = (umesh, ufl.SpatialCoordinate(mesh))
-        # forms['mesh.REF_COORDINATES'] = mesh.coordinates().copy()
+        # NOTE:
+        # To find sensitivity w.r.t shape, UFL uses the object
+        # `ufl.SpatialCoordinate(mesh)` rather than a `Function` instance.
+        # This doesn't have an associated vector of values so you have to
+        # store the ufl object and the coefficient vector separately.
+        # Code has to manually account for this additional property,
+        # for example, when taking shape derivatives
+        coefficients['ufl.coeff.prop.umesh'] = umesh_ufl
 
         expressions = {}
 
@@ -1689,7 +1687,12 @@ def gen_jac_property_forms(form: FenicsForm) -> Mapping[str, dfn.Form]:
         if 'coeff.prop' in form_name
     ]
     for prop_name in property_labels:
-        prop_coeff = form[f'coeff.prop.{prop_name}']
+        # Special handling for shape
+        if prop_name == 'umesh':
+            prop_coeff = form[f'ufl.coeff.prop.{prop_name}']
+        else:
+            prop_coeff = form[f'coeff.prop.{prop_name}']
+
         try:
             df_dprop = dfn.derivative(form.form, prop_coeff)
         except RuntimeError:

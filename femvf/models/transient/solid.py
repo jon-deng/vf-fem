@@ -40,7 +40,7 @@ def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
     prop_labels = [
         form_name.split('.')[-1] for form_name in forms.keys()
-        if 'coeff.prop' in form_name
+        if 'coeff.prop' == form_name[:len('coeff.prop')]
     ]
     vecs = []
     for prop_label in prop_labels:
