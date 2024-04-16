@@ -236,11 +236,14 @@ def make_dflcontrol_dslprop(fl_controls, sl_prop, fsimaps, dslarea_dslu):
             for dflarea_dslarea in dflarea_dslarea_coll
         ]
 
-        col_slu = sl_prop.labels[0].index('umesh')
-        num_col = sl_prop.size
-        for n, dflarea_dslu in enumerate(dflarea_dslu_coll):
-            row_flarea = fl_control.labels[0].index(f'fluid{n}.area')
-            mats[row_flarea*num_col+col_slu] = dflarea_dslu
+        # Set the block components `[f'fluid{ii}.area', 'umesh']`
+        labels = [f'fluid{ii}.area' for ii in range(len(fl_controls))]
+        fluid_control = bv.concatenate_with_prefix(fl_controls, 'fluid')
+        rows = [fluid_control.labels[0].index(label) for label in labels]
+        ncol = sl_prop.size
+        col = sl_prop.labels[0].index('umesh')
+        for ii, dflarea_dslu in zip(rows, dflarea_dslu_coll):
+            mats[ii*ncol+col] = dflarea_dslu
 
     dflcontrol_dslprop = bv.BlockMatrix(
         mats,

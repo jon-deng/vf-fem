@@ -149,9 +149,11 @@ class TransformComposition(Transform):
         trans1, trans2 = self._transforms
 
         x1 = x
-        x2 = trans1.apply(x1)
-
         hy2 = hy
+
+        y1 = trans1.apply(x1)
+
+        x2 = y1
         hx2 = trans2.apply_vjp(x2, hy2)
 
         hy1 = hx2
@@ -167,11 +169,12 @@ class TransformComposition(Transform):
         trans1, trans2 = self._transforms
 
         x1 = x
-        x2 = trans1.apply(x1)
-
         dx1 = dx
+
+        y1 = trans1.apply(x1)
         dy1 = trans1.apply_jvp(x1, dx1)
 
+        x2 = y1
         dx2 = dy1
         dy2 = trans2.apply_jvp(x2, dx2)
 

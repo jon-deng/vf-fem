@@ -185,6 +185,7 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
             self._dslcontrol_dflstate
         )
 
+        # TODO: This probably won't work in 3D since there would be multiple fluid models
         dflres_dflx = bm.convert_subtype_to_petsc(self._models[1].assem_dres_dstate())
         dflres_dslx = bla.mult_mat_mat(
             bm.convert_subtype_to_petsc(self._models[1].assem_dres_dcontrol()),
@@ -192,7 +193,8 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         )
         bmats = [
             [dslres_dslx, dslres_dflx],
-            [dflres_dslx, dflres_dflx]]
+            [dflres_dslx, dflres_dflx]
+        ]
         return bm.concatenate(bmats)
 
     def assem_dres_dstatet(self):
@@ -240,11 +242,6 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         )
 
         ## Fluid residual sensitivities
-        submats = [
-            subops.zero_mat(flsubvec.size, propsubvec.size)
-            for flsubvec in self._fl_state
-            for propsubvec in self.solid.prop
-        ]
         dflres_dflcontrol = bm.concatenate_diag(
             [fluid.assem_dres_dcontrol() for fluid in self.fluids]
         )
