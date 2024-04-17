@@ -182,6 +182,18 @@ class TimeSeriesStats(BaseDerivedStateHistoryMeasure):
     def assem(self, f: sf.StateFile, ns: Optional[Iterable] = None):
         return self.mean(f, ns=ns)
 
+    def max(self, f: sf.StateFile, ns: Optional[Iterable] = None):
+        prop = f.get_prop()
+        self.func.model.set_prop(prop)
+
+        return np.max(self.ts(f, ns=ns), axis=0)
+
+    def min(self, f: sf.StateFile, ns: Optional[Iterable] = None):
+        prop = f.get_prop()
+        self.func.model.set_prop(prop)
+
+        return np.min(self.ts(f, ns=ns), axis=0)
+
     def mean(self, f: sf.StateFile, ns: Optional[Iterable] = None):
         prop = f.get_prop()
         self.func.model.set_prop(prop)
