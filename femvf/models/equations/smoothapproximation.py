@@ -3,7 +3,7 @@ Contains definitions of smooth approximation functions
 """
 
 import jax
-from jax import numpy as jnp
+from jax import numpy as jnp, scipy as jsp
 
 
 # @jax.jit
@@ -11,7 +11,7 @@ def wavg(s, f, w, axis=-1):
     """
     Return the weighted average of f(s) over s with weights w(s)
     """
-    return jnp.trapz(f * w, s, axis=axis) / jnp.trapz(w, s, axis=axis)
+    return jsp.integrate.trapezoid(f * w, s, axis=axis) / jsp.integrate.trapezoid(w, s, axis=axis)
 
 
 # @jax.jit
