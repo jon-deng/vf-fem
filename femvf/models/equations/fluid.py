@@ -4,6 +4,7 @@ separation at a fixed location.
 """
 
 from typing import Callable, Tuple, Mapping
+from numpy.typing import NDArray
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -88,7 +89,11 @@ def _BernoulliFixedSep(s: np.ndarray, idx_sep: int = 0):
     Return quantities defining a fixed-separation point Bernoulli model
     """
 
-    N = s.size
+    # The number of fluid points
+    N_TOTAL = s.size
+    N_POINT = s.shape[-1]
+    SHAPE_FLUID = s.shape[:-1]
+    N_FLUID = np.product(SHAPE_FLUID)
 
     # Separation coefficient to ensure pressures after the separation point
     # match the supraglottal pressure
@@ -134,6 +139,12 @@ class BernoulliSmoothMinSep(PredefinedJaxResidual):
 
 
 def _BernoulliSmoothMinSep(s: jnp.ndarray):
+
+    # The number of fluid points
+    N_TOTAL = s.size
+    N_POINT = s.shape[-1]
+    SHAPE_FLUID = s.shape[:-1]
+    N_FLUID = np.product(SHAPE_FLUID)
 
     def coeff_sep(s, ssep, zeta_sep):
         """
@@ -191,26 +202,50 @@ class BernoulliAreaRatioSep(PredefinedJaxResidual):
         return _BernoulliAreaRatioSep(mesh)
 
 
+
 def _BernoulliAreaRatioSep(s: jnp.ndarray):
-    N = s.size
+    # The number of fluid points
+    SHAPE_FLUID = s.shape[:-1]
+    N_FLUID = int(np.prod(SHAPE_FLUID))
+    N_POINT = s.shape[-1]
+    N_TOTAL = s.size
 
-    s = jnp.array(s)
+    def reshape_args(shape_fluid, state, control, prop):
+        ret_state = state
+        ret_state['q'] = ret_state['q'].reshape(*shape_fluid, 1)
+        ret_state['p'] = ret_state['p'].reshape(*shape_fluid, N_POINT)
 
-    def bernoulli_qp(area, psub, psup, rho, r_sep, area_lb):
+        ret_control = control
+        ret_control['area'] = ret_control['area'].reshape(*shape_fluid, -1)
+        ret_control['psub'] = ret_control['psub'].reshape(*shape_fluid, 1)
+        ret_control['psup'] = ret_control['psup'].reshape(*shape_fluid, 1)
+
+        ret_prop = prop
+        ret_prop['rho_air'] = ret_prop['rho_air'].reshape(*shape_fluid, 1)
+        ret_prop['r_sep'] = ret_prop['r_sep'].reshape(*shape_fluid, 1)
+        ret_prop['area_lb'] = ret_prop['area_lb'].reshape(*shape_fluid, 1)
+
+        return ret_state, ret_control, ret_prop
+
+    def bernoulli_qp(area: NDArray, psub: NDArray, psup: NDArray, rho: NDArray, r_sep: NDArray, area_lb: NDArray):
         """
         Return Bernoulli flow and pressure
         """
         area = jnp.maximum(area, area_lb)
-        amin = jnp.min(area)
-        idx_min = jnp.min(jnp.argmax(area == amin))
-        smin = s[idx_min]
+        amin = jnp.min(area, axis=-1, keepdims=True)
+        idx_min = jnp.argmax(area == amin, axis=-1, keepdims=True)
+        # smin = s[idx_min]
+        smin = jnp.take_along_axis(s, idx_min, axis=-1)
 
         asep = r_sep * amin
         # To find the separation point, work only with coordinates downstream
         # of the minimum area
         _area = jnp.where(s >= smin, area, jnp.nan)
-        idx_sep = jnp.min(jnp.nanargmin(jnp.abs(_area - asep)))
-        ssep = s[idx_sep]
+        idx_sep = jnp.nanargmin(
+            jnp.abs(_area - asep), axis=-1, keepdims=True
+        )
+        # ssep = s[idx_sep]
+        ssep = jnp.take_along_axis(s, idx_sep, axis=-1)
 
         f_sep = jnp.array(s < ssep, dtype=jnp.float64)
 
@@ -222,21 +257,21 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
         return q, p
 
     def res(state, control, prop):
+        state, control, prop = reshape_args(SHAPE_FLUID, state, control, prop)
         q, p = state['q'], state['p']
         area, psub, psup = control['area'], control['psub'], control['psup']
 
         q_, p_ = bernoulli_qp(
             area, psub, psup, prop['rho_air'], prop['r_sep'], prop['area_lb']
         )
-        return {'q': q - q_, 'p': p - p_}
+        return {'q': (q - q_).reshape(-1), 'p': (p - p_).reshape(-1)}
 
-    N = s.size
     # Key functions/variables that have to be exported
-    _state = {'q': np.ones(1), 'p': np.ones(N)}
+    _state = {'q': np.ones(N_FLUID), 'p': np.ones(N_TOTAL)}
 
-    _control = {'area': np.ones(N), 'psub': np.ones(1), 'psup': np.ones(1)}
+    _control = {'area': np.ones(N_TOTAL), 'psub': np.ones(N_FLUID), 'psup': np.ones(N_FLUID)}
 
-    _props = {'rho_air': np.ones(1), 'r_sep': np.ones(1), 'area_lb': np.zeros(1)}
+    _props = {'rho_air': np.ones(N_FLUID), 'r_sep': np.ones(N_FLUID), 'area_lb': np.zeros(N_FLUID)}
 
     return res, (_state, _control, _props)
 
@@ -251,8 +286,11 @@ def _BernoulliFlowFixedSep(s: np.ndarray, idx_sep: int = 0):
     """
     Return quantities defining a fixed-separation point Bernoulli model with constant flow
     """
-
-    N = s.size
+    # The number of fluid points
+    N_TOTAL = s.size
+    N_POINT = s.shape[-1]
+    SHAPE_FLUID = s.shape[:-1]
+    N_FLUID = np.product(SHAPE_FLUID)
 
     # Separation coefficient to ensure pressures after the separation point
     # match the supraglottal pressure
