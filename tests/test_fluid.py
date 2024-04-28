@@ -13,7 +13,7 @@ import femvf.models.equations.fluid as eqfluid
 
 JaxResidual = eqfluid.JaxResidual
 
-class TestBernoulliSmoothMinSep:
+class TestBernoulliAreaRatioSep:
     @pytest.fixture(
         params=[
             np.linspace(0, 1, 11),
