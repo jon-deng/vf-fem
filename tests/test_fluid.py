@@ -13,7 +13,7 @@ import femvf.models.equations.fluid as eqfluid
 
 JaxResidual = eqfluid.JaxResidual
 
-class TestBernoulliAreaRatioSep:
+class MeshFixtures:
     @pytest.fixture(
         params=[
             np.linspace(0, 1, 11),
@@ -23,6 +23,7 @@ class TestBernoulliAreaRatioSep:
     def mesh(self, request):
         return request.param
 
+class ModelParamFixtures:
     @pytest.fixture()
     def model(self, mesh) -> eqfluid.JaxResidual:
         return eqfluid.BernoulliAreaRatioSep(mesh)
@@ -39,8 +40,14 @@ class TestBernoulliAreaRatioSep:
 
         SHAPE_FLUID = mesh.shape[:-1]
         N_POINT = mesh.shape[-1]
-        control['psub'][:] = 100
-        control['psup'][:] = 0
+        values = {
+            'psub': 100.0,
+            'psup': 0.0,
+            'qsub': 1.0,
+        }
+        for key, value in values.items():
+            if key in control:
+                control[key][:] = value
 
         # Use a flat area with multiple minimum area points
         area_1d = np.ones(N_POINT)
@@ -51,9 +58,51 @@ class TestBernoulliAreaRatioSep:
     @pytest.fixture()
     def prop(self, model: JaxResidual):
         state, control, prop = model.res_args
-        prop['rho_air'][:] = 1.00
-        prop['area_lb'][:] = 0
+
+        values = {
+            'rho_air': 1.0,
+            'area_lb': 0.0,
+        }
+        for key, value in values.items():
+            if key in prop:
+                prop[key][:] = value
         return prop
+
+class TestBernoulliAreaRatioSep(MeshFixtures, ModelParamFixtures):
+
+    @pytest.fixture()
+    def model(self, mesh) -> eqfluid.JaxResidual:
+        return eqfluid.BernoulliAreaRatioSep(mesh)
+
+    def test_res(self, model: JaxResidual, state, control, prop):
+        residual_vector = model.res(state, control, prop)
+        print(residual_vector)
+
+class TestBernoulliFlowFixedSep(MeshFixtures, ModelParamFixtures):
+
+    @pytest.fixture()
+    def model(self, mesh) -> eqfluid.JaxResidual:
+        return eqfluid.BernoulliFlowFixedSep(mesh)
+
+    def test_res(self, model: JaxResidual, state, control, prop):
+        residual_vector = model.res(state, control, prop)
+        print(residual_vector)
+
+class TestBernoulliSmoothMinSep(MeshFixtures, ModelParamFixtures):
+
+    @pytest.fixture()
+    def model(self, mesh) -> eqfluid.JaxResidual:
+        return eqfluid.BernoulliSmoothMinSep(mesh)
+
+    def test_res(self, model: JaxResidual, state, control, prop):
+        residual_vector = model.res(state, control, prop)
+        print(residual_vector)
+
+class TestBernoulliFixedSep(MeshFixtures, ModelParamFixtures):
+
+    @pytest.fixture()
+    def model(self, mesh) -> eqfluid.JaxResidual:
+        return eqfluid.BernoulliFixedSep(mesh)
 
     def test_res(self, model: JaxResidual, state, control, prop):
         residual_vector = model.res(state, control, prop)
