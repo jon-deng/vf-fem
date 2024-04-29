@@ -162,10 +162,6 @@ def load_transient_fsi_model(
             fsi_facet_labels=fsi_facet_labels,
             separation_vertex_label=separation_vertex_label,
         )
-        dofs_fsi_solid = dfn.vertex_to_dof_map(
-            solid.residual.form['coeff.fsi.p1'].function_space()
-        )[fsi_verts]
-        dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
     else:
         fluid, fsi_verts = derive_1dfluid_from_3dsolid(
             solid,
@@ -175,14 +171,14 @@ def load_transient_fsi_model(
             zs=zs,
         )
 
-        # TODO: This FSI dof selection won't for higher order elements
-        dofs_fsi_solid = tuple(
-            dfn.vertex_to_dof_map(solid.residual.form['coeff.fsi.p1'].function_space())[
-                verts
-            ]
-            for verts in fsi_verts
-        )
-        dofs_fsi_fluid = tuple(np.arange(dofs.size) for dofs in dofs_fsi_solid)
+    # Handle multiple fluid models by
+    dofs_fsi_solid = dfn.vertex_to_dof_map(
+        solid.residual.form['coeff.fsi.p1'].function_space()
+    )[fsi_verts.flat]
+    dofs_fsi_fluid = (
+        np.ones(dofs_fsi_solid.shape[:-1], dtype=int)
+        * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
+    ).reshape(-1)
 
     if coupling == 'explicit':
         model = tcmd.ExplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
@@ -238,10 +234,6 @@ def load_dynamical_fsi_model(
             fsi_facet_labels=fsi_facet_labels,
             separation_vertex_label=separation_vertex_label,
         )
-        dofs_fsi_solid = dfn.vertex_to_dof_map(
-            solid.residual.form['coeff.fsi.p1'].function_space()
-        )[fsi_verts]
-        dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
     else:
         fluid, fsi_verts = derive_1dfluid_from_3dsolid(
             solid,
@@ -251,14 +243,14 @@ def load_dynamical_fsi_model(
             zs=zs,
         )
 
-        # TODO: This FSI dof selection won't for higher order elements
-        dofs_fsi_solid = tuple(
-            dfn.vertex_to_dof_map(solid.residual.form['coeff.fsi.p1'].function_space())[
-                verts
-            ]
-            for verts in fsi_verts
-        )
-        dofs_fsi_fluid = tuple(np.arange(dofs.size) for dofs in dofs_fsi_solid)
+    # TODO: This FSI dof selection won't for higher order elements
+    dofs_fsi_solid = dfn.vertex_to_dof_map(
+        solid.residual.form['coeff.fsi.p1'].function_space()
+    )[fsi_verts.flat]
+    dofs_fsi_fluid = (
+        np.ones(dofs_fsi_solid.shape[:-1], dtype=int)
+        * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
+    ).reshape(-1)
 
     if isinstance(solid, dcmd.LinearizedModel):
         return dcmd.BaseLinearizedDynamicalFSIModel(
@@ -419,11 +411,9 @@ def derive_1dfluid_from_3dsolid(
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
     mesh = solid.residual.mesh()
-    fluids = []
-    fsi_verts_coll = []
+    fsi_verts_list = []
+    s_list = []
     for z in zs:
-
-        # TODO: Replace this with multiple z's
         facets = meshutils.extract_zplane_facets(mesh, z=z)
 
         fsi_facet_ids = [
@@ -436,7 +426,8 @@ def derive_1dfluid_from_3dsolid(
         fsi_edges = np.array([edge.index() for edge in fsi_edges])
 
         s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
-        fsi_verts_coll.append(fsi_verts)
+        s_list.append(s)
+        fsi_verts_list.append(fsi_verts)
         if issubclass(
             FluidType,
             (
@@ -447,24 +438,25 @@ def derive_1dfluid_from_3dsolid(
                 tfmd.BernoulliFixedSep,
             ),
         ):
-            sep_vert = locate_separation_vertex(solid, separation_vertex_label)
+            # TODO: For this to work you should generalize a fixed separation point
+            # to a fixed-separation line I guess
+            # sep_vert = locate_separation_vertex(solid, separation_vertex_label)
 
-            fsi_verts_fluid_ord = np.arange(fsi_verts.size)
-            idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
-            if len(idx_sep) == 1:
-                idx_sep = idx_sep[0]
-            else:
-                raise ValueError(
-                    "Expected to find single separation point on FSI surface"
-                    f" but found {len(idx_sep):d} instead"
-                )
-            fluid = FluidType(s, idx_sep=idx_sep)
-        else:
-            fluid = FluidType(s)
+            # fsi_verts_fluid_ord = np.arange(fsi_verts.size)
+            # idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
+            # if len(idx_sep) == 1:
+            #     idx_sep = idx_sep[0]
+            # else:
+            #     raise ValueError(
+            #         "Expected to find single separation point on FSI surface"
+            #         f" but found {len(idx_sep):d} instead"
+            #     )
+            # fluid = FluidType(s, idx_sep=idx_sep)
+            raise ValueError("3D models can't handle fixed separation points yet")
 
-        fluids.append(fluid)
-
-    return fluids, fsi_verts_coll
+    s = np.array(s_list)
+    fluid = FluidType(s)
+    return fluid, np.array(fsi_verts_list, dtype=int)
 
 
 def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
