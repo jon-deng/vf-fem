@@ -18,7 +18,10 @@ import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 from femvf.models.transient import (
-    solid as tsmd, fluid as tfmd, acoustic as amd, coupled as cmd
+    solid as tsmd,
+    fluid as tfmd,
+    acoustic as amd,
+    coupled as cmd,
 )
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.postprocess.solid as solidfunc
@@ -26,6 +29,7 @@ from femvf.postprocess.base import TimeSeries
 from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
 
 from vfsig import modal as modalsig
+
 
 class TestIntegrate:
 
@@ -72,20 +76,21 @@ class TestIntegrate:
         if 'DZ0.00' in mesh_path:
             zs = None
         elif 'DZ2.00' in mesh_path:
-            zs = np.linspace(0, 2.0, 5+1)
+            zs = np.linspace(0, 2.0, 5 + 1)
         elif 'DZ4.00' in mesh_path:
-            zs = np.linspace(0, 4.0, 10+1)
+            zs = np.linspace(0, 4.0, 10 + 1)
         elif 'DZ8.00' in mesh_path:
-            zs = np.linspace(0, 8.0, 20+1)
+            zs = np.linspace(0, 8.0, 20 + 1)
         else:
             raise ValueError()
 
         return load_transient_fsi_model(
-            mesh_path, None,
+            mesh_path,
+            None,
             SolidType=SolidType,
             FluidType=FluidType,
             coupling='explicit',
-            zs=zs
+            zs=zs,
         )
 
     @pytest.fixture()
@@ -94,7 +99,9 @@ class TestIntegrate:
         xy = model.solid.XREF[:].copy().reshape(-1, 2)
         x = xy[:, 0]
         y = xy[:, 1]
-        u0 = dfn.Function(model.solid.residual.form['coeff.state.u0'].function_space()).vector()
+        u0 = dfn.Function(
+            model.solid.residual.form['coeff.state.u0'].function_space()
+        ).vector()
 
         # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluids[0].solve_qp0()
@@ -150,17 +157,19 @@ class TestIntegrate:
             'rho': 1.0,
             'nu': 0.45,
             'kcontact': 1e11,
-            'ycontact': prop['ymid'][0] - y_gap*1/2,
+            'ycontact': prop['ymid'][0] - y_gap * 1 / 2,
         }
 
         # Set relevant fluid properties
         for ii in range(len(model.fluids)):
-            default_prop.update({
-                f'fluid{ii}.zeta_min': 1e-8,
-                f'fluid{ii}.zeta_sep': 1e-8,
-                f'fluid{ii}.rho_air': 1.0,
-                f'fluid{ii}.r_sep': 1.0
-            })
+            default_prop.update(
+                {
+                    f'fluid{ii}.zeta_min': 1e-8,
+                    f'fluid{ii}.zeta_sep': 1e-8,
+                    f'fluid{ii}.rho_air': 1.0,
+                    f'fluid{ii}.r_sep': 1.0,
+                }
+            )
 
         # This only sets the properties if they exist
         for key, value in default_prop.items():
@@ -172,17 +181,17 @@ class TestIntegrate:
     @pytest.fixture()
     def times(self):
         tfin = 0.2
-        return np.linspace(0, tfin, round(tfin*100/0.01)+1)
+        return np.linspace(0, tfin, round(tfin * 100 / 0.01) + 1)
 
     def test_integrate(
-            self,
-            mesh_path: str,
-            model: cmd.BaseTransientFSIModel,
-            ini_state: bv.BlockVector,
-            controls: bv.BlockVector,
-            prop: bv.BlockVector,
-            times: np.typing.NDArray
-        ):
+        self,
+        mesh_path: str,
+        model: cmd.BaseTransientFSIModel,
+        ini_state: bv.BlockVector,
+        controls: bv.BlockVector,
+        prop: bv.BlockVector,
+        times: np.typing.NDArray,
+    ):
         """
         Test forward time integration of the model
         """
@@ -195,9 +204,7 @@ class TestIntegrate:
             f'--{model.fluids[0].__class__.__name__}--psub{psub/10:.1f}.h5'
         )
         if os.path.isfile(save_path):
-            warnings.warn(
-                f"Skipping existing test result file: {save_path}"
-            )
+            warnings.warn(f"Skipping existing test result file: {save_path}")
         else:
             self.integrate(model, ini_state, controls, prop, times, save_path)
 
@@ -258,7 +265,7 @@ class TestIntegrate:
         gw = gw[idx_truncate_start:idx_truncate_end]
 
         dt = t[1] - t[0]
-        fo, *_ = modalsig.fundamental_mode_from_rfft(gw-np.mean(gw), dt)
+        fo, *_ = modalsig.fundamental_mode_from_rfft(gw - np.mean(gw), dt)
         amplitude = np.max(gw) - np.min(gw)
 
         column_labels = ['fo', 'amplitude']
@@ -268,6 +275,7 @@ class TestIntegrate:
 
         stats_path = f'{os.path.splitext(save_path)[0]}.xlsx'
         df.to_excel(stats_path)
+
 
 class TestLiEtal2020(TestIntegrate):
     """
@@ -283,9 +291,7 @@ class TestLiEtal2020(TestIntegrate):
         """Return the solid class"""
         return request.param
 
-    @pytest.fixture(
-        params=[tfmd.BernoulliAreaRatioSep]
-    )
+    @pytest.fixture(params=[tfmd.BernoulliAreaRatioSep])
     def fluid_type(self, request):
         """Return the fluid class"""
         return request.param
@@ -317,11 +323,12 @@ class TestLiEtal2020(TestIntegrate):
             # zs = (0.0, 0.5, 2.0)
             zs = np.linspace(0.0, 2.0, 6)
         return load_transient_fsi_model(
-            mesh_path, None,
+            mesh_path,
+            None,
             SolidType=SolidType,
             FluidType=FluidType,
             coupling='explicit',
-            zs=zs
+            zs=zs,
         )
 
     @pytest.fixture(
@@ -358,7 +365,7 @@ class TestLiEtal2020(TestIntegrate):
         prop['ncontact'][1] = 1.0
         prop['kcontact'] = 1e11
 
-        prop['emod'][:] = 15.0e3*PASCAL_TO_CGS
+        prop['emod'][:] = 15.0e3 * PASCAL_TO_CGS
         prop['rho'] = 1.040
         prop['rayleigh_m'] = 0.05
         prop['rayleigh_k'] = 0.0
@@ -368,14 +375,15 @@ class TestLiEtal2020(TestIntegrate):
             # NOTE: (Li2020, Table 1) Model B1 corresponds to a separation
             # area ratio of 1.0 (i.e. separation happens at the minimum area)
             prop[f'fluid{ii}.r_sep'] = 1.0
-            prop[f'fluid{ii}.area_lb'] = 2*(y_midline-y_contact)
+            prop[f'fluid{ii}.area_lb'] = 2 * (y_midline - y_contact)
 
         return prop
 
     @pytest.fixture()
     def times(self):
         tfin = 0.4
-        return np.linspace(0, tfin, round(100/0.01*tfin) + 1)
+        return np.linspace(0, tfin, round(100 / 0.01 * tfin) + 1)
+
 
 class TestBounceFromDeformation(TestIntegrate):
     """
@@ -391,9 +399,7 @@ class TestBounceFromDeformation(TestIntegrate):
         """Return the solid class"""
         return request.param
 
-    @pytest.fixture(
-        params=[tfmd.BernoulliAreaRatioSep]
-    )
+    @pytest.fixture(params=[tfmd.BernoulliAreaRatioSep])
     def fluid_type(self, request):
         """Return the fluid class"""
         return request.param
@@ -419,11 +425,12 @@ class TestBounceFromDeformation(TestIntegrate):
         else:
             zs = np.linspace(0.0, 2.0, 6)
         return load_transient_fsi_model(
-            mesh_path, None,
+            mesh_path,
+            None,
             SolidType=SolidType,
             FluidType=FluidType,
             coupling='explicit',
-            zs=zs
+            zs=zs,
         )
 
     @pytest.fixture()
@@ -431,7 +438,9 @@ class TestBounceFromDeformation(TestIntegrate):
         """Return the initial state"""
         NDIM = model.solid.residual.mesh().topology().dim()
         # This sets x/y/z deformation
-        u0 = dfn.Function(model.solid.residual.form['coeff.state.u0'].function_space()).vector()
+        u0 = dfn.Function(
+            model.solid.residual.form['coeff.state.u0'].function_space()
+        ).vector()
         u0 = np.array(u0)
         xy = model.solid.XREF[:].copy().reshape(-1, NDIM)
         if NDIM > 2:
@@ -441,10 +450,10 @@ class TestBounceFromDeformation(TestIntegrate):
             z = xy[:, 2]
             y = xy[:, 1]
             z_max = np.max(z)
-            u0[0:-2:NDIM] = 0.2*(y*(z)*(z_max-z)/z_max)
+            u0[0:-2:NDIM] = 0.2 * (y * (z) * (z_max - z) / z_max)
         else:
             y = xy[:, 1]
-            u0[0:-2:NDIM] = 0.2*y
+            u0[0:-2:NDIM] = 0.2 * y
 
         # model.fluid.set_prop(fluid_props)
         # qp0, *_ = model.fluids[0].solve_qp0()
@@ -480,7 +489,7 @@ class TestBounceFromDeformation(TestIntegrate):
         prop['ncontact'][1] = 1.0
         prop['kcontact'] = 1e11
 
-        prop['emod'][:] = 15.0e3*PASCAL_TO_CGS
+        prop['emod'][:] = 15.0e3 * PASCAL_TO_CGS
         prop['rho'] = 1.040
         prop['rayleigh_m'] = 0.05
         prop['rayleigh_k'] = 0.0
@@ -488,11 +497,11 @@ class TestBounceFromDeformation(TestIntegrate):
 
         for ii in range(len(model.fluids)):
             prop[f'fluid{ii}.r_sep'] = 1.0
-            prop[f'fluid{ii}.area_lb'] = 2*(y_midline-y_contact)
+            prop[f'fluid{ii}.area_lb'] = 2 * (y_midline - y_contact)
 
         return prop
 
     @pytest.fixture()
     def times(self):
         tfin = 0.1
-        return np.linspace(0, tfin, round(100/0.01*tfin) + 1)
+        return np.linspace(0, tfin, round(100 / 0.01 * tfin) + 1)

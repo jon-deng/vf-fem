@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 import dolfin as dfn
 
 from femvf import blockvec as vec
-from femvf.models import (
-    Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
+from femvf.models import Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 from femvf.constants import PASCAL_TO_CGS
+
 
 def load_fsi_rayleigh_model(coupling='explicit'):
     ## Set the mesh to be used and initialize the forward model
@@ -24,7 +24,9 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     mesh_base_filename = 'M5-3layers-refined'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_transient_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling=coupling)
+    model = load_transient_fsi_model(
+        mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli, coupling=coupling
+    )
 
     ## Set the fluid/solid parameters
     emod = 2.5e3 * PASCAL_TO_CGS
@@ -32,10 +34,12 @@ def load_fsi_rayleigh_model(coupling='explicit'):
     k_coll = 1e11
     y_gap = 0.02
     y_coll_offset = 0.01
-    zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
+    zeta_amin, zeta_sep, zeta_ainv = 1 / 3000, 1 / 50, 0.002
 
     fluid_props = model.fluid.prop.copy()
-    fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    fluid_props['y_midline'][()] = (
+        np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    )
     fluid_props['zeta_amin'][()] = zeta_amin
     fluid_props['zeta_sep'][()] = zeta_sep
     fluid_props['zeta_ainv'][()] = zeta_ainv
@@ -49,6 +53,7 @@ def load_fsi_rayleigh_model(coupling='explicit'):
 
     return model, vec.concatenate_vec([solid_props, fluid_props])
 
+
 def load_fsi_kelvinvoigt_model(coupling='explicit'):
     ## Set the mesh to be used and initialize the forward model
     mesh_dir = '../meshes'
@@ -56,7 +61,9 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
     mesh_base_filename = 'M5-3layers-medial-surface-refinement'
 
     mesh_path = os.path.join(mesh_dir, mesh_base_filename + '.xml')
-    model = load_transient_fsi_model(mesh_path, None, SolidType=KelvinVoigt, FluidType=Bernoulli, coupling=coupling)
+    model = load_transient_fsi_model(
+        mesh_path, None, SolidType=KelvinVoigt, FluidType=Bernoulli, coupling=coupling
+    )
 
     ## Set the fluid/solid parameters
     emod = 6e3 * PASCAL_TO_CGS
@@ -68,10 +75,12 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
 
     y_gap = 0.01
     y_coll_offset = 0.0025
-    zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
+    zeta_amin, zeta_sep, zeta_ainv = 1 / 3000, 1 / 50, 0.002
 
     fluid_props = model.fluid.prop.copy()
-    fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    fluid_props['y_midline'][()] = (
+        np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+    )
     fluid_props['zeta_amin'][()] = zeta_amin
     fluid_props['zeta_sep'][()] = zeta_sep
     fluid_props['zeta_ainv'][()] = zeta_ainv
@@ -87,6 +96,7 @@ def load_fsi_kelvinvoigt_model(coupling='explicit'):
 
     return model, vec.concatenate_vec([solid_props, fluid_props])
 
+
 def load_fsai_rayleigh_model(coupling='explicit'):
     mesh_dir = '../meshes'
     mesh_base_filename = 'geometry2'
@@ -95,12 +105,18 @@ def load_fsai_rayleigh_model(coupling='explicit'):
 
     ## Configure the model and its parameters
     acoustic = WRAnalog(44)
-    model = load_transient_fsai_model(mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
-                            coupling='explicit')
+    model = load_transient_fsai_model(
+        mesh_path,
+        None,
+        acoustic,
+        SolidType=Rayleigh,
+        FluidType=Bernoulli,
+        coupling='explicit',
+    )
 
     # Set the properties
     y_gap = 0.01
-    zeta_amin, zeta_sep, zeta_ainv = 1/3000, 1/50, 0.002
+    zeta_amin, zeta_sep, zeta_ainv = 1 / 3000, 1 / 50, 0.002
 
     fl_props = model.fluid.get_properties_vec(set_default=True)
     fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
@@ -114,18 +130,24 @@ def load_fsai_rayleigh_model(coupling='explicit'):
     y = xy[:, 1]
     x_min, x_max = x.min(), x.max()
     y_min, y_max = y.min(), y.max()
-    sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+    sl_props['emod'][:] = (
+        1
+        / 2
+        * 5.0e3
+        * PASCAL_TO_CGS
+        * ((x - x_min) / (x_max - x_min) + (y - y_min) / (y_max - y_min))
+        + 2.5e3 * PASCAL_TO_CGS
+    )
     sl_props['rayleigh_m'][()] = 0
     sl_props['rayleigh_k'][()] = 4e-3
     sl_props['kcontact'][()] = 1e11
-    sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
+    sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap * 1 / 2
 
     ac_props = model.acoustic.get_properties_vec(set_default=True)
     ac_props['area'][:] = 4.0
     ac_props['length'][:] = 12.0
-    ac_props['soundspeed'][:] = 340*100
+    ac_props['soundspeed'][:] = 340 * 100
 
     prop = vec.concatenate_vec([sl_props, fl_props, ac_props])
 
     return model, prop
-

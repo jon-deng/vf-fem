@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 from femvf.models.transient import fluid as tfld
 
+
 def setup_model():
     """
     Return a dynamical fluid model to test
@@ -15,6 +16,7 @@ def setup_model():
     s = np.linspace(0, 1, 70)
     # return tfld.BernoulliSmoothMinSep(s)
     return tfld.BernoulliFixedSep(s, idx_sep=15)
+
 
 def test_pressure_qualitative(model):
     """
@@ -30,7 +32,7 @@ def test_pressure_qualitative(model):
     ygap = 0.1
     control = model.control
     control['psub'][:] = 800.0 * 10
-    control['area'][:] = 1/2*(np.cos(2*np.pi*s/s.max()) + 1.0 + ygap)
+    control['area'][:] = 1 / 2 * (np.cos(2 * np.pi * s / s.max()) + 1.0 + ygap)
     model.set_control(control)
 
     # the two below both return the fluid flow rate/pressure
@@ -50,6 +52,7 @@ def test_pressure_qualitative(model):
     # print(model.assem_dres_dstate().bshape)
     # print(model.assem_dres_dcontrol().bshape)
     # print(model.assem_dres_dprops().bshape)
+
 
 if __name__ == '__main__':
     model = setup_model()

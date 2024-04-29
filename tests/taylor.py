@@ -11,15 +11,17 @@ import numpy as np
 T = TypeVar('T')
 U = TypeVar('U')
 
+
 def taylor_convergence(
-        x0: T, dx: T,
-        f: Callable[[T], U],
-        jac: Callable[[T], U],
-        norm: Optional[Callable[[T], float]]=None,
-        rel_err_tol: float=1e-8,
-        abs_err_tol: float=1e-8,
-        conv_rate_tol: float=1e-2
-    ):
+    x0: T,
+    dx: T,
+    f: Callable[[T], U],
+    jac: Callable[[T], U],
+    norm: Optional[Callable[[T], float]] = None,
+    rel_err_tol: float = 1e-8,
+    abs_err_tol: float = 1e-8,
+    conv_rate_tol: float = 1e-2,
+):
     """
     Apply the Taylor series convergence test to a linearization
 
@@ -45,27 +47,30 @@ def taylor_convergence(
         norm = np.linalg.norm
 
     # Start with the largest step and move to original
-    alphas = 2**np.arange(4)[::-1]
-    res_ns = [f(x0+alpha*dx) for alpha in alphas]
+    alphas = 2 ** np.arange(4)[::-1]
+    res_ns = [f(x0 + alpha * dx) for alpha in alphas]
     res_0 = f(x0)
 
-    dres_exacts = [res_n-res_0 for res_n in res_ns]
+    dres_exacts = [res_n - res_0 for res_n in res_ns]
     dres_linear = jac(x0, dx)
 
-    abs_errs = np.array([
-        norm(dres_exact-alpha*dres_linear)
-        for dres_exact, alpha in zip(dres_exacts, alphas)
-    ])
-    err_magnitudes = np.array([
-        1/2*norm(dres_exact+alpha*dres_linear)
-        for dres_exact, alpha in zip(dres_exacts, alphas)
-    ])
+    abs_errs = np.array(
+        [
+            norm(dres_exact - alpha * dres_linear)
+            for dres_exact, alpha in zip(dres_exacts, alphas)
+        ]
+    )
+    err_magnitudes = np.array(
+        [
+            1 / 2 * norm(dres_exact + alpha * dres_linear)
+            for dres_exact, alpha in zip(dres_exacts, alphas)
+        ]
+    )
     with np.errstate(invalid='ignore'):
-        conv_rates = (
-            np.log(abs_errs[:-1]/abs_errs[1:])
-            / np.log(alphas[:-1]/alphas[1:])
+        conv_rates = np.log(abs_errs[:-1] / abs_errs[1:]) / np.log(
+            alphas[:-1] / alphas[1:]
         )
-        rel_errs = abs_errs/err_magnitudes
+        rel_errs = abs_errs / err_magnitudes
 
     print(
         "||dres_linear||, ||dres_exact||"

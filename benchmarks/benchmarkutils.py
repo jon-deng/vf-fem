@@ -6,6 +6,7 @@ import argparse
 import cProfile
 import timeit
 
+
 def setup_argument_parser():
     """
     Return a `ArgumentParser` with benchmarking argument
@@ -13,6 +14,7 @@ def setup_argument_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--profile', action='store_true', default=False)
     return parser
+
 
 def benchmark(statement, profile_fname=None, profile=False, number=1, globals=None):
     """

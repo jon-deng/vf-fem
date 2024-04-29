@@ -3,6 +3,7 @@ Benchmark the performance of reading/writing from a statefile
 
 conclusion: hdf5 chunking/caching sucks big time
 """
+
 import os
 from time import perf_counter
 from math import ceil
@@ -17,7 +18,10 @@ from femvf.statefile import StateFile
 h5path = f'out/benchmark_statefile.h5'
 
 mesh_path = '../meshes/M5-3layers-cl0_50.xml'
-model = fvf.load_transient_fsi_model(mesh_path, None, SolidType=fvf.solid.KelvinVoigt, FluidType=fvf.fluid.Bernoulli)
+model = fvf.load_transient_fsi_model(
+    mesh_path, None, SolidType=fvf.solid.KelvinVoigt, FluidType=fvf.fluid.Bernoulli
+)
+
 
 def benchmark_chunksize(ntime_chunks=10):
     if os.path.isfile(h5path):
@@ -37,7 +41,9 @@ def benchmark_chunksize(ntime_chunks=10):
 
     t_fluid = []
     t_solid = []
-    with StateFile(model, h5path, mode='r', rdcc_nbytes=2**2*1024, rdcc_w0=1, rdcc_nslots=1e3) as f:
+    with StateFile(
+        model, h5path, mode='r', rdcc_nbytes=2**2 * 1024, rdcc_w0=1, rdcc_nslots=1e3
+    ) as f:
         # print(f.file.id.get_access_plist().get_cache())
         for i in range(100):
 
@@ -45,16 +51,17 @@ def benchmark_chunksize(ntime_chunks=10):
             # f.get_fluid_state(i)
             f.file['state/q'][i, ...]
             f.file['state/p'][i, ...]
-            t_fluid.append(perf_counter()-ts)
+            t_fluid.append(perf_counter() - ts)
 
             ts = perf_counter()
             # f.get_state(i)
             f.file['state/u'][i, ...]
             f.file['state/v'][i, ...]
             f.file['state/a'][i, ...]
-            t_solid.append(perf_counter()-ts)
+            t_solid.append(perf_counter() - ts)
 
     return t_fluid, t_solid
+
 
 def benchmark_chunksize_chunked_read(ntime_chunks=10):
     if os.path.isfile(h5path):
@@ -75,24 +82,27 @@ def benchmark_chunksize_chunked_read(ntime_chunks=10):
 
     t_fluid = []
     t_solid = []
-    with StateFile(model, h5path, mode='r', rdcc_nbytes=2**2*1024, rdcc_w0=1, rdcc_nslots=1e3) as f:
+    with StateFile(
+        model, h5path, mode='r', rdcc_nbytes=2**2 * 1024, rdcc_w0=1, rdcc_nslots=1e3
+    ) as f:
         # print(f.file.id.get_access_plist().get_cache())
-        for m in range(ceil(100/ntime_chunks)):
+        for m in range(ceil(100 / ntime_chunks)):
 
             ts = perf_counter()
-            start, stop = m*ntime_chunks, min((m+1)*ntime_chunks, 100)
+            start, stop = m * ntime_chunks, min((m + 1) * ntime_chunks, 100)
             print(start, stop)
             f.file['state/q'][start:stop, ...]
             f.file['state/p'][start:stop, ...]
-            t_fluid.append(perf_counter()-ts)
+            t_fluid.append(perf_counter() - ts)
 
             ts = perf_counter()
             f.file['state/u'][start:stop, ...]
             f.file['state/v'][start:stop, ...]
             f.file['state/a'][start:stop, ...]
-            t_solid.append(perf_counter()-ts)
+            t_solid.append(perf_counter() - ts)
 
     return t_fluid, t_solid
+
 
 if __name__ == '__main__':
     tfluids = []
@@ -102,7 +112,9 @@ if __name__ == '__main__':
         tfluids.append(tfluid)
         tsolids.append(tsolid)
 
-        print(f"{n} chunks, total time to read all data:  {np.sum(tfluid)} s, {np.sum(tsolid)} s")
+        print(
+            f"{n} chunks, total time to read all data:  {np.sum(tfluid)} s, {np.sum(tsolid)} s"
+        )
 
     fig, ax = plt.subplots(1, 1)
     for ii, n in enumerate([1, 10, 50, 100]):

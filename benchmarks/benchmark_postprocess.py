@@ -6,10 +6,10 @@ from os import path
 
 import numpy as np
 
-from blockarray import (blockvec as bv)
+from blockarray import blockvec as bv
 
-from femvf import (statefile as sf, forward)
-from femvf.postprocess import (solid as ppsld, base as ppbase)
+from femvf import statefile as sf, forward
+from femvf.postprocess import solid as ppsld, base as ppbase
 
 from setup import setup_model, setup_transient_args
 from benchmarkutils import setup_argument_parser, benchmark
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     model = setup_model('../meshes/M5-3layers.msh')
     state0, control, prop = setup_transient_args(model)
 
-    times = 1e-4*np.arange(100)
+    times = 1e-4 * np.arange(100)
 
     fpath = './out/.benchmark_postprocess.h5'
     if not path.isfile(fpath):
@@ -36,6 +36,8 @@ if __name__ == '__main__':
     with sf.StateFile(model, fpath, mode='r') as f:
         statement = 'postproc_ts_field(f)'
         benchmark(
-            statement, './benchmark_postprocess.profile',
-            profile=args.profile, globals=globals()
+            statement,
+            './benchmark_postprocess.profile',
+            profile=args.profile,
+            globals=globals(),
         )

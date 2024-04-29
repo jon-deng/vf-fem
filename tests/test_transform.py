@@ -17,23 +17,19 @@ from femvf.models.transient import solid as tsld, fluid as tfld
 from femvf.load import load_transient_fsi_model
 from femvf.parameters import transform as tform
 
-from blockarray import (blockvec as bv, linalg as blinalg)
+from blockarray import blockvec as bv, linalg as blinalg
 
 from taylor import taylor_convergence
 
 dfn.set_log_level(50)
 
-def init_default_transform(
-        Transform: tform.Transform, model, x=None, y=None
-    ):
+
+def init_default_transform(Transform: tform.Transform, model, x=None, y=None):
     """
     Return a basic transform
     """
     # `TransformFromModel` and `JaxTransformFromModel` instances
-    if issubclass(
-            Transform,
-            (tform.TransformFromModel, tform.JaxTransformFromModel)
-        ):
+    if issubclass(Transform, (tform.TransformFromModel, tform.JaxTransformFromModel)):
         transform_args = (model,)
 
         if issubclass(Transform, tform.TractionShape):
@@ -41,10 +37,7 @@ def init_default_transform(
         elif issubclass(Transform, tform.LayerModuli):
             kwargs = {}
     # `JaxTransformFromX`:
-    elif issubclass(
-            Transform,
-            tform.JaxTransformFromX
-        ):
+    elif issubclass(Transform, tform.JaxTransformFromX):
         transform_args = (model.prop,)
         if issubclass(Transform, tform.Identity):
             kwargs = {}
@@ -53,13 +46,11 @@ def init_default_transform(
         elif issubclass(Transform, tform.Scale):
             kwargs = {'scale': {'emod': 1e4, 'nu': 0.3}}
     # `JaxTransformFromY`:
-    elif issubclass(
-            Transform,
-            tform.JaxTransformFromY
-        ):
+    elif issubclass(Transform, tform.JaxTransformFromY):
         transform_args = (model.prop,)
 
     return Transform(*transform_args, **kwargs)
+
 
 class TestTransform:
 
@@ -73,7 +64,7 @@ class TestTransform:
             mesh_path,
             None,
             SolidType=tsld.KelvinVoigtWShape,
-            FluidType=tfld.BernoulliAreaRatioSep
+            FluidType=tfld.BernoulliAreaRatioSep,
         )
         return model
 
@@ -85,7 +76,7 @@ class TestTransform:
             tform.Scale,
             (tform.TractionShape, tform.Scale),
             (tform.TractionShape, tform.ConstantSubset),
-            (tform.TractionShape, tform.Scale, tform.ConstantSubset)
+            (tform.TractionShape, tform.Scale, tform.ConstantSubset),
         ]
     )
     def transform(self, model, request):
@@ -99,7 +90,7 @@ class TestTransform:
         if isinstance(Transform, tuple):
             _transform = reduce(
                 tform.TransformComposition,
-                [init_default_transform(x, model) for x in Transform]
+                [init_default_transform(x, model) for x in Transform],
             )
         else:
             _transform = init_default_transform(Transform, model)
@@ -145,6 +136,7 @@ class TestTransform:
         """
         Test `transform.apply_jvp`
         """
+
         def f(x):
             return transform.apply(x).copy()
 
@@ -163,10 +155,8 @@ class TestTransform:
         hx = transform.apply_vjp(x, hy)
         g_from_dual = bv.dot(dx, hx)
 
-        print(
-            "(primal, dual) functional values: "
-            f"({g_from_primal}, {g_from_dual})"
-        )
+        print("(primal, dual) functional values: " f"({g_from_primal}, {g_from_dual})")
         # assert np.isclose(g_from_primal, g_from_dual)
+
 
 # if __name__ == '__main__':

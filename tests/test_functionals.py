@@ -4,12 +4,14 @@ This modules implements tests for functionals
 
 import os
 import os.path as path
+
 # from time import perf_counter
 import unittest
 
 from tabulate import tabulate
 
 import numpy as np
+
 # import matplotlib.pyplot as plt
 import dolfin as dfn
 
@@ -20,6 +22,7 @@ from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 from femvf.constants import PASCAL_TO_CGS
 
 from femvf.functional import basic
+
 
 class TestFunctionals(unittest.TestCase):
     OVERWRITE_FORWARD_SIMULATIONS = False
@@ -38,7 +41,9 @@ class TestFunctionals(unittest.TestCase):
         mesh_base_filename = 'geometry2'
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
-        model = load_transient_fsi_model(mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli)
+        model = load_transient_fsi_model(
+            mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli
+        )
 
         ## Set time integration / fluid / solid parameters
         dt_max = 1e-4
@@ -58,7 +63,9 @@ class TestFunctionals(unittest.TestCase):
         y_gap = 0.01
         alpha, k, sigma = -3000, 50, 0.002
         p_sub = 800
-        fluid_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        fluid_props['y_midline'][()] = (
+            np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        )
         fluid_props['p_sub'][()] = p_sub * PASCAL_TO_CGS
         fluid_props['alpha'][()] = alpha
         fluid_props['k'][()] = k
@@ -69,16 +76,18 @@ class TestFunctionals(unittest.TestCase):
         y_max = y.max()
         y_min = y.min()
 
-        emod_at_ymin = 5e3*PASCAL_TO_CGS
-        emod_at_ymax = 5e3*PASCAL_TO_CGS
-        emod = emod_at_ymax*(y-y_min)/(y_max-y_min) + emod_at_ymin*(y-y_max)/(y_min-y_max)
+        emod_at_ymin = 5e3 * PASCAL_TO_CGS
+        emod_at_ymax = 5e3 * PASCAL_TO_CGS
+        emod = emod_at_ymax * (y - y_min) / (y_max - y_min) + emod_at_ymin * (
+            y - y_max
+        ) / (y_min - y_max)
 
         vert_to_sdof = np.sort(model.solid.vert_to_sdof)
         solid_props['emod'][:] = emod[vert_to_sdof]
         solid_props['rayleigh_m'][()] = 0
         solid_props['rayleigh_k'][()] = 3e-4
         solid_props['kcontact'][()] = 1e11
-        solid_props['ycontact'][()] = fluid_props['y_midline'] - y_gap*1/2
+        solid_props['ycontact'][()] = fluid_props['y_midline'] - y_gap * 1 / 2
 
         h5file = 'out/test_functionals.h5'
         if path.isfile(h5file) and not self.OVERWRITE_FORWARD_SIMULATIONS:
@@ -89,8 +98,15 @@ class TestFunctionals(unittest.TestCase):
             print("Running forward model to generate data.")
             adaptive_step_prm = {'abs_tol': None}
             with sf.StateFile(model, h5file, mode='w') as f:
-                info = integrate(model, f, (0, 0, 0), solid_props, fluid_props, timing_props,
-                                 adaptive_step_prm=adaptive_step_prm)
+                info = integrate(
+                    model,
+                    f,
+                    (0, 0, 0),
+                    solid_props,
+                    fluid_props,
+                    timing_props,
+                    adaptive_step_prm=adaptive_step_prm,
+                )
 
         self.h5file = h5file
         self.model = model
@@ -149,18 +165,29 @@ class TestFunctionals(unittest.TestCase):
 
             func_0 = g.eval(f)
 
-            iter_params0, iter_params1 = f.get_iter_params(n), f.get_iter_params(n+1)
-            dfunc_du_an, dfunc_dv_an, dfunc_da_an = g.duva(f, n, iter_params0, iter_params1)
+            iter_params0, iter_params1 = f.get_iter_params(n), f.get_iter_params(n + 1)
+            dfunc_du_an, dfunc_dv_an, dfunc_da_an = g.duva(
+                f, n, iter_params0, iter_params1
+            )
 
-            dfunc_du_fd = (functional_wrapper(g, x_0[0]+alpha_u*du, f, i=0, n=n)-func_0) / alpha_u
-            dfunc_dv_fd = (functional_wrapper(g, x_0[1]+alpha_v*du, f, i=1, n=n)-func_0) / alpha_v
-            dfunc_da_fd = (functional_wrapper(g, x_0[2]+alpha_a*du, f, i=2, n=n)-func_0) / alpha_a
+            dfunc_du_fd = (
+                functional_wrapper(g, x_0[0] + alpha_u * du, f, i=0, n=n) - func_0
+            ) / alpha_u
+            dfunc_dv_fd = (
+                functional_wrapper(g, x_0[1] + alpha_v * du, f, i=1, n=n) - func_0
+            ) / alpha_v
+            dfunc_da_fd = (
+                functional_wrapper(g, x_0[2] + alpha_a * du, f, i=2, n=n) - func_0
+            ) / alpha_a
 
         header = ["", "dg/dalpha analytical", "dg/dalpha finite difference"]
-        table = [["dg/du", np.dot(dfunc_du_an, du), dfunc_du_fd],
-                 ["dg/dv", np.dot(dfunc_dv_an, du), dfunc_dv_fd],
-                 ["dg/da", np.dot(dfunc_da_an, du), dfunc_da_fd]]
+        table = [
+            ["dg/du", np.dot(dfunc_du_an, du), dfunc_du_fd],
+            ["dg/dv", np.dot(dfunc_dv_an, du), dfunc_dv_fd],
+            ["dg/da", np.dot(dfunc_da_an, du), dfunc_da_fd],
+        ]
         print(tabulate(table, headers=header))
+
 
 # Calculate a functional along a perturbed direction
 def functional_wrapper(g, u, f, i=0, n=0):
@@ -195,6 +222,7 @@ def functional_wrapper(g, u, f, i=0, n=0):
         f.set_state(n, x_orig)
 
     return out
+
 
 if __name__ == '__main__':
     unittest.main()

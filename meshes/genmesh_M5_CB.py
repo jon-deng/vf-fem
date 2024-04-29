@@ -1,4 +1,3 @@
-
 import sys
 import gmsh
 
@@ -6,6 +5,7 @@ gmsh.initialize(sys.argv)
 
 MSH_VER = 2.0
 SIZE_FACTOR = 8
+
 
 def proc_M5(medial_angle):
     """
@@ -32,6 +32,7 @@ def proc_M5(medial_angle):
     gmsh.model.mesh.generate(2)
     gmsh.write(f'M5_CB_GA{medial_angle:d}.msh')
 
+
 def proc_M5_split(medial_angle):
     """
     Generate a mesh for the M5_CB_GA*_split.STEP geometry
@@ -57,6 +58,7 @@ def proc_M5_split(medial_angle):
 
     gmsh.model.mesh.generate(2)
     gmsh.write(f'M5_CB_GA{medial_angle:d}_split.msh')
+
 
 if __name__ == '__main__':
     for medial_angle in [0, 1, 2, 3]:

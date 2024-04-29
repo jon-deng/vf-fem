@@ -4,13 +4,16 @@ import os
 import dolfin as dfn
 import numpy as np
 
-from femvf.models import (load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
+from femvf.models import load_fsai_model, Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
 from femvf.constants import PASCAL_TO_CGS
 from blockarray import linalg
 
 from modeldefs import (
-    load_fsai_rayleigh_model, load_fsi_kelvinvoigt_model, load_fsi_rayleigh_model
+    load_fsai_rayleigh_model,
+    load_fsi_kelvinvoigt_model,
+    load_fsi_rayleigh_model,
 )
+
 
 class TestFSAIModel(unittest.TestCase):
     def setUp(self):
@@ -27,8 +30,14 @@ class TestFSAIModel(unittest.TestCase):
     def config_fsai_model(self):
         ## Configure the model and its parameters
         acoustic = WRAnalog(44)
-        model = load_fsai_model(self.mesh_path, None, acoustic, SolidType=Rayleigh, FluidType=Bernoulli,
-                                coupling='explicit')
+        model = load_fsai_model(
+            self.mesh_path,
+            None,
+            acoustic,
+            SolidType=Rayleigh,
+            FluidType=Bernoulli,
+            coupling='explicit',
+        )
 
         # Set the control vector
         p_sub = 500
@@ -44,7 +53,9 @@ class TestFSAIModel(unittest.TestCase):
         alpha, k, sigma = -3000, 50, 0.002
 
         fl_props = model.fluid.get_properties_vec(set_default=True)
-        fl_props['y_midline'][()] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        fl_props['y_midline'][()] = (
+            np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+        )
         fl_props['alpha'][()] = alpha
         fl_props['k'][()] = k
         fl_props['sigma'][()] = sigma
@@ -55,16 +66,23 @@ class TestFSAIModel(unittest.TestCase):
         y = xy[:, 1]
         x_min, x_max = x.min(), x.max()
         y_min, y_max = y.min(), y.max()
-        sl_props['emod'][:] = 1/2*5.0e3*PASCAL_TO_CGS*((x-x_min)/(x_max-x_min) + (y-y_min)/(y_max-y_min)) + 2.5e3*PASCAL_TO_CGS
+        sl_props['emod'][:] = (
+            1
+            / 2
+            * 5.0e3
+            * PASCAL_TO_CGS
+            * ((x - x_min) / (x_max - x_min) + (y - y_min) / (y_max - y_min))
+            + 2.5e3 * PASCAL_TO_CGS
+        )
         sl_props['rayleigh_m'][()] = 0
         sl_props['rayleigh_k'][()] = 4e-3
         sl_props['kcontact'][()] = 1e11
-        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap*1/2
+        sl_props['ycontact'][()] = fl_props['y_midline'] - y_gap * 1 / 2
 
         ac_props = model.acoustic.get_properties_vec(set_default=True)
         ac_props['area'][:] = 4.0
         ac_props['length'][:] = 12.0
-        ac_props['soundspeed'][:] = 340*100
+        ac_props['soundspeed'][:] = 340 * 100
 
         prop = vec.concatenate_vec([sl_props, fl_props, ac_props])
 
@@ -103,7 +121,7 @@ class TestFSAIModel(unittest.TestCase):
 
         model.set_fin_state(fin_state + dx_fd)
         res1 = model.res()
-        dres = res1-res0
+        dres = res1 - res0
 
         model.set_fin_state(fin_state)
         dx = model.solve_dres_dstate1(dres)
@@ -137,7 +155,7 @@ class TestFSAIModel(unittest.TestCase):
         model.set_fin_state(fin_state + dx_fd)
         breakpoint()
         res1 = model.res()
-        dres = res1-res0
+        dres = res1 - res0
 
         model.set_fin_state(fin_state)
         dx = model.solve_dres_dstate1(dres)
@@ -151,6 +169,7 @@ class TestFSAIModel(unittest.TestCase):
             print(name, np.linalg.norm(dx[name]), np.linalg.norm(dx_fd[name]))
         breakpoint()
 
+
 class TestAcoustic(unittest.TestCase):
 
     def setUp(self):
@@ -158,6 +177,7 @@ class TestAcoustic(unittest.TestCase):
 
     def test_res(self):
         pass
+
 
 class TestModelResidualSensitivity(unittest.TestCase):
     def setUp(self):
@@ -210,7 +230,8 @@ class TestModelResidualSensitivity(unittest.TestCase):
             self.model.apply_dres_dstate0(dstate0)
             + self.model.apply_dres_dcontrol(dcontrol)
             + self.model.apply_dres_dp(dprop)
-            + self.model.apply_dres_ddt(ddt))
+            + self.model.apply_dres_ddt(ddt)
+        )
         return dres
 
     def dres_dxx_adj(self, dres):
@@ -242,9 +263,11 @@ class TestModelResidualSensitivity(unittest.TestCase):
             bc_base.apply(dstate1[name])
 
         args = (self.state0, self.control, self.prop, self.dt)
-        dres = self.res(self.state1+dstate1, *args) - self.res(self.state1, *args)
+        dres = self.res(self.state1 + dstate1, *args) - self.res(self.state1, *args)
 
-        self.set_linearization(self.state1, self.state0, self.control, self.prop, self.dt)
+        self.set_linearization(
+            self.state1, self.state0, self.control, self.prop, self.dt
+        )
         dstate1_jac = self.model.solve_dres_dstate1(dres)
 
         err = dstate1_jac - dstate1
@@ -281,9 +304,9 @@ class TestModelResidualSensitivity(unittest.TestCase):
         def _test(xxs, dxxs):
             self.set_linearization(self.state1, *xxs)
             dres = self.dres_dxx(*dxxs)
-            dres_fd = (
-                self.res(self.state1, *[xx+dxx for xx, dxx in zip(xxs, dxxs)])
-                - self.res(self.state1, *xxs))
+            dres_fd = self.res(
+                self.state1, *[xx + dxx for xx, dxx in zip(xxs, dxxs)]
+            ) - self.res(self.state1, *xxs)
 
             err = dres - dres_fd
             print(dres['u'].norm('l2'), dres_fd['u'].norm('l2'))
@@ -292,12 +315,12 @@ class TestModelResidualSensitivity(unittest.TestCase):
 
         ## Test dt steps
         xxs = (self.state0, self.control, self.prop, self.dt)
-        dxxs = (0.0*dstate0, 0.0*dcontrol, 0.0*dprop, ddt)
+        dxxs = (0.0 * dstate0, 0.0 * dcontrol, 0.0 * dprop, ddt)
         _test(xxs, dxxs)
 
         ## Test dstate steps
         xxs = (self.state0, self.control, self.prop, self.dt)
-        dxxs = (dstate0, 0.0*dcontrol, 0.0*dprop, 0*ddt)
+        dxxs = (dstate0, 0.0 * dcontrol, 0.0 * dprop, 0 * ddt)
         _test(xxs, dxxs)
 
     def test_solve_dres_dxx_adj(self):

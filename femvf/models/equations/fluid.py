@@ -140,7 +140,11 @@ def _BernoulliFixedSep(s: np.ndarray, idx_sep: int = 0):
     # Key functions/variables that have to be exported
     _state = {'q': np.ones(N_FLUID), 'p': np.ones(N_TOTAL)}
 
-    _control = {'area': np.ones(N_TOTAL), 'psub': np.ones(N_FLUID), 'psup': np.ones(N_FLUID)}
+    _control = {
+        'area': np.ones(N_TOTAL),
+        'psub': np.ones(N_FLUID),
+        'psup': np.ones(N_FLUID),
+    }
 
     _props = {'rho_air': np.ones(N_FLUID)}
 
@@ -224,9 +228,17 @@ def _BernoulliSmoothMinSep(s: jnp.ndarray):
     # Key functions/variables that have to be exported
     _state = {'q': np.ones(N_FLUID), 'p': np.ones(N_TOTAL)}
 
-    _control = {'area': np.ones(N_TOTAL), 'psub': np.ones(N_FLUID), 'psup': np.ones(N_FLUID)}
+    _control = {
+        'area': np.ones(N_TOTAL),
+        'psub': np.ones(N_FLUID),
+        'psup': np.ones(N_FLUID),
+    }
 
-    _props = {'rho_air': np.ones(N_FLUID), 'zeta_sep': np.ones(N_FLUID), 'zeta_min': np.ones(N_FLUID)}
+    _props = {
+        'rho_air': np.ones(N_FLUID),
+        'zeta_sep': np.ones(N_FLUID),
+        'zeta_min': np.ones(N_FLUID),
+    }
 
     return res, (_state, _control, _props)
 
@@ -235,7 +247,6 @@ class BernoulliAreaRatioSep(PredefinedJaxResidual):
 
     def _make_residual(self, mesh):
         return _BernoulliAreaRatioSep(mesh)
-
 
 
 def _BernoulliAreaRatioSep(s: jnp.ndarray):
@@ -261,7 +272,14 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
 
         return ret_state, ret_control, ret_prop
 
-    def bernoulli_qp(area: NDArray, psub: NDArray, psup: NDArray, rho: NDArray, r_sep: NDArray, area_lb: NDArray):
+    def bernoulli_qp(
+        area: NDArray,
+        psub: NDArray,
+        psup: NDArray,
+        rho: NDArray,
+        r_sep: NDArray,
+        area_lb: NDArray,
+    ):
         """
         Return Bernoulli flow and pressure
         """
@@ -275,9 +293,7 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
         # To find the separation point, work only with coordinates downstream
         # of the minimum area
         _area = jnp.where(s >= smin, area, jnp.nan)
-        idx_sep = jnp.nanargmin(
-            jnp.abs(_area - asep), axis=-1, keepdims=True
-        )
+        idx_sep = jnp.nanargmin(jnp.abs(_area - asep), axis=-1, keepdims=True)
         # ssep = s[idx_sep]
         ssep = jnp.take_along_axis(s, idx_sep, axis=-1)
 
@@ -303,9 +319,17 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
     # Key functions/variables that have to be exported
     _state = {'q': np.ones(N_FLUID), 'p': np.ones(N_TOTAL)}
 
-    _control = {'area': np.ones(N_TOTAL), 'psub': np.ones(N_FLUID), 'psup': np.ones(N_FLUID)}
+    _control = {
+        'area': np.ones(N_TOTAL),
+        'psub': np.ones(N_FLUID),
+        'psup': np.ones(N_FLUID),
+    }
 
-    _props = {'rho_air': np.ones(N_FLUID), 'r_sep': np.ones(N_FLUID), 'area_lb': np.zeros(N_FLUID)}
+    _props = {
+        'rho_air': np.ones(N_FLUID),
+        'r_sep': np.ones(N_FLUID),
+        'area_lb': np.zeros(N_FLUID),
+    }
 
     return res, (_state, _control, _props)
 
@@ -370,7 +394,11 @@ def _BernoulliFlowFixedSep(s: np.ndarray, idx_sep: int = 0):
     # Key functions/variables that have to be exported
     _state = {'q': np.ones(N_FLUID), 'p': np.ones(N_TOTAL)}
 
-    _control = {'area': np.ones(N_TOTAL), 'qsub': np.ones(N_FLUID), 'psup': np.ones(N_FLUID)}
+    _control = {
+        'area': np.ones(N_TOTAL),
+        'qsub': np.ones(N_FLUID),
+        'psup': np.ones(N_FLUID),
+    }
 
     _props = {'rho_air': np.ones(N_FLUID)}
 

@@ -6,8 +6,9 @@ import pytest
 
 from femvf import statefile as sf
 from femvf.load import load_transient_fsi_model
-from femvf.postprocess import (solid, base)
-from femvf.models.transient import (solid as tsmd, fluid as tfmd)
+from femvf.postprocess import solid, base
+from femvf.models.transient import solid as tsmd, fluid as tfmd
+
 
 @pytest.fixture
 def setup_model():
@@ -15,25 +16,29 @@ def setup_model():
     Return a model (subclass of `BaseTransientModel`)
     """
     model = load_transient_fsi_model(
-        '../meshes/M5-3layers.msh', None,
+        '../meshes/M5-3layers.msh',
+        None,
         SolidType=tsmd.KelvinVoigtWEpithelium,
         FluidType=tfmd.BernoulliAreaRatioSep,
         fsi_facet_labels=['pressure'],
-        fixed_facet_labels=['fixed']
+        fixed_facet_labels=['fixed'],
     )
     return model
 
+
 _StateMeasures = [
-        solid.StressI1Field,
-        solid.StressI2Field,
-        solid.StressI3Field,
-        solid.StressHydrostaticField,
-        solid.StressVonMisesField,
-        solid.ElasticStressField,
-        solid.ViscousDissipationField,
-        solid.ContactAreaDensityField,
-        solid.FluidTractionPowerDensity,
-    ]
+    solid.StressI1Field,
+    solid.StressI2Field,
+    solid.StressI3Field,
+    solid.StressHydrostaticField,
+    solid.StressVonMisesField,
+    solid.ElasticStressField,
+    solid.ViscousDissipationField,
+    solid.ContactAreaDensityField,
+    solid.FluidTractionPowerDensity,
+]
+
+
 @pytest.fixture(params=_StateMeasures)
 def setup_state_measure(setup_model, request):
     """
@@ -42,6 +47,7 @@ def setup_state_measure(setup_model, request):
     model = setup_model
     StateMeasure = request.param
     return StateMeasure(model)
+
 
 def args_from_model(model):
     """
@@ -54,6 +60,7 @@ def args_from_model(model):
     prop = model.prop.copy()
 
     return state, control, prop
+
 
 class TestStateMeasure:
     """
@@ -74,6 +81,7 @@ class TestStateMeasure:
         state_measure(state, control, prop)
         assert True
 
+
 class TestStateHistoryMeasure:
     """
     Test `BaseStateHistoryMeasure` subclasses
@@ -87,10 +95,7 @@ class TestStateHistoryMeasure:
         state_measure = setup_state_measure
         return base.TimeSeries(state_measure)
 
-
-    def test_time_series_measure(
-            self, setup_time_series_measure, tmp_path
-        ):
+    def test_time_series_measure(self, setup_time_series_measure, tmp_path):
         """
         Test if `TimeSeries` measures run
         """
@@ -108,4 +113,3 @@ class TestStateHistoryMeasure:
             # Test if the `TimeSeries` measure runs w/o error
             time_series_measure(f)
             assert True
-

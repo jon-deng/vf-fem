@@ -11,9 +11,8 @@ def wavg(s, f, w, **kwargs):
     """
     Return the weighted average of f(s) over s with weights w(s)
     """
-    return (
-        jsp.integrate.trapezoid(f * w, s, **kwargs)
-        / jsp.integrate.trapezoid(w, s, **kwargs)
+    return jsp.integrate.trapezoid(f * w, s, **kwargs) / jsp.integrate.trapezoid(
+        w, s, **kwargs
     )
 
 

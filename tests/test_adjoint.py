@@ -22,8 +22,7 @@ import dolfin as dfn
 
 from femvf import statefile as sf, linalg
 
-from femvf.models import (
-    Rayleigh, KelvinVoigt, Bernoulli, WRAnalog)
+from femvf.models import Rayleigh, KelvinVoigt, Bernoulli, WRAnalog
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 
 from femvf.forward import integrate
@@ -37,31 +36,37 @@ from femvf.utils import line_search, line_search_p, functionals_on_line_search
 
 
 from modeldefs import (
-    load_fsi_rayleigh_model, load_fsi_kelvinvoigt_model, load_fsai_rayleigh_model)
+    load_fsi_rayleigh_model,
+    load_fsi_kelvinvoigt_model,
+    load_fsai_rayleigh_model,
+)
+
 # from optvf import functional as extra_funcs
 
 dfn.set_log_level(30)
 np.random.seed(123)
 
-def taylor_order(f0, hs, fs,
-                 gstate, gcontrols, gprops, gtimes,
-                 dstate, dcontrols, dprop, dtimes):
+
+def taylor_order(
+    f0, hs, fs, gstate, gcontrols, gprops, gtimes, dstate, dcontrols, dprop, dtimes
+):
 
     ## Project the gradient along the step direction
     directions = vec.concatenate_vec([dstate, dprop, dtimes, *dcontrols])
     gradients = vec.concatenate_vec([gstate, gprops, gtimes, *gcontrols])
 
     grad_step = linalg.dot(directions, gradients)
-    grad_step_fd = (fs - f0)/hs
+    grad_step_fd = (fs - f0) / hs
     # breakpoint()
 
     ## Compare the adjoint and finite difference gradients projected on the step direction
     remainder_1 = np.abs(fs - f0)
-    remainder_2 = np.abs((fs - f0) - hs*grad_step)
+    remainder_2 = np.abs((fs - f0) - hs * grad_step)
 
-    order_1 = np.log(remainder_1[1:]/remainder_1[:-1]) / np.log(2)
-    order_2 = np.log(remainder_2[1:]/remainder_2[:-1]) / np.log(2)
+    order_1 = np.log(remainder_1[1:] / remainder_1[:-1]) / np.log(2)
+    order_2 = np.log(remainder_2[1:] / remainder_2[:-1]) / np.log(2)
     return (order_1, order_2), (grad_step, grad_step_fd)
+
 
 class TaylorTest(unittest.TestCase):
 
@@ -72,7 +77,9 @@ class TaylorTest(unittest.TestCase):
             if os.path.isfile(base_path):
                 os.remove(base_path)
             with sf.StateFile(self.model, base_path, mode='w') as f:
-                integrate(self.model, f, self.state0, self.controls, self.prop, self.times)
+                integrate(
+                    self.model, f, self.state0, self.controls, self.prop, self.times
+                )
 
         print("Computing gradient via adjoint")
         t_start = perf_counter()
@@ -85,8 +92,9 @@ class TaylorTest(unittest.TestCase):
 
         return f0, grads
 
-    def get_taylor_order(self, lsearch_fname, hs,
-                         dstate=None, dcontrols=None, dprop=None, dtimes=None):
+    def get_taylor_order(
+        self, lsearch_fname, hs, dstate=None, dcontrols=None, dprop=None, dtimes=None
+    ):
         """
         Runs the taylor order test along the specified direction
         """
@@ -112,20 +120,41 @@ class TaylorTest(unittest.TestCase):
             if os.path.exists(lsearch_fname):
                 os.remove(lsearch_fname)
             lsearch_fname = line_search(
-                hs, self.model, self.state0, self.controls, self.prop, self.times,
-                dstate, dcontrols, dprop, dtimes, filepath=lsearch_fname)
+                hs,
+                self.model,
+                self.state0,
+                self.controls,
+                self.prop,
+                self.times,
+                dstate,
+                dcontrols,
+                dprop,
+                dtimes,
+                filepath=lsearch_fname,
+            )
         else:
             print("Line search simulations already exist. Using existing files.")
 
         fs = functionals_on_line_search(hs, self.functional, self.model, lsearch_fname)
-        assert not np.all(fs == self.f0) # Check that f actually changes along the step direction
+        assert not np.all(
+            fs == self.f0
+        )  # Check that f actually changes along the step direction
 
         ## Compute the taylor convergence order
         gstate, gcontrols, gprops, gtimes = self.grads
         (order_1, order_2), (grad_step, grad_step_fd) = taylor_order(
-            self.f0, hs, fs,
-            gstate, gcontrols, gprops, gtimes,
-            dstate, dcontrols, dprop, dtimes)
+            self.f0,
+            hs,
+            fs,
+            gstate,
+            gcontrols,
+            gprops,
+            gtimes,
+            dstate,
+            dcontrols,
+            dprop,
+            dtimes,
+        )
 
         # self.plot_taylor_convergence(grad_step, hs, gs)
         # self.plot_grad_uva(self.model, grad_uva)
@@ -140,8 +169,13 @@ class TaylorTest(unittest.TestCase):
     def plot_taylor_convergence(self, grad_on_step_dir, h, g):
         # Plot the adjoint gradient and finite difference approximations of the gradient
         fig, ax = plt.subplots(1, 1, constrained_layout=True)
-        ax.plot(h[1:], (g[1:] - g[0])/h[1:],
-                color='C0', marker='o', label='FD Approximations')
+        ax.plot(
+            h[1:],
+            (g[1:] - g[0]) / h[1:],
+            color='C0',
+            marker='o',
+            label='FD Approximations',
+        )
         ax.axhline(grad_on_step_dir, color='C1', label="Adjoint gradient")
         ax.ticklabel_format(axis='y', style='sci')
         ax.set_xlabel("Step size")
@@ -158,12 +192,15 @@ class TaylorTest(unittest.TestCase):
         for ii, (grad, label) in enumerate(zip(grad_uva, ['u0', 'v0', 'a0'])):
             for jj in range(2):
                 grad_comp = grad[:].reshape(-1, 2)[:, jj]
-                mappable = axs[ii, jj].tripcolor(tri, grad_comp[model.solid.vert_to_sdof])
+                mappable = axs[ii, jj].tripcolor(
+                    tri, grad_comp[model.solid.vert_to_sdof]
+                )
 
                 axs[ii, jj].set_title(f"$\\nabla_{{{label}}} f$")
 
                 fig.colorbar(mappable, ax=axs[ii, jj])
         return fig, axs
+
 
 class TestBasicGradient(TaylorTest):
     COUPLING = 'explicit'
@@ -210,12 +247,12 @@ class TestBasicGradient(TaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-10)
+        hs = 2.0 ** (np.arange(2, 9) - 10)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprop = self.prop.copy()
         dprop[:] = 0.0
-        dprop['emod'][:] = 1.0*step_size*10
+        dprop['emod'][:] = 1.0 * step_size * 10
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dprop=dprop)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -223,7 +260,7 @@ class TestBasicGradient(TaylorTest):
 
     def test_u0(self):
         save_path = f'out/linesearch_u0_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-16)
+        hs = 2.0 ** (np.arange(2, 9) - 16)
 
         ## Pick a step direction
         # Increment `u` linearly as a function of x and y in the y direction
@@ -232,14 +269,16 @@ class TestBasicGradient(TaylorTest):
         # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
 
         # Increment `u` only along the pressure surface
-        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.fsi_verts]
+        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[
+            self.model.fsi_verts
+        ]
         xy_surface = self.model.solid.mesh.coordinates()[self.model.fsi_verts, :]
         x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
 
-        x_frac = (x_surf-x_surf.min())/(x_surf.max()-x_surf.min())
-        step_dir[np.array(surface_dofs[:, 0])] = 1*(1.0-x_frac) + 0.25*x_frac
-        step_dir[np.array(surface_dofs[:, 1])] = -1*(1.0-x_frac) + 0.25*x_frac
+        x_frac = (x_surf - x_surf.min()) / (x_surf.max() - x_surf.min())
+        step_dir[np.array(surface_dofs[:, 0])] = 1 * (1.0 - x_frac) + 0.25 * x_frac
+        step_dir[np.array(surface_dofs[:, 1])] = -1 * (1.0 - x_frac) + 0.25 * x_frac
         # step_dir[np.array(surface_dofs[:, 0])] = (y_surf/y_surf.max())**2
         # step_dir[np.array(surface_dofs[:, 1])] = (y_surf/y_surf.max())**2
 
@@ -250,7 +289,7 @@ class TestBasicGradient(TaylorTest):
 
         self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
-        dstate['u'][:] = step_dir*0.01
+        dstate['u'][:] = step_dir * 0.01
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -258,22 +297,24 @@ class TestBasicGradient(TaylorTest):
 
     def test_v0(self):
         save_path = f'out/linesearch_v0_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)-9)
+        hs = 2.0 ** (np.arange(2, 9) - 9)
 
-        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
+        xy = self.model.get_ref_config()[
+            dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)
+        ]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
         # step_dir = np.zeros(xy.size)
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
         _step_dir = step_dir[:].copy()
-        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[:-1:2] = -(y - y.min()) / (y.max() - y.min())
+        _step_dir[1::2] = -(y - y.min()) / (y.max() - y.min())
         step_dir[:] = _step_dir
 
         self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
-        dstate['v'][:] = step_dir*0.1
+        dstate['v'][:] = step_dir * 0.1
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -281,16 +322,18 @@ class TestBasicGradient(TaylorTest):
 
     def test_a0(self):
         save_path = f'out/linesearch_a0_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9))
+        hs = 2.0 ** (np.arange(2, 9))
 
-        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
+        xy = self.model.get_ref_config()[
+            dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)
+        ]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
         _step_dir = step_dir[:].copy()
-        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[:-1:2] = -(y - y.min()) / (y.max() - y.min())
+        _step_dir[1::2] = -(y - y.min()) / (y.max() - y.min())
         step_dir[:] = _step_dir
 
         self.model.solid.forms['bc.dirichlet'].apply(step_dir)
@@ -303,11 +346,10 @@ class TestBasicGradient(TaylorTest):
 
     def test_times(self):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9))
+        hs = 2.0 ** (np.arange(2, 9))
 
         dtimes = self.times.copy()
-        dtimes['times'][1:] = np.arange(1, dtimes['times'].size)*1e-9
-
+        dtimes['times'][1:] = np.arange(1, dtimes['times'].size) * 1e-9
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -315,15 +357,16 @@ class TestBasicGradient(TaylorTest):
 
     def test_control(self):
         save_path = f'out/linesearch_control_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(7)-5)
+        hs = 2.0 ** (np.arange(7) - 5)
         step_size = 1.0e0 * PASCAL_TO_CGS
 
         dcontrol = self.model.control.copy()
-        dcontrol['psub'][:] = 1.0*step_size
+        dcontrol['psub'][:] = 1.0 * step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
         # self.assertTrue(np.all(np.isclose(order_2, 2.0)))
+
 
 class TestBasicGradientSingleStep(TaylorTest):
     COUPLING = 'explicit'
@@ -380,12 +423,12 @@ class TestBasicGradientSingleStep(TaylorTest):
 
     def test_emod(self):
         save_path = f'out/linesearch_emod_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(7)-5)
+        hs = 2.0 ** (np.arange(7) - 5)
         step_size = 0.5e0 * PASCAL_TO_CGS
 
         dprop = self.prop.copy()
         dprop[:] = 0.0
-        dprop['emod'][:] = 1.0*step_size/5
+        dprop['emod'][:] = 1.0 * step_size / 5
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dprop=dprop)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -393,7 +436,7 @@ class TestBasicGradientSingleStep(TaylorTest):
 
     def test_u0(self):
         save_path = f'out/linesearch_u0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(2, 9)-12)
+        hs = 2.0 ** (np.arange(2, 9) - 12)
 
         ## Pick a step direction
         # Increment `u` linearly as a function of x and y in the y direction
@@ -402,14 +445,16 @@ class TestBasicGradientSingleStep(TaylorTest):
         # step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
 
         # Increment `u` only along the pressure surface
-        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[self.model.fsi_verts]
+        surface_dofs = self.model.solid.vert_to_vdof.reshape(-1, 2)[
+            self.model.fsi_verts
+        ]
         xy_surface = self.model.solid.mesh.coordinates()[self.model.fsi_verts, :]
         x_surf, y_surf = xy_surface[:, 0], xy_surface[:, 1]
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
 
-        x_frac = (x_surf-x_surf.min())/(x_surf.max()-x_surf.min())
-        step_dir[np.array(surface_dofs[:, 0])] = 1*(1.0-x_frac) + 0.25*x_frac
-        step_dir[np.array(surface_dofs[:, 1])] = -1*(1.0-x_frac) + 0.25*x_frac
+        x_frac = (x_surf - x_surf.min()) / (x_surf.max() - x_surf.min())
+        step_dir[np.array(surface_dofs[:, 0])] = 1 * (1.0 - x_frac) + 0.25 * x_frac
+        step_dir[np.array(surface_dofs[:, 1])] = -1 * (1.0 - x_frac) + 0.25 * x_frac
         # step_dir[np.array(surface_dofs[:, 0])] = (y_surf/y_surf.max())**2
         # step_dir[np.array(surface_dofs[:, 1])] = (y_surf/y_surf.max())**2
 
@@ -421,7 +466,7 @@ class TestBasicGradientSingleStep(TaylorTest):
         self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
 
-        dstate['u'][:] = step_dir*0.00005
+        dstate['u'][:] = step_dir * 0.00005
         dstate['v'][:] = 0.0
         dstate['a'][:] = 0.0
 
@@ -431,23 +476,25 @@ class TestBasicGradientSingleStep(TaylorTest):
 
     def test_v0(self):
         save_path = f'out/linesearch_v0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(2, 9)-6)
+        hs = 2.0 ** (np.arange(2, 9) - 6)
 
-        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
+        xy = self.model.get_ref_config()[
+            dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)
+        ]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
         # step_dir = np.zeros(xy.size)
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
         _step_dir = step_dir[:].copy()
-        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[:-1:2] = -(y - y.min()) / (y.max() - y.min())
+        _step_dir[1::2] = -(y - y.min()) / (y.max() - y.min())
         step_dir[:] = _step_dir
 
         self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['u'][:] = 0
-        dstate['v'][:] = step_dir*1e-5
+        dstate['v'][:] = step_dir * 1e-5
         dstate['a'][:] = 0.0
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
@@ -456,23 +503,25 @@ class TestBasicGradientSingleStep(TaylorTest):
 
     def test_a0(self):
         save_path = f'out/linesearch_a0_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(2, 9)+5)
+        hs = 2.0 ** (np.arange(2, 9) + 5)
 
-        xy = self.model.get_ref_config()[dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)]
+        xy = self.model.get_ref_config()[
+            dfn.dof_to_vertex_map(self.model.solid.scalar_fspace)
+        ]
         y = xy[:, 1]
 
         # Set the step direction as a linear (de)increase in x and y displacement in the y direction
         step_dir = dfn.Function(self.model.solid.vector_fspace).vector()
         _step_dir = step_dir[:].copy()
-        _step_dir[:-1:2] = -(y-y.min()) / (y.max()-y.min())
-        _step_dir[1::2] = -(y-y.min()) / (y.max()-y.min())
+        _step_dir[:-1:2] = -(y - y.min()) / (y.max() - y.min())
+        _step_dir[1::2] = -(y - y.min()) / (y.max() - y.min())
         step_dir[:] = _step_dir
 
         self.model.solid.forms['bc.dirichlet'].apply(step_dir)
         dstate = self.model.state0.copy()
         dstate['u'][:] = 0.0
         dstate['v'][:] = 0.0
-        dstate['a'][:] = step_dir*1e-5
+        dstate['a'][:] = step_dir * 1e-5
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dstate=dstate)
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -480,11 +529,11 @@ class TestBasicGradientSingleStep(TaylorTest):
 
     def test_control(self):
         save_path = f'out/linesearch_control_{self.COUPLING}_{self.CASE_NAME}.h5'
-        hs = 2.0**(np.arange(7)-5)
+        hs = 2.0 ** (np.arange(7) - 5)
         step_size = 5.0e0 * PASCAL_TO_CGS
 
         dcontrol = self.model.control.copy()
-        dcontrol['psub'][:] = 1.0*step_size
+        dcontrol['psub'][:] = 1.0 * step_size
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dcontrols=[dcontrol])
         # self.assertTrue(np.all(np.isclose(order_1, 1.0)))
@@ -492,13 +541,13 @@ class TestBasicGradientSingleStep(TaylorTest):
 
     def test_times(self):
         save_path = f'out/linesearch_dt_{self.COUPLING}.h5'
-        hs = 2.0**(np.arange(2, 9)+5)
+        hs = 2.0 ** (np.arange(2, 9) + 5)
 
         dtimes = self.times.copy()
-        dtimes['times'][:] = np.arange(1, dtimes['times'].size)*1e-11
-
+        dtimes['times'][:] = np.arange(1, dtimes['times'].size) * 1e-11
 
         order_1, order_2 = self.get_taylor_order(save_path, hs, dtimes=dtimes)
+
 
 if __name__ == '__main__':
     # unittest.main()
