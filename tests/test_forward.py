@@ -26,7 +26,7 @@ from femvf.models.transient import (
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
-from femvf.vis.xdmfutils import export_vertex_values, write_xdmf
+from femvf.vis.xdmfutils import write_xdmf, export_mesh_values
 
 from vfsig import modal as modalsig
 
@@ -55,34 +55,25 @@ class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            # 'M5_BC--GA0.00--DZ0.00',
-            # 'M5_BC--GA0.00--DZ2.00',
+            ('M5_BC--GA3--DZ0.00', None),
+            ('M5_BC--GA3--DZ1.50', np.linspace(0, 1.5, 16)),
             # 'M5_BC--GA0.00--DZ4.00',
             # 'M5_BC--GA0.00--DZ8.00',
-            'M5_BC--GA0.00--DZ0.00'
             # 'M5-3layers.msh'
         ]
     )
-    def mesh_path(self, request):
+    def mesh_info(self, request):
         """Return the mesh path"""
+        mesh_name, zs = request.param
         mesh_dir = '../meshes'
-        return os.path.join(mesh_dir, request.param + '.msh')
+        return os.path.join(mesh_dir, f'{mesh_name}.msh'), zs
 
     @pytest.fixture()
-    def model(self, mesh_path, solid_type, fluid_type):
+    def model(self, mesh_info, solid_type, fluid_type):
         """Return the model"""
         ## Configure the model and its parameters
         SolidType, FluidType = (solid_type, fluid_type)
-        if 'DZ0.00' in mesh_path:
-            zs = None
-        elif 'DZ2.00' in mesh_path:
-            zs = np.linspace(0, 2.0, 5 + 1)
-        elif 'DZ4.00' in mesh_path:
-            zs = np.linspace(0, 4.0, 10 + 1)
-        elif 'DZ8.00' in mesh_path:
-            zs = np.linspace(0, 8.0, 20 + 1)
-        else:
-            raise ValueError()
+        mesh_path, zs = mesh_info
 
         return load_transient_fsi_model(
             mesh_path,
@@ -180,12 +171,12 @@ class TestIntegrate:
 
     @pytest.fixture()
     def times(self):
-        tfin = 0.2
-        return np.linspace(0, tfin, round(tfin * 100 / 0.01) + 1)
+        times = 2e-5 * np.arange(2**8)
+        return times
 
     def test_integrate(
         self,
-        mesh_path: str,
+        mesh_info: str,
         model: cmd.BaseTransientFSIModel,
         ini_state: bv.BlockVector,
         controls: bv.BlockVector,
@@ -197,16 +188,13 @@ class TestIntegrate:
         """
 
         psub = controls[0]['fluid0.psub'][0]
-        mesh_name = os.path.splitext(os.path.split(mesh_path)[1])[0]
+        mesh_name = os.path.splitext(os.path.split(mesh_info[0])[1])[0]
         save_path = (
             f'out/{self.__class__.__name__}--{mesh_name}'
             f'--{model.solid.__class__.__name__}'
             f'--{model.fluids[0].__class__.__name__}--psub{psub/10:.1f}.h5'
         )
-        if os.path.isfile(save_path):
-            warnings.warn(f"Skipping existing test result file: {save_path}")
-        else:
-            self.integrate(model, ini_state, controls, prop, times, save_path)
+        self.integrate(model, ini_state, controls, prop, times, save_path)
 
         self.plot_glottal_width(model, save_path)
         self.export_paraview(model, save_path)
@@ -246,11 +234,13 @@ class TestIntegrate:
         """
         Export paraview visualization data from the results
         """
-        vertex_data_path = os.path.splitext(save_path)[0] + '--vertex.h5'
-        export_vertex_values(model, save_path, vertex_data_path)
+        # TODO: `write_xdmf` and `export_mesh_values` have been updated
+        # vertex_data_path = os.path.splitext(save_path)[0] + '--vertex.h5'
+        # export_mesh_values(model, save_path, vertex_data_path)
 
-        xdmf_name = os.path.split(os.path.splitext(save_path)[0])[-1] + '--vertex.xdmf'
-        write_xdmf(model, vertex_data_path, xdmf_name)
+        # xdmf_name = os.path.split(os.path.splitext(save_path)[0])[-1] + '--vertex.xdmf'
+        # write_xdmf(model, vertex_data_path, xdmf_name)
+        pass
 
     def export_stats(self, model, save_path):
         with sf.StateFile(model, save_path, mode='r') as f:
@@ -307,7 +297,7 @@ class TestLiEtal2020(TestIntegrate):
             'LiEtal2020--GA0--DZ2.00'
         ]
     )
-    def mesh_path(self, request):
+    def mesh_info(self, request):
         """Return the mesh path"""
         mesh_dir = '../meshes'
         return os.path.join(mesh_dir, request.param + '.msh')
@@ -410,7 +400,7 @@ class TestBounceFromDeformation(TestIntegrate):
             'M5_BC--GA0--DZ2.00'
         ]
     )
-    def mesh_path(self, request):
+    def mesh_info(self, request):
         """Return the mesh path"""
         mesh_dir = '../meshes'
         return os.path.join(mesh_dir, request.param + '.msh')
