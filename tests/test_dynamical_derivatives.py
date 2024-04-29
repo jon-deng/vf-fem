@@ -300,7 +300,7 @@ class GenericFixtureMixin:
     """
 
     @pytest.fixture(params=[(dynsl.KelvinVoigt, dynsl.LinearizedKelvinVoigt, {})])
-    def SolidModelPair(self, request):
+    def SolidModelInfo(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
         """
@@ -308,38 +308,41 @@ class GenericFixtureMixin:
 
     @pytest.fixture(
         params=[
-            # (dynfl.BernoulliSmoothMinSep, dynfl.LinearizedBernoulliSmoothMinSep, {}),
-            (
-                dynfl.BernoulliFixedSep,
-                dynfl.LinearizedBernoulliFixedSep,
-                {'separation_vertex_label': 'separation-inf'},
-            ),
+            (dynfl.BernoulliAreaRatioSep, dynfl.LinearizedBernoulliAreaRatioSep, {}),
+            # (
+            #     dynfl.BernoulliFixedSep,
+            #     dynfl.LinearizedBernoulliFixedSep,
+            #     {'separation_vertex_label': 'separation-inf'},
+            # ),
             # (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
         ]
     )
-    def FluidModelPair(self, request):
+    def FluidModelInfo(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
         """
         return request.param
 
-    @pytest.fixture(params=['M5_BC--GA0.00--DZ0.00.msh'])
-    def mesh_path(self, request):
-        mesh_name = request.param
-        mesh_path = path.join('../meshes', mesh_name)
-
-        return mesh_path
+    @pytest.fixture(
+        params=[
+            ('M5_BC--GA0.00--DZ0.00.msh', None),
+            ('M5_BC--GA3--DZ1.50.msh', np.linspace(0, 1.5, 16)),
+        ]
+    )
+    def mesh_info(self, request):
+        mesh_name, zs = request.param
+        return path.join('../meshes', mesh_name), zs
 
     @pytest.fixture()
-    def model(self, mesh_path, SolidModelPair, FluidModelPair):
+    def model(self, mesh_info, SolidModelInfo, FluidModelInfo):
         """
         Return a dynamical system model residual
         """
-        solid_mesh = mesh_path
+        solid_mesh, zs = mesh_info
         fluid_mesh = None
 
-        SolidType, LinSolidType, solid_kwargs = SolidModelPair
-        FluidType, LinFluidType, fluid_kwargs = FluidModelPair
+        SolidType, LinSolidType, solid_kwargs = SolidModelInfo
+        FluidType, LinFluidType, fluid_kwargs = FluidModelInfo
         if SolidType is not None and FluidType is not None:
             model = load.load_dynamical_fsi_model(
                 solid_mesh,
@@ -348,6 +351,7 @@ class GenericFixtureMixin:
                 FluidType,
                 fsi_facet_labels=('pressure',),
                 fixed_facet_labels=('fixed',),
+                zs=zs,
                 **solid_kwargs,
                 **fluid_kwargs,
             )
@@ -367,15 +371,15 @@ class GenericFixtureMixin:
         return model
 
     @pytest.fixture()
-    def model_linear(self, mesh_path, SolidModelPair, FluidModelPair):
+    def model_linear(self, mesh_info, SolidModelInfo, FluidModelInfo):
         """
         Return a linearized dynamical system model residual
         """
-        solid_mesh = mesh_path
+        solid_mesh, zs = mesh_info
         fluid_mesh = None
 
-        SolidType, LinSolidType, solid_kwargs = SolidModelPair
-        FluidType, LinFluidType, fluid_kwargs = FluidModelPair
+        SolidType, LinSolidType, solid_kwargs = SolidModelInfo
+        FluidType, LinFluidType, fluid_kwargs = FluidModelInfo
 
         model_coupled_linear = load.load_dynamical_fsi_model(
             solid_mesh,
@@ -384,6 +388,7 @@ class GenericFixtureMixin:
             LinFluidType,
             fsi_facet_labels=('pressure',),
             fixed_facet_labels=('fixed',),
+            zs=zs,
             **solid_kwargs,
             **fluid_kwargs,
         )
@@ -547,12 +552,21 @@ class GenericFixtureMixin:
         return dprop
 
 
-class TestShapeModel(_TestDerivative, GenericFixtureMixin):
+class Test2DShapeModel(_TestDerivative, GenericFixtureMixin):
+    @pytest.fixture(
+        params=[
+            ('M5_BC--GA0.00--DZ0.00.msh', None),
+            # ('M5_BC--GA3--DZ1.50.msh', np.linspace(0, 1.5, 16)),
+        ]
+    )
+    def mesh_info(self, request):
+        mesh_name, zs = request.param
+        return path.join('../meshes', mesh_name), zs
 
     @pytest.fixture(
         params=[(dynsl.KelvinVoigtWShape, dynsl.LinearizedKelvinVoigtWShape, {})]
     )
-    def SolidModelPair(self, request):
+    def SolidModelInfo(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
         """
@@ -568,7 +582,7 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
             ),
         ]
     )
-    def FluidModelPair(self, request):
+    def FluidModelInfo(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
         """
@@ -721,6 +735,41 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
         super().test_dres_dstatet_vs_dres_statet(
             model, model_linear, state, statet, control, prop, dstatet
         )
+
+
+class Test3DShapeModel(_TestDerivative, GenericFixtureMixin):
+
+    @pytest.fixture(
+        params=[
+            # ('M5_BC--GA0.00--DZ0.00.msh', None),
+            ('M5_BC--GA3--DZ1.50.msh', np.linspace(0, 1.5, 16)),
+        ]
+    )
+    def mesh_info(self, request):
+        mesh_name, zs = request.param
+        return path.join('../meshes', mesh_name), zs
+
+    @pytest.fixture(
+        params=[
+            (dynsl.KelvinVoigtWShape, dynsl.LinearizedKelvinVoigtWShape, {}),
+        ]
+    )
+    def SolidModelInfo(self, request):
+        """
+        Return a tuple of non-linear and linearized models, and kwargs
+        """
+        return request.param
+
+    @pytest.fixture(
+        params=[
+            (dynfl.BernoulliAreaRatioSep, dynfl.LinearizedBernoulliAreaRatioSep, {}),
+        ]
+    )
+    def FluidModelInfo(self, request):
+        """
+        Return a tuple of non-linear and linearized models, and kwargs
+        """
+        return request.param
 
 
 class TestNoShapeModel(_TestDerivative, GenericFixtureMixin):
