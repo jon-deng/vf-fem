@@ -214,11 +214,11 @@ class TractionShape(TransformFromModel):
         ds = residual.measure('ds')
 
         facet_label_to_id = residual.mesh_function_label_to_value('facet')
-        ds_traction_surfaces = [
-            ds(int(facet_label_to_id[facet_label]))
-            for facet_label in residual.fsi_facet_labels
-        ]
-        ds_traction = reduce(lambda x, y: x + y, ds_traction_surfaces)
+        # ds_traction_surfaces = [
+        #     ds(int(facet_label_to_id[facet_label]))
+        #     for facet_label in residual.fsi_facet_labels
+        # ]
+        # ds_traction = reduce(lambda x, y: x + y, ds_traction_surfaces)
 
         tmesh = dfn.Function(fspace)
         trial = dfn.TrialFunction(fspace)
@@ -240,7 +240,7 @@ class TractionShape(TransformFromModel):
             form_dF_du, tensor=dfn.PETScMatrix(), keep_diagonal=True
         )
 
-        form_dF_dt = ufl.inner(trial, test) * ds_traction
+        form_dF_dt = ufl.inner(trial, test) * ds
         mat_dF_dt = dfn.assemble(
             form_dF_dt, tensor=dfn.PETScMatrix(), keep_diagonal=True
         )
