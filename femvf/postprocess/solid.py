@@ -12,7 +12,7 @@ import numpy as np
 from petsc4py import PETSc
 import dolfin as dfn
 import ufl
-from blockarray.subops import solve_petsc_lu
+from blockarray.subops import solve_petsc_preonly
 
 from femvf.models.transient.base import BaseTransientModel
 from .base import BaseStateMeasure, BaseDerivedStateMeasure
@@ -613,7 +613,7 @@ def make_project(
 
         x_petsc = x.vec()
         b_petsc = b.vec()
-        solve_petsc_lu(A.mat(), b_petsc, x_petsc, ksp=ksp)
+        solve_petsc_preonly(A.mat(), b_petsc, x_petsc, ksp=ksp)
 
         # dfn.solve(A, x, b, 'lu')
         return x
