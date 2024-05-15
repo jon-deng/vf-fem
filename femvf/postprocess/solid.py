@@ -12,7 +12,7 @@ import numpy as np
 from petsc4py import PETSc
 import dolfin as dfn
 import ufl
-from blockarray.subops import solve_petsc_lu
+from blockarray.subops import solve_petsc_preonly as solve_petsc_lu
 
 from femvf.models.transient.base import BaseTransientModel
 from .base import BaseStateMeasure, BaseDerivedStateMeasure
