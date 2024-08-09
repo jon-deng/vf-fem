@@ -109,7 +109,12 @@ def static_solid_configuration(
         # 'coeff.state.u0' always matches 'coeff.state.u1'
         form = model.residual.form
         if is_tra_model:
+            # Zero final/initial states to solve for a transient
+            zero_state = model.state1.copy()
+            zero_state[:] = 0
+            model.set_fin_state(zero_state)
             model.set_ini_state(zero_state)
+
             res_form = ufl.replace(
                 form.form, {form['coeff.state.u0']: form['coeff.state.u1']}
             )
