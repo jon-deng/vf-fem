@@ -540,9 +540,13 @@ class IsotropicElasticForm(PredefinedForm):
         set_fenics_function(nu, 0.45)
         stress_elastic = stress_isotropic(inf_strain, emod, nu)
 
+        inf_strain_rate = strain_inf(coefficients['coeff.state.v1'])
+        stress_elastic_rate = stress_isotropic(inf_strain_rate, emod, nu)
+
         expressions = {
             'expr.stress_elastic': stress_elastic,
             'expr.strain_energy': ufl.inner(stress_elastic, inf_strain),
+            'expr.strain_energy_rate': 2*ufl.inner(stress_elastic_rate, inf_strain_rate),
         }
         return ufl.inner(stress_elastic, strain_test) * measure, expressions
 
@@ -648,6 +652,7 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.state.v1': func_spec('CG', 1, 'vector'),
         'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
         'coeff.prop.nu': const_spec('scalar', default_value=0.45),
         'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
@@ -661,10 +666,12 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
         dx = measure
 
         u = coefficients['coeff.state.u1']
+        v = coefficients['coeff.state.v1']
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
         DE = strain_lin_green_lagrange(u, vector_test)
         E = strain_green_lagrange(u)
+        E_rate = strain_green_lagrange(v)
 
         emod = coefficients['coeff.prop.emod']
         nu = dfn.Constant(0.45)
@@ -674,12 +681,14 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
         m.vector()[:] = 0.0
 
         E_v = v ** (-2 / 3) * E + 1 / 2 * (v ** (-2 / 3) - 1) * ufl.Identity(3)
+        E_v_rate = v ** (-2 / 3) * E_rate + 1 / 2 * (v ** (-2 / 3) - 1) * ufl.Identity(3)
         # Here `mbar_v` corresponds to the scaling function 'm(v)/v' [Gou2016]
         # I used 'm(v)/v' (instead of 'm(v)') so that the coefficient
         # `'coeff.prop.m_swelling'` will correspond to the linear stiffness
         # change used for `IsotropicElasticSwellingForm` at no swelling
         mbar_v = v**m
         S = mbar_v * v ** (1 / 3) * stress_isotropic(E_v, emod, nu)
+        S_rate = mbar_v * v ** (1 / 3) * stress_isotropic(E_v_rate, emod, nu)
 
         F = def_grad(u)
         J = ufl.det(F)
@@ -689,6 +698,7 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
             # NOTE: This should be true because this is a linear hyperelastic
             # material
             'expr.strain_energy': ufl.inner(S, E),
+            'expr.strain_energy_rate': ufl.inner(S, E_rate) + ufl.inner(S_rate, E),
             'expr.stress_elastic_PK2': S,
             'expr.strain_green': E,
         }

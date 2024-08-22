@@ -216,6 +216,35 @@ class StrainEnergy(BaseFieldMeasure):
 
 
 @doc_field_measure_params
+class StrainEnergyRate(BaseFieldMeasure):
+    """
+    Return the elastic strain energy
+
+    """
+
+    def _init_expression(self):
+        forms = self.model.solid.residual.form
+        return forms.expressions['expr.strain_energy_rate']
+
+    def assem(self, state, control, prop):
+        return np.array(self.project()[:])
+
+@doc_field_measure_params
+class PositiveStrainEnergyRate(BaseFieldMeasure):
+    """
+    Return only positive elastic strain energy rates
+
+    """
+
+    def _init_expression(self):
+        forms = self.model.solid.residual.form
+        return ufl.Max(forms.expressions['expr.strain_energy_rate'], 0)
+
+    def assem(self, state, control, prop):
+        return np.array(self.project()[:])
+
+
+@doc_field_measure_params
 class ContactPressureField(BaseFieldMeasure):
     """
     Return the penalty contact pressure
