@@ -326,7 +326,7 @@ class GenericFixtureMixin:
     @pytest.fixture(params=['M5_BC--GA0.00--DZ0.00.msh'])
     def mesh_path(self, request):
         mesh_name = request.param
-        mesh_path = path.join('../meshes', mesh_name)
+        mesh_path = path.join('../../meshes', mesh_name)
 
         return mesh_path
 
