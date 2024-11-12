@@ -19,7 +19,7 @@ from femvf.parameters import transform as tform
 
 from blockarray import blockvec as bv, linalg as blinalg
 
-from taylor import taylor_convergence
+from femvf.misc.taylor import taylor_convergence
 
 dfn.set_log_level(50)
 
