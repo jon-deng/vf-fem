@@ -524,6 +524,7 @@ class IsotropicElasticForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'coeff.state.u1': func_spec('CG', 1, 'vector'),
+        'coeff.state.v1': func_spec('CG', 1, 'vector'),
         'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
         'coeff.prop.nu': const_spec('scalar', default_value=0.45),
     }
@@ -1268,8 +1269,8 @@ class KelvinVoigt(PredefinedFenicsResidual):
 
         form = (
             InertialForm({}, dx, mesh)
-            + IsotropicElasticForm({}, dx, mesh)
             + KelvinVoigtForm({}, dx, mesh)
+            + IsotropicElasticForm({}, dx, mesh)
             - SurfacePressureForm({}, traction_ds, mesh)
             - ManualSurfaceContactTractionForm({}, traction_ds, mesh)
         )

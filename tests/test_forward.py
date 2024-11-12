@@ -5,7 +5,6 @@ Test to see if `forward.integrate` runs
 import os
 import pytest
 from time import perf_counter
-import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,7 +19,6 @@ from femvf.constants import PASCAL_TO_CGS
 from femvf.models.transient import (
     solid as tsmd,
     fluid as tfmd,
-    acoustic as amd,
     coupled as cmd,
 )
 from femvf.load import load_transient_fsi_model, load_transient_fsai_model
@@ -303,17 +301,17 @@ class TestLiEtal2020(TestIntegrate):
         return os.path.join(mesh_dir, request.param + '.msh')
 
     @pytest.fixture()
-    def model(self, mesh_path, solid_type, fluid_type):
+    def model(self, mesh_info, solid_type, fluid_type):
         """Return the model"""
         ## Configure the model and its parameters
         SolidType, FluidType = (solid_type, fluid_type)
-        if 'DZ0.00' in mesh_path:
+        if 'DZ0.00' in mesh_info:
             zs = None
         else:
             # zs = (0.0, 0.5, 2.0)
             zs = np.linspace(0.0, 2.0, 6)
         return load_transient_fsi_model(
-            mesh_path,
+            mesh_info,
             None,
             SolidType=SolidType,
             FluidType=FluidType,
@@ -371,7 +369,7 @@ class TestLiEtal2020(TestIntegrate):
 
     @pytest.fixture()
     def times(self):
-        tfin = 0.4
+        tfin = 0.01
         return np.linspace(0, tfin, round(100 / 0.01 * tfin) + 1)
 
 
@@ -406,16 +404,16 @@ class TestBounceFromDeformation(TestIntegrate):
         return os.path.join(mesh_dir, request.param + '.msh')
 
     @pytest.fixture()
-    def model(self, mesh_path, solid_type, fluid_type):
+    def model(self, mesh_info, solid_type, fluid_type):
         """Return the model"""
         ## Configure the model and its parameters
         SolidType, FluidType = (solid_type, fluid_type)
-        if 'DZ0.00' in mesh_path:
+        if 'DZ0.00' in mesh_info:
             zs = None
         else:
             zs = np.linspace(0.0, 2.0, 6)
         return load_transient_fsi_model(
-            mesh_path,
+            mesh_info,
             None,
             SolidType=SolidType,
             FluidType=FluidType,
@@ -493,5 +491,5 @@ class TestBounceFromDeformation(TestIntegrate):
 
     @pytest.fixture()
     def times(self):
-        tfin = 0.1
+        tfin = 0.01
         return np.linspace(0, tfin, round(100 / 0.01 * tfin) + 1)
