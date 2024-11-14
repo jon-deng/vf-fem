@@ -42,6 +42,10 @@ ResReturn = Mapping[str, ArrayLike]
 
 ## Fluid residual classes
 # TODO: Move residual classes to separate module?
+# TODO: Formalize the jax residual more with argument size/shape definitions?
+# The Jax residual is kind of fragile since you just have to create arrays
+# and arguments etc. in the right sizes and shapes based on how you coded the
+# `res` function
 class JaxResidual(base.BaseResidual):
     """
     Representation of a (non-linear) residual in `JAX`
