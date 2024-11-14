@@ -41,11 +41,13 @@ ResReturn = Mapping[str, ArrayLike]
 
 
 ## Fluid residual classes
+# TODO: Move residual classes to separate module?
 class JaxResidual(base.BaseResidual):
     """
     Representation of a (non-linear) residual in `JAX`
     """
 
+    # TODO: Document/refactor the format of res and res_args?
     def __init__(self, res: Callable[[ResArgs], ResReturn], res_args: ResArgs):
 
         self._res = res
