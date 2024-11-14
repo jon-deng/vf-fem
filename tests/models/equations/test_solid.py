@@ -8,6 +8,7 @@ import dolfin as dfn
 
 from femvf.models.equations import solid as sld
 
+
 class UFLFormFixtures:
 
     @pytest.fixture()
@@ -84,3 +85,77 @@ class TestPredefinedVolumeForms(UFLFormFixtures):
     def test_FacetForm(self, FacetForm, measure_ds, mesh):
         assert FacetForm({}, measure_ds, mesh)
 
+
+class FenicsFormFixtures(UFLFormFixtures):
+
+    @pytest.fixture()
+    def form(self, ufl_form, ufl_coefficients):
+        return sld.FenicsForm(ufl_form, ufl_coefficients)
+
+
+class TestFenicsResidual(FenicsFormFixtures):
+
+    @pytest.fixture()
+    def vertex_function_tuple(self, mesh: dfn.Mesh):
+        mf = dfn.MeshFunction('size_t', mesh, 0, 0)
+        return mf, {}
+
+    @pytest.fixture()
+    def facet_function_tuple(self, mesh: dfn.Mesh):
+        num_dim = mesh.topology().dim()
+        mf = dfn.MeshFunction('size_t', mesh, num_dim-1, 0)
+
+        # Mark the bottom and front/back faces of the unit cube as dirichlet
+        class Fixed(dfn.SubDomain):
+
+            def inside(self, x, on_boundary):
+                is_bottom = x[1] < dfn.DOLFIN_EPS
+                # Only check for front/back surfaces in 3D
+                if len(x) > 2:
+                    is_front = x[2] > 1-dfn.DOLFIN_EPS
+                    is_back = x[2] < dfn.DOLFIN_EPS
+                else:
+                    is_front = False
+                    is_back = False
+                return (is_bottom or is_front or is_back) and on_boundary
+
+        fixed = Fixed()
+        fixed.mark(mf, 1)
+        return mf, {'fixed': 1, 'traction': 0}
+
+    @pytest.fixture()
+    def cell_function_tuple(self, mesh: dfn.Mesh):
+        num_dim = mesh.topology().dim()
+        mf = dfn.MeshFunction('size_t', mesh, num_dim, 0)
+
+        # Mark the bottom and front/back faces of the unit cube as dirichlet
+        class TopHalf(dfn.SubDomain):
+
+            def inside(self, x, on_boundary):
+                is_tophalf = x[1] > 0.5 + dfn.DOLFIN_EPS
+                return is_tophalf
+
+        top_half = TopHalf()
+        top_half.mark(mf, 1)
+        return mf, {'top': 1, 'bottom': 0}
+
+    @pytest.fixture()
+    def form(self, mesh, measure_dx):
+
+        return sld.InertialForm({}, measure_dx, mesh) + sld.IsotropicElasticForm({}, measure_dx, mesh)
+
+    def test_FenicsResidual(
+            self,
+            form,
+            mesh,
+            vertex_function_tuple,
+            facet_function_tuple,
+            cell_function_tuple
+        ):
+        mf_vertex, vertex_values = vertex_function_tuple
+        mf_facet, facet_values = facet_function_tuple
+        mf_cell, cell_values = cell_function_tuple
+
+        mfs = (mf_vertex, mf_facet, mf_cell)
+        mfs_values = (vertex_values, facet_values, cell_values)
+        assert sld.FenicsResidual(form, mesh, mfs, mfs_values, ['traction'], ['fixed'])
