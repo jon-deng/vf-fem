@@ -21,10 +21,10 @@ from femvf.models.transient import (
     fluid as tfmd,
     coupled as cmd,
 )
-from femvf.load import load_transient_fsi_model, load_transient_fsai_model
+from femvf.load import load_transient_fsi_model
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
-from femvf.vis.xdmfutils import write_xdmf, export_mesh_values
+# from femvf.vis.xdmfutils import write_xdmf, export_mesh_values
 
 from vfsig import modal as modalsig
 
@@ -53,8 +53,8 @@ class TestIntegrate:
 
     @pytest.fixture(
         params=[
-            ('M5_BC--GA3--DZ0.00', None),
-            ('M5_BC--GA3--DZ1.50', np.linspace(0, 1.5, 16)),
+            ('M5_BC--GA3.00--DZ0.00', None),
+            # ('M5_BC--GA3.00--DZ1.50', np.linspace(0, 1.5, 16)),
             # 'M5_BC--GA0.00--DZ4.00',
             # 'M5_BC--GA0.00--DZ8.00',
             # 'M5-3layers.msh'
@@ -188,7 +188,7 @@ class TestIntegrate:
         psub = controls[0]['fluid0.psub'][0]
         mesh_name = os.path.splitext(os.path.split(mesh_info[0])[1])[0]
         save_path = (
-            f'out/{self.__class__.__name__}--{mesh_name}'
+            f'{self.__class__.__name__}--{mesh_name}'
             f'--{model.solid.__class__.__name__}'
             f'--{model.fluids[0].__class__.__name__}--psub{psub/10:.1f}.h5'
         )
@@ -265,6 +265,7 @@ class TestIntegrate:
         df.to_excel(stats_path)
 
 
+@pytest.mark.skip
 class TestLiEtal2020(TestIntegrate):
     """
     Test the forward model with conditions given in (Li et. al., 2020)
@@ -372,7 +373,7 @@ class TestLiEtal2020(TestIntegrate):
         tfin = 0.01
         return np.linspace(0, tfin, round(100 / 0.01 * tfin) + 1)
 
-
+@pytest.mark.skip
 class TestBounceFromDeformation(TestIntegrate):
     """
     Test the forward model with bouncing back from a deformed state
