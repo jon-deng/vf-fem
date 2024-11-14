@@ -106,3 +106,8 @@ class TestFluid:
         assert FluidModel(mesh)
 
     # TODO: Think of ways you can test a model is working properly?
+
+
+# TODO: Implement FSI model tests!
+# class TestFSI:
+
