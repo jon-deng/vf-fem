@@ -1,22 +1,33 @@
 name: fenics
 channels:
     - defaults
-    - conda-forge
 dependicies:
-    - scipy
-    - numpy
-    - jupyter
-    - pandas
-    - matplotlib
-    - h5py
-    - tabulate
-    - tqdm
-    - ipython
-    
-    - cyipopt
-    - fenics
-    - nlopt
-    - ipdb
-    - autograd
-    - lxml
 
+    # These are commonly used scientific libraries
+    - numpy
+    - scipy
+    - jax
+    - pandas
+    - h5py
+    - matplotlib
+
+    # Mesh  + vis utilities
+    - meshio
+
+    # Needed for compiling fenics
+    # - fenics
+    - pybind11
+    - cython
+
+    # PETSc related utilities
+    # - petsc4py
+    # - slepc4py
+
+    # These aren't strictly needed but are used alot for analyzing results and debugging
+    - jupyter
+    - ipython
+    - ipdb
+
+    # Miscellaneous utilities
+    - tqdm
+    - tabulate
