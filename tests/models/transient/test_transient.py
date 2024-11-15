@@ -8,6 +8,7 @@ import numpy as np
 import dolfin as dfn
 
 from femvf.models.transient import solid as sld, fluid as fld, coupled as cpd
+from femvf.load import derive_1dfluid_from_2dsolid, derive_1dfluid_from_3dsolid
 
 
 class FenicsMeshFixtures:
@@ -20,7 +21,17 @@ class FenicsMeshFixtures:
     @pytest.fixture()
     def vertex_function_tuple(self, mesh: dfn.Mesh):
         mf = dfn.MeshFunction('size_t', mesh, 0, 0)
-        return mf, {}
+
+        # Mark the top right corner as 'separation'
+        class Separation(dfn.SubDomain):
+
+            def inside(self, x, on_boundary):
+                is_top = x[1] > 1 - dfn.DOLFIN_EPS
+                is_right = x[0] > 1 - dfn.DOLFIN_EPS
+                return (is_top and is_right) and on_boundary
+        subdomain = Separation()
+        subdomain.mark(mf, 1)
+        return mf, {'separation': 1}
 
     @pytest.fixture()
     def facet_function_tuple(self, mesh: dfn.Mesh):
@@ -108,6 +119,35 @@ class TestFluid:
     # TODO: Think of ways you can test a model is working properly?
 
 
-# TODO: Implement FSI model tests!
-# class TestFSI:
+class TestCoupled(FenicsMeshFixtures):
+
+    @pytest.fixture(
+        params=[sld.Rayleigh, sld.KelvinVoigt, sld.SwellingKelvinVoigt]
+    )
+    def SolidModel(self, request):
+        return request.param
+
+    @pytest.fixture(
+        params=[fld.BernoulliSmoothMinSep, fld.BernoulliFixedSep, fld.BernoulliAreaRatioSep]
+    )
+    def FluidModel(self, request):
+        return request.param
+
+    @pytest.fixture()
+    def solid(self, SolidModel, mesh, vertex_function_tuple, facet_function_tuple, cell_function_tuple):
+        mf_tuples = [vertex_function_tuple, facet_function_tuple, cell_function_tuple]
+        mfs = [mf_tuple[0] for mf_tuple in mf_tuples]
+        mfs_values = [mf_tuple[1] for mf_tuple in mf_tuples]
+        return SolidModel(mesh, mfs, mfs_values, fixed_facet_labels=['fixed'], fsi_facet_labels=['traction'])
+
+    def test_init(
+        self, solid, FluidModel
+    ):
+        fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidModel, fsi_facet_labels=['traction'])
+        fluid_pdofs = np.arange(solid_pdofs.size)
+        solid
+
+        assert cpd.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+
+    # TODO: Think of ways you can test a model is working properly?
 
