@@ -7,7 +7,6 @@ References
 """
 
 from typing import Tuple, Mapping, Callable, Union, Any, Optional
-from numpy.typing import NDArray
 
 import operator
 import warnings
@@ -23,9 +22,6 @@ from .uflcontinuum import *
 DfnFunction = Union[ufl.Constant, dfn.Function]
 FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
 FunctionSpace = Union[ufl.FunctionSpace, dfn.FunctionSpace]
-
-CoefficientMapping = Mapping[str, DfnFunction]
-FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
 
 ## Utilities for handling Fenics functions
 
@@ -257,6 +253,7 @@ def const_spec(value_dim, default_value=0):
 
 ## Form class
 
+CoefficientMapping = Mapping[str, DfnFunction]
 
 class FenicsForm:
     """
