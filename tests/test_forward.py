@@ -21,66 +21,115 @@ from femvf.models.transient import (
     fluid as tfmd,
     coupled as cmd,
 )
-from femvf.load import load_transient_fsi_model
+from femvf.load import load_transient_fsi_model, derive_1dfluid_from_2dsolid
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
 # from femvf.vis.xdmfutils import write_xdmf, export_mesh_values
 
 from vfsig import modal as modalsig
 
-
-class TestIntegrate:
-
-    @pytest.fixture(
-        params=[
-            tsmd.KelvinVoigt,
-            # tsmd.Rayleigh
-        ]
-    )
-    def solid_type(self, request):
-        """Return the solid class"""
-        return request.param
-
-    @pytest.fixture(
-        params=[
-            # tfmd.BernoulliSmoothMinSep,
-            tfmd.BernoulliAreaRatioSep
-        ]
-    )
-    def fluid_type(self, request):
-        """Return the fluid class"""
-        return request.param
-
-    @pytest.fixture(
-        params=[
-            ('M5_BC--GA3.00--DZ0.00', None),
-            # ('M5_BC--GA3.00--DZ1.50', np.linspace(0, 1.5, 16)),
-            # 'M5_BC--GA0.00--DZ4.00',
-            # 'M5_BC--GA0.00--DZ8.00',
-            # 'M5-3layers.msh'
-        ]
-    )
-    def mesh_info(self, request):
-        """Return the mesh path"""
-        mesh_name, zs = request.param
-        mesh_dir = '../meshes'
-        return os.path.join(mesh_dir, f'{mesh_name}.msh'), zs
+class FenicsMeshFixtures:
 
     @pytest.fixture()
-    def model(self, mesh_info, solid_type, fluid_type):
-        """Return the model"""
-        ## Configure the model and its parameters
-        SolidType, FluidType = (solid_type, fluid_type)
-        mesh_path, zs = mesh_info
+    def mesh_name(self):
+        return "UnitSquare"
 
-        return load_transient_fsi_model(
-            mesh_path,
-            None,
-            SolidType=SolidType,
-            FluidType=FluidType,
-            coupling='explicit',
-            zs=zs,
-        )
+    @pytest.fixture()
+    def mesh(self):
+        # TODO: Implement test for 3D case too!
+        return dfn.UnitSquareMesh(10, 10)
+
+    @pytest.fixture()
+    def vertex_function_tuple(self, mesh: dfn.Mesh):
+        mf = dfn.MeshFunction('size_t', mesh, 0, 0)
+
+        # Mark the top right corner as 'separation'
+        class Separation(dfn.SubDomain):
+
+            def inside(self, x, on_boundary):
+                is_top = x[1] > 1 - dfn.DOLFIN_EPS
+                is_right = x[0] > 1 - dfn.DOLFIN_EPS
+                return (is_top and is_right) and on_boundary
+        subdomain = Separation()
+        subdomain.mark(mf, 1)
+        return mf, {'separation': 1}
+
+    @pytest.fixture()
+    def facet_function_tuple(self, mesh: dfn.Mesh):
+        num_dim = mesh.topology().dim()
+        mf = dfn.MeshFunction('size_t', mesh, num_dim-1, 0)
+
+        # Mark the bottom and front/back faces of the unit cube as dirichlet
+        class Fixed(dfn.SubDomain):
+
+            def inside(self, x, on_boundary):
+                is_bottom = x[1] < dfn.DOLFIN_EPS
+                # Only check for front/back surfaces in 3D
+                if len(x) > 2:
+                    is_front = x[2] > 1-dfn.DOLFIN_EPS
+                    is_back = x[2] < dfn.DOLFIN_EPS
+                else:
+                    is_front = False
+                    is_back = False
+                return (is_bottom or is_front or is_back) and on_boundary
+
+        fixed = Fixed()
+        fixed.mark(mf, 1)
+        return mf, {'fixed': 1, 'traction': 0}
+
+    @pytest.fixture()
+    def cell_function_tuple(self, mesh: dfn.Mesh):
+        num_dim = mesh.topology().dim()
+        mf = dfn.MeshFunction('size_t', mesh, num_dim, 0)
+
+        # Mark the bottom and front/back faces of the unit cube as dirichlet
+        class TopHalf(dfn.SubDomain):
+
+            def inside(self, x, on_boundary):
+                is_tophalf = x[1] > 0.5 + dfn.DOLFIN_EPS
+                return is_tophalf
+
+        top_half = TopHalf()
+        top_half.mark(mf, 1)
+        return mf, {'top': 1, 'bottom': 0}
+
+
+class ModelFixtures(FenicsMeshFixtures):
+
+    @pytest.fixture(
+        params=[tsmd.Rayleigh, tsmd.KelvinVoigt, tsmd.SwellingKelvinVoigt]
+    )
+    def SolidModel(self, request):
+        return request.param
+
+    @pytest.fixture(
+        params=[tfmd.BernoulliSmoothMinSep, tfmd.BernoulliFixedSep, tfmd.BernoulliAreaRatioSep]
+    )
+    def FluidModel(self, request):
+        return request.param
+
+    @pytest.fixture()
+    def solid(self, SolidModel, mesh, vertex_function_tuple, facet_function_tuple, cell_function_tuple):
+        mf_tuples = [vertex_function_tuple, facet_function_tuple, cell_function_tuple]
+        mfs = [mf_tuple[0] for mf_tuple in mf_tuples]
+        mfs_values = [mf_tuple[1] for mf_tuple in mf_tuples]
+        return SolidModel(mesh, mfs, mfs_values, fixed_facet_labels=['fixed'], fsi_facet_labels=['traction'])
+
+    @pytest.fixture()
+    def fluid(self, FluidModel, solid):
+        fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidModel, fsi_facet_labels=['traction'])
+
+    @pytest.fixture()
+    def model(
+        self, solid, FluidModel
+    ):
+        fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidModel, fsi_facet_labels=['traction'])
+        fluid_pdofs = np.arange(solid_pdofs.size)
+
+        return cmd.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+
+
+class TestIntegrate(ModelFixtures):
 
     @pytest.fixture()
     def ini_state(self, model):
@@ -174,7 +223,7 @@ class TestIntegrate:
 
     def test_integrate(
         self,
-        mesh_info: str,
+        mesh_name: str,
         model: cmd.BaseTransientFSIModel,
         ini_state: bv.BlockVector,
         controls: bv.BlockVector,
@@ -186,7 +235,6 @@ class TestIntegrate:
         """
 
         psub = controls[0]['fluid0.psub'][0]
-        mesh_name = os.path.splitext(os.path.split(mesh_info[0])[1])[0]
         save_path = (
             f'{self.__class__.__name__}--{mesh_name}'
             f'--{model.solid.__class__.__name__}'
