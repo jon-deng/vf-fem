@@ -14,7 +14,6 @@ from blockarray import blockvec as bv
 from .models.transient.base import BaseTransientModel
 from . import statefile as sf
 
-# TODO: Allow negative indexes in get functions (negative indexes index in reverse order)
 # @profile
 Options = Mapping[str, Any]
 Info = Options

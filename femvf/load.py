@@ -117,7 +117,7 @@ def load_fluid_model(
     return fluid
 
 
-# TODO: Can combine transient/dynamical model loading functions into single one
+# TODO: Combine transient and dynamical model loading functions?
 def load_transient_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
@@ -243,7 +243,7 @@ def load_dynamical_fsi_model(
             zs=zs,
         )
 
-    # TODO: This FSI dof selection won't for higher order elements
+    # BUG: This FSI dof selection won't work for higher order elements!!
     dofs_fsi_solid = dfn.vertex_to_dof_map(
         solid.residual.form['coeff.fsi.p1'].function_space()
     )[fsi_verts.flat]

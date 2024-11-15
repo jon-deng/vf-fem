@@ -45,7 +45,7 @@ class FenicsResidual(BaseResidual):
             self.mesh_function_label_to_value('facet')[facet_label]
             for facet_label in fixed_facet_labels
         ]
-        # TODO: Should remove these very specific form keys requirements!
+        # TODO: Refactor `FenicsResidual` without this super-specific key requirement!
         # The class should work in general for any input form
         fun_space = self.form['coeff.state.u1'].function_space()
         fixed_dis = dfn.Constant(mesh.topology().dim() * [0.0])

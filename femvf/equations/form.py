@@ -126,7 +126,7 @@ def get_shared_function(
         raise TypeError("Functions must have the same type")
 
     if compare_function_space(function_space(function_a), function_space(function_b)):
-        # TODO: You could create a new function space for the shared function
+        # TODO: Create a new function space for the shared function?
         shared_function = function_a
         return shared_function
     else:
@@ -196,7 +196,7 @@ class FunctionSpaceSpec(BaseFunctionSpaceSpec):
 
     def generate_function(self, mesh: dfn.Mesh) -> dfn.Function:
         elem_family, elem_degree, value_dim = self.spec
-        # TODO: You should also handle shape tuple for the value
+        # TODO: Add handling for case where `value_dim` being a tuple?
         if value_dim == 'vector':
             return dfn.Function(dfn.VectorFunctionSpace(mesh, elem_family, elem_degree))
         elif value_dim == 'scalar':

@@ -139,7 +139,7 @@ class BaseTransientModel:
         """
         raise NotImplementedError(f"Subclass {type(self)} must implement this function")
 
-    # TODO: If you want to take derivatives of Transient models, you will need
+    # NOTE: If you want to take derivatives of Transient models, you will need
     # to implement solvers for the jacobian and its adjoint
     # (`solve_dres_dstate1` and `solve_dres_dstate1_adj`).
     # In addition you'll need adjoints of all the `assem_*` functions
