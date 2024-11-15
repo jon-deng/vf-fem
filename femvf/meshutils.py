@@ -10,7 +10,7 @@ import meshio as mio
 import numpy as np
 import dolfin as dfn
 
-from .models.equations import solid
+from .models.residuals import solid
 
 ## Functions for loading `dfn.Mesh` objects from other mesh formats
 MeshFunctions = List[dfn.MeshFunction]
@@ -508,7 +508,7 @@ def process_celllabel_to_dofs_from_residual(
     Parameters
     ----------
     forms:
-        A mapping (see `femvf.models.equations.solid.solidforms` for examples)
+        A mapping (see `femvf.models.residuals.solid.solidforms` for examples)
     dofmap:
         The Dofmap from the desired function space
 

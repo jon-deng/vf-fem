@@ -17,8 +17,8 @@ from blockarray.subops import diag_mat, zero_mat
 from nonlineq import newton_solve
 
 from . import base
-from ..equations import newmark
-from ..equations import solid
+from ..residuals import newmark
+from ..residuals import solid
 from ..assemblyutils import CachedFormAssembler
 
 

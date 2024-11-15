@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 import numpy as np
 from jax import numpy as jnp
 
-from femvf.models.equations import fluid as fld
+from femvf.models.residuals import fluid as fld
 
 
 class TestJaxResidual:

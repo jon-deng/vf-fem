@@ -14,7 +14,7 @@ from . import base
 
 from ..jaxutils import blockvec_to_dict, flatten_nested_dict
 
-from ..equations import fluid
+from ..residuals import fluid
 
 ## 1D Bernoulli approximation codes
 

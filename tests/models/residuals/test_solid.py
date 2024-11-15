@@ -6,7 +6,7 @@ import pytest
 
 import dolfin as dfn
 
-from femvf.models.equations import solid as sld
+from femvf.models.residuals import solid as sld
 
 
 class UFLFormFixtures:

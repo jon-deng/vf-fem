@@ -36,7 +36,7 @@ from ..transient.solid import (
     properties_bvec_from_forms,
     depack_form_coefficient_function,
 )
-from ..equations import solid
+from ..residuals import solid
 from ..assemblyutils import CachedFormAssembler
 
 # pylint: disable=abstract-method
