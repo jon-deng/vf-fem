@@ -18,7 +18,7 @@ from blockarray import blockvec as bv
 
 
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
-from ..residuals import fluid
+from femvf.residuals import fluid
 from ..jaxutils import blockvec_to_dict, flatten_nested_dict
 
 # pylint: disable=missing-docstring
