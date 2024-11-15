@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 import dolfin as dfn
 import numpy as np
 
-from femvf.equation.form import FenicsForm
+from femvf.equations.form import FenicsForm
 
 
 class BaseResidual:

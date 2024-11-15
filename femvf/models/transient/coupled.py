@@ -21,7 +21,7 @@ from blockarray import subops
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
 from nonlineq import iterative_solve
 
-from femvf.equation import newmark
+from femvf.equations import newmark
 from ..fsi import FSIMap, make_coupling_stuff
 from . import base, solid as tsmd, fluid as tfmd, acoustic as amd
 

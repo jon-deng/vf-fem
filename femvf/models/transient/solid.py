@@ -17,7 +17,7 @@ from blockarray.subops import diag_mat, zero_mat
 from nonlineq import newton_solve
 
 from . import base
-from femvf.equation import newmark
+from femvf.equations import newmark
 from femvf.residuals import solid
 from ..assemblyutils import CachedFormAssembler
 

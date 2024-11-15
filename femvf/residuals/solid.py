@@ -17,9 +17,9 @@ import numpy as np
 import dolfin as dfn
 import ufl
 
-from femvf.equation import newmark
+from femvf.equations import newmark
 from .base import FenicsResidual, PredefinedFenicsResidual
-from femvf.equation.uflcontinuum import *
+from femvf.equations.uflcontinuum import *
 
 DfnFunction = Union[ufl.Constant, dfn.Function]
 FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
