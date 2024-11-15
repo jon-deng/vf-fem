@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 import dolfin as dfn
 
-from .form import FenicsForm
+from .equation.form import FenicsForm
 
 
 class BaseResidual:

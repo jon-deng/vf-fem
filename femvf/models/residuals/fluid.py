@@ -9,7 +9,7 @@ import numpy as np
 from jax import numpy as jnp
 import jax
 
-from .smoothapproximation import wavg, smooth_min_weight
+from .equation.smoothapproximation import wavg, smooth_min_weight
 from .base import PredefinedJaxResidual
 
 
