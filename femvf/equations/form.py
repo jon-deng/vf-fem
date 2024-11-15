@@ -1,5 +1,5 @@
 """
-Contains definitions of different solid model forms
+Define the `FenicsForm`, common forms and associated utilities
 
 References
 ----------
