@@ -219,7 +219,7 @@ class Model(base.BaseTransientModel):
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
         ]
         res[:] = values
-        for bc in self.residual.dirichlet_bcs:
+        for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
             bc.apply(res.sub['u'])
         return res
 
@@ -251,7 +251,7 @@ class Model(base.BaseTransientModel):
             tensor=dfn.PETScMatrix(),
         )
         # dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
-        for bc in self.residual.dirichlet_bcs:
+        for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
             bc.apply(dfu_du)
 
         (_, dfu_dv, dfu_da, dfv_du, dfv_dv, dfv_da, dfa_du, dfa_dv, dfa_da) = (
@@ -283,7 +283,7 @@ class Model(base.BaseTransientModel):
         dfu_dv = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
         dfu_da = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
         for mat in (dfu_du, dfu_dv, dfu_da):
-            for bc in self.dirichlet_bcs:
+            for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
                 bc.apply(mat)
 
         dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du0(self.dt)))

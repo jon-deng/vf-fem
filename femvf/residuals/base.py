@@ -2,7 +2,7 @@
 Base residual class definitions
 """
 
-from typing import Callable, Tuple, Mapping, Union
+from typing import Callable, Tuple, Mapping, Union, Optional
 from numpy.typing import NDArray
 
 import dolfin as dfn
@@ -32,6 +32,7 @@ class FenicsResidual(BaseResidual):
         mesh_functions_label_to_value: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
+        dirichlet_bcs: Optional[dict[str, dfn.DirichletBC]]=None
     ):
 
         self._mesh = mesh
@@ -49,12 +50,16 @@ class FenicsResidual(BaseResidual):
         # The class should work in general for any input form
         fun_space = self.form['coeff.state.u1'].function_space()
         fixed_dis = dfn.Constant(mesh.topology().dim() * [0.0])
-        self._dirichlet_bcs = tuple(
-            dfn.DirichletBC(
-                fun_space, fixed_dis, self.mesh_function('facet'), fixed_subdomain_idx
-            )
-            for fixed_subdomain_idx in fixed_subdomain_idxs
-        )
+        if dirichlet_bcs is None:
+            dirichlet_bcs = {
+                'coeff.state.u1': tuple(
+                    dfn.DirichletBC(
+                        fun_space, fixed_dis, self.mesh_function('facet'), fixed_subdomain_idx
+                    )
+                    for fixed_subdomain_idx in fixed_subdomain_idxs
+                )
+            }
+        self._dirichlet_bcs = dirichlet_bcs
 
         self._fsi_facet_labels = fsi_facet_labels
         self._fixed_facet_labels = fixed_facet_labels
@@ -111,7 +116,7 @@ class FenicsResidual(BaseResidual):
         return dfn.Measure(integral_type, self.mesh(), subdomain_data=mf)
 
     @property
-    def dirichlet_bcs(self) -> list[dfn.DirichletBC]:
+    def dirichlet_bcs(self):
         return self._dirichlet_bcs
 
     @property

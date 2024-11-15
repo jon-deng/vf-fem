@@ -129,13 +129,13 @@ def static_solid_configuration(
 
             def assem_res():
                 res = dfn.assemble(res_form)
-                for bc in model.residual.dirichlet_bcs:
+                for bc in model.residual.dirichlet_bcs['coeff.state.u1']:
                     bc.apply(res)
                 return res
 
             def solve_res(res):
                 A = dfn.assemble(jac)
-                for bc in model.residual.dirichlet_bcs:
+                for bc in model.residual.dirichlet_bcs['coeff.state.u1']:
                     bc.apply(A)
                 dfn.solve(A, dx, res)
                 return dx
@@ -156,7 +156,7 @@ def static_solid_configuration(
         dfn.solve(
             model.residual.form.form == 0.0,
             model.residual.form['coeff.state.u1'],
-            bcs=model.residual.dirichlet_bcs,
+            bcs=model.residual.dirichlet_bcs['coeff.state.u1'],
             J=jac,
             solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM},
         )
@@ -227,7 +227,7 @@ def static_coupled_configuration_picard(
             dfn.solve(
                 solid.residual.form.form == 0.0,
                 solid.residual.form['coeff.state.u1'],
-                bcs=solid.residual.dirichlet_bcs,
+                bcs=solid.residual.dirichlet_bcs['coeff.state.u1'],
                 # J= ... ()
                 solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM},
             )

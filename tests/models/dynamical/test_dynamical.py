@@ -485,7 +485,7 @@ class GenericFixtureMixin:
             # model_solid.forms['bc.dirichlet'].apply(dxv)
             dstate['v'] = dxv
 
-            for bc in model_solid.residual.dirichlet_bcs:
+            for bc in model_solid.residual.dirichlet_bcs['coeff.state.u1']:
                 _set_dirichlet_bvec(bc, dstate)
 
         if model_fluids is not None:
@@ -508,7 +508,7 @@ class GenericFixtureMixin:
 
         dstatet[:] = 1e-6
         if model_solid is not None:
-            for bc in model_solid.residual.dirichlet_bcs:
+            for bc in model_solid.residual.dirichlet_bcs['coeff.state.u1']:
                 _set_dirichlet_bvec(bc, dstatet)
 
         return dstatet
