@@ -21,8 +21,8 @@ Plane Surface(1) = {1};
 // Mark Physical entities
 
 // Mark the top left and top right points as "inferior" and "superior"
-Physical Point("inferior") = {4};
-Physical Point("superior") = {3};
+// Physical Point("inferior") = {4};
+// Physical Point("superior") = {3};
 
 // Mark the bottom, right, top, and left surfaces
 Physical Curve("bottom") = {1};
