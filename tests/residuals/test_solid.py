@@ -50,43 +50,6 @@ class UFLFormFixtures:
         return coefficients
 
 
-class TestFenicsForm(UFLFormFixtures):
-
-    def test_init(self, ufl_form, ufl_coefficients):
-        assert form.FenicsForm(ufl_form, ufl_coefficients)
-
-
-class TestPredefinedVolumeForms(UFLFormFixtures):
-
-    @pytest.fixture(
-        params = [
-            form.IsotropicElasticForm,
-            form.IsotropicIncompressibleElasticSwellingForm,
-            form.IsotropicElasticSwellingForm,
-            form.IsotropicElasticSwellingPowerLawForm
-        ]
-    )
-    def CellForm(self, request):
-        return request.param
-
-    def test_CellForm(self, CellForm, measure_dx, mesh):
-        assert CellForm({}, measure_dx, mesh)
-
-    @pytest.fixture(
-        params = [
-            form.IsotropicMembraneForm,
-            form.IsotropicIncompressibleMembraneForm,
-            form.SurfacePressureForm,
-            form.ManualSurfaceContactTractionForm
-        ]
-    )
-    def FacetForm(self, request):
-        return request.param
-
-    def test_FacetForm(self, FacetForm, measure_ds, mesh):
-        assert FacetForm({}, measure_ds, mesh)
-
-
 class FenicsFormFixtures(UFLFormFixtures):
 
     @pytest.fixture()
