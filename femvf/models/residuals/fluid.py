@@ -3,16 +3,14 @@ This module contains the equations defining a quasi-steady Bernoulli fluid with
 separation at a fixed location.
 """
 
-from typing import Callable, Tuple, Mapping
 from numpy.typing import NDArray
 
 import numpy as np
-from numpy.typing import ArrayLike
 from jax import numpy as jnp
 import jax
 
 from .smoothapproximation import wavg, smooth_min_weight
-from . import base
+from .base import PredefinedJaxResidual
 
 
 ## Common bernoulli fluid functions
@@ -36,53 +34,7 @@ def bernoullip_from_q_psep(qsub, psep, area_sep, area, rho):
     return psep + 1 / 2 * rho * qsub**2 * (area_sep**-2 - area**-2)
 
 
-ResArgs = Tuple[Mapping[str, ArrayLike], ...]
-ResReturn = Mapping[str, ArrayLike]
-
-
 ## Fluid residual classes
-# TODO: Move residual classes to separate module?
-# TODO: Formalize the jax residual more with argument size/shape definitions?
-# The Jax residual is kind of fragile since you just have to create arrays
-# and arguments etc. in the right sizes and shapes based on how you coded the
-# `res` function
-class JaxResidual(base.BaseResidual):
-    """
-    Representation of a (non-linear) residual in `JAX`
-    """
-
-    # TODO: Document/refactor the format of res and res_args?
-    def __init__(self, res: Callable[[ResArgs], ResReturn], res_args: ResArgs):
-
-        self._res = res
-        self._res_args = res_args
-
-    @property
-    def res(self):
-        return self._res
-
-    @property
-    def res_args(self):
-        return self._res_args
-
-
-class PredefinedJaxResidual(JaxResidual):
-    """
-    Predefined `JaxResidual`
-    """
-
-    def __init__(self, mesh: ArrayLike, *args, **kwargs):
-        res, res_args = self._make_residual(mesh, *args, **kwargs)
-        super().__init__(res, res_args)
-
-        self._mesh = mesh
-
-    def mesh(self):
-        return self._mesh
-
-    def _make_residual(self, mesh, *args, **kwargs):
-        raise NotImplementedError("Subclasses must implement this method")
-
 
 class BernoulliFixedSep(PredefinedJaxResidual):
 
