@@ -16,6 +16,8 @@ from blockarray.subops import diag_mat, zero_mat
 
 from nonlineq import newton_solve
 
+
+from femvf.models.residuals.base import FenicsResidual
 from . import base
 from ..residuals.equation import newmark
 from ..residuals import solid
@@ -77,7 +79,7 @@ class Model(base.BaseTransientModel):
     Class representing the discretized governing equations of a solid
     """
 
-    def __init__(self, residual: solid.FenicsResidual):
+    def __init__(self, residual: FenicsResidual):
 
         self._residual = residual
 
@@ -113,7 +115,7 @@ class Model(base.BaseTransientModel):
         )
 
     @property
-    def residual(self) -> solid.FenicsResidual:
+    def residual(self) -> FenicsResidual:
         return self._residual
 
     @property
@@ -415,7 +417,7 @@ class PredefinedModel(Model):
         )
 
         new_form = solid.modify_newmark_time_discretization(residual.form)
-        new_residual = solid.FenicsResidual(
+        new_residual = FenicsResidual(
             new_form,
             mesh,
             mesh_functions,
@@ -432,7 +434,7 @@ class PredefinedModel(Model):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         raise NotImplementedError()
 
 
@@ -450,7 +452,7 @@ class NodalContactSolid(PredefinedModel):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         raise NotImplementedError()
 
     def set_fin_state(self, state):
@@ -534,7 +536,7 @@ class Rayleigh(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.Rayleigh(
             mesh,
             mesh_functions,
@@ -556,7 +558,7 @@ class KelvinVoigt(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.KelvinVoigt(
             mesh,
             mesh_functions,
@@ -575,7 +577,7 @@ class KelvinVoigtWEpithelium(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.KelvinVoigtWEpithelium(
             mesh,
             mesh_functions,
@@ -597,7 +599,7 @@ class KelvinVoigtWShape(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.KelvinVoigtWShape(
             mesh,
             mesh_functions,
@@ -619,7 +621,7 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.IncompSwellingKelvinVoigt(
             mesh,
             mesh_functions,
@@ -641,7 +643,7 @@ class SwellingKelvinVoigt(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.SwellingKelvinVoigt(
             mesh,
             mesh_functions,
@@ -660,7 +662,7 @@ class SwellingKelvinVoigtWEpithelium(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.SwellingKelvinVoigtWEpithelium(
             mesh,
             mesh_functions,
@@ -679,7 +681,7 @@ class SwellingKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.SwellingKelvinVoigtWEpitheliumNoShape(
             mesh,
             mesh_functions,
@@ -698,7 +700,7 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.SwellingPowerLawKelvinVoigtWEpitheliumNoShape(
             mesh,
             mesh_functions,
@@ -717,7 +719,7 @@ class Approximate3DKelvinVoigt(NodalContactSolid):
         mesh_functions_label_to_value: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
+    ) -> FenicsResidual:
         return solid.Approximate3DKelvinVoigt(
             mesh,
             mesh_functions,

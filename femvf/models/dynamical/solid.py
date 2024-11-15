@@ -31,6 +31,8 @@ import dolfin as dfn
 
 from blockarray import blockvec as bv, blockmat as bm, subops
 
+from femvf.models.residuals.base import FenicsResidual
+
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
 from ..transient.solid import (
     properties_bvec_from_forms,
@@ -60,7 +62,7 @@ def cast_output_bvec_to_petsc(func):
 
 class DynamicalSolidModelInterface:
 
-    def __init__(self, residual: solid.FenicsResidual):
+    def __init__(self, residual: FenicsResidual):
 
         self._residual = residual
 
@@ -107,7 +109,7 @@ class DynamicalSolidModelInterface:
         )
 
     @property
-    def residual(self) -> solid.FenicsResidual:
+    def residual(self) -> FenicsResidual:
         return self._residual
 
     def set_state(self, state):
@@ -228,10 +230,10 @@ class Model(DynamicalSolidModelInterface, BaseDynamicalModel):
 
 class LinearizedModel(DynamicalSolidModelInterface, BaseLinearizedDynamicalModel):
 
-    def __init__(self, residual: solid.FenicsResidual):
+    def __init__(self, residual: FenicsResidual):
 
         new_form = solid.modify_unary_linearized_forms(residual.form)
-        new_residual = solid.FenicsResidual(
+        new_residual = FenicsResidual(
             new_form,
             residual.mesh(),
             residual._mesh_functions,

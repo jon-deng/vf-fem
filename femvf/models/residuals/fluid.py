@@ -10,7 +10,7 @@ from jax import numpy as jnp
 import jax
 
 from .equation.smoothapproximation import wavg, smooth_min_weight
-from .base import PredefinedJaxResidual
+from .base import JaxResidual, PredefinedJaxResidual
 
 
 ## Common bernoulli fluid functions

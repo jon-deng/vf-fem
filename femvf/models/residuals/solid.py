@@ -18,7 +18,7 @@ import dolfin as dfn
 import ufl
 
 from .equation import newmark
-from .base import PredefinedFenicsResidual
+from .base import FenicsResidual, PredefinedFenicsResidual
 from .equation.uflcontinuum import *
 
 DfnFunction = Union[ufl.Constant, dfn.Function]

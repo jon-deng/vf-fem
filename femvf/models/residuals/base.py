@@ -6,6 +6,7 @@ from typing import Callable, Tuple, Mapping, Union
 from numpy.typing import NDArray
 
 import dolfin as dfn
+import numpy as np
 
 from .equation.form import FenicsForm
 
