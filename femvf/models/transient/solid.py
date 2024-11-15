@@ -18,6 +18,7 @@ from nonlineq import newton_solve
 
 from . import base
 from femvf.equations import newmark
+from femvf.equations import form
 from femvf.residuals import solid
 from ..assemblyutils import CachedFormAssembler
 
@@ -81,7 +82,7 @@ class Model(base.BaseTransientModel):
 
         self._residual = residual
 
-        bilinear_forms = solid.gen_residual_bilinear_forms(self.residual.form)
+        bilinear_forms = form.gen_residual_bilinear_forms(self.residual.form)
 
         ## Define the state/controls/properties
         u0 = self.residual.form['coeff.state.u0']
@@ -414,7 +415,7 @@ class PredefinedModel(Model):
             fixed_facet_labels,
         )
 
-        new_form = solid.modify_newmark_time_discretization(residual.form)
+        new_form = form.modify_newmark_time_discretization(residual.form)
         new_residual = solid.FenicsResidual(
             new_form,
             mesh,
@@ -478,7 +479,7 @@ class NodalContactSolid(PredefinedModel):
         ndim = self.residual.form['coeff.state.u0'].ufl_shape[0]
         gap = np.dot((XREF + u)[:].reshape(-1, ndim), ncontact) - ycontact
         tcontact = (
-            (-solid.pressure_contact_cubic_penalty(gap, kcontact)[:, None] * ncontact)
+            (-form.pressure_contact_cubic_penalty(gap, kcontact)[:, None] * ncontact)
             .reshape(-1)
             .copy()
         )
@@ -511,7 +512,7 @@ class NodalContactSolid(PredefinedModel):
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
         dtcontact_du2 = self.residual.form['coeff.state.u1'].vector().copy()
-        dpcontact_dgap, _ = solid.dform_cubic_penalty_pressure(gap, kcontact)
+        dpcontact_dgap, _ = form.dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None] * dgap_du).reshape(-1))
 
         if adjoint:

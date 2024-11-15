@@ -6,6 +6,7 @@ import pytest
 
 import dolfin as dfn
 
+from femvf.equations import form
 from femvf.residuals import solid as sld
 
 
@@ -52,17 +53,17 @@ class UFLFormFixtures:
 class TestFenicsForm(UFLFormFixtures):
 
     def test_init(self, ufl_form, ufl_coefficients):
-        assert sld.FenicsForm(ufl_form, ufl_coefficients)
+        assert form.FenicsForm(ufl_form, ufl_coefficients)
 
 
 class TestPredefinedVolumeForms(UFLFormFixtures):
 
     @pytest.fixture(
         params = [
-            sld.IsotropicElasticForm,
-            sld.IsotropicIncompressibleElasticSwellingForm,
-            sld.IsotropicElasticSwellingForm,
-            sld.IsotropicElasticSwellingPowerLawForm
+            form.IsotropicElasticForm,
+            form.IsotropicIncompressibleElasticSwellingForm,
+            form.IsotropicElasticSwellingForm,
+            form.IsotropicElasticSwellingPowerLawForm
         ]
     )
     def CellForm(self, request):
@@ -73,10 +74,10 @@ class TestPredefinedVolumeForms(UFLFormFixtures):
 
     @pytest.fixture(
         params = [
-            sld.IsotropicMembraneForm,
-            sld.IsotropicIncompressibleMembraneForm,
-            sld.SurfacePressureForm,
-            sld.ManualSurfaceContactTractionForm
+            form.IsotropicMembraneForm,
+            form.IsotropicIncompressibleMembraneForm,
+            form.SurfacePressureForm,
+            form.ManualSurfaceContactTractionForm
         ]
     )
     def FacetForm(self, request):
@@ -90,7 +91,7 @@ class FenicsFormFixtures(UFLFormFixtures):
 
     @pytest.fixture()
     def form(self, ufl_form, ufl_coefficients):
-        return sld.FenicsForm(ufl_form, ufl_coefficients)
+        return form.FenicsForm(ufl_form, ufl_coefficients)
 
 
 class TestFenicsResidual(FenicsFormFixtures):
@@ -142,7 +143,7 @@ class TestFenicsResidual(FenicsFormFixtures):
     @pytest.fixture()
     def form(self, mesh, measure_dx):
 
-        return sld.InertialForm({}, measure_dx, mesh) + sld.IsotropicElasticForm({}, measure_dx, mesh)
+        return form.InertialForm({}, measure_dx, mesh) + form.IsotropicElasticForm({}, measure_dx, mesh)
 
     def test_FenicsResidual(
             self,
