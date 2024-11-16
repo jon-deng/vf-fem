@@ -13,13 +13,14 @@ import dolfin as dfn
 from femvf.residuals import solid
 
 ## Functions for loading `dfn.Mesh` objects from other mesh formats
-MeshFunctions = List[dfn.MeshFunction]
-MeshFunctionMaps = List[Mapping[str, int]]
 
+MeshFunctions = list[dfn.MeshFunction]
+MeshFieldData = dict[str, int]
+MeshFieldsData = list[MeshFieldData]
 
 def load_fenics_gmsh(
-    mesh_path: str, overwrite_xdmf: bool = False
-) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
+    mesh_path: str
+) -> Tuple[dfn.Mesh, MeshFunctions, MeshFieldsData]:
     """
     Return a `dfn.mesh` and mesh function info from a gmsh '.msh' file
 
@@ -33,14 +34,26 @@ def load_fenics_gmsh(
 
     Returns
     -------
-    dfn.Mesh
+    dfn_mesh: dfn.Mesh
         The mesh
-    MeshFunctions
-        A list of `dfn.MeshFunction` defined in gmsh (corresponding to
-        physical groups)
-    MeshFunctionMaps
-        A list of mappings from labelled mesh regions (physical groups) to
-        corresponding integer values in the mesh function.
+    mfs: MeshFunctions
+        A `dfn.MeshFunction` for each type of mesh entity (vertex, line, triangle, tetrahedron)
+
+        For example:
+        - `mfs[0]` is a mesh function for vertices
+        - `mfs[1]` is a mesh function for lines, etc.
+
+        Each mesh function represents an integer for value for each mesh entity
+    fields_data: MeshFieldsData
+        A dictionary of tagged mesh values for each type of mesh entity (vertex, line, triangle, tetrahedron)
+
+        For example:
+        - `fields_data[0]` is a dictionary of tagged vertex values
+        - `fields_data[1]` is a dictionary of tagged line values, etc.
+
+        If `fields_data[0] == {'A': 3, 'B': 5, 'C': 10}` then:
+        - 'A' references all vertices with value 3
+        - 'PointCollectionB' represents all vertices with value 5, etc.
     """
     mesh_dir, mesh_fname = path.split(mesh_path)
     mesh_name, mesh_ext = path.splitext(mesh_fname)
@@ -61,64 +74,44 @@ def load_fenics_gmsh(
 
     # First load some basic information about the mesh and check compatibility
     # with fenics
-    cell_types = [cell.type for cell in mio_mesh.cells]
-    cell_dims = [_dim_from_type(cell_type) for cell_type in cell_types]
+    max_dim = max(set(cell_block.dim for cell_block in mio_mesh.cells))
 
-    max_dim = max(cell_dims)
-    for dim in range(max_dim + 1):
-        if cell_dims.count(max_dim) > 1:
-            # TODO: This limitation happens because FEniCS requires 1 '.xdmf'
-            # file per mesh of given dimension
-            # You could get around this limitation by combining cell blocks
-            # with the same dimension to a single '.xdmf' file
-            raise ValueError(
-                f"The mesh contains multiple cell types of dimension {dim}"
-                " which is not supported!"
-            )
+    # Write out point, line, triangle, tetrahedron meshes separately
+    submesh_cell_types = ('vertex', 'line', 'triangle', 'tetrahedron')[:max_dim]
+    submesh_dims = (0, 1, 2, 3)[:max_dim]
+    submesh_paths = tuple(
+        path.join(mesh_dir, f'{mesh_name}_{cell_type}.xdmf')
+        for cell_type in submesh_cell_types
+    )
+    cell_data_dict = mio_mesh.cell_data_dict
+    for cell_type, submesh_path in zip(submesh_cell_types, submesh_paths):
+        sub_cells = mio.CellBlock(cell_type, mio_mesh.get_cells_type(cell_type))
+        sub_cell_data = {
+            data_key: [cell_data.get(cell_type, np.array([]))]
+            for data_key, cell_data in cell_data_dict.items()
+        }
+        _mesh = mio.Mesh(mio_mesh.points, [sub_cells], cell_data=sub_cell_data)
+        mio.write(submesh_path, _mesh)
 
-    # Split multiple cell blocks in mio_mesh to separate meshes
-    split_meshes = _split_meshio_cells(mio_mesh)
-    split_mesh_names = [
-        f'{mesh_name}_{n}_{cell_block_type}'
-        for n, cell_block_type in enumerate(cell_types)
-    ]
-    split_mesh_paths = [
-        path.join(mesh_dir, f'{split_mesh_name}.xdmf')
-        for split_mesh_name in split_mesh_names
-    ]
-    for split_path_n, mesh_n in zip(split_mesh_paths, split_meshes):
-        if not path.isfile(split_path_n):
-            mio.write(split_path_n, mesh_n)
-        elif overwrite_xdmf:
-            mio.write(split_path_n, mesh_n)
-        else:
-            warnings.warn(
-                "Loading 'gmsh' mesh from existing '.xdmf' files.", category=UserWarning
-            )
-
-    # Read the highest-dimensional mesh as the base dolfin mesh,
-    # which is assumed to be the last cell block
+    # Read the highest-dimensional mesh as the base dolfin mesh (this is the last submesh)
     dfn_mesh = dfn.Mesh()
-    with dfn.XDMFFile(split_mesh_paths[-1]) as f:
+    with dfn.XDMFFile(submesh_paths[-1]) as f:
         f.read(dfn_mesh)
 
     # Create `MeshValueCollection`s for each split cell block
     vcs = [
-        dfn.MeshValueCollection('size_t', dfn_mesh, cell_dim) for cell_dim in cell_dims
+        dfn.MeshValueCollection('size_t', dfn_mesh, cell_dim)
+        for cell_dim in submesh_dims
     ]
-    for vc, split_mesh_path in zip(vcs, split_mesh_paths):
+    for vc, split_mesh_path in zip(vcs, submesh_paths):
         with dfn.XDMFFile(split_mesh_path) as f:
             f.read(vc, 'gmsh:physical')
 
-    # Create a `MeshFunction` from each `MeshValueCollection` ordered by increasing
-    # dimension. If entities of a certain dimensions have no mesh function, they
-    # are None
-    _mfs = [dfn.MeshFunction('size_t', dfn_mesh, vc) for vc in vcs]
-    dim_to_mf = {mf.dim(): mf for mf in _mfs}
-    mfs = [dim_to_mf[dim] if dim in dim_to_mf else None for dim in range(max_dim + 1)]
+    # Create a `MeshFunction` for each mesh entity type ('vertex', 'line', ...)
+    mfs = [dfn.MeshFunction('size_t', dfn_mesh, vc) for vc in vcs]
 
     # Load mappings of 'field data' These associate labels to mesh function values
-    entities_label_to_id = [
+    fields_data = [
         {
             key: value
             for key, (value, entity_dim) in mio_mesh.field_data.items()
@@ -127,7 +120,7 @@ def load_fenics_gmsh(
         for dim in range(max_dim + 1)
     ]
 
-    return dfn_mesh, tuple(mfs), tuple(entities_label_to_id)
+    return dfn_mesh, tuple(mfs), tuple(fields_data)
 
 
 def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
@@ -175,7 +168,7 @@ def _dim_from_type(cell_type: str) -> int:
 
 # Load a mesh from the FEniCS .xml format
 # This format is no longer updated/promoted by FEniCS
-def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFunctionMaps]:
+def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFieldsData]:
     """
     Return a `dfn.mesh` and mesh function info from a FEniCS '.xml' file
 
@@ -193,7 +186,7 @@ def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFuncti
     MeshFunctions
         A list of `dfn.MeshFunction` defined in gmsh (corresponding to
         physical groups)
-    MeshFunctionMaps
+    MeshFieldDatas
         A list of mappings from labelled mesh regions (physical groups) to
         corresponding integer values in the mesh function.
     """
@@ -220,7 +213,7 @@ def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFuncti
     )
 
 
-def _parse_msh2_physical_groups(mesh_path: str) -> MeshFunctionMaps:
+def _parse_msh2_physical_groups(mesh_path: str) -> MeshFieldsData:
     """
     Return mappings from physical group labels to integer ids
 
