@@ -140,10 +140,16 @@ class PredefinedFenicsResidual(FenicsResidual):
     def __init__(
         self,
         mesh: dfn.Mesh,
+        # TODO: Remove the below 4 (mesh_functions, ..., fixed_facet labels)
+        # These are redundant since you should be able to totally evaluate
+        # the residual given just the FenicsForm, a mesh, and dirichlet boundary
+        # conditions!
         mesh_functions: list[dfn.MeshFunction],
         mesh_functions_label_to_value: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
+        # TODO: Add dirichlet bc arguments for different coefficients!
+        # TODO: Add form arguments for different coefficients!
     ):
 
         functional = self._make_functional(
