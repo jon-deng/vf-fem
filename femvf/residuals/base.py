@@ -26,8 +26,12 @@ class FenicsResidual(BaseResidual):
 
     def __init__(
         self,
-        linear_form: FenicsForm,
+        form: FenicsForm,
         mesh: dfn.Mesh,
+        # TODO: Remove the below 4 (mesh_functions, ..., fixed_facet labels)
+        # These are redundant since you should be able to totally evaluate
+        # the residual given just the FenicsForm, a mesh, and dirichlet boundary
+        # conditions!
         mesh_functions: list[dfn.MeshFunction],
         mesh_functions_label_to_value: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
@@ -37,7 +41,7 @@ class FenicsResidual(BaseResidual):
 
         self._mesh = mesh
         self._ref_mesh_coords = np.array(mesh.coordinates())
-        self._form = linear_form
+        self._form = form
 
         self._mesh_functions = mesh_functions
         self._mesh_functions_label_to_value = mesh_functions_label_to_value
