@@ -20,18 +20,16 @@ class FenicsResidual(BaseResidual):
     """
     Representation of a (non-linear) residual in `Fenics`
 
-    This includes additional information defining the residual such as the mesh,
-    mesh functions, Dirichlet boundary conditions, etc.
+    This take a pure UFL form, then adds mesh and boundary condition information so that
+    numerical integration can be used to evaluate a residual vector.
     """
 
+    # TODO: Remove `fsi_facet_labels` (these are implicitly contained through measure definitions in `form`)
+    # TODO: Remove `fixed_facet_labels` (these are implicitly contained through `dirichlet_bcs`)
     def __init__(
         self,
         form: UFLForm,
         mesh: dfn.Mesh,
-        # TODO: Remove the below 4 (mesh_functions, ..., fixed_facet labels)
-        # These are redundant since you should be able to totally evaluate
-        # the residual given just the FenicsForm, a mesh, and dirichlet boundary
-        # conditions!
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
