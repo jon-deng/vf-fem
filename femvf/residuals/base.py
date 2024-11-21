@@ -2,7 +2,7 @@
 Base residual class definitions
 """
 
-from typing import Callable, Tuple, Mapping, Union, Optional
+from typing import Callable, Tuple, Mapping, Union, Optional, Any
 from numpy.typing import NDArray
 
 import dolfin as dfn
@@ -15,6 +15,11 @@ class BaseResidual:
     pass
     # _res: Any
 
+# A `DirichletBCTuple` consists of (dirichlet value, element_type, subdomain)
+# `element_type` is the topology to apply the BC over, for example facet applies
+# dirichlet BCs over facets
+# `subdomain` is a string in `mesh_subdomains` indicating which part of the domain to apply it on
+DirichletBCTuple = tuple[Any, str, str]
 
 class FenicsResidual(BaseResidual):
     """
@@ -24,17 +29,13 @@ class FenicsResidual(BaseResidual):
     numerical integration can be used to evaluate a residual vector.
     """
 
-    # TODO: Remove `fsi_facet_labels` (these are implicitly contained through measure definitions in `form`)
-    # TODO: Remove `fixed_facet_labels` (these are implicitly contained through `dirichlet_bcs`)
     def __init__(
         self,
         form: UFLForm,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]],
-        fsi_facet_labels: list[str],
-        fixed_facet_labels: list[str],
-        dirichlet_bcs: Optional[dict[str, dfn.DirichletBC]]=None
+        dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
     ):
 
         self._mesh = mesh
@@ -44,27 +45,24 @@ class FenicsResidual(BaseResidual):
         self._mesh_functions = mesh_functions
         self._mesh_subdomains = mesh_subdomains
 
-        fixed_subdomain_idxs = [
-            self.mesh_subdomain('facet')[facet_label]
-            for facet_label in fixed_facet_labels
-        ]
-        # TODO: Refactor `FenicsResidual` without this super-specific key requirement!
-        # The class should work in general for any input form
-        fun_space = self.form['coeff.state.u1'].function_space()
-        fixed_dis = dfn.Constant(mesh.topology().dim() * [0.0])
+        zero_value = dfn.Constant(mesh.topology().dim() * [0.0])
         if dirichlet_bcs is None:
             dirichlet_bcs = {
-                'coeff.state.u1': tuple(
-                    dfn.DirichletBC(
-                        fun_space, fixed_dis, self.mesh_function('facet'), fixed_subdomain_idx
-                    )
-                    for fixed_subdomain_idx in fixed_subdomain_idxs
-                )
+                'coeff.state.u1': [(zero_value, 'facet', 'fixed')]
             }
-        self._dirichlet_bcs = dirichlet_bcs
 
-        self._fsi_facet_labels = fsi_facet_labels
-        self._fixed_facet_labels = fixed_facet_labels
+        self._dirichlet_bcs = {
+            coeff_key: tuple(
+                dfn.DirichletBC(
+                    form[coeff_key].function_space(),
+                    value,
+                    self.mesh_function(element_type),
+                    self.mesh_subdomain(element_type)[subdomain]
+                )
+                for (value, element_type, subdomain) in dirichlet_bc_tuples
+            )
+            for coeff_key, dirichlet_bc_tuples in dirichlet_bcs.items()
+        }
 
     @property
     def form(self) -> UFLForm:
