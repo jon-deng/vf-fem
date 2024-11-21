@@ -143,7 +143,7 @@ class PredefinedFenicsResidual(FenicsResidual):
         fixed_facet_labels: list[str]
     ):
 
-        functional = self._make_functional(
+        form = self.init_form(
             mesh,
             mesh_functions,
             mesh_subdomains,
@@ -151,7 +151,7 @@ class PredefinedFenicsResidual(FenicsResidual):
             fixed_facet_labels,
         )
         super().__init__(
-            functional,
+            form,
             mesh,
             mesh_functions,
             mesh_subdomains,
@@ -159,7 +159,7 @@ class PredefinedFenicsResidual(FenicsResidual):
             fixed_facet_labels,
         )
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],

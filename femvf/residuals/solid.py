@@ -65,7 +65,7 @@ def _process_measures(
 
 class Rayleigh(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -93,7 +93,7 @@ class Rayleigh(PredefinedFenicsResidual):
 
 class KelvinVoigt(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -122,7 +122,7 @@ class KelvinVoigt(PredefinedFenicsResidual):
 
 class KelvinVoigtWShape(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -152,7 +152,7 @@ class KelvinVoigtWShape(PredefinedFenicsResidual):
 
 class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -181,7 +181,7 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
 class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -209,7 +209,7 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
 
 class SwellingKelvinVoigt(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -237,7 +237,7 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
 
 class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -266,7 +266,7 @@ class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
 
 class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -295,7 +295,7 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
 
 class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
@@ -324,7 +324,7 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
 
 class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
 
-    def _make_functional(
+    def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
