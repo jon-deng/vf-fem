@@ -21,6 +21,10 @@ class FenicsMeshFixtures:
         return dfn.UnitSquareMesh(10, 10)
 
     @pytest.fixture()
+    def mesh_dim(self, mesh):
+        return mesh.topology().dim()
+
+    @pytest.fixture()
     def vertex_function_tuple(self, mesh: dfn.Mesh):
         mf = dfn.MeshFunction('size_t', mesh, 0, 0)
 
@@ -36,9 +40,8 @@ class FenicsMeshFixtures:
         return mf, {'separation': 1}
 
     @pytest.fixture()
-    def facet_function_tuple(self, mesh: dfn.Mesh):
-        num_dim = mesh.topology().dim()
-        mf = dfn.MeshFunction('size_t', mesh, num_dim-1, 0)
+    def facet_function_tuple(self, mesh: dfn.Mesh, mesh_dim: int):
+        mf = dfn.MeshFunction('size_t', mesh, mesh_dim-1, 0)
 
         # Mark the bottom and front/back faces of the unit cube as dirichlet
         class Fixed(dfn.SubDomain):
@@ -59,9 +62,8 @@ class FenicsMeshFixtures:
         return mf, {'fixed': 1, 'traction': 0}
 
     @pytest.fixture()
-    def cell_function_tuple(self, mesh: dfn.Mesh):
-        num_dim = mesh.topology().dim()
-        mf = dfn.MeshFunction('size_t', mesh, num_dim, 0)
+    def cell_function_tuple(self, mesh: dfn.Mesh, mesh_dim: int):
+        mf = dfn.MeshFunction('size_t', mesh, mesh_dim, 0)
 
         # Mark the bottom and front/back faces of the unit cube as dirichlet
         class TopHalf(dfn.SubDomain):
@@ -73,4 +75,16 @@ class FenicsMeshFixtures:
         top_half = TopHalf()
         top_half.mark(mf, 1)
         return mf, {'top': 1, 'bottom': 0}
+
+    @pytest.fixture()
+    def mesh_funcs(self, mesh_dim, facet_function_tuple, cell_function_tuple):
+        facet_func, _ = facet_function_tuple
+        cell_func, _ = cell_function_tuple
+        return (mesh_dim-2) * [None] + [facet_func, cell_func]
+
+    @pytest.fixture()
+    def mesh_subdomains(self, mesh_dim, facet_function_tuple, cell_function_tuple):
+        _, facet_fields = facet_function_tuple
+        _, cell_fields = cell_function_tuple
+        return (mesh_dim-2) * [{}] + [facet_fields, cell_fields]
 
