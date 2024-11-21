@@ -37,19 +37,19 @@ FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
 def _process_measures(
     mesh: dfn.Mesh,
     mesh_functions: list[dfn.MeshFunction],
-    mesh_functions_label_to_value: list[Mapping[str, int]],
+    mesh_subdomains: list[Mapping[str, int]],
     fsi_facet_labels: list[str],
     fixed_facet_labels: list[str],
 ):
     if len(mesh_functions) == 3:
         vertex_func, facet_func, cell_func = mesh_functions
         vertex_label_to_id, facet_label_to_id, cell_label_to_id = (
-            mesh_functions_label_to_value
+            mesh_subdomains
         )
     elif len(mesh_functions) == 4:
         vertex_func, edge_func, facet_func, cell_func = mesh_functions
         vertex_label_to_id, edge_label_to_id, facet_label_to_id, cell_label_to_id = (
-            mesh_functions_label_to_value
+            mesh_subdomains
         )
     else:
         raise ValueError(f"`mesh_functions` has length {len(mesh_functions):d}")
@@ -69,14 +69,14 @@ class Rayleigh(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -97,7 +97,7 @@ class KelvinVoigt(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
@@ -105,7 +105,7 @@ class KelvinVoigt(PredefinedFenicsResidual):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -126,7 +126,7 @@ class KelvinVoigtWShape(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
@@ -134,7 +134,7 @@ class KelvinVoigtWShape(PredefinedFenicsResidual):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -156,14 +156,14 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -185,14 +185,14 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -213,14 +213,14 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -241,14 +241,14 @@ class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -270,14 +270,14 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -299,14 +299,14 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -328,14 +328,14 @@ class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ):
         dx, ds, traction_ds = _process_measures(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )

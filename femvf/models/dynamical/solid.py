@@ -235,7 +235,7 @@ class LinearizedModel(DynamicalSolidModelInterface, BaseLinearizedDynamicalModel
             new_form,
             residual.mesh(),
             residual._mesh_functions,
-            residual._mesh_functions_label_to_value,
+            residual._mesh_subdomains,
             residual.fsi_facet_labels,
             residual.fixed_facet_labels,
         )
@@ -336,14 +336,14 @@ class PredefinedModel(Model):
         self,
         mesh: dfn.Mesh,
         mesh_functions: Tuple[dfn.MeshFunction],
-        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        mesh_subdomains: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
     ):
         residual = self._make_residual(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -356,14 +356,14 @@ class PredefinedLinearizedModel(LinearizedModel):
         self,
         mesh: dfn.Mesh,
         mesh_functions: Tuple[dfn.MeshFunction],
-        mesh_functions_label_to_value: Tuple[Mapping[str, int]],
+        mesh_subdomains: Tuple[Mapping[str, int]],
         fsi_facet_labels: Tuple[str],
         fixed_facet_labels: Tuple[str],
     ):
         residual = self._make_residual(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )

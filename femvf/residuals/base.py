@@ -33,7 +33,7 @@ class FenicsResidual(BaseResidual):
         # the residual given just the FenicsForm, a mesh, and dirichlet boundary
         # conditions!
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
         dirichlet_bcs: Optional[dict[str, dfn.DirichletBC]]=None
@@ -44,10 +44,10 @@ class FenicsResidual(BaseResidual):
         self._form = form
 
         self._mesh_functions = mesh_functions
-        self._mesh_functions_label_to_value = mesh_functions_label_to_value
+        self._mesh_subdomains = mesh_subdomains
 
         fixed_subdomain_idxs = [
-            self.mesh_function_label_to_value('facet')[facet_label]
+            self.mesh_subdomain('facet')[facet_label]
             for facet_label in fixed_facet_labels
         ]
         # TODO: Refactor `FenicsResidual` without this super-specific key requirement!
@@ -104,11 +104,11 @@ class FenicsResidual(BaseResidual):
         idx = self._mesh_element_type_to_idx(mesh_element_type)
         return self._mesh_functions[idx]
 
-    def mesh_function_label_to_value(
+    def mesh_subdomain(
         self, mesh_element_type: Union[str, int]
     ) -> Mapping[str, int]:
         idx = self._mesh_element_type_to_idx(mesh_element_type)
-        return self._mesh_functions_label_to_value[idx]
+        return self._mesh_subdomains[idx]
 
     def measure(self, integral_type: str):
         if integral_type == 'dx':
@@ -145,7 +145,7 @@ class PredefinedFenicsResidual(FenicsResidual):
         # the residual given just the FenicsForm, a mesh, and dirichlet boundary
         # conditions!
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
         # TODO: Add dirichlet bc arguments for different coefficients!
@@ -155,7 +155,7 @@ class PredefinedFenicsResidual(FenicsResidual):
         functional = self._make_functional(
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -163,7 +163,7 @@ class PredefinedFenicsResidual(FenicsResidual):
             functional,
             mesh,
             mesh_functions,
-            mesh_functions_label_to_value,
+            mesh_subdomains,
             fsi_facet_labels,
             fixed_facet_labels,
         )
@@ -172,7 +172,7 @@ class PredefinedFenicsResidual(FenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_functions_label_to_value: list[Mapping[str, int]],
+        mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
         fixed_facet_labels: list[str],
     ) -> dfn.Form:

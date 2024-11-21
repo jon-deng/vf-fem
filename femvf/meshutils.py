@@ -15,12 +15,12 @@ from femvf.residuals import solid
 ## Functions for loading `dfn.Mesh` objects from other mesh formats
 
 MeshFunctions = list[dfn.MeshFunction]
-MeshFieldData = dict[str, int]
-MeshFieldsData = list[MeshFieldData]
+MeshSubdomainData = dict[str, int]
+MeshSubdomainsData = list[MeshSubdomainData]
 
 def load_fenics_gmsh(
     mesh_path: str
-) -> Tuple[dfn.Mesh, MeshFunctions, MeshFieldsData]:
+) -> Tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:
     """
     Return a `dfn.mesh` and mesh function info from a gmsh '.msh' file
 
@@ -36,22 +36,22 @@ def load_fenics_gmsh(
     -------
     dfn_mesh: dfn.Mesh
         The mesh
-    mfs: MeshFunctions
+    mesh_funcs: MeshFunctions
         A `dfn.MeshFunction` for each type of mesh entity (vertex, line, triangle, tetrahedron)
 
         For example:
-        - `mfs[0]` is a mesh function for vertices
-        - `mfs[1]` is a mesh function for lines, etc.
+        - `mesh_funcs[0]` is a mesh function for vertices
+        - `mesh_funcs[1]` is a mesh function for lines, etc.
 
         Each mesh function represents an integer for value for each mesh entity
-    fields_data: MeshFieldsData
+    mesh_subdomains: MeshSubdomainsData
         A dictionary of tagged mesh values for each type of mesh entity (vertex, line, triangle, tetrahedron)
 
         For example:
-        - `fields_data[0]` is a dictionary of tagged vertex values
-        - `fields_data[1]` is a dictionary of tagged line values, etc.
+        - `mesh_subdomains[0]` is a dictionary of tagged vertex values
+        - `mesh_subdomains[1]` is a dictionary of tagged line values, etc.
 
-        If `fields_data[0] == {'A': 3, 'B': 5, 'C': 10}` then:
+        If `mesh_subdomains[0] == {'A': 3, 'B': 5, 'C': 10}` then:
         - 'A' references all vertices with value 3
         - 'PointCollectionB' represents all vertices with value 5, etc.
     """
@@ -108,10 +108,10 @@ def load_fenics_gmsh(
             f.read(vc, 'gmsh:physical')
 
     # Create a `MeshFunction` for each mesh entity type ('vertex', 'line', ...)
-    mfs = [dfn.MeshFunction('size_t', dfn_mesh, vc) for vc in vcs]
+    mesh_funcs = [dfn.MeshFunction('size_t', dfn_mesh, vc) for vc in vcs]
 
     # Load mappings of 'field data' These associate labels to mesh function values
-    fields_data = [
+    mesh_subdomains = [
         {
             key: value
             for key, (value, entity_dim) in mio_mesh.field_data.items()
@@ -120,7 +120,7 @@ def load_fenics_gmsh(
         for dim in range(max_dim + 1)
     ]
 
-    return dfn_mesh, tuple(mfs), tuple(fields_data)
+    return dfn_mesh, tuple(mesh_funcs), tuple(mesh_subdomains)
 
 
 def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
@@ -168,7 +168,7 @@ def _dim_from_type(cell_type: str) -> int:
 
 # Load a mesh from the FEniCS .xml format
 # This format is no longer updated/promoted by FEniCS
-def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFieldsData]:
+def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:
     """
     Return a `dfn.mesh` and mesh function info from a FEniCS '.xml' file
 
@@ -213,7 +213,7 @@ def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshFields
     )
 
 
-def _parse_msh2_physical_groups(mesh_path: str) -> MeshFieldsData:
+def _parse_msh2_physical_groups(mesh_path: str) -> MeshSubdomainsData:
     """
     Return mappings from physical group labels to integer ids
 
@@ -513,5 +513,5 @@ def process_celllabel_to_dofs_from_residual(
     """
     mesh = residual.mesh()
     cell_func = residual.mesh_function('cell')
-    cell_label_to_id = residual.mesh_function_label_to_value('cell')
+    cell_label_to_id = residual.mesh_subdomain('cell')
     return process_meshlabel_to_dofs(mesh, cell_func, cell_label_to_id, dofmap)

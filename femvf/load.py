@@ -337,7 +337,7 @@ def derive_1dfluid_from_2dsolid(
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
     fsi_facet_ids = [
-        solid.residual.mesh_function_label_to_value('facet')[name]
+        solid.residual.mesh_subdomain('facet')[name]
         for name in fsi_facet_labels
     ]
     fsi_edges = np.array(
@@ -417,7 +417,7 @@ def derive_1dfluid_from_3dsolid(
         facets = meshutils.extract_zplane_facets(mesh, z=z)
 
         fsi_facet_ids = [
-            solid.residual.mesh_function_label_to_value('facet')[name]
+            solid.residual.mesh_subdomain('facet')[name]
             for name in fsi_facet_labels
         ]
         fsi_edges = meshutils.extract_edges_from_facets(
@@ -477,7 +477,7 @@ def locate_separation_vertex(
 ):
     # If the fluid has a fixed-separation point, set the appropriate
     # separation point for the fluid
-    vertex_label_to_id = solid.residual.mesh_function_label_to_value('vertex')
+    vertex_label_to_id = solid.residual.mesh_subdomain('vertex')
     vertex_mf = solid.residual.mesh_function('vertex')
     if vertex_mf is None:
         raise ValueError(
