@@ -8,13 +8,10 @@ import dolfin as dfn
 
 from femvf.equations import form
 
+from ..fixture_mesh import FenicsMeshFixtures
 
-class UFLFormFixtures:
 
-    @pytest.fixture()
-    def mesh(self):
-        mesh = dfn.UnitSquareMesh(10, 10)
-        return mesh
+class UFLFormFixtures(FenicsMeshFixtures):
 
     @pytest.fixture()
     def measure_dx(self, mesh):
