@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 import dolfin as dfn
 import numpy as np
 
-from femvf.equations.form import FenicsForm
+from femvf.equations.form import UFLForm
 
 
 class BaseResidual:
@@ -26,7 +26,7 @@ class FenicsResidual(BaseResidual):
 
     def __init__(
         self,
-        form: FenicsForm,
+        form: UFLForm,
         mesh: dfn.Mesh,
         # TODO: Remove the below 4 (mesh_functions, ..., fixed_facet labels)
         # These are redundant since you should be able to totally evaluate
@@ -69,7 +69,7 @@ class FenicsResidual(BaseResidual):
         self._fixed_facet_labels = fixed_facet_labels
 
     @property
-    def form(self) -> FenicsForm:
+    def form(self) -> UFLForm:
         return self._form
 
     def mesh(self) -> dfn.Mesh:

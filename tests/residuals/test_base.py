@@ -74,7 +74,7 @@ class FenicsFormFixtures(UFLFormFixtures):
 
     @pytest.fixture()
     def form(self, ufl_form, ufl_coefficients):
-        return form.FenicsForm(ufl_form, ufl_coefficients)
+        return form.UFLForm(ufl_form, ufl_coefficients)
 
 
 class TestFenicsResidual(FenicsFormFixtures):
