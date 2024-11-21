@@ -133,19 +133,14 @@ class PredefinedFenicsResidual(FenicsResidual):
     Class representing a pre-defined residual
     """
 
+    # TODO: Think what fully characterizes this class? pass into __init__
     def __init__(
         self,
         mesh: dfn.Mesh,
-        # TODO: Remove the below 4 (mesh_functions, ..., fixed_facet labels)
-        # These are redundant since you should be able to totally evaluate
-        # the residual given just the FenicsForm, a mesh, and dirichlet boundary
-        # conditions!
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]],
         fsi_facet_labels: list[str],
-        fixed_facet_labels: list[str],
-        # TODO: Add dirichlet bc arguments for different coefficients!
-        # TODO: Add form arguments for different coefficients!
+        fixed_facet_labels: list[str]
     ):
 
         functional = self._make_functional(
