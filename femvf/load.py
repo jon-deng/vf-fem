@@ -92,11 +92,11 @@ def load_fluid_model(
     if issubclass(
         FluidType,
         (
-            dfmd.BernoulliFixedSep,
-            dfmd.LinearizedBernoulliFixedSep,
-            dfmd.BernoulliFlowFixedSep,
-            dfmd.LinearizedBernoulliFlowFixedSep,
-            transient.BernoulliFixedSep,
+            flr.BernoulliFixedSep,
+            # flr.LinearizedBernoulliFixedSep,
+            flr.BernoulliFlowFixedSep,
+            # flr.LinearizedBernoulliFlowFixedSep,
+            flr.BernoulliFixedSep,
         ),
     ):
         if len(idx_sep) == 1:
@@ -192,7 +192,7 @@ def load_dynamical_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
     SolidType: SolidClass = slr.KelvinVoigt,
-    FluidType: FluidClass = dfmd.BernoulliAreaRatioSep,
+    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
     separation_vertex_label: str = 'separation',
@@ -303,10 +303,10 @@ def derive_1dfluid_from_2dsolid(
     if issubclass(
         FluidResidual,
         (
-            dfmd.BernoulliFixedSep,
-            dfmd.LinearizedBernoulliFixedSep,
-            dfmd.BernoulliFlowFixedSep,
-            dfmd.LinearizedBernoulliFlowFixedSep,
+            flr.BernoulliFixedSep,
+            # flr.LinearizedBernoulliFixedSep,
+            flr.BernoulliFlowFixedSep,
+            # flr.LinearizedBernoulliFlowFixedSep,
             flr.BernoulliFixedSep,
         ),
     ):
@@ -380,10 +380,10 @@ def derive_1dfluid_from_3dsolid(
         if issubclass(
             FluidResidual,
             (
-                dfmd.BernoulliFixedSep,
-                dfmd.LinearizedBernoulliFixedSep,
-                dfmd.BernoulliFlowFixedSep,
-                dfmd.LinearizedBernoulliFlowFixedSep,
+                flr.BernoulliFixedSep,
+                # flr.LinearizedBernoulliFixedSep,
+                flr.BernoulliFlowFixedSep,
+                # flr.LinearizedBernoulliFlowFixedSep,
                 flr.BernoulliFixedSep,
             ),
         ):
