@@ -256,53 +256,6 @@ def load_dynamical_fsi_model(
         return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 
-def load_transient_fsai_model(
-    solid_mesh: str,
-    fluid_mesh: Any,
-    acoustic: transient.Acoustic1D,
-    SolidType: SolidClass = slr.KelvinVoigt,
-    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
-    fsi_facet_labels: Optional[Labels] = ('pressure',),
-    fixed_facet_labels: Optional[Labels] = ('fixed',),
-    coupling: str = 'explicit',
-):
-    # TODO: I haven't updated the acoustic model in a while so it's likely this
-    # doesn't work
-    """
-    Load a transient coupled (fsai) model
-
-    Parameters
-    ----------
-    solid_mesh : str
-        Path to the solid mesh
-    fluid_mesh : None or (future proofing for other fluid types)
-        Currently this isn't used
-    acoustic :
-        The acoustic model
-    SolidType, FluidType:
-        Classes of the solid and fluid models to load
-    fsi_facet_labels, fixed_facet_labels:
-        String identifiers for facets corresponding to traction/dirichlet
-        conditions
-    coupling: str
-        One of 'explicit' or 'implicit' indicating the coupling strategy between
-        fluid/solid domains
-    """
-    solid = load_solid_model(
-        solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels
-    )
-    fluid, fsi_verts = derive_1dfluid_from_2dsolid(
-        solid_mesh, FluidResidual=FluidType, fsi_facet_labels=fsi_facet_labels
-    )
-
-    dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['fspace.scalar'])[
-        fsi_verts
-    ]
-    dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
-
-    return transient.FSAIModel(solid, fluid, acoustic, dofs_fsi_solid, dofs_fsi_fluid)
-
-
 # TODO: Refactor this function; currently does too many things
 # the function should take a loaded solid model and derive a fluid mesh from it
 def derive_1dfluid_from_2dsolid(
