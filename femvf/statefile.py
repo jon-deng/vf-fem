@@ -15,7 +15,7 @@ import dolfin as dfn
 import numpy as np
 from blockarray import blockvec as bv
 
-from .models.transient.base import BaseTransientModel
+from .models.transient import BaseTransientModel
 
 
 class StateFile:

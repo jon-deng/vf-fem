@@ -5,20 +5,20 @@ Generic code for setting up commonly used components in benchmarking
 from typing import Tuple
 
 from femvf.load import load_transient_fsi_model
-from femvf.models.transient import fluid as tfmd, solid as tsmd, base as tbase
+from femvf.models import transient
 
 from blockarray import blockvec as bv
 
 
-def setup_model(mesh_path: str) -> tbase.BaseTransientModel:
+def setup_model(mesh_path: str) -> transient.BaseTransientModel:
     """
     Return a common model to integrate
     """
     model = load_transient_fsi_model(
         mesh_path,
         None,
-        SolidType=tsmd.KelvinVoigtWEpithelium,
-        FluidType=tfmd.BernoulliAreaRatioSep,
+        SolidType=transient.KelvinVoigtWEpithelium,
+        FluidType=transient.BernoulliAreaRatioSep,
         fsi_facet_labels=['pressure'],
         fixed_facet_labels=['fixed'],
         coupling='explicit',
@@ -27,7 +27,7 @@ def setup_model(mesh_path: str) -> tbase.BaseTransientModel:
 
 
 def setup_transient_args(
-    model: tbase.BaseTransientModel,
+    model: transient.BaseTransientModel,
 ) -> Tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector]:
     """
     Return a (initial state, control, properties) tuple

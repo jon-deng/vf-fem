@@ -11,7 +11,7 @@ from tqdm import tqdm
 import numpy as np
 from blockarray import blockvec as bv
 
-from .models.transient.base import BaseTransientModel
+from .models.transient import BaseTransientModel
 from . import statefile as sf
 
 # @profile

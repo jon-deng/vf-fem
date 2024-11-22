@@ -29,7 +29,7 @@ from blockarray import blockmat as bm, blockvec as bv
 import nonlineq
 
 from .models.dynamical import base as dynbase
-from .models.transient import solid as slmodel, coupled as comodel, base as trabase
+from .models import transient
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 # import warnings
@@ -66,7 +66,7 @@ def _add_static_docstring(func):
 
 @_add_static_docstring
 def static_solid_configuration(
-    model: slmodel.FenicsModel,
+    model: transient.FenicsModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     state=None,
@@ -76,7 +76,7 @@ def static_solid_configuration(
     Return the static state for a solid model
 
     """
-    if isinstance(model, trabase.BaseTransientModel):
+    if isinstance(model, transient.BaseTransientModel):
         is_tra_model = True
     elif isinstance(model, dynbase.BaseDynamicalModel):
         is_tra_model = False
@@ -170,7 +170,7 @@ def static_solid_configuration(
 
 # TODO: Refactor this to simply set appropriate blocks to a vector from value
 def _set_coupled_model_substate(
-    model: comodel.BaseTransientFSIModel, xsub: bv.BlockVector
+    model: transient.BaseTransientFSIModel, xsub: bv.BlockVector
 ):
     """
     Set a subset of blocks in `model.state` from a given block vector
@@ -196,7 +196,7 @@ def _set_coupled_model_substate(
 
 @_add_static_docstring
 def static_coupled_configuration_picard(
-    model: comodel.BaseTransientFSIModel,
+    model: transient.BaseTransientFSIModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
 ) -> Tuple[bv.BlockVector, Info]:
@@ -258,7 +258,7 @@ def static_coupled_configuration_picard(
 # I'm not sure if the answer it returns is correct or not
 @_add_static_docstring
 def static_coupled_configuration_newton(
-    model: comodel.BaseTransientFSIModel,
+    model: transient.BaseTransientFSIModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     dt: float = 1e6,

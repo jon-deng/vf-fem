@@ -10,7 +10,7 @@ import itertools
 import dolfin as dfn
 from petsc4py import PETSc
 
-from .transient import solid as tsmd, fluid as tfmd
+from . import transient
 from .dynamical import solid as dsmd, fluid as dfmd
 from blockarray import subops, blockmat as bm, blockvec as bv
 
@@ -88,12 +88,12 @@ class FSIMap:
         return A
 
 
-SolidModel = Union[tsmd.FenicsModel, dsmd.Model]
-FluidModel = Union[tfmd.JaxModel, dfmd.Model]
+SolidModel = Union[transient.FenicsModel, dsmd.Model]
+FluidModel = Union[transient.JaxModel, dfmd.Model]
 
 
 def _state_from_dynamic_or_transient_model(model: Union[SolidModel, FluidModel]):
-    if isinstance(model, (tfmd.JaxModel, tsmd.FenicsModel)):
+    if isinstance(model, (transient.JaxModel, transient.FenicsModel)):
         return model.state0
     elif isinstance(
         model, (dfmd.Model, dfmd.LinearizedModel, dsmd.Model, dsmd.LinearizedModel)

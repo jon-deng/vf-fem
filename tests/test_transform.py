@@ -11,9 +11,8 @@ import pytest
 import numpy as np
 import dolfin as dfn
 
-from femvf.models.transient.base import BaseTransientModel
+from femvf.models import transient
 from femvf.models.dynamical.base import BaseDynamicalModel
-from femvf.models.transient import solid as tsld, fluid as tfld
 from femvf.load import load_transient_fsi_model
 from femvf.parameters import transform as tform
 
@@ -55,7 +54,7 @@ def init_default_transform(Transform: tform.Transform, model, x=None, y=None):
 class TestTransform:
 
     @pytest.fixture()
-    def model(self) -> Union[BaseDynamicalModel, BaseTransientModel]:
+    def model(self) -> Union[BaseDynamicalModel, transient.BaseTransientModel]:
         """
         Return the model to test
         """
@@ -63,8 +62,8 @@ class TestTransform:
         model = load_transient_fsi_model(
             mesh_path,
             None,
-            SolidType=tsld.KelvinVoigtWShape,
-            FluidType=tfld.BernoulliAreaRatioSep,
+            SolidType=transient.KelvinVoigtWShape,
+            FluidType=transient.BernoulliAreaRatioSep,
         )
         return model
 

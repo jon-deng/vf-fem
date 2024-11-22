@@ -16,11 +16,7 @@ from blockarray import blockvec as bv
 import femvf.statefile as sf
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
-from femvf.models.transient import (
-    solid as tsmd,
-    fluid as tfmd,
-    coupled as cmd,
-)
+from femvf.models import transient
 from femvf.load import load_transient_fsi_model, derive_1dfluid_from_2dsolid
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
@@ -34,13 +30,13 @@ from tests.fixture_mesh import FenicsMeshFixtures
 class ModelFixtures(FenicsMeshFixtures):
 
     @pytest.fixture(
-        params=[tsmd.Rayleigh, tsmd.KelvinVoigt, tsmd.SwellingKelvinVoigt]
+        params=[transient.Rayleigh, transient.KelvinVoigt, transient.SwellingKelvinVoigt]
     )
     def SolidModel(self, request):
         return request.param
 
     @pytest.fixture(
-        params=[tfmd.BernoulliSmoothMinSep, tfmd.BernoulliFixedSep, tfmd.BernoulliAreaRatioSep]
+        params=[transient.BernoulliSmoothMinSep, transient.BernoulliFixedSep, transient.BernoulliAreaRatioSep]
     )
     def FluidModel(self, request):
         return request.param
@@ -63,7 +59,7 @@ class ModelFixtures(FenicsMeshFixtures):
         fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidModel, fsi_facet_labels=['traction'])
         fluid_pdofs = np.arange(solid_pdofs.size)
 
-        return cmd.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+        return transient.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
 
 class TestIntegrate(ModelFixtures):
@@ -161,7 +157,7 @@ class TestIntegrate(ModelFixtures):
     def test_integrate(
         self,
         mesh_name: str,
-        model: cmd.BaseTransientFSIModel,
+        model: transient.BaseTransientFSIModel,
         ini_state: bv.BlockVector,
         controls: bv.BlockVector,
         prop: bv.BlockVector,
@@ -258,14 +254,14 @@ class TestLiEtal2020(TestIntegrate):
 
     @pytest.fixture(
         params=[
-            tsmd.Rayleigh,
+            transient.Rayleigh,
         ]
     )
     def solid_type(self, request):
         """Return the solid class"""
         return request.param
 
-    @pytest.fixture(params=[tfmd.BernoulliAreaRatioSep])
+    @pytest.fixture(params=[transient.BernoulliAreaRatioSep])
     def fluid_type(self, request):
         """Return the fluid class"""
         return request.param
@@ -366,14 +362,14 @@ class TestBounceFromDeformation(TestIntegrate):
 
     @pytest.fixture(
         params=[
-            tsmd.Rayleigh,
+            transient.Rayleigh,
         ]
     )
     def solid_type(self, request):
         """Return the solid class"""
         return request.param
 
-    @pytest.fixture(params=[tfmd.BernoulliAreaRatioSep])
+    @pytest.fixture(params=[transient.BernoulliAreaRatioSep])
     def fluid_type(self, request):
         """Return the fluid class"""
         return request.param

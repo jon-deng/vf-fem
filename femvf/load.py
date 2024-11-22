@@ -9,18 +9,13 @@ import dolfin as dfn
 
 from . import meshutils
 from femvf.residuals import solid as slr, fluid as flr
-from .models.transient import (
-    solid as tsmd,
-    fluid as tfmd,
-    acoustic as tamd,
-    coupled as tcmd,
-)
+from .models import transient
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[tsmd.FenicsModel, dsmd.Model]
-FluidModel = Union[tfmd.JaxModel, dfmd.Model]
+SolidModel = Union[transient.FenicsModel, dsmd.Model]
+FluidModel = Union[transient.JaxModel, dfmd.Model]
 SolidClass = slr.PredefinedSolidResidual
-FluidClass = Union[Type[tfmd.JaxModel], Type[dfmd.Model]]
+FluidClass = Union[Type[transient.JaxModel], Type[dfmd.Model]]
 
 Labels = list[str]
 
@@ -101,7 +96,7 @@ def load_fluid_model(
             dfmd.LinearizedBernoulliFixedSep,
             dfmd.BernoulliFlowFixedSep,
             dfmd.LinearizedBernoulliFlowFixedSep,
-            tfmd.BernoulliFixedSep,
+            transient.BernoulliFixedSep,
         ),
     ):
         if len(idx_sep) == 1:
@@ -129,7 +124,7 @@ def load_transient_fsi_model(
     separation_vertex_label: str = 'separation',
     coupling: str = 'explicit',
     zs: Optional[Tuple[float]] = None,
-) -> tcmd.BaseTransientFSIModel:
+) -> transient.BaseTransientFSIModel:
     """
     Load a transient coupled (fsi) model
 
@@ -182,9 +177,9 @@ def load_transient_fsi_model(
     ).reshape(-1)
 
     if coupling == 'explicit':
-        model = tcmd.ExplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+        model = transient.ExplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
     elif coupling == 'implicit':
-        model = tcmd.ImplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+        model = transient.ImplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
     else:
         raise ValueError(
             f"'coupling' must be one of `['explicit', 'implicit']`, not `{coupling}`"
@@ -264,7 +259,7 @@ def load_dynamical_fsi_model(
 def load_transient_fsai_model(
     solid_mesh: str,
     fluid_mesh: Any,
-    acoustic: tamd.Acoustic1D,
+    acoustic: transient.Acoustic1D,
     SolidType: SolidClass = slr.KelvinVoigt,
     FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
@@ -305,7 +300,7 @@ def load_transient_fsai_model(
     ]
     dofs_fsi_fluid = np.arange(dofs_fsi_solid.size)
 
-    return tcmd.FSAIModel(solid, fluid, acoustic, dofs_fsi_solid, dofs_fsi_fluid)
+    return transient.FSAIModel(solid, fluid, acoustic, dofs_fsi_solid, dofs_fsi_fluid)
 
 
 # TODO: Refactor this function; currently does too many things

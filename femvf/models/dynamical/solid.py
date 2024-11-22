@@ -32,7 +32,7 @@ import dolfin as dfn
 from blockarray import blockvec as bv, blockmat as bm, subops
 
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
-from ..transient.solid import (
+from ..transient import (
     properties_bvec_from_forms,
     depack_form_coefficient_function,
 )

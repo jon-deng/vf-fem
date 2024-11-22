@@ -7,7 +7,7 @@ import pytest
 from femvf import statefile as sf
 from femvf.load import load_transient_fsi_model
 from femvf.postprocess import solid, base
-from femvf.models.transient import solid as tsmd, fluid as tfmd
+from femvf.models import transient
 
 
 @pytest.fixture
@@ -18,8 +18,8 @@ def setup_model():
     model = load_transient_fsi_model(
         '../meshes/M5-3layers.msh',
         None,
-        SolidType=tsmd.KelvinVoigtWEpithelium,
-        FluidType=tfmd.BernoulliAreaRatioSep,
+        SolidType=transient.KelvinVoigtWEpithelium,
+        FluidType=transient.BernoulliAreaRatioSep,
         fsi_facet_labels=['pressure'],
         fixed_facet_labels=['fixed'],
     )

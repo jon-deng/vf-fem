@@ -9,11 +9,7 @@ import os
 import numpy as np
 import dolfin as dfn
 
-from femvf.models.transient import (
-    solid as tsmd,
-    fluid as tfmd,
-    # acoustic as amd
-)
+from femvf.models import transient
 from femvf.load import load_transient_fsi_model
 from femvf.meshutils import process_meshlabel_to_dofs
 from femvf import static
@@ -25,8 +21,8 @@ mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
 model = load_transient_fsi_model(
     mesh_path,
     None,
-    SolidType=tsmd.KelvinVoigt,
-    FluidType=tfmd.BernoulliAreaRatioSep,
+    SolidType=transient.KelvinVoigt,
+    FluidType=transient.BernoulliAreaRatioSep,
     coupling='explicit',
 )
 

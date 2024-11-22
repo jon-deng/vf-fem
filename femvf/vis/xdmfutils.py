@@ -14,7 +14,7 @@ import h5py
 import numpy as np
 import dolfin as dfn
 
-from femvf.models.transient.base import BaseTransientModel
+from femvf.models.transient import BaseTransientModel
 
 # from .. import statefile as sf
 

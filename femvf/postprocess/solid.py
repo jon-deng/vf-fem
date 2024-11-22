@@ -14,7 +14,7 @@ import dolfin as dfn
 import ufl
 from blockarray.subops import solve_petsc_preonly
 
-from femvf.models.transient.base import BaseTransientModel
+from femvf.models.transient import BaseTransientModel
 from .base import BaseStateMeasure, BaseDerivedStateMeasure
 
 

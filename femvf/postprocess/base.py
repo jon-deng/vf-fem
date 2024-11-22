@@ -15,7 +15,7 @@ import numpy as np
 from blockarray import blockvec as bv
 
 from femvf import statefile as sf
-from femvf.models.transient.base import BaseTransientModel
+from femvf.models.transient import BaseTransientModel
 
 
 class BaseStateMeasure:

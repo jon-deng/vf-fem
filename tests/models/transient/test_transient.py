@@ -10,7 +10,7 @@ import numpy as np
 import dolfin as dfn
 
 from femvf.residuals import solid as slr, fluid as flr
-from femvf.models.transient import solid as sld, fluid as fld, coupled as cpd
+from femvf.models import transient
 from femvf.load import derive_1dfluid_from_2dsolid, derive_1dfluid_from_3dsolid
 
 from tests.fixture_mesh import FenicsMeshFixtures
@@ -36,7 +36,7 @@ class TestSolid(FenicsMeshFixtures):
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-        assert sld.FenicsModel(residual)
+        assert transient.FenicsModel(residual)
 
     # TODO: Think of ways you can test a model is working properly?
 
@@ -58,7 +58,7 @@ class TestFluid:
         FluidResidual: flr.PredefinedFluidResidual,
         mesh: NDArray
     ):
-        assert fld.JaxModel(FluidResidual(mesh))
+        assert transient.JaxModel(FluidResidual(mesh))
 
     # TODO: Think of ways you can test a model is working properly?
 
@@ -84,16 +84,16 @@ class TestCoupled(FenicsMeshFixtures):
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-        return sld.FenicsModel(residual)
+        return transient.FenicsModel(residual)
 
     def test_init(
         self, solid, FluidResidual
     ):
         fluid_res, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
-        fluid = fld.JaxModel(fluid_res)
+        fluid = transient.JaxModel(fluid_res)
         fluid_pdofs = np.arange(solid_pdofs.size)
 
-        assert cpd.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+        assert transient.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
     # TODO: Think of ways you can test a model is working properly?
 

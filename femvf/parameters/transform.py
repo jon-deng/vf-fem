@@ -15,15 +15,15 @@ from jax import numpy as jnp
 import jax
 import dolfin as dfn
 import ufl
-from femvf.models.transient.base import BaseTransientModel as TranModel
-from femvf.models.dynamical.base import BaseDynamicalModel as DynModel
+from femvf.models.transient import BaseTransientModel
+from femvf.models.dynamical.base import BaseDynamicalModel
 from femvf import meshutils
 
 from blockarray import blockvec as bv, blockarray as ba
 from blockarray import typing
 
 
-Model = Union[DynModel, TranModel]
+Model = Union[BaseDynamicalModel, BaseTransientModel]
 BlockVectorDict = Mapping[str, NDArray]
 
 
