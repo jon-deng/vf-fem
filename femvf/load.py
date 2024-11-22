@@ -159,14 +159,14 @@ def load_transient_fsi_model(
     if zs is None:
         fluid, fsi_verts = derive_1dfluid_from_2dsolid(
             solid,
-            FluidType=FluidType,
+            FluidResidual=FluidType,
             fsi_facet_labels=fsi_facet_labels,
             separation_vertex_label=separation_vertex_label,
         )
     else:
         fluid, fsi_verts = derive_1dfluid_from_3dsolid(
             solid,
-            FluidType=FluidType,
+            FluidResidual=FluidType,
             fsi_facet_labels=fsi_facet_labels,
             separation_vertex_label=separation_vertex_label,
             zs=zs,
@@ -231,14 +231,14 @@ def load_dynamical_fsi_model(
     if zs is None:
         fluid, fsi_verts = derive_1dfluid_from_2dsolid(
             solid,
-            FluidType=FluidType,
+            FluidResidual=FluidType,
             fsi_facet_labels=fsi_facet_labels,
             separation_vertex_label=separation_vertex_label,
         )
     else:
         fluid, fsi_verts = derive_1dfluid_from_3dsolid(
             solid,
-            FluidType=FluidType,
+            FluidResidual=FluidType,
             fsi_facet_labels=fsi_facet_labels,
             separation_vertex_label=separation_vertex_label,
             zs=zs,
@@ -297,7 +297,7 @@ def load_transient_fsai_model(
         solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels
     )
     fluid, fsi_verts = derive_1dfluid_from_2dsolid(
-        solid_mesh, FluidType=FluidType, fsi_facet_labels=fsi_facet_labels
+        solid_mesh, FluidResidual=FluidType, fsi_facet_labels=fsi_facet_labels
     )
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(solid.residual.form['fspace.scalar'])[
@@ -311,11 +311,11 @@ def load_transient_fsai_model(
 # TODO: Refactor this function; currently does too many things
 # the function should take a loaded solid model and derive a fluid mesh from it
 def derive_1dfluid_from_2dsolid(
-    solid: SolidModel,
-    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
+    solid: slr.FenicsResidual,
+    FluidResidual: type[flr.PredefinedJaxResidual] = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
-) -> Tuple[FluidModel, np.ndarray]:
+) -> Tuple[flr.PredefinedJaxResidual, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 
@@ -353,7 +353,7 @@ def derive_1dfluid_from_2dsolid(
     mesh = solid.residual.mesh()
     s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
     if issubclass(
-        FluidType,
+        FluidResidual,
         (
             dfmd.BernoulliFixedSep,
             dfmd.LinearizedBernoulliFixedSep,
@@ -373,20 +373,20 @@ def derive_1dfluid_from_2dsolid(
                 "Expected to find single separation point on FSI surface"
                 f" but found {len(idx_sep):d} instead"
             )
-        fluid = FluidType(s, idx_sep=idx_sep)
+        fluid = FluidResidual(s, idx_sep=idx_sep)
     else:
-        fluid = FluidType(s)
+        fluid = FluidResidual(s)
 
     return fluid, fsi_verts
 
 
 def derive_1dfluid_from_3dsolid(
-    solid: SolidModel,
-    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
+    solid: slr.FenicsResidual,
+    FluidResidual: type[flr.PredefinedJaxResidual] = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
     zs: Optional[np.typing.NDArray[int]] = None,
-) -> Tuple[FluidModel, np.ndarray]:
+) -> Tuple[flr.PredefinedJaxResidual, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 
@@ -430,7 +430,7 @@ def derive_1dfluid_from_3dsolid(
         s_list.append(s)
         fsi_verts_list.append(fsi_verts)
         if issubclass(
-            FluidType,
+            FluidResidual,
             (
                 dfmd.BernoulliFixedSep,
                 dfmd.LinearizedBernoulliFixedSep,
@@ -456,7 +456,7 @@ def derive_1dfluid_from_3dsolid(
             raise ValueError("3D models can't handle fixed separation points yet")
 
     s = np.array(s_list)
-    fluid = FluidType(s)
+    fluid = FluidResidual(s)
     return fluid, np.array(fsi_verts_list, dtype=int)
 
 

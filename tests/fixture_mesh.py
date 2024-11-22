@@ -77,14 +77,16 @@ class FenicsMeshFixtures:
         return mf, {'top': 1, 'bottom': 0}
 
     @pytest.fixture()
-    def mesh_functions(self, mesh_dim, facet_function_tuple, cell_function_tuple):
+    def mesh_functions(self, mesh_dim, vertex_function_tuple, facet_function_tuple, cell_function_tuple):
+        vertex_func, _ = vertex_function_tuple
         facet_func, _ = facet_function_tuple
         cell_func, _ = cell_function_tuple
-        return (mesh_dim-2) * [None] + [facet_func, cell_func]
+        return (vertex_func,) + (mesh_dim-3)*(None,) + (facet_func, cell_func)
 
     @pytest.fixture()
-    def mesh_subdomains(self, mesh_dim, facet_function_tuple, cell_function_tuple):
+    def mesh_subdomains(self, mesh_dim, vertex_function_tuple, facet_function_tuple, cell_function_tuple):
+        _, vertex_fields = vertex_function_tuple
         _, facet_fields = facet_function_tuple
         _, cell_fields = cell_function_tuple
-        return (mesh_dim-2) * [{}] + [facet_fields, cell_fields]
+        return (vertex_fields,) + (mesh_dim-3)*({},) + (facet_fields, cell_fields)
 
