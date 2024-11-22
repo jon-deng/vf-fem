@@ -18,6 +18,45 @@ MeshFunctions = list[dfn.MeshFunction]
 MeshSubdomainData = dict[str, int]
 MeshSubdomainsData = list[MeshSubdomainData]
 
+def mesh_element_type_dim(element_type: str | int) -> int:
+    """
+    Return the dimension of an element type
+
+    This can be used to index into a list of mesh functions or mesh subdomains
+
+    Parameters
+    ----------
+    element_type: str | int
+        The element type
+
+        If a string, it can be one of vertex, edge, facet, cell
+        If an integer, it is interpreted as the dimension itself
+
+    Returns
+    -------
+    int
+        The dimension of the mesh element
+    """
+    ELEMENT_TYPE_TO_IDX = {
+        'vertex': 0, 'edge': 1, 'facet': -2, 'cell': -1
+    }
+    if isinstance(element_type, str):
+        if element_type in ELEMENT_TYPE_TO_IDX:
+            idx = ELEMENT_TYPE_TO_IDX[element_type]
+        else:
+            raise ValueError(
+                "`mesh_element_type` must be one of "
+                f"{ELEMENT_TYPE_TO_IDX.keys()}`"
+            )
+    elif isinstance(element_type, int):
+        idx = element_type
+    else:
+        raise TypeError(
+            f"`mesh_element_type` must be `str` or `int`, not "
+            f"`{type(element_type)}`"
+        )
+    return idx
+
 def load_fenics_gmsh(
     mesh_path: str
 ) -> Tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:

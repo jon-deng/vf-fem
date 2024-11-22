@@ -9,6 +9,7 @@ import dolfin as dfn
 import numpy as np
 
 from femvf.equations.form import UFLForm
+from femvf.meshutils import mesh_element_type_dim
 
 
 class BaseResidual:
@@ -80,30 +81,14 @@ class FenicsResidual(BaseResidual):
         """
         return self._ref_mesh_coords
 
-    @staticmethod
-    def _mesh_element_type_to_idx(mesh_element_type: Union[str, int]) -> int:
-        if isinstance(mesh_element_type, str):
-            if mesh_element_type == 'vertex':
-                return 0
-            elif mesh_element_type == 'facet':
-                return -2
-            elif mesh_element_type == 'cell':
-                return -1
-        elif isinstance(mesh_element_type, int):
-            return mesh_element_type
-        else:
-            raise TypeError(
-                f"`mesh_element_type` must be `str` or `int`, not `{type(mesh_element_type)}`"
-            )
-
     def mesh_function(self, mesh_element_type: Union[str, int]) -> dfn.MeshFunction:
-        idx = self._mesh_element_type_to_idx(mesh_element_type)
+        idx = mesh_element_type_dim(mesh_element_type)
         return self._mesh_functions[idx]
 
     def mesh_subdomain(
         self, mesh_element_type: Union[str, int]
     ) -> Mapping[str, int]:
-        idx = self._mesh_element_type_to_idx(mesh_element_type)
+        idx = mesh_element_type_dim(mesh_element_type)
         return self._mesh_subdomains[idx]
 
     def measure(self, integral_type: str):
