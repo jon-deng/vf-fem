@@ -50,8 +50,8 @@ class BaseTransientFSIModel(base.BaseTransientModel):
 
     def __init__(
         self,
-        solid: tsmd.Model,
-        fluids: Union[List[tfmd.Model], tfmd.Model],
+        solid: tsmd.FenicsModel,
+        fluids: Union[List[tfmd.JaxModel], tfmd.JaxModel],
         solid_fsi_dofs: Union[List[ArrayLike], ArrayLike],
         fluid_fsi_dofs: Union[List[ArrayLike], ArrayLike],
     ):

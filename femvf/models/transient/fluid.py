@@ -15,7 +15,7 @@ from femvf.residuals import fluid
 ## 1D Bernoulli approximation codes
 
 
-class Model(base.BaseTransientModel):
+class JaxModel(base.BaseTransientModel):
 
     def __init__(self, residual: fluid.JaxResidual):
         res, (state, control, prop) = residual.res, residual.res_args

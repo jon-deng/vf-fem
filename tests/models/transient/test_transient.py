@@ -36,7 +36,7 @@ class TestSolid(FenicsMeshFixtures):
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-        assert sld.Model(residual)
+        assert sld.FenicsModel(residual)
 
     # TODO: Think of ways you can test a model is working properly?
 
@@ -58,7 +58,7 @@ class TestFluid:
         FluidResidual: flr.PredefinedFluidResidual,
         mesh: NDArray
     ):
-        assert fld.Model(FluidResidual(mesh))
+        assert fld.JaxModel(FluidResidual(mesh))
 
     # TODO: Think of ways you can test a model is working properly?
 
@@ -84,13 +84,13 @@ class TestCoupled(FenicsMeshFixtures):
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-        return sld.Model(residual)
+        return sld.FenicsModel(residual)
 
     def test_init(
         self, solid, FluidResidual
     ):
         fluid_res, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
-        fluid = fld.Model(fluid_res)
+        fluid = fld.JaxModel(fluid_res)
         fluid_pdofs = np.arange(solid_pdofs.size)
 
         assert cpd.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)

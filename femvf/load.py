@@ -17,10 +17,10 @@ from .models.transient import (
 )
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[tsmd.Model, dsmd.Model]
-FluidModel = Union[tfmd.Model, dfmd.Model]
+SolidModel = Union[tsmd.FenicsModel, dsmd.Model]
+FluidModel = Union[tfmd.JaxModel, dfmd.Model]
 SolidClass = slr.PredefinedSolidResidual
-FluidClass = Union[Type[tfmd.Model], Type[dfmd.Model]]
+FluidClass = Union[Type[tfmd.JaxModel], Type[dfmd.Model]]
 
 Labels = list[str]
 

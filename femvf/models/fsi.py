@@ -88,12 +88,12 @@ class FSIMap:
         return A
 
 
-SolidModel = Union[tsmd.Model, dsmd.Model]
-FluidModel = Union[tfmd.Model, dfmd.Model]
+SolidModel = Union[tsmd.FenicsModel, dsmd.Model]
+FluidModel = Union[tfmd.JaxModel, dfmd.Model]
 
 
 def _state_from_dynamic_or_transient_model(model: Union[SolidModel, FluidModel]):
-    if isinstance(model, (tfmd.Model, tsmd.Model)):
+    if isinstance(model, (tfmd.JaxModel, tsmd.FenicsModel)):
         return model.state0
     elif isinstance(
         model, (dfmd.Model, dfmd.LinearizedModel, dsmd.Model, dsmd.LinearizedModel)

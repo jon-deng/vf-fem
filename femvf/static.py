@@ -66,7 +66,7 @@ def _add_static_docstring(func):
 
 @_add_static_docstring
 def static_solid_configuration(
-    model: slmodel.Model,
+    model: slmodel.FenicsModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     state=None,
