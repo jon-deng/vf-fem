@@ -35,6 +35,8 @@ from ..transient import (
     properties_bvec_from_forms,
     depack_form_coefficient_function,
 )
+
+from femvf.equations import form
 from femvf.residuals import solid
 from ..assemblyutils import CachedFormAssembler
 
@@ -68,8 +70,8 @@ class DynamicalSolidModelInterface:
         # self.residual_form_name = residual_form_name
         # self._forms = self.form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
         # bilinear_forms = gen_residual_bilinear_forms(self.residual.form)
-        hopf_forms = solid.gen_jac_state_forms(self.residual.form)
-        prop_jac_forms = solid.gen_jac_property_forms(self.residual.form)
+        hopf_forms = form.gen_jac_state_forms(self.residual.form)
+        prop_jac_forms = form.gen_jac_property_forms(self.residual.form)
         forms = {**hopf_forms, **prop_jac_forms}
 
         self.u = self.residual.form['coeff.state.u1']
@@ -229,14 +231,12 @@ class LinearizedModel(DynamicalSolidModelInterface, BaseLinearizedDynamicalModel
 
     def __init__(self, residual: solid.FenicsResidual):
 
-        new_form = solid.modify_unary_linearized_forms(residual.form)
+        new_form = form.modify_unary_linearized_forms(residual.form)
         new_residual = solid.FenicsResidual(
             new_form,
             residual.mesh(),
             residual._mesh_functions,
-            residual._mesh_subdomains,
-            residual.fsi_facet_labels,
-            residual.fixed_facet_labels,
+            residual._mesh_subdomains
         )
         super().__init__(new_residual)
 
