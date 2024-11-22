@@ -10,7 +10,8 @@ import meshio as mio
 import numpy as np
 import dolfin as dfn
 
-from femvf.residuals import solid
+# if typing
+# from femvf.residuals.base import FenicsResidual
 
 ## Functions for loading `dfn.Mesh` objects from other mesh formats
 
@@ -532,7 +533,7 @@ def process_meshlabel_to_dofs(
 
 
 def process_celllabel_to_dofs_from_residual(
-    residual: solid.FenicsResidual, dofmap: dfn.DofMap
+    residual: "FenicsResidual", dofmap: dfn.DofMap
 ) -> Mapping[str, np.ndarray]:
     """
     Return a mapping from mesh region labels to associated DOFs
