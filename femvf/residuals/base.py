@@ -139,33 +139,27 @@ class PredefinedFenicsResidual(FenicsResidual):
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]],
-        fsi_facet_labels: list[str],
-        fixed_facet_labels: list[str]
+        dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
     ):
 
         form = self.init_form(
             mesh,
             mesh_functions,
-            mesh_subdomains,
-            fsi_facet_labels,
-            fixed_facet_labels,
+            mesh_subdomains
         )
         super().__init__(
             form,
             mesh,
             mesh_functions,
             mesh_subdomains,
-            fsi_facet_labels,
-            fixed_facet_labels,
+            dirichlet_bcs=dirichlet_bcs
         )
 
     def init_form(
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]],
-        fsi_facet_labels: list[str],
-        fixed_facet_labels: list[str],
+        mesh_subdomains: list[Mapping[str, int]]
     ) -> dfn.Form:
         raise NotImplementedError()
 
