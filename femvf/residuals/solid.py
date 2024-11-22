@@ -104,7 +104,7 @@ def subdomain_measure(
 
 ## Residual definitions
 
-class PredefinedFenicsResidual(FenicsResidual):
+class PredefinedSolidResidual(FenicsResidual):
     """
     Class representing a pre-defined residual
     """
@@ -141,7 +141,7 @@ class PredefinedFenicsResidual(FenicsResidual):
 
 # NOTE: All the forms below apply a traction over a facet subdomain named
 # 'traction'
-class Rayleigh(PredefinedFenicsResidual):
+class Rayleigh(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -165,7 +165,7 @@ class Rayleigh(PredefinedFenicsResidual):
         return form
 
 
-class KelvinVoigt(PredefinedFenicsResidual):
+class KelvinVoigt(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -189,7 +189,7 @@ class KelvinVoigt(PredefinedFenicsResidual):
         return form
 
 
-class KelvinVoigtWShape(PredefinedFenicsResidual):
+class KelvinVoigtWShape(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -215,7 +215,7 @@ class KelvinVoigtWShape(PredefinedFenicsResidual):
         return form
 
 
-class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
+class KelvinVoigtWEpithelium(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -240,7 +240,7 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
         return form
 
 
-class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
+class IncompSwellingKelvinVoigt(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -264,7 +264,7 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
         return form
 
 
-class SwellingKelvinVoigt(PredefinedFenicsResidual):
+class SwellingKelvinVoigt(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -288,32 +288,7 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
         return form
 
 
-class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
-
-    def init_form(
-        self,
-        mesh: dfn.Mesh,
-        mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
-    ):
-        dx = get_measure('cell', mesh, mesh_functions)
-        ds = get_measure('facet', mesh, mesh_functions)
-
-        ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
-
-        form = (
-            _form.InertialForm({}, dx, mesh)
-            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
-            + _form.IsotropicElasticSwellingForm({}, dx, mesh)
-            + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, ds_traction, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
-        )
-        return form
-
-
-class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
+class SwellingKelvinVoigtWEpithelium(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -338,7 +313,32 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
         return form
 
 
-class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
+class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedSolidResidual):
+
+    def init_form(
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: list[dfn.MeshFunction],
+        mesh_subdomains: list[Mapping[str, int]]
+    ):
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+
+        form = (
+            _form.InertialForm({}, dx, mesh)
+            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
+            + _form.IsotropicElasticSwellingForm({}, dx, mesh)
+            + _form.KelvinVoigtForm({}, dx, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
+        )
+        return form
+
+
+class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedSolidResidual):
 
     def init_form(
         self,
@@ -363,7 +363,7 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
         return form
 
 
-class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
+class Approximate3DKelvinVoigt(PredefinedSolidResidual):
 
     def init_form(
         self,

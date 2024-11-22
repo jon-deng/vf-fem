@@ -25,7 +25,7 @@ class TestResidual(FenicsMeshFixtures):
 
     def test_init(
             self,
-            ResidualClass: solid.PredefinedFenicsResidual,
+            ResidualClass: solid.PredefinedSolidResidual,
             mesh: dfn.Mesh,
             mesh_functions: list[dfn.MeshFunction],
             mesh_subdomains
