@@ -10,7 +10,7 @@ from jax import numpy as jnp
 import jax
 
 from femvf.equations.smoothapproximation import wavg, smooth_min_weight
-from .base import JaxResidual, PredefinedJaxResidual
+from .base import JaxResidual
 
 
 ## Common bernoulli fluid functions
@@ -35,6 +35,23 @@ def bernoullip_from_q_psep(qsub, psep, area_sep, area, rho):
 
 
 ## Fluid residual classes
+
+class PredefinedJaxResidual(JaxResidual):
+    """
+    Predefined `JaxResidual`
+    """
+
+    def __init__(self, mesh: NDArray, *args, **kwargs):
+        res, res_args = self._make_residual(mesh, *args, **kwargs)
+        super().__init__(res, res_args)
+
+        self._mesh = mesh
+
+    def mesh(self):
+        return self._mesh
+
+    def _make_residual(self, mesh, *args, **kwargs):
+        raise NotImplementedError("Subclasses must implement this method")
 
 class BernoulliFixedSep(PredefinedJaxResidual):
 

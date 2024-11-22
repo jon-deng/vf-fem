@@ -16,10 +16,7 @@ class BaseResidual:
     pass
     # _res: Any
 
-# A `DirichletBCTuple` consists of (dirichlet value, element_type, subdomain)
-# `element_type` is the topology to apply the BC over, for example facet applies
-# dirichlet BCs over facets
-# `subdomain` is a string in `mesh_subdomains` indicating which part of the domain to apply it on
+
 DirichletBCTuple = tuple[Any, str, str]
 
 class FenicsResidual(BaseResidual):
@@ -113,42 +110,6 @@ class FenicsResidual(BaseResidual):
         return self._fixed_facet_labels
 
 
-class PredefinedFenicsResidual(FenicsResidual):
-    """
-    Class representing a pre-defined residual
-    """
-
-    # TODO: Think what fully characterizes this class? pass into __init__
-    def __init__(
-        self,
-        mesh: dfn.Mesh,
-        mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]],
-        dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
-    ):
-
-        form = self.init_form(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
-        super().__init__(
-            form,
-            mesh,
-            mesh_functions,
-            mesh_subdomains,
-            dirichlet_bcs=dirichlet_bcs
-        )
-
-    def init_form(
-        self,
-        mesh: dfn.Mesh,
-        mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
-    ) -> dfn.Form:
-        raise NotImplementedError()
-
-
 # TODO: Formalize the jax residual more with argument size/shape definitions?
 # The Jax residual is kind of fragile since you just have to create arrays
 # and arguments etc. in the right sizes and shapes based on how you coded the
@@ -175,22 +136,3 @@ class JaxResidual(BaseResidual):
     @property
     def res_args(self):
         return self._res_args
-
-
-class PredefinedJaxResidual(JaxResidual):
-    """
-    Predefined `JaxResidual`
-    """
-
-    def __init__(self, mesh: NDArray, *args, **kwargs):
-        res, res_args = self._make_residual(mesh, *args, **kwargs)
-        super().__init__(res, res_args)
-
-        self._mesh = mesh
-
-    def mesh(self):
-        return self._mesh
-
-    def _make_residual(self, mesh, *args, **kwargs):
-        raise NotImplementedError("Subclasses must implement this method")
-

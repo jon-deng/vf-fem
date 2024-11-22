@@ -6,17 +6,14 @@ References
 [Gou2016] Gou, K., Pence, T.J. Hyperelastic modeling of swelling in fibrous soft tissue with application to tracheal angioedema. J. Math. Biol. 72, 499-526 (2016). https://doi.org/10.1007/s00285-015-0893-0
 """
 
-from typing import Mapping, Union
+from typing import Mapping, Union, Any, Optional
 
-import operator
-import warnings
 from functools import reduce
 
-import numpy as np
 import dolfin as dfn
 import ufl
 
-from .base import FenicsResidual, PredefinedFenicsResidual
+from .base import FenicsResidual, DirichletBCTuple
 
 from femvf.equations import form as _form
 from femvf.meshutils import mesh_element_type_dim
@@ -28,12 +25,9 @@ FunctionSpace = Union[ufl.FunctionSpace, dfn.FunctionSpace]
 CoefficientMapping = Mapping[str, DfnFunction]
 FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
 
-## Utilities for handling Fenics functions
-
-# These are used to treat `ufl.Constant` and `dfn.Function` uniformly
-
-## Residual definitions
-
+## Utilities to get measures
+# These are for getting measures over different dimensions of geometry
+# for example, volume, face, etc.
 
 def get_measure(
     mesh_element_type: str | int,
@@ -107,6 +101,43 @@ def subdomain_measure(
         return measure('everywhere')
     else:
         return measure(subdomain_to_marker[subdomain_id])
+
+## Residual definitions
+
+class PredefinedFenicsResidual(FenicsResidual):
+    """
+    Class representing a pre-defined residual
+    """
+
+    # TODO: Think what fully characterizes this class? pass into __init__
+    def __init__(
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: list[dfn.MeshFunction],
+        mesh_subdomains: list[Mapping[str, int]],
+        dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
+    ):
+
+        form = self.init_form(
+            mesh,
+            mesh_functions,
+            mesh_subdomains
+        )
+        super().__init__(
+            form,
+            mesh,
+            mesh_functions,
+            mesh_subdomains,
+            dirichlet_bcs=dirichlet_bcs
+        )
+
+    def init_form(
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: list[dfn.MeshFunction],
+        mesh_subdomains: list[Mapping[str, int]]
+    ) -> dfn.Form:
+        raise NotImplementedError()
 
 # NOTE: All the forms below apply a traction over a facet subdomain named
 # 'traction'
