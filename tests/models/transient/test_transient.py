@@ -58,7 +58,7 @@ class TestFluid:
         FluidModel: flr.PredefinedJaxResidual,
         mesh: NDArray
     ):
-        assert FluidModel(mesh)
+        assert fld.Model(FluidModel(mesh))
 
     # TODO: Think of ways you can test a model is working properly?
 
