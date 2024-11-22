@@ -8,6 +8,7 @@ import numpy as np
 import dolfin as dfn
 
 from . import meshutils
+from femvf.residuals import solid as slr
 from .models.transient import (
     solid as tsmd,
     fluid as tfmd,
@@ -18,7 +19,7 @@ from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
 SolidModel = Union[tsmd.Model, dsmd.Model]
 FluidModel = Union[tfmd.Model, dfmd.Model]
-SolidClass = Union[Type[tsmd.Model], Type[dsmd.Model]]
+SolidClass = slr.PredefinedSolidResidual
 FluidClass = Union[Type[tfmd.Model], Type[dfmd.Model]]
 
 Labels = list[str]
@@ -121,7 +122,7 @@ def load_fluid_model(
 def load_transient_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
-    SolidType: SolidClass = tsmd.KelvinVoigt,
+    SolidType: SolidClass = slr.KelvinVoigt,
     FluidType: FluidClass = tfmd.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
@@ -195,7 +196,7 @@ def load_transient_fsi_model(
 def load_dynamical_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
-    SolidType: SolidClass = dsmd.KelvinVoigt,
+    SolidType: SolidClass = slr.KelvinVoigt,
     FluidType: FluidClass = dfmd.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
@@ -264,7 +265,7 @@ def load_transient_fsai_model(
     solid_mesh: str,
     fluid_mesh: Any,
     acoustic: tamd.Acoustic1D,
-    SolidType: SolidClass = tsmd.KelvinVoigt,
+    SolidType: SolidClass = slr.KelvinVoigt,
     FluidType: FluidClass = tfmd.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
