@@ -8,7 +8,7 @@ import numpy as np
 import dolfin as dfn
 
 from . import meshutils
-from femvf.residuals import solid as slr
+from femvf.residuals import solid as slr, fluid as flr
 from .models.transient import (
     solid as tsmd,
     fluid as tfmd,
@@ -123,7 +123,7 @@ def load_transient_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
     SolidType: SolidClass = slr.KelvinVoigt,
-    FluidType: FluidClass = tfmd.BernoulliAreaRatioSep,
+    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
     separation_vertex_label: str = 'separation',
@@ -266,7 +266,7 @@ def load_transient_fsai_model(
     fluid_mesh: Any,
     acoustic: tamd.Acoustic1D,
     SolidType: SolidClass = slr.KelvinVoigt,
-    FluidType: FluidClass = tfmd.BernoulliAreaRatioSep,
+    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
     coupling: str = 'explicit',
@@ -312,7 +312,7 @@ def load_transient_fsai_model(
 # the function should take a loaded solid model and derive a fluid mesh from it
 def derive_1dfluid_from_2dsolid(
     solid: SolidModel,
-    FluidType: FluidClass = tfmd.BernoulliAreaRatioSep,
+    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
 ) -> Tuple[FluidModel, np.ndarray]:
@@ -359,7 +359,7 @@ def derive_1dfluid_from_2dsolid(
             dfmd.LinearizedBernoulliFixedSep,
             dfmd.BernoulliFlowFixedSep,
             dfmd.LinearizedBernoulliFlowFixedSep,
-            tfmd.BernoulliFixedSep,
+            flr.BernoulliFixedSep,
         ),
     ):
         sep_vert = locate_separation_vertex(solid, separation_vertex_label)
@@ -382,7 +382,7 @@ def derive_1dfluid_from_2dsolid(
 
 def derive_1dfluid_from_3dsolid(
     solid: SolidModel,
-    FluidType: FluidClass = tfmd.BernoulliAreaRatioSep,
+    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
     zs: Optional[np.typing.NDArray[int]] = None,
@@ -436,7 +436,7 @@ def derive_1dfluid_from_3dsolid(
                 dfmd.LinearizedBernoulliFixedSep,
                 dfmd.BernoulliFlowFixedSep,
                 dfmd.LinearizedBernoulliFlowFixedSep,
-                tfmd.BernoulliFixedSep,
+                flr.BernoulliFixedSep,
             ),
         ):
             # TODO: For this to work you should generalize a fixed separation point

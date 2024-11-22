@@ -2,12 +2,14 @@
 Test transient models
 """
 
+from numpy.typing import NDArray
+
 import pytest
 
 import numpy as np
 import dolfin as dfn
 
-from femvf.residuals import solid as slr
+from femvf.residuals import solid as slr, fluid as flr
 from femvf.models.transient import solid as sld, fluid as fld, coupled as cpd
 from femvf.load import derive_1dfluid_from_2dsolid, derive_1dfluid_from_3dsolid
 
@@ -46,16 +48,16 @@ class TestFluid:
         return np.linspace(0, 1, 11)
 
     @pytest.fixture(
-        params=[fld.BernoulliSmoothMinSep, fld.BernoulliFixedSep, fld.BernoulliAreaRatioSep]
+        params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
     )
     def FluidModel(self, request):
         return request.param
 
     def test_init(
-            self,
-            FluidModel,
-            mesh
-        ):
+        self,
+        FluidModel: flr.PredefinedJaxResidual,
+        mesh: NDArray
+    ):
         assert FluidModel(mesh)
 
     # TODO: Think of ways you can test a model is working properly?
@@ -70,7 +72,7 @@ class TestCoupled(FenicsMeshFixtures):
         return request.param
 
     @pytest.fixture(
-        params=[fld.BernoulliSmoothMinSep, fld.BernoulliFixedSep, fld.BernoulliAreaRatioSep]
+        params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
     )
     def FluidModel(self, request):
         return request.param

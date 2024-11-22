@@ -92,39 +92,3 @@ class Model(base.BaseTransientModel):
         """
         info = {}
         return self.state1 - self.assem_res(), info
-
-
-class PredefinedModel(Model):
-    def __init__(self, mesh: ArrayLike, *args, **kwargs):
-        residual = self._make_residual(mesh, *args, **kwargs)
-        super().__init__(residual)
-
-    def _make_residual(self, mesh: ArrayLike, *args, **kwargs):
-        raise NotImplementedError("Subclasses must implement this method")
-
-
-class BernoulliSmoothMinSep(PredefinedModel):
-    """
-    Bernoulli fluid model with separation at the minimum
-    """
-
-    def _make_residual(self, mesh):
-        return fluid.BernoulliSmoothMinSep(mesh)
-
-
-class BernoulliFixedSep(PredefinedModel):
-    """
-    Bernoulli fluid model with separation at the minimum
-    """
-
-    def _make_residual(self, mesh, idx_sep=0):
-        return fluid.BernoulliFixedSep(mesh, idx_sep=idx_sep)
-
-
-class BernoulliAreaRatioSep(PredefinedModel):
-    """
-    Bernoulli fluid model with separation at the minimum
-    """
-
-    def _make_residual(self, mesh):
-        return fluid.BernoulliAreaRatioSep(mesh)
