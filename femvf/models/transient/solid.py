@@ -80,6 +80,16 @@ class Model(base.BaseTransientModel):
 
     def __init__(self, residual: solid.FenicsResidual):
 
+        # Modify the input residual + form with newmark time-discretization
+
+        new_form = form.modify_newmark_time_discretization(residual.form)
+        residual = solid.FenicsResidual(
+            new_form,
+            residual._mesh,
+            residual._mesh_functions,
+            residual._mesh_subdomains
+        )
+
         self._residual = residual
 
         bilinear_forms = form.gen_residual_bilinear_forms(self.residual.form)
