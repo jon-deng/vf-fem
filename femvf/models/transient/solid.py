@@ -398,46 +398,7 @@ class Model(base.BaseTransientModel):
         return x
 
 
-class PredefinedModel(Model):
-    def __init__(
-        self,
-        mesh: dfn.Mesh,
-        mesh_functions: Tuple[dfn.MeshFunction],
-        mesh_subdomains: Tuple[Mapping[str, int]],
-        fsi_facet_labels: Tuple[str],
-        fixed_facet_labels: Tuple[str],
-    ):
-        residual = self._make_residual(
-            mesh,
-            mesh_functions,
-            mesh_subdomains,
-            fsi_facet_labels,
-            fixed_facet_labels,
-        )
-
-        new_form = form.modify_newmark_time_discretization(residual.form)
-        new_residual = solid.FenicsResidual(
-            new_form,
-            mesh,
-            mesh_functions,
-            mesh_subdomains,
-            fsi_facet_labels,
-            fixed_facet_labels,
-        )
-        super().__init__(new_residual)
-
-    def _make_residual(
-        self,
-        mesh: dfn.Mesh,
-        mesh_functions: Tuple[dfn.MeshFunction],
-        mesh_subdomains: Tuple[Mapping[str, int]],
-        fsi_facet_labels: Tuple[str],
-        fixed_facet_labels: Tuple[str],
-    ) -> solid.FenicsResidual:
-        raise NotImplementedError()
-
-
-class NodalContactSolid(PredefinedModel):
+class NodalContactModel(Model):
     """
     This class modifies the default behaviour of the solid to implement contact
     pressures interpolated with the displacement function space. This involves
@@ -523,7 +484,49 @@ class NodalContactSolid(PredefinedModel):
         return dfu2_du2_contact
 
 
-class Rayleigh(NodalContactSolid):
+class PredefinedModel(NodalContactModel):
+    def __init__(
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_subdomains: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ):
+        residual = self._make_residual(
+            mesh,
+            mesh_functions,
+            mesh_subdomains,
+            fsi_facet_labels,
+            fixed_facet_labels,
+        )
+
+        new_form = form.modify_newmark_time_discretization(residual.form)
+        new_residual = solid.FenicsResidual(
+            new_form,
+            mesh,
+            mesh_functions,
+            mesh_subdomains,
+            fsi_facet_labels,
+            fixed_facet_labels,
+        )
+        super().__init__(new_residual)
+
+    def _make_residual(
+        self,
+        mesh: dfn.Mesh,
+        mesh_functions: Tuple[dfn.MeshFunction],
+        mesh_subdomains: Tuple[Mapping[str, int]],
+        fsi_facet_labels: Tuple[str],
+        fixed_facet_labels: Tuple[str],
+    ) -> solid.FenicsResidual:
+        raise NotImplementedError()
+
+
+
+
+
+class Rayleigh(PredefinedModel):
     """
     Represents the governing equations of Rayleigh damped solid
     """
@@ -545,7 +548,7 @@ class Rayleigh(NodalContactSolid):
         )
 
 
-class KelvinVoigt(NodalContactSolid):
+class KelvinVoigt(PredefinedModel):
     """
     Represents the governing equations of a Kelvin-Voigt damped solid
     """
@@ -567,7 +570,7 @@ class KelvinVoigt(NodalContactSolid):
         )
 
 
-class KelvinVoigtWEpithelium(NodalContactSolid):
+class KelvinVoigtWEpithelium(PredefinedModel):
 
     def _make_residual(
         self,
@@ -586,7 +589,7 @@ class KelvinVoigtWEpithelium(NodalContactSolid):
         )
 
 
-class KelvinVoigtWShape(NodalContactSolid):
+class KelvinVoigtWShape(PredefinedModel):
     """
     Represents the governing equations of a Kelvin-Voigt damped solid
     """
@@ -608,7 +611,7 @@ class KelvinVoigtWShape(NodalContactSolid):
         )
 
 
-class IncompSwellingKelvinVoigt(NodalContactSolid):
+class IncompSwellingKelvinVoigt(PredefinedModel):
     """
     Kelvin Voigt model allowing for a swelling field
     """
@@ -630,7 +633,7 @@ class IncompSwellingKelvinVoigt(NodalContactSolid):
         )
 
 
-class SwellingKelvinVoigt(NodalContactSolid):
+class SwellingKelvinVoigt(PredefinedModel):
     """
     Kelvin Voigt model allowing for a swelling field
     """
@@ -652,7 +655,7 @@ class SwellingKelvinVoigt(NodalContactSolid):
         )
 
 
-class SwellingKelvinVoigtWEpithelium(NodalContactSolid):
+class SwellingKelvinVoigtWEpithelium(PredefinedModel):
 
     def _make_residual(
         self,
@@ -671,7 +674,7 @@ class SwellingKelvinVoigtWEpithelium(NodalContactSolid):
         )
 
 
-class SwellingKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
+class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedModel):
 
     def _make_residual(
         self,
@@ -690,7 +693,7 @@ class SwellingKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
         )
 
 
-class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
+class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedModel):
 
     def _make_residual(
         self,
@@ -709,7 +712,7 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(NodalContactSolid):
         )
 
 
-class Approximate3DKelvinVoigt(NodalContactSolid):
+class Approximate3DKelvinVoigt(PredefinedModel):
 
     def _make_residual(
         self,
