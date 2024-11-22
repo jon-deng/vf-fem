@@ -9,7 +9,7 @@ xt = [qt, pt]
 and where q and p stand for flow and pressure for a 1D fluid model
 """
 
-from typing import Tuple, Callable, Mapping, Union, Any, List
+from typing import Callable, Union, Any
 from numpy.typing import ArrayLike
 import numpy as np
 import jax
@@ -22,18 +22,18 @@ from femvf.residuals import fluid
 from ..jaxutils import blockvec_to_dict, flatten_nested_dict
 
 # pylint: disable=missing-docstring
-DictVec = Mapping[str, ArrayLike]
+DictVec = dict[str, ArrayLike]
 
-JaxResidualArgs = Tuple[DictVec, DictVec, DictVec]
-JaxLinearizedResidualArgs = Tuple[
-    DictVec, DictVec, DictVec, Tuple[DictVec, DictVec, DictVec]
+JaxResidualArgs = tuple[DictVec, DictVec, DictVec]
+JaxLinearizedResidualArgs = tuple[
+    DictVec, DictVec, DictVec, tuple[DictVec, DictVec, DictVec]
 ]
 
 JaxResidualFunction = Callable[JaxResidualArgs, DictVec]
 JaxLinearizedResidualFunction = Callable[JaxLinearizedResidualArgs, DictVec]
 
-Residual = Tuple[
-    ArrayLike, Tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector], Callable
+Residual = tuple[
+    ArrayLike, tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector], Callable
 ]
 
 Test = Union[JaxResidualFunction, JaxLinearizedResidualFunction]

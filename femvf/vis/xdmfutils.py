@@ -2,7 +2,7 @@
 Utilities for creating XDMF files
 """
 
-from typing import Union, Tuple, Optional, List, Callable
+from typing import Union, Optional, Callable
 
 from os import path
 
@@ -21,10 +21,10 @@ from femvf.models.transient import BaseTransientModel
 Model = BaseTransientModel
 
 AxisSize = int
-Shape = Tuple[AxisSize, ...]
+Shape = tuple[AxisSize, ...]
 
 AxisIndex = Union[int, slice, type(Ellipsis)]
-AxisIndices = Tuple[AxisIndex, ...]
+AxisIndices = tuple[AxisIndex, ...]
 
 # This is a tuple consisting of:
 # an `h5py.Dataset` object containing the data
@@ -32,7 +32,7 @@ AxisIndices = Tuple[AxisIndex, ...]
 # a string (eg. 'node', 'center') indicating where data is located
 XDMFValueType = str
 XDMFValueCenter = str
-DatasetDescription = Tuple[h5py.Dataset, XDMFValueType, XDMFValueCenter]
+DatasetDescription = tuple[h5py.Dataset, XDMFValueType, XDMFValueCenter]
 
 
 class XDMFArray:
@@ -185,19 +185,19 @@ Format = Union[None, dfn.FunctionSpace]
 
 
 def export_mesh_values(
-    datasets: List[Union[h5py.Dataset, h5py.Group]],
-    formats: List[Format],
+    datasets: list[Union[h5py.Dataset, h5py.Group]],
+    formats: list[Format],
     output_group: h5py.Group,
-    output_names: Optional[List[str]] = None,
+    output_names: Optional[list[str]] = None,
 ):
     """
     Export finite element and other data to mesh based data
 
     Parameters
     ----------
-    datasets: List[Union[h5py.Dataset, h5py.Group]]
+    datasets: list[Union[h5py.Dataset, h5py.Group]]
         A list of datasets
-    formats: List[Format]
+    formats: list[Format]
         A list of dataset formats
 
         If the dataset format is `None`, the dataset is assumed to represent
@@ -310,11 +310,11 @@ def export_group(input_group: h5py.Group, output_group: h5py.Group, idx=None):
 
 def write_xdmf(
     mesh_group: h5py.Group,
-    static_dataset_descrs: List[DatasetDescription] = None,
-    static_dataset_idxs: List[AxisIndices] = None,
+    static_dataset_descrs: list[DatasetDescription] = None,
+    static_dataset_idxs: list[AxisIndices] = None,
     time_dataset: h5py.Dataset = None,
-    temporal_dataset_descrs: List[DatasetDescription] = None,
-    temporal_dataset_idxs: List[AxisIndices] = None,
+    temporal_dataset_descrs: list[DatasetDescription] = None,
+    temporal_dataset_idxs: list[AxisIndices] = None,
     xdmf_fpath: Optional[str] = None,
 ) -> str:
     """
@@ -324,7 +324,7 @@ def write_xdmf(
     ----------
     mesh_group: h5py.Group
         A group containing mesh information for the datasets
-    static_dataset_descrs: List[DatasetDescription]
+    static_dataset_descrs: list[DatasetDescription]
         A list of static datasets and info on how they are placed on the mesh
 
         Each element of the list should be a tuple with the format
@@ -335,13 +335,13 @@ def write_xdmf(
             ('scalar', 'vector', ...)
             - `XDFMValueCenter` is a string indicating where values are located
             on the mesh ('node', 'center', ...)
-    static_dataset_idxs: List[AxisIndices]
+    static_dataset_idxs: list[AxisIndices]
         Indices into the datasets
     time_dataset: h5py.Dataset
         A dataset containing simulation times
-    temporal_dataset_descrs: List[DatasetDescription]
+    temporal_dataset_descrs: list[DatasetDescription]
         A list of temporal datasets and info on how they are placed on the mesh
-    temporal_dataset_idxs: List[AxisIndices]
+    temporal_dataset_idxs: list[AxisIndices]
         Indices into the datasets
     xdmf_fpath: Optional[str]
         The path to the XDMF file
@@ -422,8 +422,8 @@ def add_xdmf_uniform_grid(
     parent: Element,
     grid_name: str,
     mesh_group: h5py.Group,
-    dataset_descrs: List[DatasetDescription],
-    dataset_idxs: List[AxisIndices],
+    dataset_descrs: list[DatasetDescription],
+    dataset_idxs: list[AxisIndices],
     time: float = None,
     xdmf_dir: str = '.',
 ):

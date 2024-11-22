@@ -5,7 +5,7 @@ These objects should mappings from a given parameter set to the standard
 properties of the forward model.
 """
 
-from typing import Mapping, Union, Optional, Callable, Tuple
+from typing import Union, Optional, Callable
 from numpy.typing import NDArray
 
 from functools import reduce
@@ -24,7 +24,7 @@ from blockarray import typing
 
 
 Model = Union[BaseDynamicalModel, BaseTransientModel]
-BlockVectorDict = Mapping[str, NDArray]
+BlockVectorDict = dict[str, NDArray]
 
 
 class Transform:
@@ -353,7 +353,7 @@ class JaxTransform(Transform):
 
     def __init__(
         self,
-        x_y_map: Tuple[
+        x_y_map: tuple[
             bv.BlockVector, bv.BlockVector, Callable[[BlockVectorDict], BlockVectorDict]
         ],
     ):
@@ -583,12 +583,12 @@ class ExtractSubset(JaxTransformFromY):
         return x, map
 
 
-def bvec_to_dict(x: bv.BlockVector) -> Mapping[str, np.ndarray]:
+def bvec_to_dict(x: bv.BlockVector) -> dict[str, np.ndarray]:
     return {label: subvec for label, subvec in x.sub_items()}
 
 
 def dict_to_bvec(
-    y: Mapping[str, np.ndarray], labels: Optional[typing.MultiLabels] = None
+    y: dict[str, np.ndarray], labels: Optional[typing.MultiLabels] = None
 ) -> bv.BlockVector:
     if labels is None:
         labels = (tuple(y.keys()),)
@@ -596,5 +596,5 @@ def dict_to_bvec(
     return bv.BlockVector(subvecs, labels=labels)
 
 
-def jax_to_numpy_dict(dict: Mapping[str, NDArray]):
+def jax_to_numpy_dict(dict: dict[str, NDArray]):
     return {key: np.array(value) for key, value in dict.items()}

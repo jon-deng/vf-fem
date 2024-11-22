@@ -19,7 +19,7 @@ approach is a little trickier as the jacobian dFu/du1 would change since u0 must
 be linked to u1.
 """
 
-from typing import Tuple, Mapping, Any
+from typing import Any
 
 import dolfin as dfn
 import ufl
@@ -37,7 +37,7 @@ from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
 dfn.set_log_level(50)
 
-Info = Mapping[str, Any]
+Info = dict[str, Any]
 
 
 def _add_static_docstring(func):
@@ -71,7 +71,7 @@ def static_solid_configuration(
     prop: bv.BlockVector,
     state=None,
     solver: str = 'manual',
-) -> Tuple[bv.BlockVector, Info]:
+) -> tuple[bv.BlockVector, Info]:
     """
     Return the static state for a solid model
 
@@ -199,7 +199,7 @@ def static_coupled_configuration_picard(
     model: transient.BaseTransientFSIModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
-) -> Tuple[bv.BlockVector, Info]:
+) -> tuple[bv.BlockVector, Info]:
     """
     Solve for the static state of a coupled model
 
@@ -262,7 +262,7 @@ def static_coupled_configuration_newton(
     control: bv.BlockVector,
     prop: bv.BlockVector,
     dt: float = 1e6,
-) -> Tuple[bv.BlockVector, Info]:
+) -> tuple[bv.BlockVector, Info]:
     """
     Return the static equilibrium state for a coupled model
 

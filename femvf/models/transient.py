@@ -2,7 +2,7 @@
 This module defines the basic interface for a transient model.
 """
 
-from typing import TypeVar, Union, Tuple, Mapping, Optional, Any, List
+from typing import TypeVar, Union, Optional, Any
 from numpy.typing import NDArray
 
 from petsc4py import PETSc
@@ -15,7 +15,6 @@ from blockarray import blockvec as bv, blockmat as bm
 from blockarray.subops import diag_mat, zero_mat
 
 import functools
-from typing import Tuple, Mapping, Union
 
 from femvf.residuals import solid as slr, fluid as flr
 from femvf.solverconst import DEFAULT_NEWTON_SOLVER_PRM
@@ -132,8 +131,8 @@ class BaseTransientModel:
 
     ## Solver methods
     def solve_state1(
-        self, state1: BlockVec, options: Optional[Mapping[str, Any]]
-    ) -> Tuple[BlockVec, Mapping[str, Any]]:
+        self, state1: BlockVec, options: Optional[dict[str, Any]]
+    ) -> tuple[BlockVec, dict[str, Any]]:
         """
         Solve for the final state for the time step
 
@@ -178,7 +177,7 @@ def depack_form_coefficient_function(form_coefficient):
     """
     #
     if isinstance(form_coefficient, tuple):
-        # Tuple coefficients consist of a `(function, ufl_object)` tuple
+        # tuple coefficients consist of a `(function, ufl_object)` tuple
         coefficient, _ = form_coefficient
     else:
         coefficient = form_coefficient
@@ -726,9 +725,9 @@ class BaseTransientFSIModel(BaseTransientModel):
     ----------
     solid : Solid
         A solid model object
-    fluids : List[Fluid]
+    fluids : list[Fluid]
         A collection of 1D fluid model objects
-    solid_fsi_dofs, fluid_fsi_dofs : Union[List[NDArray], NDArray]
+    solid_fsi_dofs, fluid_fsi_dofs : Union[list[NDArray], NDArray]
         A collection of corresponding DOF arrays for fluid/structure interaction
         on the solid and fluid models, respectively.
         If there are `n` fluid models, then there must be `n` DOF arrays on both
@@ -739,9 +738,9 @@ class BaseTransientFSIModel(BaseTransientModel):
     def __init__(
         self,
         solid: FenicsModel,
-        fluids: Union[List[JaxModel], JaxModel],
-        solid_fsi_dofs: Union[List[NDArray], NDArray],
-        fluid_fsi_dofs: Union[List[NDArray], NDArray],
+        fluids: Union[list[JaxModel], JaxModel],
+        solid_fsi_dofs: Union[list[NDArray], NDArray],
+        fluid_fsi_dofs: Union[list[NDArray], NDArray],
     ):
         if isinstance(fluids, list):
             fluids = tuple(fluids)

@@ -4,7 +4,7 @@ Integrate models in time
 Uses CGS (cm-g-s) units unless otherwise stated
 """
 
-from typing import List, Optional, Mapping, Any, Tuple
+from typing import Optional, Any
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
@@ -15,7 +15,7 @@ from .models.transient import BaseTransientModel
 from . import statefile as sf
 
 # @profile
-Options = Mapping[str, Any]
+Options = dict[str, Any]
 Info = Options
 
 
@@ -23,14 +23,14 @@ def integrate(
     model: BaseTransientModel,
     f: sf.StateFile,
     ini_state: bv.BlockVector,
-    controls: List[bv.BlockVector],
+    controls: list[bv.BlockVector],
     prop: bv.BlockVector,
     times: ArrayLike,
     idx_meas: Optional[np.ndarray] = None,
-    newton_solver_prm: Optional[Mapping[str, Any]] = None,
+    newton_solver_prm: Optional[dict[str, Any]] = None,
     write: bool = True,
     use_tqdm: bool = False,
-) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
+) -> tuple[bv.BlockVector, dict[str, Any]]:
     """
     Integrate the model over a set of time instances
 
@@ -41,7 +41,7 @@ def integrate(
     ini_state : BlockVector
         Initial state of the system (for example: displacement, velocity, acceleration)
     controls : list(BlockVector)
-        List of control BlockVector with on entry for each integration time.
+        list of control BlockVector with on entry for each integration time.
         If there is only one control in the list, then the controls are considered to be constant in time.
     prop : BlockVector
         Properties vector for the system
@@ -110,7 +110,7 @@ def integrate_extend(
     idx_meas: np.ndarray = None,
     newton_solver_prm: Optional[Options] = None,
     write: bool = True,
-) -> Tuple[bv.BlockVector, Info]:
+) -> tuple[bv.BlockVector, Info]:
     """
     See `integrate`
     """
@@ -140,14 +140,14 @@ def integrate_steps(
     model: BaseTransientModel,
     f: sf.StateFile,
     ini_state: bv.BlockVector,
-    controls: List[bv.BlockVector],
+    controls: list[bv.BlockVector],
     prop: bv.BlockVector,
     times: ArrayLike,
     idx_meas: Optional[np.ndarray] = None,
-    newton_solver_prm: Optional[Mapping[str, Any]] = None,
+    newton_solver_prm: Optional[dict[str, Any]] = None,
     write: bool = True,
     use_tqdm: bool = False,
-) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
+) -> tuple[bv.BlockVector, dict[str, Any]]:
     """
     See `integrate`
     """
@@ -190,7 +190,7 @@ def integrate_linear(
     model: BaseTransientModel,
     f: sf.StateFile,
     dini_state: bv.BlockVector,
-    dcontrols: List[bv.BlockVector],
+    dcontrols: list[bv.BlockVector],
     dprop: bv.BlockVector,
     dtimes: ArrayLike,
 ) -> bv.BlockVector:
@@ -252,7 +252,7 @@ def integrate_step(
     dt: float,
     set_prop: bool = False,
     options: Options = None,
-) -> Tuple[bv.BlockVector, Mapping[str, Any]]:
+) -> tuple[bv.BlockVector, dict[str, Any]]:
     """
     Integrate a model over a single time step
 

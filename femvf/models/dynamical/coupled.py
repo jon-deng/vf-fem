@@ -2,7 +2,7 @@
 Contains class definitions for coupled dynamical systems models
 """
 
-from typing import List, Union
+from typing import Union
 from numpy.typing import NDArray
 
 import dolfin as dfn
@@ -28,9 +28,9 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
     def __init__(
         self,
         solid: Model,
-        fluids: Union[List[Model], Model],
-        solid_fsi_dofs: Union[List[NDArray], NDArray],
-        fluid_fsi_dofs: Union[List[NDArray], NDArray],
+        fluids: Union[list[Model], Model],
+        solid_fsi_dofs: Union[list[NDArray], NDArray],
+        fluid_fsi_dofs: Union[list[NDArray], NDArray],
     ):
         if isinstance(fluids, list):
             fluids = tuple(fluids)
@@ -299,7 +299,7 @@ class BaseLinearizedDynamicalFSIModel(
     def __init__(
         self,
         solid: LinearizedModel,
-        fluids: [List[LinearizedModel]],
+        fluids: [list[LinearizedModel]],
         solid_fsi_dofs,
         fluid_fsi_dofs,
     ):

@@ -2,7 +2,7 @@
 Base residual class definitions
 """
 
-from typing import Callable, Tuple, Mapping, Union, Optional, Any
+from typing import Callable, Union, Optional, Any
 from numpy.typing import NDArray
 
 import dolfin as dfn
@@ -33,7 +33,7 @@ class FenicsResidual(BaseResidual):
         form: UFLForm,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]],
+        mesh_subdomains: list[dict[str, int]],
         dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
     ):
 
@@ -85,7 +85,7 @@ class FenicsResidual(BaseResidual):
 
     def mesh_subdomain(
         self, mesh_element_type: Union[str, int]
-    ) -> Mapping[str, int]:
+    ) -> dict[str, int]:
         idx = mesh_element_type_dim(mesh_element_type)
         return self._mesh_subdomains[idx]
 
@@ -116,8 +116,8 @@ class FenicsResidual(BaseResidual):
 # and arguments etc. in the right sizes and shapes based on how you coded the
 # `res` function
 
-ResArgs = Tuple[Mapping[str, NDArray], ...]
-ResReturn = Mapping[str, NDArray]
+ResArgs = tuple[dict[str, NDArray], ...]
+ResReturn = dict[str, NDArray]
 
 class JaxResidual(BaseResidual):
     """

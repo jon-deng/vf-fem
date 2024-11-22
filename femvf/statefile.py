@@ -7,7 +7,7 @@ Module to work with state values from a forward pass stored in an hdf5 file.
 # so you may have to fix bugs that are associated with this if you want to use time-varying
 # fluid/solid parameters
 
-from typing import Union, Tuple, Optional, Mapping, Any
+from typing import Union, Any
 from collections import OrderedDict
 
 import h5py
@@ -329,7 +329,7 @@ class StateFile:
         dset.resize(dset.shape[0] + 1, axis=0)
         dset[-1] = index
 
-    def append_solver_info(self, solver_info: Mapping[str, Any]):
+    def append_solver_info(self, solver_info: dict[str, Any]):
         solver_info_group = self.file['solver_info']
         for key, dset in solver_info_group.items():
             dset.resize(dset.shape[0] + 1, axis=0)
@@ -414,7 +414,7 @@ class StateFile:
                 vec[()] = dset[()]
         return properties
 
-    def get_solver_info(self, n) -> Mapping[str, np.ndarray]:
+    def get_solver_info(self, n) -> dict[str, np.ndarray]:
         solver_info_group = self.file['solver_info']
         solver_info = {
             key: solver_info_group[key][n] for key in solver_info_group.keys()

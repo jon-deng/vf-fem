@@ -2,7 +2,7 @@
 Functionality for dealing with meshes
 """
 
-from typing import List, Tuple, Mapping, Any
+from typing import Any
 from os import path
 import warnings
 
@@ -60,7 +60,7 @@ def mesh_element_type_dim(element_type: str | int) -> int:
 
 def load_fenics_gmsh(
     mesh_path: str
-) -> Tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:
+) -> tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:
     """
     Return a `dfn.mesh` and mesh function info from a gmsh '.msh' file
 
@@ -163,7 +163,7 @@ def load_fenics_gmsh(
     return dfn_mesh, tuple(mesh_funcs), tuple(mesh_subdomains)
 
 
-def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
+def _split_meshio_cells(mesh: mio.Mesh) -> list[mio.Mesh]:
     """
     Return each cell block of a `mio.Mesh` instance as a separate mesh
 
@@ -174,7 +174,7 @@ def _split_meshio_cells(mesh: mio.Mesh) -> List[mio.Mesh]:
 
     Returns
     -------
-    List[mio.Mesh]
+    list[mio.Mesh]
         A list of `mio.Mesh` instances corresponding to each cell block
     """
     meshes = [
@@ -208,7 +208,7 @@ def _dim_from_type(cell_type: str) -> int:
 
 # Load a mesh from the FEniCS .xml format
 # This format is no longer updated/promoted by FEniCS
-def load_fenics_xml(mesh_path: str) -> Tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:
+def load_fenics_xml(mesh_path: str) -> tuple[dfn.Mesh, MeshFunctions, MeshSubdomainsData]:
     """
     Return a `dfn.mesh` and mesh function info from a FEniCS '.xml' file
 
@@ -502,9 +502,9 @@ def dofs_from_mesh_func(
 def process_meshlabel_to_dofs(
     mesh: dfn.Mesh,
     mesh_func: dfn.MeshFunction,
-    label_to_meshfunc: Mapping[str, int],
+    label_to_meshfunc: dict[str, int],
     dofmap: dfn.DofMap,
-) -> Mapping[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Return a mapping from mesh region labels to associated DOFs
 
@@ -513,7 +513,7 @@ def process_meshlabel_to_dofs(
     mesh: dfn.Mesh
     mesh_func: dfn.MeshFunction
         The mesh function use to specify the mesh region
-    label_to_meshfunc: Mapping[str, int]
+    label_to_meshfunc: dict[str, int]
         A mapping from labels to integer ids corresponding to mesh regions
     dofmap:
         The Dofmap from the desired function space
@@ -534,7 +534,7 @@ def process_meshlabel_to_dofs(
 
 def process_celllabel_to_dofs_from_residual(
     residual: "FenicsResidual", dofmap: dfn.DofMap
-) -> Mapping[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Return a mapping from mesh region labels to associated DOFs
 

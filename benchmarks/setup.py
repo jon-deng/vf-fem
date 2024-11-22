@@ -2,7 +2,6 @@
 Generic code for setting up commonly used components in benchmarking
 """
 
-from typing import Tuple
 
 from femvf.load import load_transient_fsi_model
 from femvf.models import transient
@@ -28,7 +27,7 @@ def setup_model(mesh_path: str) -> transient.BaseTransientModel:
 
 def setup_transient_args(
     model: transient.BaseTransientModel,
-) -> Tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector]:
+) -> tuple[bv.BlockVector, bv.BlockVector, bv.BlockVector]:
     """
     Return a (initial state, control, properties) tuple
     """

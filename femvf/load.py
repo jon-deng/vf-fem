@@ -3,7 +3,7 @@ Functionality for creating model objects from meshes, etc.
 """
 
 from os import path
-from typing import Union, Optional, Type, Any, Tuple
+from typing import Union, Optional, Any
 import numpy as np
 import dolfin as dfn
 
@@ -15,7 +15,7 @@ from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 SolidModel = Union[transient.FenicsModel, dsmd.Model]
 FluidModel = Union[transient.JaxModel, dfmd.Model]
 SolidClass = slr.PredefinedSolidResidual
-FluidClass = Union[Type[transient.JaxModel], Type[dfmd.Model]]
+FluidClass = Union[type[transient.JaxModel], type[dfmd.Model]]
 
 Labels = list[str]
 
@@ -123,7 +123,7 @@ def load_transient_fsi_model(
     fixed_facet_labels: Optional[Labels] = ('fixed',),
     separation_vertex_label: str = 'separation',
     coupling: str = 'explicit',
-    zs: Optional[Tuple[float]] = None,
+    zs: Optional[tuple[float]] = None,
 ) -> transient.BaseTransientFSIModel:
     """
     Load a transient coupled (fsi) model
@@ -196,7 +196,7 @@ def load_dynamical_fsi_model(
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
     separation_vertex_label: str = 'separation',
-    zs: Optional[Tuple[float]] = None,
+    zs: Optional[tuple[float]] = None,
 ) -> Union[dcmd.BaseDynamicalModel, dcmd.BaseLinearizedDynamicalModel]:
     """
     Load a transient coupled (fsi) model
@@ -310,7 +310,7 @@ def derive_1dfluid_from_2dsolid(
     FluidResidual: type[flr.PredefinedFluidResidual] = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
-) -> Tuple[flr.PredefinedFluidResidual, np.ndarray]:
+) -> tuple[flr.PredefinedFluidResidual, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 
@@ -381,7 +381,7 @@ def derive_1dfluid_from_3dsolid(
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
     zs: Optional[np.typing.NDArray[int]] = None,
-) -> Tuple[flr.PredefinedFluidResidual, np.ndarray]:
+) -> tuple[flr.PredefinedFluidResidual, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 

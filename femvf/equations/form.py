@@ -6,7 +6,7 @@ References
 [Gou2016] Gou, K., Pence, T.J. Hyperelastic modeling of swelling in fibrous soft tissue with application to tracheal angioedema. J. Math. Biol. 72, 499-526 (2016). https://doi.org/10.1007/s00285-015-0893-0
 """
 
-from typing import Tuple, Mapping, Callable, Union, Any, Optional
+from typing import Callable, Union, Any, Optional
 
 import operator
 import warnings
@@ -151,7 +151,7 @@ class BaseFunctionSpaceSpec:
         self._default_value = default_value
 
     @property
-    def spec(self) -> Tuple[Any, ...]:
+    def spec(self) -> tuple[Any, ...]:
         return self._spec
 
     @property
@@ -182,7 +182,7 @@ class FunctionSpaceSpec(BaseFunctionSpaceSpec):
         self,
         elem_family: str,
         elem_degree: int,
-        value_dim: Union[Tuple[int, ...], str],
+        value_dim: Union[tuple[int, ...], str],
         default_value: int = 0,
     ):
         assert value_dim in {'vector', 'scalar'}
@@ -213,7 +213,7 @@ class ConstantFunctionSpaceSpec(BaseFunctionSpaceSpec):
         The default value for the function
     """
 
-    def __init__(self, value_dim: Union[Tuple[int, ...], str], default_value: int = 0):
+    def __init__(self, value_dim: Union[tuple[int, ...], str], default_value: int = 0):
         super().__init__(value_dim, default_value=default_value)
 
     def generate_function(self, mesh: dfn.Mesh) -> dfn.Constant:
@@ -253,7 +253,7 @@ def const_spec(value_dim, default_value=0):
 
 ## Form class
 
-CoefficientMapping = Mapping[str, DfnFunction]
+CoefficientMapping = dict[str, DfnFunction]
 
 # TODO: A `UFLForm` should represent a ufl form expression *without* any associated
 # mesh information (just element definitions for coefficients, etc.)
@@ -325,7 +325,7 @@ class UFLForm:
     def values(self) -> list[DfnFunction]:
         return self.coefficients.values()
 
-    def items(self) -> list[Tuple[str, DfnFunction]]:
+    def items(self) -> list[tuple[str, DfnFunction]]:
         return self.coefficients.items()
 
     def __getitem__(self, key: str) -> DfnFunction:
@@ -451,11 +451,11 @@ class PredefinedForm(UFLForm):
 
     Class Attributes
     ----------------
-    COEFFICIENT_SPEC: Mapping[str, BaseFunctionSpaceSpec]
+    COEFFICIENT_SPEC: dict[str, BaseFunctionSpaceSpec]
         A mapping defining all coefficients that are needed to create the form
     MAKE_FORM: Callable[
             [CoefficientMapping, dfn.Measure, dfn.Mesh],
-            Tuple[dfn.Form, CoefficientMapping]
+            tuple[dfn.Form, CoefficientMapping]
         ]
         A function that returns a `dfn.Form` instance using the coefficients
         given in `COEFFICIENT_SPEC` and additional mesh information
@@ -477,9 +477,9 @@ class PredefinedForm(UFLForm):
         The measure to use in the form
     """
 
-    COEFFICIENT_SPEC: Mapping[str, BaseFunctionSpaceSpec] = {}
+    COEFFICIENT_SPEC: dict[str, BaseFunctionSpaceSpec] = {}
     MAKE_FORM: Callable[
-        [CoefficientMapping, dfn.Measure, dfn.Mesh], Tuple[dfn.Form, CoefficientMapping]
+        [CoefficientMapping, dfn.Measure, dfn.Mesh], tuple[dfn.Form, CoefficientMapping]
     ]
 
     def __init__(
@@ -1078,7 +1078,7 @@ def modify_newmark_time_discretization(form: UFLForm) -> UFLForm:
     return UFLForm(new_functional, coefficients, form.expressions)
 
 
-def modify_unary_linearized_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
+def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
     """
     Generate linearized forms representing linearization of the residual wrt different states
 
@@ -1182,7 +1182,7 @@ def dform_cubic_penalty_pressure(gap, kcoll):
 ## Generation of new forms
 # These functions are mainly for generating forms that are needed for solving
 # the transient problem with a time discretization
-def gen_residual_bilinear_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
+def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
     """
     Generates bilinear forms representing derivatives of the residual wrt state variables
 
@@ -1232,7 +1232,7 @@ def gen_residual_bilinear_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
     return bi_forms
 
 
-def gen_residual_bilinear_property_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
+def gen_residual_bilinear_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
     """
     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
     """
@@ -1256,7 +1256,7 @@ def gen_residual_bilinear_property_forms(form: UFLForm) -> Mapping[str, dfn.Form
 
 # These functions are mainly for generating derived forms that are needed for solving
 # the hopf bifurcation problem
-def gen_hopf_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
+def gen_hopf_forms(form: UFLForm) -> dict[str, dfn.Form]:
     forms = {}
     # forms.update(modify_unary_linearized_forms(form))
 
@@ -1271,7 +1271,7 @@ def gen_hopf_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
     return forms
 
 
-def gen_jac_state_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
+def gen_jac_state_forms(form: UFLForm) -> dict[str, dfn.Form]:
     """
     Return the derivatives of a unary form wrt all states
     """
@@ -1289,7 +1289,7 @@ def gen_jac_state_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
     return forms
 
 
-def gen_jac_property_forms(form: UFLForm) -> Mapping[str, dfn.Form]:
+def gen_jac_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
     """
     Return the derivatives of a unary form wrt all solid properties
     """

@@ -2,7 +2,7 @@
 This module contains functionality for coupling fluid/solid domains
 """
 
-from typing import Union, List, Any
+from typing import Union, Any
 from numpy.typing import NDArray
 
 import itertools
@@ -105,9 +105,9 @@ def _state_from_dynamic_or_transient_model(model: Union[SolidModel, FluidModel])
 
 def make_coupling_stuff(
     solid: SolidModel,
-    fluids: Union[List[FluidModel], FluidModel],
-    solid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]],
-    fluid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]],
+    fluids: Union[list[FluidModel], FluidModel],
+    solid_fsi_dofs: Union[list[NDArray[int]], NDArray[int]],
+    fluid_fsi_dofs: Union[list[NDArray[int]], NDArray[int]],
 ):
     """
     Return coupling matrices, etc.
@@ -154,9 +154,9 @@ def make_coupling_stuff(
 
 def make_fsimaps(
     solid: SolidModel,
-    fluids: Union[List[FluidModel], FluidModel],
-    solid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]],
-    fluid_fsi_dofs: Union[List[NDArray[int]], NDArray[int]],
+    fluids: Union[list[FluidModel], FluidModel],
+    solid_fsi_dofs: Union[list[NDArray[int]], NDArray[int]],
+    fluid_fsi_dofs: Union[list[NDArray[int]], NDArray[int]],
 ):
     """
     Return `FSIMap` instances for multiple fluids coupled to a single solid domain

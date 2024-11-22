@@ -24,7 +24,6 @@ parameters `x`, `xt`, `g`, `p`. This is done in the classes
 `SolidDynamicalSystem` and `LinearizedSolidDynamicalSystem` below.
 """
 
-from typing import Tuple, Mapping
 
 import numpy as np
 import dolfin as dfn
@@ -335,10 +334,10 @@ class PredefinedModel(Model):
     def __init__(
         self,
         mesh: dfn.Mesh,
-        mesh_functions: Tuple[dfn.MeshFunction],
-        mesh_subdomains: Tuple[Mapping[str, int]],
-        fsi_facet_labels: Tuple[str],
-        fixed_facet_labels: Tuple[str],
+        mesh_functions: tuple[dfn.MeshFunction],
+        mesh_subdomains: tuple[dict[str, int]],
+        fsi_facet_labels: tuple[str],
+        fixed_facet_labels: tuple[str],
     ):
         residual = self._make_residual(
             mesh,
@@ -355,10 +354,10 @@ class PredefinedLinearizedModel(LinearizedModel):
     def __init__(
         self,
         mesh: dfn.Mesh,
-        mesh_functions: Tuple[dfn.MeshFunction],
-        mesh_subdomains: Tuple[Mapping[str, int]],
-        fsi_facet_labels: Tuple[str],
-        fixed_facet_labels: Tuple[str],
+        mesh_functions: tuple[dfn.MeshFunction],
+        mesh_subdomains: tuple[dict[str, int]],
+        fsi_facet_labels: tuple[str],
+        fixed_facet_labels: tuple[str],
     ):
         residual = self._make_residual(
             mesh,

@@ -6,7 +6,7 @@ References
 [Gou2016] Gou, K., Pence, T.J. Hyperelastic modeling of swelling in fibrous soft tissue with application to tracheal angioedema. J. Math. Biol. 72, 499-526 (2016). https://doi.org/10.1007/s00285-015-0893-0
 """
 
-from typing import Mapping, Union, Any, Optional
+from typing import Union, Any, Optional
 
 from functools import reduce
 
@@ -22,8 +22,8 @@ DfnFunction = Union[ufl.Constant, dfn.Function]
 FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
 FunctionSpace = Union[ufl.FunctionSpace, dfn.FunctionSpace]
 
-CoefficientMapping = Mapping[str, DfnFunction]
-FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
+CoefficientMapping = dict[str, DfnFunction]
+FunctionSpaceMapping = dict[str, dfn.FunctionSpace]
 
 ## Utilities to get measures
 # These are for getting measures over different dimensions of geometry
@@ -62,7 +62,7 @@ def get_measure(
 
 def get_subdomain(
     mesh_element_type: str | int,
-    mesh_subdomains: list[Mapping[str, int]]
+    mesh_subdomains: list[dict[str, int]]
 ):
     """
     Return a mesh subdomain mapping
@@ -73,7 +73,7 @@ def get_subdomain(
         The element type
 
         This can be a dimension (int) or a string (vertex, facet, cell)
-    mesh_subdomains: list[Mapping[str, int]]
+    mesh_subdomains: list[dict[str, int]]
         Mesh subdomain info for each dimension
     """
 
@@ -82,7 +82,7 @@ def get_subdomain(
 
 def subdomain_measure(
         measure: dfn.Measure,
-        subdomain_to_marker: Mapping[str, int],
+        subdomain_to_marker: dict[str, int],
         subdomain_id: str = 'everywhere'
     ):
     """
@@ -92,7 +92,7 @@ def subdomain_measure(
     ----------
     measure: dfn.Measure
         The measure
-    subdomain_to_marker: Mapping[str, int]
+    subdomain_to_marker: dict[str, int]
         The dictionary of subdomain keys to mesh markers
     subdomain_id: str
         The subdomain key
@@ -114,7 +114,7 @@ class PredefinedSolidResidual(FenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]],
+        mesh_subdomains: list[dict[str, int]],
         dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
     ):
 
@@ -135,7 +135,7 @@ class PredefinedSolidResidual(FenicsResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ) -> dfn.Form:
         raise NotImplementedError()
 
@@ -147,7 +147,7 @@ class Rayleigh(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -171,7 +171,7 @@ class KelvinVoigt(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -195,7 +195,7 @@ class KelvinVoigtWShape(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
 
         dx = get_measure('cell', mesh, mesh_functions)
@@ -221,7 +221,7 @@ class KelvinVoigtWEpithelium(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -246,7 +246,7 @@ class IncompSwellingKelvinVoigt(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -270,7 +270,7 @@ class SwellingKelvinVoigt(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -294,7 +294,7 @@ class SwellingKelvinVoigtWEpithelium(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -319,7 +319,7 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -344,7 +344,7 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
@@ -369,7 +369,7 @@ class Approximate3DKelvinVoigt(PredefinedSolidResidual):
         self,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[Mapping[str, int]]
+        mesh_subdomains: list[dict[str, int]]
     ):
         dx = get_measure('cell', mesh, mesh_functions)
         ds = get_measure('facet', mesh, mesh_functions)
