@@ -16,7 +16,8 @@ class BaseResidual:
     pass
     # _res: Any
 
-
+# A `DirichletBCTuple` consists of:
+# (BC value, mesh element to apply over, subdomain str)
 DirichletBCTuple = tuple[Any, str, str]
 
 class FenicsResidual(BaseResidual):
