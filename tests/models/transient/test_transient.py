@@ -55,7 +55,7 @@ class TestFluid:
 
     def test_init(
         self,
-        FluidResidual: flr.PredefinedJaxResidual,
+        FluidResidual: flr.PredefinedFluidResidual,
         mesh: NDArray
     ):
         assert fld.Model(FluidResidual(mesh))

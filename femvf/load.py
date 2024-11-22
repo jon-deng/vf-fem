@@ -312,10 +312,10 @@ def load_transient_fsai_model(
 # the function should take a loaded solid model and derive a fluid mesh from it
 def derive_1dfluid_from_2dsolid(
     solid: slr.FenicsResidual,
-    FluidResidual: type[flr.PredefinedJaxResidual] = flr.BernoulliAreaRatioSep,
+    FluidResidual: type[flr.PredefinedFluidResidual] = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
-) -> Tuple[flr.PredefinedJaxResidual, np.ndarray]:
+) -> Tuple[flr.PredefinedFluidResidual, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 
@@ -382,11 +382,11 @@ def derive_1dfluid_from_2dsolid(
 
 def derive_1dfluid_from_3dsolid(
     solid: slr.FenicsResidual,
-    FluidResidual: type[flr.PredefinedJaxResidual] = flr.BernoulliAreaRatioSep,
+    FluidResidual: type[flr.PredefinedFluidResidual] = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     separation_vertex_label: str = 'separation',
     zs: Optional[np.typing.NDArray[int]] = None,
-) -> Tuple[flr.PredefinedJaxResidual, np.ndarray]:
+) -> Tuple[flr.PredefinedFluidResidual, np.ndarray]:
     """
     Processes appropriate mappings between fluid/solid domains for FSI
 

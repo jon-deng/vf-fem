@@ -36,7 +36,7 @@ def bernoullip_from_q_psep(qsub, psep, area_sep, area, rho):
 
 ## Fluid residual classes
 
-class PredefinedJaxResidual(JaxResidual):
+class PredefinedFluidResidual(JaxResidual):
     """
     Predefined `JaxResidual`
     """
@@ -53,7 +53,7 @@ class PredefinedJaxResidual(JaxResidual):
     def _make_residual(self, mesh, *args, **kwargs):
         raise NotImplementedError("Subclasses must implement this method")
 
-class BernoulliFixedSep(PredefinedJaxResidual):
+class BernoulliFixedSep(PredefinedFluidResidual):
 
     def _make_residual(self, mesh, idx_sep=0):
         return _BernoulliFixedSep(mesh, idx_sep=idx_sep)
@@ -126,7 +126,7 @@ def _BernoulliFixedSep(s: np.ndarray, idx_sep: int = 0):
     return res, (_state, _control, _props)
 
 
-class BernoulliSmoothMinSep(PredefinedJaxResidual):
+class BernoulliSmoothMinSep(PredefinedFluidResidual):
 
     def _make_residual(self, mesh):
         return _BernoulliSmoothMinSep(mesh)
@@ -218,7 +218,7 @@ def _BernoulliSmoothMinSep(s: jnp.ndarray):
     return res, (_state, _control, _props)
 
 
-class BernoulliAreaRatioSep(PredefinedJaxResidual):
+class BernoulliAreaRatioSep(PredefinedFluidResidual):
 
     def _make_residual(self, mesh):
         return _BernoulliAreaRatioSep(mesh)
@@ -309,7 +309,7 @@ def _BernoulliAreaRatioSep(s: jnp.ndarray):
     return res, (_state, _control, _props)
 
 
-class BernoulliFlowFixedSep(PredefinedJaxResidual):
+class BernoulliFlowFixedSep(PredefinedFluidResidual):
 
     def _make_residual(self, mesh, idx_sep=0):
         return _BernoulliFlowFixedSep(mesh, idx_sep=idx_sep)
