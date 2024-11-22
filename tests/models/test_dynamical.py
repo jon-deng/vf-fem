@@ -12,6 +12,8 @@ import numpy as np
 import dolfin as dfn
 
 from blockarray import linalg as bla, blockvec as bv
+
+from femvf.residuals import solid as slr, fluid as flr
 from femvf.models.dynamical import (
     solid as dynsl,
     fluid as dynfl,
@@ -299,7 +301,7 @@ class GenericFixtureMixin:
     A set of generic fixtures for `_TestDerivative`
     """
 
-    @pytest.fixture(params=[(dynsl.KelvinVoigt, dynsl.LinearizedKelvinVoigt, {})])
+    @pytest.fixture(params=[(slr.KelvinVoigt, {})])
     def SolidModelPair(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
@@ -308,13 +310,9 @@ class GenericFixtureMixin:
 
     @pytest.fixture(
         params=[
-            # (dynfl.BernoulliSmoothMinSep, dynfl.LinearizedBernoulliSmoothMinSep, {}),
-            (
-                dynfl.BernoulliFixedSep,
-                dynfl.LinearizedBernoulliFixedSep,
-                {'separation_vertex_label': 'separation-inf'},
-            ),
-            # (dynfl.BernoulliFlowFixedSep, dynfl.LinearizedBernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
+            # (flr.BernoulliSmoothMinSep, {}),
+            (flr.BernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
+            # (flr.BernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
         ]
     )
     def FluidModelPair(self, request):
@@ -550,7 +548,7 @@ class GenericFixtureMixin:
 class TestShapeModel(_TestDerivative, GenericFixtureMixin):
 
     @pytest.fixture(
-        params=[(dynsl.KelvinVoigtWShape, dynsl.LinearizedKelvinVoigtWShape, {})]
+        params=[(slr.KelvinVoigtWShape, {})]
     )
     def SolidModelPair(self, request):
         """
@@ -561,11 +559,7 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
     @pytest.fixture(
         params=[
             (None, None, {}),
-            (
-                dynfl.BernoulliFixedSep,
-                dynfl.LinearizedBernoulliFixedSep,
-                {'separation_vertex_label': 'separation-inf'},
-            ),
+            (flr.BernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
         ]
     )
     def FluidModelPair(self, request):
