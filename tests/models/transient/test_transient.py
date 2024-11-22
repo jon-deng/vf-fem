@@ -21,12 +21,12 @@ class TestSolid(FenicsMeshFixtures):
     @pytest.fixture(
         params=[slr.Rayleigh, slr.KelvinVoigt, slr.SwellingKelvinVoigt]
     )
-    def SolidModel(self, request):
+    def SolidResidual(self, request):
         return request.param
 
     def test_init(
             self,
-            SolidModel: slr.PredefinedSolidResidual,
+            SolidResidual: slr.PredefinedSolidResidual,
             mesh,
             mesh_functions,
             mesh_subdomains
@@ -35,7 +35,7 @@ class TestSolid(FenicsMeshFixtures):
         dirichlet_bcs = {
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
-        residual = SolidModel(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
+        residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
         assert sld.Model(residual)
 
     # TODO: Think of ways you can test a model is working properly?
@@ -50,15 +50,15 @@ class TestFluid:
     @pytest.fixture(
         params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
     )
-    def FluidModel(self, request):
+    def FluidResidual(self, request):
         return request.param
 
     def test_init(
         self,
-        FluidModel: flr.PredefinedJaxResidual,
+        FluidResidual: flr.PredefinedJaxResidual,
         mesh: NDArray
     ):
-        assert fld.Model(FluidModel(mesh))
+        assert fld.Model(FluidResidual(mesh))
 
     # TODO: Think of ways you can test a model is working properly?
 
