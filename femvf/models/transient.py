@@ -713,6 +713,8 @@ class JaxModel(BaseTransientModel):
 
 ## Coupled models
 
+from . import fsi
+
 class BaseTransientFSIModel(BaseTransientModel):
     """
     Represents a coupled system of a solid and fluid(s) models
@@ -785,7 +787,7 @@ class BaseTransientFSIModel(BaseTransientModel):
             dflcontrol_dslstate,
             dslcontrol_dflstate,
             dflcontrol_dslprops,
-        ) = make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+        ) = fsi.make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
         self._fsimaps = fsimaps
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate
