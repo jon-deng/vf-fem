@@ -19,6 +19,7 @@ import ufl
 from .base import FenicsResidual, PredefinedFenicsResidual
 
 from femvf.equations import form as _form
+from femvf.meshutils import mesh_element_type_dim
 
 DfnFunction = Union[ufl.Constant, dfn.Function]
 FunctionLike = Union[ufl.Argument, dfn.Function, dfn.Constant]
@@ -34,35 +35,81 @@ FunctionSpaceMapping = Mapping[str, dfn.FunctionSpace]
 ## Residual definitions
 
 
-def _process_measures(
+def get_measure(
+    mesh_element_type: str | int,
     mesh: dfn.Mesh,
-    mesh_functions: list[dfn.MeshFunction],
-    mesh_subdomains: list[Mapping[str, int]],
-    fsi_facet_labels: list[str],
-    fixed_facet_labels: list[str],
+    mesh_functions: list[dfn.MeshFunction]
 ):
-    if len(mesh_functions) == 3:
-        vertex_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, facet_label_to_id, cell_label_to_id = (
-            mesh_subdomains
-        )
-    elif len(mesh_functions) == 4:
-        vertex_func, edge_func, facet_func, cell_func = mesh_functions
-        vertex_label_to_id, edge_label_to_id, facet_label_to_id, cell_label_to_id = (
-            mesh_subdomains
-        )
+    """
+    Return a measure
+
+    Parameters
+    ----------
+    mesh_element_type: str | int
+        The element type
+
+        This can be a dimension (int) or a string (vertex, facet, cell)
+    mesh: dfn.Mesh
+        The mesh
+    mesh_function: list[dfn.MeshFunction]
+        A list of mesh functions for each dimension
+    """
+    mesh_dim = mesh.topology().dim()
+    # NOTE: legacy Fenics only supports facet and cell integrals
+    # The two empty strings
+    INTEGRAL_TYPES = (mesh_dim-2)*('',) + ('ds', 'dx')
+
+    el_dim = mesh_element_type_dim(mesh_element_type)
+
+    measure = dfn.Measure(
+        INTEGRAL_TYPES[el_dim], domain=mesh, subdomain_data=mesh_functions[el_dim]
+    )
+    return measure
+
+def get_subdomain(
+    mesh_element_type: str | int,
+    mesh_subdomains: list[Mapping[str, int]]
+):
+    """
+    Return a mesh subdomain mapping
+
+    Parameters
+    ----------
+    mesh_element_type: str | int
+        The element type
+
+        This can be a dimension (int) or a string (vertex, facet, cell)
+    mesh_subdomains: list[Mapping[str, int]]
+        Mesh subdomain info for each dimension
+    """
+
+    el_dim = mesh_element_type_dim(mesh_element_type)
+    return mesh_subdomains[el_dim]
+
+def subdomain_measure(
+        measure: dfn.Measure,
+        subdomain_to_marker: Mapping[str, int],
+        subdomain_id: str = 'everywhere'
+    ):
+    """
+    Return the measure over a subdomain of the mesh
+
+    Parameters
+    ----------
+    measure: dfn.Measure
+        The measure
+    subdomain_to_marker: Mapping[str, int]
+        The dictionary of subdomain keys to mesh markers
+    subdomain_id: str
+        The subdomain key
+    """
+    if subdomain_id == 'everywhere':
+        return measure('everywhere')
     else:
-        raise ValueError(f"`mesh_functions` has length {len(mesh_functions):d}")
+        return measure(subdomain_to_marker[subdomain_id])
 
-    dx = dfn.Measure('dx', domain=mesh, subdomain_data=cell_func)
-    ds = dfn.Measure('ds', domain=mesh, subdomain_data=facet_func)
-    _traction_ds = [
-        ds(int(facet_label_to_id[facet_label])) for facet_label in fsi_facet_labels
-    ]
-    traction_ds = reduce(operator.add, _traction_ds)
-    return dx, ds, traction_ds
-
-
+# NOTE: All the forms below apply a traction over a facet subdomain named
+# 'traction'
 class Rayleigh(PredefinedFenicsResidual):
 
     def init_form(
@@ -71,18 +118,18 @@ class Rayleigh(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
             + _form.IsotropicElasticForm({}, dx, mesh)
             + _form.RayleighDampingForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -95,19 +142,18 @@ class KelvinVoigt(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
 
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
             + _form.IsotropicElasticForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -121,18 +167,18 @@ class KelvinVoigtWShape(PredefinedFenicsResidual):
         mesh_subdomains: list[Mapping[str, int]]
     ):
 
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
             + _form.IsotropicElasticForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
             - _form.ShapeForm({}, dx, mesh)
         )
         return form
@@ -146,19 +192,19 @@ class KelvinVoigtWEpithelium(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
-            + _form.IsotropicMembraneForm({}, traction_ds, mesh)
+            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
             + _form.IsotropicElasticForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -171,18 +217,18 @@ class IncompSwellingKelvinVoigt(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
             + _form.IsotropicIncompressibleElasticSwellingForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -195,18 +241,18 @@ class SwellingKelvinVoigt(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
             + _form.IsotropicElasticSwellingForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -219,19 +265,19 @@ class SwellingKelvinVoigtWEpithelium(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
-            + _form.IsotropicMembraneForm({}, traction_ds, mesh)
+            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
             + _form.IsotropicElasticSwellingForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -244,19 +290,19 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
-            + _form.IsotropicMembraneForm({}, traction_ds, mesh)
+            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
             + _form.IsotropicElasticSwellingForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -269,19 +315,19 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
-            + _form.IsotropicMembraneForm({}, traction_ds, mesh)
+            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
             + _form.IsotropicElasticSwellingPowerLawForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
 
@@ -294,19 +340,19 @@ class Approximate3DKelvinVoigt(PredefinedFenicsResidual):
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[Mapping[str, int]]
     ):
-        dx, ds, traction_ds = _process_measures(
-            mesh,
-            mesh_functions,
-            mesh_subdomains
-        )
+        dx = get_measure('cell', mesh, mesh_functions)
+        ds = get_measure('facet', mesh, mesh_functions)
+
+        ds_subdomain = get_subdomain('facet', mesh_subdomains)
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
 
         form = (
             _form.InertialForm({}, dx, mesh)
-            + _form.IsotropicMembraneForm({}, traction_ds, mesh)
+            + _form.IsotropicMembraneForm({}, ds_traction, mesh)
             + _form.IsotropicElasticForm({}, dx, mesh)
             - _form.APForceForm({}, dx, mesh)
             + _form.KelvinVoigtForm({}, dx, mesh)
-            - _form.SurfacePressureForm({}, traction_ds, mesh)
-            - _form.ManualSurfaceContactTractionForm({}, traction_ds, mesh)
+            - _form.SurfacePressureForm({}, ds_traction, mesh)
+            - _form.ManualSurfaceContactTractionForm({}, ds_traction, mesh)
         )
         return form
