@@ -28,7 +28,7 @@ import numpy as np
 from blockarray import blockmat as bm, blockvec as bv
 import nonlineq
 
-from .models.dynamical import base as dynbase
+from .models import dynamical
 from .models import transient
 from .solverconst import DEFAULT_NEWTON_SOLVER_PRM
 
@@ -78,7 +78,7 @@ def static_solid_configuration(
     """
     if isinstance(model, transient.BaseTransientModel):
         is_tra_model = True
-    elif isinstance(model, dynbase.BaseDynamicalModel):
+    elif isinstance(model, dynamical.BaseDynamicalModel):
         is_tra_model = False
     else:
         raise TypeError(f"Unknown `model` type {type(model)}")

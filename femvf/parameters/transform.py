@@ -16,7 +16,7 @@ import jax
 import dolfin as dfn
 import ufl
 from femvf.models.transient import BaseTransientModel
-from femvf.models.dynamical.base import BaseDynamicalModel
+from femvf.models.dynamical import BaseDynamicalModel
 from femvf import meshutils
 
 from blockarray import blockvec as bv, blockarray as ba

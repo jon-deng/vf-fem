@@ -10,12 +10,12 @@ import dolfin as dfn
 from . import meshutils
 from femvf.residuals import solid as slr, fluid as flr
 from .models import transient
-from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
+from .models import dynamical
 
-SolidModel = Union[transient.FenicsModel, dsmd.FenicsModel]
-FluidModel = Union[transient.JaxModel, dfmd.JaxModel]
+SolidModel = Union[transient.FenicsModel, dynamical.FenicsModel]
+FluidModel = Union[transient.JaxModel, dynamical.JaxModel]
 SolidClass = slr.PredefinedSolidResidual
-FluidClass = Union[type[transient.JaxModel], type[dfmd.JaxModel]]
+FluidClass = Union[type[transient.JaxModel], type[dynamical.JaxModel]]
 
 Labels = list[str]
 
@@ -197,7 +197,7 @@ def load_dynamical_fsi_model(
     fixed_facet_labels: Optional[Labels] = ('fixed',),
     separation_vertex_label: str = 'separation',
     zs: Optional[tuple[float]] = None,
-) -> Union[dcmd.BaseDynamicalModel, dcmd.BaseLinearizedDynamicalModel]:
+) -> Union[dynamical.BaseDynamicalModel, dynamical.BaseLinearizedDynamicalModel]:
     """
     Load a transient coupled (fsi) model
 
@@ -248,12 +248,12 @@ def load_dynamical_fsi_model(
         * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
     ).reshape(-1)
 
-    if isinstance(solid, dcmd.LinearizedFenicsModel):
-        return dcmd.LinearizedFSIModel(
+    if isinstance(solid, dynamical.LinearizedFenicsModel):
+        return dynamical.LinearizedFSIModel(
             solid, fluid, dofs_fsi_solid, dofs_fsi_fluid
         )
     else:
-        return dcmd.FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+        return dynamical.FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 
 # TODO: Refactor this function; currently does too many things

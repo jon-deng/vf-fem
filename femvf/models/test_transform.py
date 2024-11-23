@@ -12,7 +12,7 @@ import numpy as np
 import dolfin as dfn
 
 from femvf.models import transient
-from femvf.models.dynamical import BaseDynamicalModel
+from femvf.models.mesh_functions import BaseDynamicalModel
 from femvf.load import load_transient_fsi_model
 from femvf.parameters import transform as tform
 
