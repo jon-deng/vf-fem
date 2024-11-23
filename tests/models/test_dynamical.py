@@ -38,13 +38,17 @@ Model = dynbase.BaseDynamicalModel
 LinModel = dynbase.BaseLinearizedDynamicalModel
 BVec = bv.BlockVector
 
-class TestSolid(FenicsMeshFixtures):
+
+class SolidResidualFixtures:
 
     @pytest.fixture(
         params=[slr.Rayleigh, slr.KelvinVoigt, slr.SwellingKelvinVoigt]
     )
     def SolidResidual(self, request):
         return request.param
+
+
+class TestSolid(SolidResidualFixtures, FenicsMeshFixtures):
 
     def test_init(
             self,
@@ -62,17 +66,20 @@ class TestSolid(FenicsMeshFixtures):
         assert dynsl.LinearizedModel(residual)
 
 
-class TestFluid:
-
-    @pytest.fixture()
-    def mesh(self):
-        return np.linspace(0, 1, 11)
+class FluidResidualFixtures:
 
     @pytest.fixture(
         params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
     )
     def FluidResidual(self, request):
         return request.param
+
+
+class TestFluid(FluidResidualFixtures):
+
+    @pytest.fixture()
+    def mesh(self):
+        return np.linspace(0, 1, 11)
 
     def test_init(
         self,
@@ -84,19 +91,7 @@ class TestFluid:
         assert dynfl.LinearizedModel(residual)
 
 
-class TestCoupled(FenicsMeshFixtures):
-
-    @pytest.fixture(
-        params=[slr.Rayleigh, slr.KelvinVoigt, slr.SwellingKelvinVoigt]
-    )
-    def SolidResidual(self, request):
-        return request.param
-
-    @pytest.fixture(
-        params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
-    )
-    def FluidResidual(self, request):
-        return request.param
+class TestCoupled(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixtures):
 
     @pytest.fixture()
     def residual(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
@@ -389,97 +384,46 @@ class _TestDerivative:
                 print(key, subvec.norm())
 
 
-class ModelFixtures:
+class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixtures):
     """
     Fixtures that supply dynamical models and inputs (state, control, properties)
     """
 
-    @pytest.fixture(params=[(slr.KelvinVoigt, {})])
-    def SolidModelPair(self, request):
-        """
-        Return a tuple of non-linear and linearized models, and kwargs
-        """
-        return request.param
-
-    @pytest.fixture(
-        params=[
-            # (flr.BernoulliSmoothMinSep, {}),
-            (flr.BernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
-            # (flr.BernoulliFlowFixedSep, {'separation_vertex_label': 'separation-inf'}),
-        ]
-    )
-    def FluidModelPair(self, request):
-        """
-        Return a tuple of non-linear and linearized models, and kwargs
-        """
-        return request.param
-
-    @pytest.fixture(params=['M5_BC--GA0.00--DZ0.00.msh'])
-    def mesh_path(self, request):
-        mesh_name = request.param
-        mesh_path = path.join('../../meshes', mesh_name)
-
-        return mesh_path
+    @pytest.fixture()
+    def solid_residual(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
+        dim = mesh.topology().dim()
+        dirichlet_bcs = {
+            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+        }
+        return SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
 
     @pytest.fixture()
-    def model(self, mesh_path, SolidModelPair, FluidModelPair):
-        """
-        Return a dynamical system model residual
-        """
-        solid_mesh = mesh_path
-        fluid_mesh = None
-
-        SolidType, LinSolidType, solid_kwargs = SolidModelPair
-        FluidType, LinFluidType, fluid_kwargs = FluidModelPair
-        if SolidType is not None and FluidType is not None:
-            model = load.load_dynamical_fsi_model(
-                solid_mesh,
-                fluid_mesh,
-                SolidType,
-                FluidType,
-                fsi_facet_labels=('pressure',),
-                fixed_facet_labels=('fixed',),
-                **solid_kwargs,
-                **fluid_kwargs,
-            )
-        elif SolidType is not None and FluidType is None:
-            model = load.load_solid_model(
-                solid_mesh,
-                SolidType,
-                pressure_facet_labels=('pressure',),
-                fixed_facet_labels=('fixed',),
-                **solid_kwargs,
-            )
-        elif SolidType is None and FluidType is not None:
-            model = load.load_fluid_model(fluid_mesh, FluidType, **fluid_kwargs)
-        else:
-            assert False
-
-        return model
+    def solid(self, solid_residual):
+        return dynsl.Model(solid_residual)
 
     @pytest.fixture()
-    def model_linear(self, mesh_path, SolidModelPair, FluidModelPair):
-        """
-        Return a linearized dynamical system model residual
-        """
-        solid_mesh = mesh_path
-        fluid_mesh = None
+    def linearized_solid(self, solid_residual):
+        return dynsl.LinearizedModel(solid_residual)
 
-        SolidType, LinSolidType, solid_kwargs = SolidModelPair
-        FluidType, LinFluidType, fluid_kwargs = FluidModelPair
+    @pytest.fixture()
+    def model(
+        self, solid, FluidResidual
+    ):
+        fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
+        fluid, linearized_fluid = dynfl.Model(fluid_res), dynfl.LinearizedModel(fluid_res)
+        fluid_pdofs = np.arange(solid_pdofs.size)
 
-        model_coupled_linear = load.load_dynamical_fsi_model(
-            solid_mesh,
-            fluid_mesh,
-            LinSolidType,
-            LinFluidType,
-            fsi_facet_labels=('pressure',),
-            fixed_facet_labels=('fixed',),
-            **solid_kwargs,
-            **fluid_kwargs,
-        )
+        return dynco.BaseDynamicalFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
-        return model_coupled_linear
+    @pytest.fixture()
+    def linearized_model(
+        self, linearized_solid, FluidResidual
+    ):
+        fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(linearized_solid, FluidResidual, fsi_facet_labels=['traction'])
+        linearized_fluid = dynfl.LinearizedModel(fluid_res)
+        fluid_pdofs = np.arange(solid_pdofs.size)
+
+        return dynco.BaseDynamicalFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
 
     @pytest.fixture()
     def state(self, model: Model):
