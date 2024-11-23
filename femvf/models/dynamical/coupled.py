@@ -12,23 +12,23 @@ from petsc4py import PETSc as PETSc
 from blockarray import blockmat as bm, blockvec as bv, subops, linalg as bla
 
 from .base import BaseDynamicalModel, BaseLinearizedDynamicalModel
-from .fluid import Model, LinearizedModel
-from .solid import Model, LinearizedModel
+from .fluid import JaxModel, LinearizedJaxModel
+from .solid import FenicsModel, LinearizedFenicsModel
 
 from ..fsi import make_coupling_stuff
 
 # pylint: disable=missing-function-docstring
 
 
-class BaseDynamicalFSIModel(BaseDynamicalModel):
+class FSIModel(BaseDynamicalModel):
     """
     Class representing a fluid-solid coupled dynamical system
     """
 
     def __init__(
         self,
-        solid: Model,
-        fluids: Union[list[Model], Model],
+        solid: FenicsModel,
+        fluids: Union[list[FenicsModel], FenicsModel],
         solid_fsi_dofs: Union[list[NDArray], NDArray],
         fluid_fsi_dofs: Union[list[NDArray], NDArray],
     ):
@@ -289,8 +289,8 @@ class BaseDynamicalFSIModel(BaseDynamicalModel):
         return bm.concatenate([[dslres_dg], [dflres_dg]])
 
 
-class BaseLinearizedDynamicalFSIModel(
-    BaseLinearizedDynamicalModel, BaseDynamicalFSIModel
+class LinearizedFSIModel(
+    BaseLinearizedDynamicalModel, FSIModel
 ):
     """
     Class representing a fluid-solid coupled dynamical system
@@ -298,8 +298,8 @@ class BaseLinearizedDynamicalFSIModel(
 
     def __init__(
         self,
-        solid: LinearizedModel,
-        fluids: [list[LinearizedModel]],
+        solid: LinearizedFenicsModel,
+        fluids: [list[LinearizedFenicsModel]],
         solid_fsi_dofs,
         fluid_fsi_dofs,
     ):

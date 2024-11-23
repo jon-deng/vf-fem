@@ -19,7 +19,7 @@ BlockVec = bv.BlockVector[Vector]
 BlockMat = bm.BlockMatrix[Matrix]
 
 
-class DynamicalModelInterface:
+class BaseDynamicalModel:
 
     def set_state(self, state: BlockVec):
         raise NotImplementedError()
@@ -49,7 +49,7 @@ class DynamicalModelInterface:
         raise NotImplementedError()
 
 
-class LinearizedDynamicalModelInterface(DynamicalModelInterface):
+class BaseLinearizedDynamicalModel(BaseDynamicalModel):
 
     def set_dstate(self, dstate: BlockVec):
         raise NotImplementedError()
@@ -59,11 +59,3 @@ class LinearizedDynamicalModelInterface(DynamicalModelInterface):
 
     def set_dcontrol(self, dcontrol: BlockVec):
         raise NotImplementedError()
-
-
-class BaseDynamicalModel(DynamicalModelInterface):
-    pass
-
-
-class BaseLinearizedDynamicalModel(LinearizedDynamicalModelInterface):
-    pass

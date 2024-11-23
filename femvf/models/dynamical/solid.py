@@ -59,7 +59,7 @@ def cast_output_bvec_to_petsc(func):
     return wrapped_func
 
 
-class DynamicalSolidModelInterface:
+class BaseDynamicalFenicsModel:
 
     def __init__(self, residual: solid.FenicsResidual):
 
@@ -163,7 +163,7 @@ class DynamicalSolidModelInterface:
         return xref
 
 
-class Model(DynamicalSolidModelInterface, BaseDynamicalModel):
+class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
 
     @cast_output_bvec_to_petsc
     def assem_res(self):
@@ -227,7 +227,7 @@ class Model(DynamicalSolidModelInterface, BaseDynamicalModel):
         return bm.BlockMatrix(mats, labels=(self.state.labels[0], self.prop.labels[0]))
 
 
-class LinearizedModel(DynamicalSolidModelInterface, BaseLinearizedDynamicalModel):
+class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalModel):
 
     def __init__(self, residual: solid.FenicsResidual):
 

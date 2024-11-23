@@ -62,8 +62,8 @@ class TestSolid(SolidResidualFixtures, FenicsMeshFixtures):
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-        assert dynsl.Model(residual)
-        assert dynsl.LinearizedModel(residual)
+        assert dynsl.FenicsModel(residual)
+        assert dynsl.LinearizedFenicsModel(residual)
 
 
 class FluidResidualFixtures:
@@ -87,8 +87,8 @@ class TestFluid(FluidResidualFixtures):
         mesh: NDArray
     ):
         residual = FluidResidual(mesh)
-        assert dynfl.Model(residual)
-        assert dynfl.LinearizedModel(residual)
+        assert dynfl.JaxModel(residual)
+        assert dynfl.LinearizedJaxModel(residual)
 
 
 class TestCoupled(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixtures):
@@ -103,21 +103,21 @@ class TestCoupled(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixtur
 
     @pytest.fixture()
     def solid(self, residual):
-        return dynsl.Model(residual)
+        return dynsl.FenicsModel(residual)
 
     @pytest.fixture()
     def linearized_solid(self, residual):
-        return dynsl.LinearizedModel(residual)
+        return dynsl.LinearizedFenicsModel(residual)
 
     def test_init(
         self, solid, linearized_solid, FluidResidual
     ):
         fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
-        fluid, linearized_fluid = dynfl.Model(fluid_res), dynfl.LinearizedModel(fluid_res)
+        fluid, linearized_fluid = dynfl.JaxModel(fluid_res), dynfl.LinearizedJaxModel(fluid_res)
         fluid_pdofs = np.arange(solid_pdofs.size)
 
-        assert dynco.BaseDynamicalFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
-        assert dynco.BaseLinearizedDynamicalFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
+        assert dynco.FSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+        assert dynco.LinearizedFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
 
     # TODO: Think of ways you can test a model is working properly?
 
@@ -137,11 +137,11 @@ def split_model_components(model):
     Return model split into fluid/solid/coupled parts
     """
     # Determine whether the model has fluid/solid components
-    if isinstance(model, dynco.BaseDynamicalFSIModel):
+    if isinstance(model, dynco.FSIModel):
         model_solid = model.solid
         model_fluids = model.fluids
         model_coupl = model
-    elif isinstance(model, dynsl.Model):
+    elif isinstance(model, dynsl.FenicsModel):
         model_solid = model
         model_fluids = None
         model_coupl = None
@@ -399,31 +399,31 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
 
     @pytest.fixture()
     def solid(self, solid_residual):
-        return dynsl.Model(solid_residual)
+        return dynsl.FenicsModel(solid_residual)
 
     @pytest.fixture()
     def linearized_solid(self, solid_residual):
-        return dynsl.LinearizedModel(solid_residual)
+        return dynsl.LinearizedFenicsModel(solid_residual)
 
     @pytest.fixture()
     def model(
         self, solid, FluidResidual
     ):
         fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
-        fluid, linearized_fluid = dynfl.Model(fluid_res), dynfl.LinearizedModel(fluid_res)
+        fluid, linearized_fluid = dynfl.JaxModel(fluid_res), dynfl.LinearizedJaxModel(fluid_res)
         fluid_pdofs = np.arange(solid_pdofs.size)
 
-        return dynco.BaseDynamicalFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+        return dynco.FSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
     @pytest.fixture()
     def linearized_model(
         self, linearized_solid, FluidResidual
     ):
         fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(linearized_solid, FluidResidual, fsi_facet_labels=['traction'])
-        linearized_fluid = dynfl.LinearizedModel(fluid_res)
+        linearized_fluid = dynfl.LinearizedJaxModel(fluid_res)
         fluid_pdofs = np.arange(solid_pdofs.size)
 
-        return dynco.BaseLinearizedDynamicalFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
+        return dynco.LinearizedFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
 
     @pytest.fixture()
     def state(self, model: Model):

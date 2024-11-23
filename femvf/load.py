@@ -12,10 +12,10 @@ from femvf.residuals import solid as slr, fluid as flr
 from .models import transient
 from .models.dynamical import solid as dsmd, fluid as dfmd, coupled as dcmd
 
-SolidModel = Union[transient.FenicsModel, dsmd.Model]
-FluidModel = Union[transient.JaxModel, dfmd.Model]
+SolidModel = Union[transient.FenicsModel, dsmd.FenicsModel]
+FluidModel = Union[transient.JaxModel, dfmd.JaxModel]
 SolidClass = slr.PredefinedSolidResidual
-FluidClass = Union[type[transient.JaxModel], type[dfmd.Model]]
+FluidClass = Union[type[transient.JaxModel], type[dfmd.JaxModel]]
 
 Labels = list[str]
 
@@ -248,12 +248,12 @@ def load_dynamical_fsi_model(
         * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
     ).reshape(-1)
 
-    if isinstance(solid, dcmd.LinearizedModel):
-        return dcmd.BaseLinearizedDynamicalFSIModel(
+    if isinstance(solid, dcmd.LinearizedFenicsModel):
+        return dcmd.LinearizedFSIModel(
             solid, fluid, dofs_fsi_solid, dofs_fsi_fluid
         )
     else:
-        return dcmd.BaseDynamicalFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+        return dcmd.FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 
 # TODO: Refactor this function; currently does too many things

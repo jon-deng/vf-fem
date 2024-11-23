@@ -39,7 +39,7 @@ Residual = tuple[
 Test = Union[JaxResidualFunction, JaxLinearizedResidualFunction]
 
 
-class DynamicalFluidModelInterface:
+class BaseDynamicalJaxModel:
     _res: Union[JaxResidualFunction, JaxLinearizedResidualFunction]
     _res_args: Union[JaxResidualArgs, JaxLinearizedResidualArgs]
 
@@ -116,7 +116,7 @@ class DynamicalFluidModelInterface:
 
 # NOTE: `Model` and `LinearizedModel` are very similar except for
 # the residual functions and arguments (the latter is linearized)
-class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
+class JaxModel(BaseDynamicalJaxModel, BaseDynamicalModel):
     """
     Representation of a dynamical system model
     """
@@ -133,7 +133,7 @@ class Model(DynamicalFluidModelInterface, BaseDynamicalModel):
         )
 
 
-class LinearizedModel(DynamicalFluidModelInterface, BaseLinearizedDynamicalModel):
+class LinearizedJaxModel(BaseDynamicalJaxModel, BaseLinearizedDynamicalModel):
     """
     Representation of a linearized dynamical system model
     """
