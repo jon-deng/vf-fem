@@ -389,9 +389,9 @@ class _TestDerivative:
                 print(key, subvec.norm())
 
 
-class GenericFixtureMixin:
+class ModelFixtures:
     """
-    A set of generic fixtures for `_TestDerivative`
+    Fixtures that supply dynamical models and inputs (state, control, properties)
     """
 
     @pytest.fixture(params=[(slr.KelvinVoigt, {})])
@@ -638,7 +638,7 @@ class GenericFixtureMixin:
         return dprop
 
 
-class TestShapeModel(_TestDerivative, GenericFixtureMixin):
+class TestShapeModel(_TestDerivative, ModelFixtures):
 
     @pytest.fixture(
         params=[(slr.KelvinVoigtWShape, {})]
@@ -810,5 +810,5 @@ class TestShapeModel(_TestDerivative, GenericFixtureMixin):
         )
 
 
-class TestNoShapeModel(_TestDerivative, GenericFixtureMixin):
+class TestNoShapeModel(_TestDerivative, ModelFixtures):
     pass
