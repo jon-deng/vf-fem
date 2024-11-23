@@ -67,7 +67,7 @@ class TestSolid(SolidResidualFixtures, FenicsMeshFixtures):
 
 
 class FluidResidualFixtures:
-
+    # TODO: Need to add keyword arguments for some fluid residuals
     @pytest.fixture(
         params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
     )
@@ -294,7 +294,7 @@ class _TestDerivative:
     def test_dres_dstate_vs_dres_state(
         self,
         model: Model,
-        model_linear: LinModel,
+        linearized_model: LinModel,
         state: BVec,
         statet: BVec,
         control: BVec,
@@ -312,19 +312,19 @@ class _TestDerivative:
             (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
         """
         set_linearization(model, state, statet, control, prop)
-        set_linearization(model_linear, state, statet, control, prop)
+        set_linearization(linearized_model, state, statet, control, prop)
 
         # compute the linearized residual from `model`
         dres_dstate = set_and_assemble(state, model.set_state, model.assem_dres_dstate)
         dres_state_a = bla.mult_mat_vec(dres_dstate, dstate)
 
-        model_linear.set_dstate(dstate)
-        _zero_del_xt = model_linear.dstatet.copy()
+        linearized_model.set_dstate(dstate)
+        _zero_del_xt = linearized_model.dstatet.copy()
         _zero_del_xt[:] = 0
-        model_linear.set_dstatet(_zero_del_xt)
+        linearized_model.set_dstatet(_zero_del_xt)
 
         dres_state_b = set_and_assemble(
-            state, model_linear.set_state, model_linear.assem_res
+            state, linearized_model.set_state, linearized_model.assem_res
         )
         err = dres_state_a - dres_state_b
 
@@ -339,7 +339,7 @@ class _TestDerivative:
     def test_dres_dstatet_vs_dres_statet(
         self,
         model: Model,
-        model_linear: LinModel,
+        linearized_model: LinModel,
         state: BVec,
         statet: BVec,
         control: BVec,
@@ -357,7 +357,7 @@ class _TestDerivative:
             (dF/dstate * del_state)(...)  (computed from `model_linear_state`)
         """
         set_linearization(model, state, statet, control, prop)
-        set_linearization(model_linear, state, statet, control, prop)
+        set_linearization(linearized_model, state, statet, control, prop)
 
         # compute the linearized residual from `model`
         dres_dstatet = set_and_assemble(
@@ -365,13 +365,13 @@ class _TestDerivative:
         )
         dres_statet_a = bla.mult_mat_vec(dres_dstatet, dstatet)
 
-        model_linear.set_dstatet(dstatet)
-        _zero_del_x = model_linear.dstate.copy()
+        linearized_model.set_dstatet(dstatet)
+        _zero_del_x = linearized_model.dstate.copy()
         _zero_del_x[:] = 0
-        model_linear.set_dstate(_zero_del_x)
+        linearized_model.set_dstate(_zero_del_x)
 
         dres_statet_b = set_and_assemble(
-            statet, model_linear.set_state, model_linear.assem_res
+            statet, linearized_model.set_state, linearized_model.assem_res
         )
         err = dres_statet_a - dres_statet_b
 
@@ -423,7 +423,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
         linearized_fluid = dynfl.LinearizedModel(fluid_res)
         fluid_pdofs = np.arange(solid_pdofs.size)
 
-        return dynco.BaseDynamicalFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
+        return dynco.BaseLinearizedDynamicalFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
 
     @pytest.fixture()
     def state(self, model: Model):
@@ -585,21 +585,19 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
 class TestShapeModel(_TestDerivative, ModelFixtures):
 
     @pytest.fixture(
-        params=[(slr.KelvinVoigtWShape, {})]
+        params=[slr.KelvinVoigtWShape]
     )
-    def SolidModelPair(self, request):
+    def SolidResidual(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
         """
         return request.param
 
+    # TODO: Need to add keyword argument `{'separation_vertex_label': 'separation-inf'}`
     @pytest.fixture(
-        params=[
-            (None, None, {}),
-            (flr.BernoulliFixedSep, {'separation_vertex_label': 'separation-inf'}),
-        ]
+        params=[flr.BernoulliFixedSep]
     )
-    def FluidModelPair(self, request):
+    def FluidResidual(self, request):
         """
         Return a tuple of non-linear and linearized models, and kwargs
         """
@@ -727,7 +725,7 @@ class TestShapeModel(_TestDerivative, ModelFixtures):
     def test_dres_dstate_vs_dres_state(
         self,
         model: Model,
-        model_linear: LinModel,
+        linearized_model: LinModel,
         state: BVec,
         statet: BVec,
         control: BVec,
@@ -735,14 +733,14 @@ class TestShapeModel(_TestDerivative, ModelFixtures):
         dstate: BVec,
     ):
         super().test_dres_dstate_vs_dres_state(
-            model, model_linear, state, statet, control, prop, dstate
+            model, linearized_model, state, statet, control, prop, dstate
         )
 
     @pytest.mark.skip()
     def test_dres_dstatet_vs_dres_statet(
         self,
         model: Model,
-        model_linear: LinModel,
+        linearized_model: LinModel,
         state: BVec,
         statet: BVec,
         control: BVec,
@@ -750,7 +748,7 @@ class TestShapeModel(_TestDerivative, ModelFixtures):
         dstatet: BVec,
     ):
         super().test_dres_dstatet_vs_dres_statet(
-            model, model_linear, state, statet, control, prop, dstatet
+            model, linearized_model, state, statet, control, prop, dstatet
         )
 
 
