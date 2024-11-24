@@ -267,36 +267,32 @@ class UFLForm:
 
     Parameters
     ----------
-    form: dfn.Form
+    forms: dict[str, dfn.Form]
         The 'dfn.Form' instance
     coefficients: CoefficientMapping
         A mapping from string labels to `dfn.Coefficient` instances used in
-        `form`
+        `forms`
 
     Attributes
     ----------
-    form: dfn.Form
+    forms: dict[str, dfn.Form]
         The 'dfn.Form' instance
     coefficients: CoefficientMapping
         A mapping from string labels to `dfn.Coefficient` instances used in
-        `form`
+        `forms`
     expressions: CoefficientMapping
         A mapping from string labels to `dfn.Expression` instances, using the
         coefficients in `coefficients`
     """
 
-    _form: dfn.Form
-    _coefficients: CoefficientMapping
-    _expressions: CoefficientMapping
-
     def __init__(
         self,
-        form: dfn.Form,
+        forms: dict[str, dfn.Form],
         coefficients: CoefficientMapping,
         expressions: Optional[CoefficientMapping] = None,
     ):
 
-        self._form = form
+        self._forms = forms
         self._coefficients = coefficients
 
         if expressions is None:
@@ -304,8 +300,8 @@ class UFLForm:
         self._expressions = expressions
 
     @property
-    def form(self):
-        return self._form
+    def forms(self) -> dict[str, dfn.Form]:
+        return self._forms
 
     @property
     def coefficients(self) -> CoefficientMapping:
@@ -316,7 +312,7 @@ class UFLForm:
         return self._expressions
 
     def arguments(self) -> list[ufl.Argument]:
-        return self.form.arguments()
+        return {key: form.arguments() for key, form in self.forms.items()}
 
     ## Dict interface
     def keys(self) -> list[str]:
@@ -369,14 +365,24 @@ def add_form(form_a: UFLForm, form_b: UFLForm) -> UFLForm:
     # these with a single argument
     # NOTE: The form arguments are the test functions that forms are integrated
     # against for linear forms/functionals
-    new_form_a = form_a.form
-    new_form_b = form_b.form
-    args_a, args_b = new_form_a.arguments(), new_form_b.arguments()
-    for arg_a, arg_b in zip(args_a, args_b):
-        arg_shared = get_shared_function(arg_a, arg_b)
-        new_form_a = ufl.replace(form_a.form, {arg_a: arg_shared})
-        new_form_b = ufl.replace(form_b.form, {arg_b: arg_shared})
-    new_form = new_form_a + new_form_b
+
+    def add_ufl_form(a: dfn.Form, b: dfn.Form):
+        # new_form_a = form_a
+        # new_form_b = form_b
+        args_a, args_b = a.arguments(), b.arguments()
+        for arg_a, arg_b in zip(args_a, args_b):
+            arg_shared = get_shared_function(arg_a, arg_b)
+            a = ufl.replace(a, {arg_a: arg_shared})
+            b = ufl.replace(b, {arg_b: arg_shared})
+        return a + b
+
+    # TODO: Handle case where form_a and form_b have form keys have non-shared keys
+    assert form_a.forms.keys() == form_b.forms.keys()
+    keys = form_a.forms.keys()
+    new_forms = {
+        key: add_ufl_form(form_a.forms[key], form_b.forms[key])
+        for key in keys
+    }
 
     # Sum any expressions with the same key
     new_expressions = {**form_a.expressions, **form_b.expressions}
@@ -418,14 +424,17 @@ def add_form(form_a: UFLForm, form_b: UFLForm) -> UFLForm:
     }
     shared_coeffs = get_shared_coefficients(duplicate_coeffs)
     new_coefficients.update(shared_coeffs)
-    new_form = update_coefficients(new_form, duplicate_coeffs, shared_coeffs)
+    new_forms = {
+        key: update_coefficients(form, duplicate_coeffs, shared_coeffs)
+        for key, form in new_forms.items()
+    }
 
     new_expressions = {
         key: update_coefficients(expr, duplicate_coeffs, shared_coeffs)
         for key, expr in new_expressions.items()
     }
 
-    return UFLForm(new_form, new_coefficients, new_expressions)
+    return UFLForm(new_forms, new_coefficients, new_expressions)
 
 
 def mul_form(form: UFLForm, scalar: float) -> UFLForm:
@@ -434,7 +443,7 @@ def mul_form(form: UFLForm, scalar: float) -> UFLForm:
     """
     # Check that form arguments are consistent and replace duplicated
     # consistent arguments
-    new_form = scalar * form.form
+    new_form = scalar * form.forms
 
     return UFLForm(new_form, form.coefficients, form.expressions)
 
@@ -479,7 +488,7 @@ class PredefinedForm(UFLForm):
 
     COEFFICIENT_SPEC: dict[str, BaseFunctionSpaceSpec] = {}
     MAKE_FORM: Callable[
-        [CoefficientMapping, dfn.Measure, dfn.Mesh], tuple[dfn.Form, CoefficientMapping]
+        [CoefficientMapping, dfn.Measure, dfn.Mesh], tuple[dict[str, dfn.Form], CoefficientMapping]
     ]
 
     def __init__(
@@ -513,7 +522,7 @@ class InertialForm(PredefinedForm):
         density = coefficients['coeff.prop.rho']
         inertial_body_force = density * acc
 
-        return ufl.inner(inertial_body_force, vector_test) * measure, {}
+        return {'u': ufl.inner(inertial_body_force, vector_test) * measure}, {}
         # forms['expr.force_inertial'] = inertial_body_force
 
 
@@ -552,7 +561,7 @@ class IsotropicElasticForm(PredefinedForm):
             'expr.strain_energy': ufl.inner(stress_elastic, inf_strain),
             'expr.strain_energy_rate': 2*ufl.inner(stress_elastic_rate, inf_strain_rate),
         }
-        return ufl.inner(stress_elastic, strain_test) * measure, expressions
+        return {'u': ufl.inner(stress_elastic, strain_test) * measure}, expressions
 
 
 class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
@@ -589,7 +598,7 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
             'expr.stress_elastic': stress_elastic,
             'expr.strain_energy': ufl.inner(stress_elastic, inf_strain),
         }
-        return ufl.inner(stress_elastic, strain_test) * measure, expressions
+        return {'u': ufl.inner(stress_elastic, strain_test) * measure}, expressions
         # return forms
 
 
@@ -644,7 +653,7 @@ class IsotropicElasticSwellingForm(PredefinedForm):
             'expr.strain_green': E,
         }
 
-        return ufl.inner(S, DE) * dx, expressions
+        return {'u': ufl.inner(S, DE) * dx}, expressions
 
 
 class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
@@ -707,7 +716,7 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
             'expr.strain_green': E,
         }
 
-        return ufl.inner(S, DE) * dx, expressions
+        return {'u': ufl.inner(S, DE) * dx}, expressions
 
 
 # Surface forcing forms
@@ -736,7 +745,7 @@ class SurfacePressureForm(PredefinedForm):
 
         expressions = {}
         expressions['expr.fluid_traction'] = reference_traction
-        return ufl.inner(reference_traction, vector_test) * ds, expressions
+        return {'u': ufl.inner(reference_traction, vector_test) * ds}, expressions
 
 
 class ManualSurfaceContactTractionForm(PredefinedForm):
@@ -774,7 +783,7 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         coefficients['coeff.prop.ncontact'].assign(dfn.Constant(ncontact))
 
         expressions = {}
-        return ufl.inner(tcontact, vector_test) * measure, expressions
+        return {'u': ufl.inner(tcontact, vector_test) * measure}, expressions
 
 
 # Surface membrane forms
@@ -835,7 +844,7 @@ class IsotropicMembraneForm(PredefinedForm):
 
         expressions = {}
 
-        return ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure, expressions
+        return {'u': ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure}, expressions
 
         # forms['form.un.f1uva'] += res
         # forms['coeff.prop.nu_membrane'] = nu
@@ -892,7 +901,7 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
         )
 
         expressions = {}
-        return ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure, expressions
+        return {'u': ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure}, expressions
 
 
 # Viscous effect forms
@@ -933,10 +942,10 @@ class RayleighDampingForm(PredefinedForm):
         force_visco = rayleigh_m * rho * v
 
         expressions = {}
-
-        return (
+        form = (
             ufl.inner(force_visco, vector_test) + ufl.inner(stress_visco, strain_test)
-        ) * dx, expressions
+        ) * dx
+        return {'u': form}, expressions
 
         # coefficients['form.un.f1uva'] += damping
         # # coefficients['coeff.prop.nu'] = nu
@@ -970,7 +979,7 @@ class KelvinVoigtForm(PredefinedForm):
         expressions['expr.kv_stress'] = stress_visco
         expressions['expr.kv_strain_rate'] = inf_strain_rate
 
-        return ufl.inner(stress_visco, strain_test) * measure, expressions
+        return {'u': ufl.inner(stress_visco, strain_test) * measure}, expressions
 
 
 class APForceForm(PredefinedForm):
@@ -1013,7 +1022,7 @@ class APForceForm(PredefinedForm):
 
         expressions = {}
 
-        return -stiffness - viscous, expressions
+        return {'u': -stiffness - viscous}, expressions
 
 
 # Add shape effect forms
@@ -1042,7 +1051,7 @@ class ShapeForm(PredefinedForm):
 
         expressions = {}
 
-        return 0 * ufl.inner(umesh_ufl, vector_test) * measure, expressions
+        return {'u': 0 * ufl.inner(umesh_ufl, vector_test) * measure}, expressions
 
 
 ## Form modifiers
@@ -1073,7 +1082,7 @@ def modify_newmark_time_discretization(form: UFLForm) -> UFLForm:
 
     coefficients = {**form.coefficients, **new_coefficients}
 
-    new_functional = ufl.replace(form.form, {v1: v1_nmk, a1: a1_nmk})
+    new_functional = ufl.replace(form.forms, {v1: v1_nmk, a1: a1_nmk})
 
     return UFLForm(new_functional, coefficients, form.expressions)
 
@@ -1108,7 +1117,7 @@ def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
     linearized_forms = []
     for var_name in ['u1', 'v1', 'a1']:
         # unary_form_name = f'df1uva_{var_name}'
-        df_dx = dfn.derivative(form.form, form[f'coeff.state.{var_name}'])
+        df_dx = dfn.derivative(form.forms, form[f'coeff.state.{var_name}'])
         # print(len(df_dx.arguments()))
         # print(len(forms[f'form.un.f1uva'].arguments()))
         linearized_form = dfn.action(
@@ -1119,7 +1128,7 @@ def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
     for var_name in ['p1']:
         # unary_form_name = f'df1uva_{var_name}'
         # df_dx = form[f'form.bi.df1uva_d{var_name}']
-        df_dx = dfn.derivative(form.form, form[f'coeff.fsi.{var_name}'])
+        df_dx = dfn.derivative(form.forms, form[f'coeff.fsi.{var_name}'])
         linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dfsi.{var_name}'])
         linearized_forms.append(linearized_form)
 
@@ -1205,7 +1214,7 @@ def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
         + manual_state_var_names
         + ['coeff.time.dt', 'coeff.fsi.p1']
     ):
-        f = form.form
+        f = form.forms
         x = form[full_var_name]
 
         var_name = full_var_name.split(".")[-1]
@@ -1216,7 +1225,7 @@ def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
     # This section is for derivatives of the original not time-discretized residual
     # F(u1, v1, a1; parameters, ...)
     for full_var_name in final_state_names + manual_state_var_names + ['coeff.fsi.p1']:
-        f = form.form
+        f = form.forms
         x = form[full_var_name]
 
         var_name = full_var_name.split(".")[-1]
@@ -1266,7 +1275,7 @@ def gen_hopf_forms(form: UFLForm) -> dict[str, dfn.Form]:
     # for unary_form_name in unary_form_names:
     #     forms.update(gen_jac_property_forms(unary_form_name, form))
 
-    forms.update(gen_jac_state_forms(form.form))
+    forms.update(gen_jac_state_forms(form.forms))
 
     return forms
 
@@ -1278,12 +1287,12 @@ def gen_jac_state_forms(form: UFLForm) -> dict[str, dfn.Form]:
     forms = {}
     state_labels = ['u1', 'v1', 'a1']
     for state_name in state_labels:
-        df_dx = dfn.derivative(form.form, form[f'coeff.state.{state_name}'])
+        df_dx = dfn.derivative(form.forms, form[f'coeff.state.{state_name}'])
         forms[f'form.bi.dres_d{state_name}'] = df_dx
 
     state_labels = ['p1']
     for state_name in state_labels:
-        df_dx = dfn.derivative(form.form, form[f'coeff.fsi.{state_name}'])
+        df_dx = dfn.derivative(form.forms, form[f'coeff.fsi.{state_name}'])
         forms[f'form.bi.dres_d{state_name}'] = df_dx
 
     return forms
@@ -1307,7 +1316,7 @@ def gen_jac_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
             prop_coeff = form[f'coeff.prop.{prop_name}']
 
         try:
-            df_dprop = dfn.derivative(form.form, prop_coeff)
+            df_dprop = dfn.derivative(form.forms, prop_coeff)
         except RuntimeError:
             df_dprop = None
 

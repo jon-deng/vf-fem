@@ -116,10 +116,10 @@ def static_solid_configuration(
             model.set_ini_state(zero_state)
 
             res_form = ufl.replace(
-                form.form, {form['coeff.state.u0']: form['coeff.state.u1']}
+                form.forms, {form['coeff.state.u0']: form['coeff.state.u1']}
             )
         else:
-            res_form = form.form
+            res_form = form.forms
 
         jac = dfn.derivative(res_form, form['coeff.state.u1'])
 
@@ -151,10 +151,10 @@ def static_solid_configuration(
         state_n['u'] = u
     elif solver == 'automatic':
         jac = dfn.derivative(
-            model.residual.form.form, model.residual.form['coeff.state.u1']
+            model.residual.form.forms, model.residual.form['coeff.state.u1']
         )
         dfn.solve(
-            model.residual.form.form == 0.0,
+            model.residual.form.forms == 0.0,
             model.residual.form['coeff.state.u1'],
             bcs=model.residual.dirichlet_bcs['coeff.state.u1'],
             J=jac,
@@ -225,7 +225,7 @@ def static_coupled_configuration_picard(
             """
             # Solve for the solid deformation under the guessed fluid load
             dfn.solve(
-                solid.residual.form.form == 0.0,
+                solid.residual.form.forms == 0.0,
                 solid.residual.form['coeff.state.u1'],
                 bcs=solid.residual.dirichlet_bcs['coeff.state.u1'],
                 # J= ... ()

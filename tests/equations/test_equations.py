@@ -49,7 +49,13 @@ class UFLFormFixtures(FenicsMeshFixtures):
 class TestFenicsForm(UFLFormFixtures):
 
     def test_init(self, ufl_form, ufl_coefficients):
-        assert form.UFLForm(ufl_form, ufl_coefficients)
+        assert form.UFLForm({'f': ufl_form}, ufl_coefficients)
+
+    def test_add(self, ufl_form, ufl_coefficients):
+        form_a = form.UFLForm({'f': ufl_form}, ufl_coefficients)
+        form_b = form.UFLForm({'f': ufl_form}, ufl_coefficients)
+
+        assert form_a + form_b
 
 
 class TestPredefinedVolumeForms(UFLFormFixtures):

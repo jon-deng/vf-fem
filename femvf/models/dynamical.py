@@ -190,7 +190,7 @@ class BaseDynamicalFenicsModel:
         }
 
         self.cached_form_assemblers['form.un.res'] = CachedFormAssembler(
-            self.residual.form.form
+            self.residual.form.forms
         )
 
     @property
