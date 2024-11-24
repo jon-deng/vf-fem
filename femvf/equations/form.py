@@ -316,6 +316,9 @@ class UFLForm:
         return {key: form.arguments() for key, form in self.forms.items()}
 
     ## Dict interface
+    def __iter__(self):
+        return self.coefficients.__iter__()
+
     def keys(self) -> list[str]:
         return self.coefficients.keys()
 
