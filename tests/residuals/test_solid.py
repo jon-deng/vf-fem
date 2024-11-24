@@ -56,4 +56,5 @@ class TestResidual(FenicsMeshFixtures):
         return self.init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains)
 
     def test_assemble_form(self, residual):
-        assert dfn.assemble(residual.form.form)
+        for key, form in residual.form.forms.items():
+            assert dfn.assemble(form)

@@ -444,9 +444,9 @@ def mul_form(form: UFLForm, scalar: float) -> UFLForm:
     """
     # Check that form arguments are consistent and replace duplicated
     # consistent arguments
-    new_form = scalar * form.forms
+    new_forms = {key: scalar * ufl_form for key, ufl_form in form.forms.items()}
 
-    return UFLForm(new_form, form.coefficients, form.expressions)
+    return UFLForm(new_forms, form.coefficients, form.expressions)
 
 
 ## Pre-defined linear functionals
