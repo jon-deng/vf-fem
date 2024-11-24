@@ -6,7 +6,7 @@ import pytest
 
 import dolfin as dfn
 
-from femvf.residuals import solid
+from femvf.residuals import base, solid
 
 from tests.fixture_mesh import FenicsMeshFixtures
 
@@ -41,7 +41,7 @@ class TestResidual(FenicsMeshFixtures):
         ResidualClass: solid.PredefinedSolidResidual,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains
+        mesh_subdomains: list[dict[str, int]]
     ):
         assert self.init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains)
 
@@ -51,10 +51,10 @@ class TestResidual(FenicsMeshFixtures):
         ResidualClass: solid.PredefinedSolidResidual,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains
+        mesh_subdomains: list[dict[str, int]]
     ):
         return self.init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains)
 
-    def test_assemble_form(self, residual):
-        for key, form in residual.form.forms.items():
+    def test_assemble_form(self, residual: base.FenicsResidual):
+        for key, form in residual.form.ufl_forms.items():
             assert dfn.assemble(form)

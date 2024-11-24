@@ -265,7 +265,7 @@ class FenicsModel(BaseTransientModel):
             if 'form.' in key
         }
         self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(
-            self.residual.form.forms
+            self.residual.form.ufl_forms
         )
 
     @property

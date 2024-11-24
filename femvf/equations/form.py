@@ -268,19 +268,19 @@ class UFLForm:
 
     Parameters
     ----------
-    forms: dict[str, dfn.Form]
+    ufl_forms: dict[str, dfn.Form]
         The 'dfn.Form' instance
     coefficients: CoefficientMapping
         A mapping from string labels to `dfn.Coefficient` instances used in
-        `forms`
+        `ufl_forms`
 
     Attributes
     ----------
-    forms: dict[str, dfn.Form]
+    ufl_forms: dict[str, dfn.Form]
         The 'dfn.Form' instance
     coefficients: CoefficientMapping
         A mapping from string labels to `dfn.Coefficient` instances used in
-        `forms`
+        `ufl_forms`
     expressions: CoefficientMapping
         A mapping from string labels to `dfn.Expression` instances, using the
         coefficients in `coefficients`
@@ -288,12 +288,12 @@ class UFLForm:
 
     def __init__(
         self,
-        forms: dict[str, dfn.Form],
+        ufl_forms: dict[str, dfn.Form],
         coefficients: CoefficientMapping,
         expressions: Optional[CoefficientMapping] = None,
     ):
 
-        self._forms = forms
+        self._ufl_forms = ufl_forms
         self._coefficients = coefficients
 
         if expressions is None:
@@ -301,8 +301,8 @@ class UFLForm:
         self._expressions = expressions
 
     @property
-    def forms(self) -> dict[str, dfn.Form]:
-        return self._forms
+    def ufl_forms(self) -> dict[str, dfn.Form]:
+        return self._ufl_forms
 
     @property
     def coefficients(self) -> CoefficientMapping:
@@ -313,7 +313,7 @@ class UFLForm:
         return self._expressions
 
     def arguments(self) -> list[ufl.Argument]:
-        return {key: form.arguments() for key, form in self.forms.items()}
+        return {key: form.arguments() for key, form in self.ufl_forms.items()}
 
     ## Dict interface
     def __iter__(self):
@@ -381,10 +381,10 @@ def add_form(form_a: UFLForm, form_b: UFLForm) -> UFLForm:
         return a + b
 
     # TODO: Handle case where form_a and form_b have form keys have non-shared keys
-    assert form_a.forms.keys() == form_b.forms.keys()
-    keys = form_a.forms.keys()
+    assert form_a.ufl_forms.keys() == form_b.ufl_forms.keys()
+    keys = form_a.ufl_forms.keys()
     new_forms = {
-        key: add_ufl_form(form_a.forms[key], form_b.forms[key])
+        key: add_ufl_form(form_a.ufl_forms[key], form_b.ufl_forms[key])
         for key in keys
     }
 
@@ -447,7 +447,7 @@ def mul_form(form: UFLForm, scalar: float) -> UFLForm:
     """
     # Check that form arguments are consistent and replace duplicated
     # consistent arguments
-    new_forms = {key: scalar * ufl_form for key, ufl_form in form.forms.items()}
+    new_forms = {key: scalar * ufl_form for key, ufl_form in form.ufl_forms.items()}
 
     return UFLForm(new_forms, form.coefficients, form.expressions)
 
@@ -1089,7 +1089,7 @@ def modify_newmark_time_discretization(form: UFLForm) -> UFLForm:
 
     coefficients = {**form.coefficients, **new_coefficients}
 
-    new_functional = ufl.replace(form.forms, {v1: v1_nmk, a1: a1_nmk})
+    new_functional = ufl.replace(form.ufl_forms, {v1: v1_nmk, a1: a1_nmk})
 
     return UFLForm(new_functional, coefficients, form.expressions)
 
@@ -1124,7 +1124,7 @@ def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
     linearized_forms = []
     for var_name in ['u1', 'v1', 'a1']:
         # unary_form_name = f'df1uva_{var_name}'
-        df_dx = dfn.derivative(form.forms, form[f'coeff.state.{var_name}'])
+        df_dx = dfn.derivative(form.ufl_forms, form[f'coeff.state.{var_name}'])
         # print(len(df_dx.arguments()))
         # print(len(forms[f'form.un.f1uva'].arguments()))
         linearized_form = dfn.action(
@@ -1135,7 +1135,7 @@ def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
     for var_name in ['p1']:
         # unary_form_name = f'df1uva_{var_name}'
         # df_dx = form[f'form.bi.df1uva_d{var_name}']
-        df_dx = dfn.derivative(form.forms, form[f'coeff.fsi.{var_name}'])
+        df_dx = dfn.derivative(form.ufl_forms, form[f'coeff.fsi.{var_name}'])
         linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dfsi.{var_name}'])
         linearized_forms.append(linearized_form)
 
@@ -1221,7 +1221,7 @@ def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
         + manual_state_var_names
         + ['coeff.time.dt', 'coeff.fsi.p1']
     ):
-        f = form.forms
+        f = form.ufl_forms
         x = form[full_var_name]
 
         var_name = full_var_name.split(".")[-1]
@@ -1232,7 +1232,7 @@ def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
     # This section is for derivatives of the original not time-discretized residual
     # F(u1, v1, a1; parameters, ...)
     for full_var_name in final_state_names + manual_state_var_names + ['coeff.fsi.p1']:
-        f = form.forms
+        f = form.ufl_forms
         x = form[full_var_name]
 
         var_name = full_var_name.split(".")[-1]
@@ -1282,7 +1282,7 @@ def gen_hopf_forms(form: UFLForm) -> dict[str, dfn.Form]:
     # for unary_form_name in unary_form_names:
     #     forms.update(gen_jac_property_forms(unary_form_name, form))
 
-    forms.update(gen_jac_state_forms(form.forms))
+    forms.update(gen_jac_state_forms(form.ufl_forms))
 
     return forms
 
@@ -1294,12 +1294,12 @@ def gen_jac_state_forms(form: UFLForm) -> dict[str, dfn.Form]:
     forms = {}
     state_labels = ['u1', 'v1', 'a1']
     for state_name in state_labels:
-        df_dx = dfn.derivative(form.forms, form[f'coeff.state.{state_name}'])
+        df_dx = dfn.derivative(form.ufl_forms, form[f'coeff.state.{state_name}'])
         forms[f'form.bi.dres_d{state_name}'] = df_dx
 
     state_labels = ['p1']
     for state_name in state_labels:
-        df_dx = dfn.derivative(form.forms, form[f'coeff.fsi.{state_name}'])
+        df_dx = dfn.derivative(form.ufl_forms, form[f'coeff.fsi.{state_name}'])
         forms[f'form.bi.dres_d{state_name}'] = df_dx
 
     return forms
@@ -1323,7 +1323,7 @@ def gen_jac_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
             prop_coeff = form[f'coeff.prop.{prop_name}']
 
         try:
-            df_dprop = dfn.derivative(form.forms, prop_coeff)
+            df_dprop = dfn.derivative(form.ufl_forms, prop_coeff)
         except RuntimeError:
             df_dprop = None
 
