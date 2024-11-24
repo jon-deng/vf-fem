@@ -289,6 +289,8 @@ class UFLForm:
     _coefficients: CoefficientMapping
     _expressions: CoefficientMapping
 
+    # TODO: Refactor so that a dictionary of forms is passed in
+    # Each form key would represent one block of the residual
     def __init__(
         self,
         form: dfn.Form,

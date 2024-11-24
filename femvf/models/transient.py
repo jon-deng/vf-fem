@@ -259,6 +259,9 @@ class FenicsModel(BaseTransientModel):
         self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
 
+        # TODO: REFACTOR Form assembly to dynamically create the desired
+        # form based on inputs keys (this should make it much clearer and eaiser to handle)
+        # you'll be able to get rid of many of the form manipulation code
         self.cached_form_assemblers = {
             key: CachedFormAssembler(biform, keep_diagonal=True)
             for key, biform in bilinear_forms.items()
@@ -737,6 +740,7 @@ class BaseTransientFSIModel(BaseTransientModel):
         Note that while each DOF array
     """
 
+    # TODO: Get rid of multiple fluid models
     def __init__(
         self,
         solid: FenicsModel,
