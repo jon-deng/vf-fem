@@ -23,13 +23,8 @@ class TestResidual(FenicsMeshFixtures):
     def ResidualClass(self, request):
         return request.param
 
-    def test_init(
-            self,
-            ResidualClass: solid.PredefinedSolidResidual,
-            mesh: dfn.Mesh,
-            mesh_functions: list[dfn.MeshFunction],
-            mesh_subdomains
-        ):
+    @staticmethod
+    def init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains):
 
         dim = mesh.topology().dim()
         dirichlet_bcs = {
@@ -37,4 +32,28 @@ class TestResidual(FenicsMeshFixtures):
             # 'coeff.state.u0': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
 
-        ResidualClass(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
+        return ResidualClass(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
+
+    # TODO: Not sure duplicated init + residual is good design?? Seem off
+
+    def test_init(
+        self,
+        ResidualClass: solid.PredefinedSolidResidual,
+        mesh: dfn.Mesh,
+        mesh_functions: list[dfn.MeshFunction],
+        mesh_subdomains
+    ):
+        assert self.init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains)
+
+    @pytest.fixture()
+    def residual(
+        self,
+        ResidualClass: solid.PredefinedSolidResidual,
+        mesh: dfn.Mesh,
+        mesh_functions: list[dfn.MeshFunction],
+        mesh_subdomains
+    ):
+        return self.init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains)
+
+    def test_assemble_form(self, residual):
+        assert dfn.assemble(residual.form.form)
