@@ -7,6 +7,7 @@ References
 """
 
 from typing import Callable, Union, Any, Optional
+from ufl.core.expr import Expr
 
 import operator
 import warnings
@@ -462,7 +463,7 @@ class PredefinedForm(UFLForm):
     ----------------
     COEFFICIENT_SPEC: dict[str, BaseFunctionSpaceSpec]
         A mapping defining all coefficients that are needed to create the form
-    MAKE_FORM: Callable[
+    INIT_FORM: Callable[
             [CoefficientMapping, dfn.Measure, dfn.Mesh],
             tuple[dfn.Form, CoefficientMapping]
         ]
@@ -487,21 +488,24 @@ class PredefinedForm(UFLForm):
     """
 
     COEFFICIENT_SPEC: dict[str, BaseFunctionSpaceSpec] = {}
-    MAKE_FORM: Callable[
-        [CoefficientMapping, dfn.Measure, dfn.Mesh], tuple[dict[str, dfn.Form], CoefficientMapping]
-    ]
+    def init_form(
+        self,
+        coefficients: CoefficientMapping,
+        measure: dfn.Measure,
+        mesh: dfn.Mesh
+    ) -> tuple[dict[str, dfn.Form], dict[str, Expr]]:
+        raise NotImplementedError()
 
     def __init__(
         self, coefficients: CoefficientMapping, measure: dfn.Measure, mesh: dfn.Mesh
     ):
-
         # If a coefficient key is not supplied, generate a default coefficient
         # from `COEFFICIENT_SPEC`
         for key, spec in self.COEFFICIENT_SPEC.items():
             if key not in coefficients:
                 coefficients[key] = spec.generate_function(mesh)
 
-        form, expressions = self.MAKE_FORM(coefficients, measure, mesh)
+        form, expressions = self.init_form(coefficients, measure, mesh)
         super().__init__(form, coefficients, expressions)
 
 
@@ -515,7 +519,7 @@ class InertialForm(PredefinedForm):
         'coeff.prop.rho': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['coeff.state.a1'].function_space())
 
         acc = coefficients['coeff.state.a1']
@@ -541,7 +545,7 @@ class IsotropicElasticForm(PredefinedForm):
         'coeff.prop.nu': const_spec('scalar', default_value=0.45),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
         strain_test = strain_inf(vector_test)
@@ -576,7 +580,7 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
         'coeff.prop.k_swelling': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
         strain_test = strain_inf(vector_test)
@@ -615,7 +619,7 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
         """
         Add an effect for isotropic elasticity with a swelling field
         """
@@ -672,7 +676,7 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
         'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
         """
         Add an effect for isotropic elasticity with a swelling field
         """
@@ -732,7 +736,7 @@ class SurfacePressureForm(PredefinedForm):
         'coeff.fsi.p1': func_spec('CG', 1, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
 
         ds = measure
 
@@ -761,7 +765,7 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         'coeff.prop.kcontact': const_spec('scalar', 1.0),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
 
         # NOTE: The contact traction must be manually linked with displacements
         # and penalty parameters!
@@ -801,7 +805,7 @@ class IsotropicMembraneForm(PredefinedForm):
         'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh, large_def=False):
+    def init_form(self, coefficients, measure, mesh, large_def=False):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
         # Define the 8th order projector to get the planar strain component
@@ -862,7 +866,7 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
         'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh, large_def=False):
+    def init_form(self, coefficients, measure, mesh, large_def=False):
         vector_test = dfn.TestFunction(coefficients['coeff.state.u1'].function_space())
 
         # Define the 8th order projector to get the planar strain component
@@ -921,7 +925,7 @@ class RayleighDampingForm(PredefinedForm):
         'coeff.prop.rayleigh_k': const_spec('scalar', 1.0),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh, large_def=False):
+    def init_form(self, coefficients, measure, mesh, large_def=False):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
@@ -964,7 +968,7 @@ class KelvinVoigtForm(PredefinedForm):
         'coeff.prop.eta': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
 
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
@@ -999,7 +1003,7 @@ class APForceForm(PredefinedForm):
         'coeff.prop.muscle_stress': func_spec('DG', 0, 'scalar'),
     }
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['coeff.state.v1'].function_space())
 
         u1, v1 = coefficients['coeff.state.u1'], coefficients['coeff.state.v1']
@@ -1033,7 +1037,7 @@ class ShapeForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {'coeff.prop.umesh': func_spec('CG', 1, 'vector')}
 
-    def MAKE_FORM(self, coefficients, measure, mesh):
+    def init_form(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(
             coefficients['coeff.prop.umesh'].function_space()
         )
