@@ -7,6 +7,7 @@ References
 """
 
 from typing import Callable, Union, Any, Optional
+import ufl.coefficient
 from ufl.core.expr import Expr
 
 import operator
@@ -1089,9 +1090,12 @@ def modify_newmark_time_discretization(form: UFLForm) -> UFLForm:
 
     coefficients = {**form.coefficients, **new_coefficients}
 
-    new_functional = ufl.replace(form.ufl_forms, {v1: v1_nmk, a1: a1_nmk})
+    ufl_forms = {
+        key: ufl.replace(ufl_form, {v1: v1_nmk, a1: a1_nmk})
+        for key, ufl_form in form.ufl_forms.items()
+    }
 
-    return UFLForm(new_functional, coefficients, form.expressions)
+    return UFLForm(ufl_forms, coefficients, form.expressions)
 
 
 def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
@@ -1215,35 +1219,37 @@ def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
 
     # This section is for derivatives of the time-discretized residual
     # F(u0, v0, a0, u1; parameters, ...)
-    for full_var_name in (
-        initial_state_names
-        + ['coeff.state.u1']
-        + manual_state_var_names
-        + ['coeff.time.dt', 'coeff.fsi.p1']
-    ):
-        f = form.ufl_forms
-        x = form[full_var_name]
+    for form_key, f in form.ufl_forms.items():
+        for full_var_name in (
+            initial_state_names
+            + ['coeff.state.u1']
+            + manual_state_var_names
+            + ['coeff.time.dt', 'coeff.fsi.p1']
+        ):
+            # f = form.ufl_forms
+            x = form[full_var_name]
 
-        var_name = full_var_name.split(".")[-1]
-        form_name = f'form.bi.df1_d{var_name}'
-        bi_forms[form_name] = dfn.derivative(f, x)
-        bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
+            var_name = full_var_name.split(".")[-1]
+            form_name = f'{form_key}.bi.df1_d{var_name}'
+            bi_forms[form_name] = dfn.derivative(f, x)
+            bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
 
     # This section is for derivatives of the original not time-discretized residual
     # F(u1, v1, a1; parameters, ...)
-    for full_var_name in final_state_names + manual_state_var_names + ['coeff.fsi.p1']:
-        f = form.ufl_forms
-        x = form[full_var_name]
+    for form_key, f in form.ufl_forms.items():
+        for full_var_name in final_state_names + manual_state_var_names + ['coeff.fsi.p1']:
+            # f = form.ufl_forms
+            x = form[full_var_name]
 
-        var_name = full_var_name.split(".")[-1]
-        form_name = f'form.bi.df1uva_d{var_name}'
-        bi_forms[form_name] = dfn.derivative(f, x)
-        try:
-            # TODO: This can fail if the form is not sensitive to a coefficient so the derivative
-            # is 0
-            bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
-        except:
-            pass
+            var_name = full_var_name.split(".")[-1]
+            form_name = f'{form_key}.bi.df1uva_d{var_name}'
+            bi_forms[form_name] = dfn.derivative(f, x)
+            try:
+                # TODO: This can fail if the form is not sensitive to a coefficient so the derivative
+                # is 0
+                bi_forms[f'{form_name}_adj'] = dfn.adjoint(bi_forms[form_name])
+            except:
+                pass
 
     return bi_forms
 

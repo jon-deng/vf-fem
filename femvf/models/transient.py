@@ -259,14 +259,18 @@ class FenicsModel(BaseTransientModel):
         self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
 
-        self.cached_form_assemblers = {
-            key: CachedFormAssembler(biform, keep_diagonal=True)
-            for key, biform in bilinear_forms.items()
-            if 'form.' in key
-        }
-        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(
-            self.residual.form.ufl_forms
-        )
+        # TODO: Refactor handling of multiple `ufl_forms`
+        # This is super unclear right now
+        self.FORM_KEY = 'u'
+        for form_key in residual.form.ufl_forms:
+            self.cached_form_assemblers = {
+                key: CachedFormAssembler(biform, keep_diagonal=True)
+                for key, biform in bilinear_forms.items()
+                if form_key in key
+            }
+            self.cached_form_assemblers[f'{form_key}.un.f1'] = CachedFormAssembler(
+                self.residual.form.ufl_forms[form_key]
+            )
 
     @property
     def residual(self) -> slr.FenicsResidual:
@@ -369,7 +373,7 @@ class FenicsModel(BaseTransientModel):
 
         res = self.state1.copy()
         values = [
-            self.cached_form_assemblers['form.un.f1'].assemble(),
+            self.cached_form_assemblers['u.un.f1'].assemble(),
             v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt),
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
         ]
@@ -402,10 +406,10 @@ class FenicsModel(BaseTransientModel):
         # This is done with the `cached_form_assembler` since it caches the
         # tensor it applies on
         dfu_du = dfn.assemble(
-            self.cached_form_assemblers['form.bi.df1_du1'].form,
+            self.cached_form_assemblers['u.bi.df1_du1'].form,
             tensor=dfn.PETScMatrix(),
         )
-        # dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        # dfu_du = self.cached_form_assemblers['u.bi.df1_du1'].assemble()
         for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
             bc.apply(dfu_du)
 
@@ -434,9 +438,9 @@ class FenicsModel(BaseTransientModel):
         assert len(self.state1.bshape) == 1
         N = self.state1.bshape[0][0]
 
-        dfu_du = self.cached_form_assemblers['form.bi.df1_du0'].assemble()
-        dfu_dv = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
-        dfu_da = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
+        dfu_du = self.cached_form_assemblers['u.bi.df1_du0'].assemble()
+        dfu_dv = self.cached_form_assemblers['u.bi.df1_dv0'].assemble()
+        dfu_da = self.cached_form_assemblers['u.bi.df1_da0'].assemble()
         for mat in (dfu_du, dfu_dv, dfu_da):
             for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
                 bc.apply(mat)
@@ -468,7 +472,7 @@ class FenicsModel(BaseTransientModel):
 
         # It should be hardcoded that the control is just the surface pressure
         assert self.control.shape[0] == 1
-        dfu_dcontrol = self.cached_form_assemblers['form.bi.df1_dp1'].assemble()
+        dfu_dcontrol = self.cached_form_assemblers['u.bi.df1_dp1'].assemble()
         dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
 
         submats = [[dfu_dcontrol], [dfv_dcontrol]]
@@ -596,11 +600,11 @@ class NodalContactModel(FenicsModel):
         dfu2_dtcontact = None
         if adjoint:
             dfu2_dtcontact = self.cached_form_assemblers[
-                'form.bi.df1uva_dtcontact_adj'
+                'u.bi.df1uva_dtcontact_adj'
             ].assemble()
         else:
             dfu2_dtcontact = self.cached_form_assemblers[
-                'form.bi.df1uva_dtcontact'
+                'u.bi.df1uva_dtcontact'
             ].assemble()
 
         XREF = self.XREF
@@ -1118,7 +1122,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
 
         solid = self.solid
 
-        dfu1_du1 = self.solid.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        dfu1_du1 = self.solid.cached_form_assemblers['u.bi.df1_du1'].assemble()
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -1146,7 +1150,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-        dfu2_dp2 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
+        dfu2_dp2 = self.solid.cached_form_assemblers['u.bi.df1_dp1_adj'].assemble()
 
         # map dfu2_dp2 to have p on the fluid domain
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
