@@ -237,8 +237,6 @@ class FenicsModel(BaseTransientModel):
 
         self._residual = residual
 
-        bilinear_forms = form.gen_residual_bilinear_forms(self.residual.form)
-
         ## Define the state/controls/properties
         u0 = self.residual.form['coeff.state.u0']
         v0 = self.residual.form['coeff.state.v0']
