@@ -165,7 +165,7 @@ class BaseTransientModel:
 
 from femvf.equations import newmark
 from femvf.equations import form
-from .assemblyutils import CachedUFLFormAssembler
+from .assemblyutils import FormAssembler
 
 
 def depack_form_coefficient_function(form_coefficient):
@@ -259,17 +259,11 @@ class FenicsModel(BaseTransientModel):
         self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
 
-        # TODO: REFACTOR Form assembly to dynamically create the desired
-        # form based on inputs keys (this should make it much clearer and eaiser to handle)
-        # you'll be able to get rid of many of the form manipulation code
-        self.cached_form_assemblers = {
-            key: CachedUFLFormAssembler(biform, keep_diagonal=True)
-            for key, biform in bilinear_forms.items()
-            if 'form.' in key
-        }
-        self.cached_form_assemblers['form.un.f1'] = CachedUFLFormAssembler(
-            self.residual.form.form
-        )
+        self._assembler = FormAssembler(new_form)
+
+    @property
+    def assembler(self):
+        return self._assembler
 
     @property
     def residual(self) -> slr.FenicsResidual:
@@ -372,7 +366,7 @@ class FenicsModel(BaseTransientModel):
 
         res = self.state1.copy()
         values = [
-            self.cached_form_assemblers['form.un.f1'].assemble(),
+            self.assembler.assemble('form'),
             v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt),
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
         ]
@@ -404,11 +398,7 @@ class FenicsModel(BaseTransientModel):
         # trying to reassemble into that tensor seems to cause problems.
         # This is done with the `cached_form_assembler` since it caches the
         # tensor it applies on
-        dfu_du = dfn.assemble(
-            self.cached_form_assemblers['form.bi.df1_du1'].form,
-            tensor=dfn.PETScMatrix(),
-        )
-        # dfu_du = self.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        dfu_du = self.assembler.assemble_derivative('form', 'coeff.state.u1')
         for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
             bc.apply(dfu_du)
 
@@ -437,9 +427,9 @@ class FenicsModel(BaseTransientModel):
         assert len(self.state1.bshape) == 1
         N = self.state1.bshape[0][0]
 
-        dfu_du = self.cached_form_assemblers['form.bi.df1_du0'].assemble()
-        dfu_dv = self.cached_form_assemblers['form.bi.df1_dv0'].assemble()
-        dfu_da = self.cached_form_assemblers['form.bi.df1_da0'].assemble()
+        dfu_du = self.assembler.assemble_derivative('form', 'coeff.state.u0')
+        dfu_dv = self.assembler.assemble_derivative('form', 'coeff.state.v0')
+        dfu_da = self.assembler.assemble_derivative('form', 'coeff.state.a0')
         for mat in (dfu_du, dfu_dv, dfu_da):
             for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
                 bc.apply(mat)
@@ -471,7 +461,7 @@ class FenicsModel(BaseTransientModel):
 
         # It should be hardcoded that the control is just the surface pressure
         assert self.control.shape[0] == 1
-        dfu_dcontrol = self.cached_form_assemblers['form.bi.df1_dp1'].assemble()
+        dfu_dcontrol = self.assembler.assemble_derivative('form', 'coeff.fsi.p1')
         dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
 
         submats = [[dfu_dcontrol], [dfv_dcontrol]]
@@ -596,15 +586,9 @@ class NodalContactModel(FenicsModel):
 
     def _assem_dresu_du_contact(self, adjoint=False):
         # Compute things needed to find sensitivities of contact pressure
-        dfu2_dtcontact = None
-        if adjoint:
-            dfu2_dtcontact = self.cached_form_assemblers[
-                'form.bi.df1uva_dtcontact_adj'
-            ].assemble()
-        else:
-            dfu2_dtcontact = self.cached_form_assemblers[
-                'form.bi.df1uva_dtcontact'
-            ].assemble()
+        dfu2_dtcontact = self.assembler.assemble_derivative(
+            'form', 'coeff.state.manual.tcontact', adjoint=adjoint
+        )
 
         XREF = self.XREF
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
@@ -1128,7 +1112,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
 
         solid = self.solid
 
-        dfu1_du1 = self.solid.cached_form_assemblers['form.bi.df1_du1'].assemble()
+        dfu1_du1 = self.solid.assembler.assemble_derivative('form', 'coeff.state.u1')
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -1153,10 +1137,10 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         # self.set_iter_params(**it_params)
         dt = self.solid.dt
 
-        dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfu2_du2 = self.solid.assembler.assemble_derivative('form', 'coeff.state.u1', adjoint=True)
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-        dfu2_dp2 = self.solid.cached_form_assemblers['form.bi.df1_dp1_adj'].assemble()
+        dfu2_dp2 = self.solid.assembler.assemble_derivative('form', 'coeff.fsi.p1', adjoint=True)
 
         # map dfu2_dp2 to have p on the fluid domain
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
