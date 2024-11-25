@@ -24,6 +24,13 @@ class TestSolid(FenicsMeshFixtures):
     def SolidResidual(self, request):
         return request.param
 
+    def init_residual(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
+        dim = mesh.topology().dim()
+        dirichlet_bcs = {
+            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+        }
+        return SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
+
     def test_init(
             self,
             SolidResidual: slr.PredefinedSolidResidual,
@@ -31,14 +38,40 @@ class TestSolid(FenicsMeshFixtures):
             mesh_functions,
             mesh_subdomains
         ):
-        dim = mesh.topology().dim()
-        dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
-        }
-        residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
+        residual = self.init_residual(SolidResidual, mesh, mesh_functions, mesh_subdomains)
         assert transient.FenicsModel(residual)
 
+    @pytest.fixture()
+    def residual(
+            self,
+            SolidResidual: slr.PredefinedSolidResidual,
+            mesh,
+            mesh_functions,
+            mesh_subdomains
+        ):
+        return self.init_residual(SolidResidual, mesh, mesh_functions, mesh_subdomains)
+
     # TODO: Think of ways you can test a model is working properly?
+    @pytest.fixture()
+    def model(self, residual: slr.FenicsResidual):
+        model = transient.FenicsModel(residual)
+        model.dt = 1
+        return model
+
+    def test_assem_res(self, model: transient.FenicsModel):
+        assert model.assem_res()
+
+    def test_assem_dres_dstate0(self, model: transient.FenicsModel):
+        assert model.assem_dres_dstate0()
+
+    def test_assem_dres_dstate1(self, model: transient.FenicsModel):
+        assert model.assem_dres_dstate1()
+
+    def test_assem_dres_dcontrol(self, model: transient.FenicsModel):
+        assert model.assem_dres_dcontrol()
+
+    def test_assem_dres_dprops(self, model: transient.FenicsModel):
+        assert model.assem_dres_dprops()
 
 
 class TestFluid:
