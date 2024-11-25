@@ -1118,7 +1118,8 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
-        self.solid.forms['bc.dirichlet'].apply(dfu1_du1)
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(dfu1_du1)
         dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
         x['v'][:] = b['v'] - dfv2_du2 * x['u']
         x['a'][:] = b['a'] - dfa2_du2 * x['u']
@@ -1158,10 +1159,12 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
 
         # adjoint states for v, a, and q are explicit so we can solve for them
-        self.solid.forms['bc.dirichlet'].apply(adj_v_rhs)
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(adj_v_rhs)
         adj_uva['v'][:] = adj_v_rhs
 
-        self.solid.forms['bc.dirichlet'].apply(adj_a_rhs)
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(adj_a_rhs)
         adj_uva['a'][:] = adj_a_rhs
 
         # TODO: how to apply fluid boundary conditions in a generic way?
@@ -1171,13 +1174,18 @@ class ImplicitFSIModel(BaseTransientFSIModel):
             dfv2_du2 * adj_uva['v'] + dfa2_du2 * adj_uva['a'] + dfq2_du2 * adj_qp['q']
         )
 
-        bc_dofs = np.array(
-            list(self.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
-            dtype=np.int32,
+        bc_dofs = np.concatenate(
+            [
+                list(bc.get_boundary_values().keys())
+                or bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']
+            ],
+            dtype=np.int32
         )
-        self.solid.forms['bc.dirichlet'].apply(dfu2_du2, adj_u_rhs)
+        bc_dofs = np.unique(bc_dofs)
+
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(dfu2_du2, adj_u_rhs)
         dfp2_du2.zeroRows(bc_dofs, diag=0.0)
-        # self.solid.forms['bc.dirichlet'].zero_columns(dfu2_du2, adj_u_rhs.copy(), diagonal_value=1.0)
 
         # solve the coupled system for pressure and displacement residuals
         dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
