@@ -639,6 +639,8 @@ from .jaxutils import blockvec_to_dict, flatten_nested_dict
 class JaxModel(BaseTransientModel):
 
     def __init__(self, residual: flr.JaxResidual):
+        self._residual = residual
+
         res, (state, control, prop) = residual.res, residual.res_args
 
         self._res = jax.jit(res)
@@ -660,6 +662,10 @@ class JaxModel(BaseTransientModel):
             blockvec_to_dict(self.control),
             blockvec_to_dict(self.prop),
         )
+
+    @property
+    def residual(self) -> flr.JaxResidual:
+        return self._residual
 
     @property
     def fluid(self):
