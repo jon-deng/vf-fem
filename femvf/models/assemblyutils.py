@@ -85,19 +85,28 @@ class FormAssembler:
 
         return self.assemblers[form_key].assemble()
 
-
-    def assemble_derivative(self, residual_key: str, coefficient_key: str):
+    def assemble_derivative(
+            self,
+            residual_key: str,
+            coefficient_key: str,
+            adjoint: bool=False
+        ):
         """
         Assemble a residual from the form
         """
         # TODO: Update this hard-coded value for multiple residuals keys
         # in `Form`
         residual_key = "form"
-        form_key = f"d{residual_key}_d{coefficient_key}"
+        if adjoint:
+            form_key = f"d{residual_key}_d{coefficient_key}_adj"
+        else:
+            form_key = f"d{residual_key}_d{coefficient_key}"
 
         if form_key not in self.assemblers:
             coeff = self.form[coefficient_key]
             form = dfn.derivative(self.form.form, coeff)
+            if adjoint:
+                form = dfn.adjoint(form)
             self.assemblers[form_key] = CachedUFLFormAssembler(form)
 
         return self.assemblers[form_key].assemble()
