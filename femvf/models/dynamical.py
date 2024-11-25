@@ -121,7 +121,7 @@ class BaseLinearizedDynamicalModel(BaseDynamicalModel):
 
 ### FENICS MODELS
 
-from .assemblyutils import CachedUFLFormAssembler
+from .assemblyutils import FormAssembler
 from .transient import (
     properties_bvec_from_forms,
     depack_form_coefficient_function,
@@ -151,15 +151,6 @@ class BaseDynamicalFenicsModel:
 
         self._residual = residual
 
-        # assert isinstance(fsi_facet_labels, (list, tuple))
-        # assert isinstance(fixed_facet_labels, (list, tuple))
-        # self.residual_form_name = residual_form_name
-        # self._forms = self.form_definitions(mesh, mesh_funcs, mesh_entities_label_to_value, fsi_facet_labels, fixed_facet_labels)
-        # bilinear_forms = gen_residual_bilinear_forms(self.residual.form)
-        hopf_forms = form.gen_jac_state_forms(self.residual.form)
-        prop_jac_forms = form.gen_jac_property_forms(self.residual.form)
-        forms = {**hopf_forms, **prop_jac_forms}
-
         self.u = self.residual.form['coeff.state.u1']
         self.v = self.residual.form['coeff.state.v1']
         self.state = bv.BlockVector(
@@ -183,15 +174,11 @@ class BaseDynamicalFenicsModel:
         self.prop = bv.convert_subtype_to_petsc(self.prop)
         self.set_prop(self.prop)
 
-        self.cached_form_assemblers = {
-            key: CachedUFLFormAssembler(form)
-            for key, form in forms.items()
-            if ('form.' in key and form is not None)
-        }
+        self._assembler = FormAssembler(residual.form)
 
-        self.cached_form_assemblers['form.un.res'] = CachedUFLFormAssembler(
-            self.residual.form.form
-        )
+    @property
+    def assembler(self) -> FormAssembler:
+        return self._assembler
 
     @property
     def residual(self) -> solid.FenicsResidual:
@@ -253,14 +240,14 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
 
     @cast_output_bvec_to_petsc
     def assem_res(self):
-        resu = self.cached_form_assemblers['form.un.res'].assemble()
+        resu = self.assembler.assemble('form')
         resv = self.v.vector() - self.ut.vector()
         return bv.BlockVector([resu, resv], labels=[['u', 'v']])
 
     @cast_output_bmat_to_petsc
     def assem_dres_dstate(self):
-        dresu_du = self.cached_form_assemblers['form.bi.dres_du1'].assemble()
-        dresu_dv = self.cached_form_assemblers['form.bi.dres_dv1'].assemble()
+        dresu_du = self.assembler.assemble_derivative('form', 'coeff.state.u1')
+        dresu_dv = self.assembler.assemble_derivative('form', 'coeff.state.v1')
 
         n = self.v.vector().size()
         dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -273,7 +260,7 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
-        dresu_dvt = self.cached_form_assemblers['form.bi.dres_da1'].assemble()
+        dresu_dvt = self.assembler.assemble_derivative('form', 'coeff.state.a1')
 
         dresv_dut = dfn.PETScMatrix(-1 * subops.ident_mat(n))
         dresv_dvt = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
@@ -284,7 +271,7 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
     @cast_output_bmat_to_petsc
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
-        dresu_dcontrol = self.cached_form_assemblers['form.bi.dres_dp1'].assemble()
+        dresu_dcontrol = self.assembler.assemble_derivative('form', 'coeff.fsi.p1')
 
         dresv_dcontrol = dfn.PETScMatrix(
             subops.zero_mat(self.state['v'].size, self.control['p'].size)
@@ -302,13 +289,11 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
         ]
 
         j_emod = self.prop.labels[0].index('emod')
-        mats[0][j_emod] = self.cached_form_assemblers['form.bi.dres_demod'].assemble()
+        mats[0][j_emod] = self.assembler.assemble_derivative('form', 'coeff.prop.emod')
 
         if 'umesh' in self.prop:
             j_shape = self.prop.labels[0].index('umesh')
-            mats[0][j_shape] = self.cached_form_assemblers[
-                'form.bi.dres_dumesh'
-            ].assemble()
+            mats[0][j_shape] = self.assembler.assemble_derivative('form', 'coeff.prop.umesh')
 
         return bm.BlockMatrix(mats, labels=(self.state.labels[0], self.prop.labels[0]))
 
@@ -357,14 +342,14 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
 
     @cast_output_bvec_to_petsc
     def assem_res(self):
-        resu = self.cached_form_assemblers['form.un.res'].assemble()
+        resu = self.assembler.assemble('form')
         resv = self.dv.vector() - self.dut.vector()
         return bv.BlockVector([resu, resv], labels=[['u', 'v']])
 
     @cast_output_bmat_to_petsc
     def assem_dres_dstate(self):
-        dresu_du = self.cached_form_assemblers['form.bi.dres_du1'].assemble()
-        dresu_dv = self.cached_form_assemblers['form.bi.dres_dv1'].assemble()
+        dresu_du = self.assembler.assemble_derivative('form', 'coeff.state.u1')
+        dresu_dv = self.assembler.assemble_derivative('form', 'coeff.state.v1')
 
         n = self.u.vector().size()
         dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -377,7 +362,7 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
-        dresu_dvt = self.cached_form_assemblers['form.bi.dres_da1'].assemble()
+        dresu_dvt = self.assembler.assemble_derivative('form', 'coeff.state.a1')
 
         dresv_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
         dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -389,7 +374,7 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
         m = self.control['p'].size
-        dresu_dg = self.cached_form_assemblers['form.bi.dres_dp1'].assemble()
+        dresu_dg = self.assembler.assemble_derivative('form', 'coeff.fsi.p1')
 
         dresv_dg = dfn.PETScMatrix(subops.zero_mat(n, m))
 
@@ -405,13 +390,11 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
         ]
 
         j_emod = self.prop.labels[0].index('emod')
-        mats[0][j_emod] = self.cached_form_assemblers['form.bi.dres_demod'].assemble()
+        mats[0][j_emod] = self.assembler.assemble_derivative('form', 'coeff.prop.emod')
 
         if 'umesh' in self.prop:
             j_shape = self.prop.labels[0].index('umesh')
-            mats[0][j_shape] = self.cached_form_assemblers[
-                'form.bi.dres_dumesh'
-            ].assemble()
+            mats[0][j_shape] = self.assembler.assemble_derivative('form', 'coeff.prop.umesh')
 
         return bm.BlockMatrix(mats, labels=self.state.labels + self.prop.labels)
 
