@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 import dolfin as dfn
 import numpy as np
 
-from femvf.equations.form import UFLForm
+from femvf.equations.form import Form
 from femvf.meshutils import mesh_element_type_dim
 
 
@@ -30,7 +30,7 @@ class FenicsResidual(BaseResidual):
 
     def __init__(
         self,
-        form: UFLForm,
+        form: Form,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[dict[str, int]],
@@ -64,7 +64,7 @@ class FenicsResidual(BaseResidual):
         }
 
     @property
-    def form(self) -> UFLForm:
+    def form(self) -> Form:
         return self._form
 
     def mesh(self) -> dfn.Mesh:
