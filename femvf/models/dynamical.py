@@ -121,7 +121,7 @@ class BaseLinearizedDynamicalModel(BaseDynamicalModel):
 
 ### FENICS MODELS
 
-from .assemblyutils import CachedFormAssembler
+from .assemblyutils import CachedUFLFormAssembler
 from .transient import (
     properties_bvec_from_forms,
     depack_form_coefficient_function,
@@ -184,12 +184,12 @@ class BaseDynamicalFenicsModel:
         self.set_prop(self.prop)
 
         self.cached_form_assemblers = {
-            key: CachedFormAssembler(form)
+            key: CachedUFLFormAssembler(form)
             for key, form in forms.items()
             if ('form.' in key and form is not None)
         }
 
-        self.cached_form_assemblers['form.un.res'] = CachedFormAssembler(
+        self.cached_form_assemblers['form.un.res'] = CachedUFLFormAssembler(
             self.residual.form.form
         )
 

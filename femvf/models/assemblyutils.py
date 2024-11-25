@@ -2,15 +2,15 @@ import ufl
 import dolfin as dfn
 
 
-class CachedFormAssembler:
+class CachedUFLFormAssembler:
     """
-    Assembles a bilinear form using a cached sparsity pattern
+    Assemble a UFL/Dolfin form and cache the sparsity pattern
 
     Parameters
     ----------
     form : ufl.Form
     kwargs :
-        Keyword arguments of `dfn.assemble` except for `tensor`
+        Keyword arguments of `dfn.assemble`
     """
 
     def __init__(self, form: ufl.Form, **kwargs):
@@ -40,3 +40,4 @@ class CachedFormAssembler:
 
     def assemble(self):
         return dfn.assemble(self.form, tensor=self.tensor, **self._kwargs)
+

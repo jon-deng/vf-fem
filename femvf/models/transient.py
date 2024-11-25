@@ -165,7 +165,7 @@ class BaseTransientModel:
 
 from femvf.equations import newmark
 from femvf.equations import form
-from .assemblyutils import CachedFormAssembler
+from .assemblyutils import CachedUFLFormAssembler
 
 
 def depack_form_coefficient_function(form_coefficient):
@@ -263,11 +263,11 @@ class FenicsModel(BaseTransientModel):
         # form based on inputs keys (this should make it much clearer and eaiser to handle)
         # you'll be able to get rid of many of the form manipulation code
         self.cached_form_assemblers = {
-            key: CachedFormAssembler(biform, keep_diagonal=True)
+            key: CachedUFLFormAssembler(biform, keep_diagonal=True)
             for key, biform in bilinear_forms.items()
             if 'form.' in key
         }
-        self.cached_form_assemblers['form.un.f1'] = CachedFormAssembler(
+        self.cached_form_assemblers['form.un.f1'] = CachedUFLFormAssembler(
             self.residual.form.form
         )
 
