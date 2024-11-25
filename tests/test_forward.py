@@ -187,8 +187,8 @@ class TestIntegrate(ModelFixtures):
         psub = controls[0]['fluid0.psub'][0]
         save_path = (
             f'{self.__class__.__name__}--{mesh_name}'
-            f'--{model.solid.__class__.__name__}'
-            f'--{model.fluids[0].__class__.__name__}--psub{psub/10:.1f}.h5'
+            f'--{model.solid.residual.__class__.__name__}'
+            f'--{model.fluids[0].residual.__class__.__name__}--psub{psub/10:.1f}.h5'
         )
         self.integrate(model, ini_state, controls, prop, times, save_path)
 
