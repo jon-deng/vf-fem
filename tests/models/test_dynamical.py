@@ -201,6 +201,7 @@ def _test_taylor(x0, dx, res, jac):
     print("Convergence rates: ", np.array(conv_rates))
 
 
+# TODO: Get derivate tests working again! currently many are just returning NaN
 class _TestDerivative:
     """
     Test correctness of model derivatives
