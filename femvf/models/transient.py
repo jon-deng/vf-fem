@@ -732,29 +732,22 @@ class BaseTransientFSIModel(BaseTransientModel):
     def __init__(
         self,
         solid: FenicsModel,
-        fluids: Union[list[JaxModel], JaxModel],
-        solid_fsi_dofs: Union[list[NDArray], NDArray],
-        fluid_fsi_dofs: Union[list[NDArray], NDArray],
+        fluid: JaxModel,
+        solid_fsi_dofs: NDArray,
+        fluid_fsi_dofs: NDArray,
     ):
-        if isinstance(fluids, list):
-            fluids = tuple(fluids)
-            fluid_fsi_dofs = tuple(fluid_fsi_dofs)
-            solid_fsi_dofs = tuple(solid_fsi_dofs)
-        elif isinstance(fluids, tuple):
-            pass
-        else:
-            fluids = (fluids,)
-            fluid_fsi_dofs = (fluid_fsi_dofs,)
-            solid_fsi_dofs = (solid_fsi_dofs,)
+        fluid = (fluid,)
+        fluid_fsi_dofs = (fluid_fsi_dofs,)
+        solid_fsi_dofs = (solid_fsi_dofs,)
         self.solid = solid
-        self.fluids = fluids
+        self.fluids = fluid
 
         ## Specify state, controls, and properties
         fluid_state0 = bv.concatenate_with_prefix(
-            [fluid.state0 for fluid in fluids], 'fluid'
+            [fluid.state0 for fluid in fluid], 'fluid'
         )
         fluid_state1 = bv.concatenate_with_prefix(
-            [fluid.state1 for fluid in fluids], 'fluid'
+            [fluid.state1 for fluid in fluid], 'fluid'
         )
         self.state0 = bv.concatenate([self.solid.state0, fluid_state0])
         self.state1 = bv.concatenate([self.solid.state1, fluid_state1])
@@ -779,7 +772,7 @@ class BaseTransientFSIModel(BaseTransientModel):
             dflcontrol_dslstate,
             dslcontrol_dflstate,
             dflcontrol_dslprops,
-        ) = fsi.make_coupling_stuff(solid, fluids, solid_fsi_dofs, fluid_fsi_dofs)
+        ) = fsi.make_coupling_stuff(solid, fluid, solid_fsi_dofs, fluid_fsi_dofs)
         self._fsimaps = fsimaps
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate
