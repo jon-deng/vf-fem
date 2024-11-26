@@ -4,6 +4,7 @@ Functionality for creating model objects from meshes, etc.
 
 from os import path
 from typing import Union, Optional, Any
+from numpy.typing import NDArray
 import numpy as np
 import dolfin as dfn
 
@@ -54,45 +55,31 @@ def load_fenics_model(
         raise ValueError(f"Invalid model type {model_type}")
 
 
-def load_fluid_model(
-    mesh: str, FluidType: FluidClass, idx_sep: Optional[int] = 0
+def load_jax_model(
+    mesh: NDArray,
+    Residual: flr.PredefinedFluidResidual,
+    model_type: str = 'transient',
+    **kwargs
 ) -> FluidModel:
     """
-    Load a solid model of the specified type
+    Load a JAX model of the specified type
 
     Parameters
     ----------
     mesh:
         A string indicating the path to a mesh file. This can be either in
          '.xml' or '.msh' format.
-    SolidType:
-        A class indicating the type of solid model to load.
-    pressure_facet_labels, fixed_facet_labels:
-        Lists of strings for labelled facets corresponding to the pressure
-        loading and fixed boundaries.
+    Residual:
+        A fluid residual class
     """
-    if issubclass(
-        FluidType,
-        (
-            flr.BernoulliFixedSep,
-            # flr.LinearizedBernoulliFixedSep,
-            flr.BernoulliFlowFixedSep,
-            # flr.LinearizedBernoulliFlowFixedSep,
-            flr.BernoulliFixedSep,
-        ),
-    ):
-        if len(idx_sep) == 1:
-            idx_sep = idx_sep[0]
-        else:
-            raise ValueError(
-                "Expected to find single separation point on FSI surface"
-                f" but found {len(idx_sep):d} instead"
-            )
-        fluid = FluidType(mesh, idx_sep=idx_sep)
-    else:
-        fluid = FluidType(mesh)
+    residual = Residual(mesh, **kwargs)
 
-    return fluid
+    if model_type == 'transient':
+        return transient.JaxModel(residual)
+    elif model_type == 'dynamical':
+        return dynamical.JaxModel(residual)
+    else:
+        raise ValueError(f"Invalid model type {model_type}")
 
 
 # TODO: Combine transient and dynamical model loading functions?
