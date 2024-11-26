@@ -31,8 +31,8 @@ class TestLoad(GMSHFixtures):
             'coeff.state.u1': [(dfn.Constant([0, 0]), 'facet', 'dirichlet')]
         }
 
-    def test_load_fenics_model(self, mesh_path, dirichlet_bcs):
-        assert load.load_fenics_model(mesh_path, slr.Rayleigh, dirichlet_bcs=dirichlet_bcs)
+    def test_load_fenics_model(self, mesh_path, SolidResidual, dirichlet_bcs):
+        assert load.load_fenics_model(mesh_path, SolidResidual, dirichlet_bcs=dirichlet_bcs)
 
     FLUID_RESIDUALS = [flr.BernoulliAreaRatioSep, flr.BernoulliFixedSep]
 
