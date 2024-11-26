@@ -580,8 +580,6 @@ class FSIModel(BaseDynamicalModel):
         solid_fsi_dofs: NDArray,
         fluid_fsi_dofs: NDArray,
     ):
-        fluid_fsi_dofs = (fluid_fsi_dofs,)
-        solid_fsi_dofs = (solid_fsi_dofs,)
         self.solid = solid
         self.fluid = fluid
 
@@ -601,13 +599,13 @@ class FSIModel(BaseDynamicalModel):
 
         ## -- FSI --
         (
-            fsimaps,
+            fsimap,
             solid_area,
             dflcontrol_dslstate,
             dslcontrol_dflstate,
             dflcontrol_dslprops,
-        ) = fsi.make_coupling_stuff(solid, (fluid,), solid_fsi_dofs, fluid_fsi_dofs)
-        self._fsimaps = fsimaps
+        ) = fsi.make_coupling_stuff(solid, fluid, solid_fsi_dofs, fluid_fsi_dofs)
+        self._fsimap = fsimap
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate
         self._dslcontrol_dflstate = dslcontrol_dflstate
@@ -652,7 +650,7 @@ class FSIModel(BaseDynamicalModel):
 
         # map solid_area to fluid area
         control = self.fluid.control.copy()
-        self._fsimaps[0].map_solid_to_fluid(self._solid_area, control['area'])
+        self._fsimap.map_solid_to_fluid(self._solid_area, control['area'])
         self.fluid.set_control(control)
 
     def _transfer_fluid_to_solid(self):
@@ -661,7 +659,7 @@ class FSIModel(BaseDynamicalModel):
         """
         # map fluid pressure to solid pressure
         control = self.solid.control.copy()
-        self._fsimaps[0].map_fluid_to_solid(self.fluid.state['p'], control['p'])
+        self._fsimap.map_fluid_to_solid(self.fluid.state['p'], control['p'])
         self.solid.set_control(control)
 
     # Since the fluid has no time dependence there should be no need to set FSI interactions here
@@ -863,7 +861,7 @@ class LinearizedFSIModel(
         # map linearized solid area to fluid area
         dfl_control = self.fluid.dcontrol.copy()
         dfl_control['area'][:] = subops.mult_mat_vec(
-            self._fsimaps[0].dfluid_dsolid,
+            self._fsimap.dfluid_dsolid,
             subops.convert_vec_to_petsc(self._dsolid_area)
         )
         self.fluid.set_dcontrol(dfl_control)
@@ -875,7 +873,7 @@ class LinearizedFSIModel(
         # map linearized fluid pressure to solid pressure
         dsolid_control = self.solid.control.copy()
         dsolid_control['p'][:] = subops.mult_mat_vec(
-            self._fsimaps[0].dsolid_dfluid,
+            self._fsimap.dsolid_dfluid,
             subops.convert_vec_to_petsc(self.fluid.dstate['p'])
         )
         self.solid.set_dcontrol(dsolid_control)

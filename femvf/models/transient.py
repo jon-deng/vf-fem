@@ -736,8 +736,6 @@ class BaseTransientFSIModel(BaseTransientModel):
         solid_fsi_dofs: NDArray,
         fluid_fsi_dofs: NDArray,
     ):
-        fluid_fsi_dofs = (fluid_fsi_dofs,)
-        solid_fsi_dofs = (solid_fsi_dofs,)
         self.solid = solid
         self.fluid = fluid
 
@@ -753,13 +751,13 @@ class BaseTransientFSIModel(BaseTransientModel):
 
         ## FSI related stuff
         (
-            fsimaps,
+            fsimap,
             solid_area,
             dflcontrol_dslstate,
             dslcontrol_dflstate,
             dflcontrol_dslprops,
-        ) = fsi.make_coupling_stuff(solid, (fluid,), solid_fsi_dofs, fluid_fsi_dofs)
-        self._fsimaps = fsimaps
+        ) = fsi.make_coupling_stuff(solid, fluid, solid_fsi_dofs, fluid_fsi_dofs)
+        self._fsimap = fsimap
         self._solid_area = solid_area
         self._dflcontrol_dslstate = dflcontrol_dslstate
         self._dslcontrol_dflstate = dslcontrol_dflstate
@@ -781,11 +779,11 @@ class BaseTransientFSIModel(BaseTransientModel):
         self._null_dflstate_dslstate = bm.BlockMatrix(mats)
 
     @property
-    def fsimaps(self):
+    def fsimap(self):
         """
         Return the FSI map object
         """
-        return self._fsimaps
+        return self._fsimap
 
     # These have to be defined to exchange data between fluid/solid domains
     # Explicit/implicit coupling methods may define these in different ways to
@@ -878,7 +876,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         )
 
         fl_control = self.fluid.control.copy()
-        self.fsimaps[0].map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
+        self.fsimap.map_solid_to_fluid(self._solid_area, fl_control.sub['area'][:])
         self.fluid.set_control(fl_control)
 
     def _set_ini_fluid_state(self, qp0):
@@ -888,7 +886,7 @@ class ExplicitFSIModel(BaseTransientFSIModel):
         sl_control['p'] = 0
 
         self.fluid.set_ini_state(qp0)
-        self.fsimaps[0].map_fluid_to_solid(qp0[1], sl_control.sub['p'])
+        self.fsimap.map_fluid_to_solid(qp0[1], sl_control.sub['p'])
         self.solid.set_control(sl_control)
 
     def _set_fin_fluid_state(self, qp1):
@@ -1005,7 +1003,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         sl_control['p'] = 0
 
         self.fluid.set_fin_state(qp1)
-        self.fsimaps[0].map_fluid_to_solid(qp1[1], sl_control.sub['p'])
+        self.fsimap.map_fluid_to_solid(qp1[1], sl_control.sub['p'])
         self.solid.set_control(sl_control)
 
     def _set_ini_solid_state(self, uva0):
@@ -1022,7 +1020,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         )
 
         fl_control = self.fluid.control.copy()
-        self.fsimaps[0].map_solid_to_fluid(self._solid_area, fl_control['area'][:])
+        self.fsimap.map_solid_to_fluid(self._solid_area, fl_control['area'][:])
         self.fluid.set_control(fl_control)
 
     ## Forward solver methods
