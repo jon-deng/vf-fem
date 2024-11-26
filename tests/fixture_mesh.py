@@ -128,13 +128,15 @@ class GMSHFixtures:
         gmsh.model.geo.addPhysicalGroup(0, [4], name="inferior")
 
         # Mark the bottom, right, top, and left surfaces
-        gmsh.model.geo.addPhysicalGroup(1, [1], name="bottom")
-        gmsh.model.geo.addPhysicalGroup(1, [2], name="right")
-        gmsh.model.geo.addPhysicalGroup(1, [3], name="top")
-        gmsh.model.geo.addPhysicalGroup(1, [4], name="left")
+        # TODO: Handle "overlapping" physical groups in load_gmsh
+        # gmsh.model.geo.addPhysicalGroup(1, [1], name="bottom")
+        # gmsh.model.geo.addPhysicalGroup(1, [2], name="right")
+        # gmsh.model.geo.addPhysicalGroup(1, [3], name="top")
+        # gmsh.model.geo.addPhysicalGroup(1, [3], name="traction")
+        # gmsh.model.geo.addPhysicalGroup(1, [4], name="left")
 
         gmsh.model.geo.addPhysicalGroup(1, [1], name="dirichlet")
-        gmsh.model.geo.addPhysicalGroup(1, [2, 3, 4], name="neumann")
+        gmsh.model.geo.addPhysicalGroup(1, [2, 3, 4], name="traction")
 
         # Mark the plane surface
         gmsh.model.geo.addPhysicalGroup(2, [1], name="volume")

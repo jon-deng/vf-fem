@@ -14,17 +14,16 @@ from .models import dynamical
 
 SolidModel = Union[transient.FenicsModel, dynamical.FenicsModel]
 FluidModel = Union[transient.JaxModel, dynamical.JaxModel]
-SolidClass = slr.PredefinedSolidResidual
 FluidClass = Union[type[transient.JaxModel], type[dynamical.JaxModel]]
 
 Labels = list[str]
 
 
-def load_solid_model(
+def load_fenics_model(
     mesh: str,
-    SolidType: SolidClass,
-    pressure_facet_labels: Optional[Labels] = ('pressure',),
-    fixed_facet_labels: Optional[Labels] = ('fixed',),
+    Residual: slr.PredefinedSolidResidual,
+    model_type: str = 'transient',
+    **kwargs: dict[str, Any]
 ) -> SolidModel:
     """
     Load a solid model of the specified type
@@ -34,42 +33,25 @@ def load_solid_model(
     mesh:
         A string indicating the path to a mesh file. This can be either in
          '.xml' or '.msh' format.
-    SolidType:
-        A class indicating the type of solid model to load.
+    Residual:
+        A class indicating the type of fenics residual
     pressure_facet_labels, fixed_facet_labels:
         Lists of strings for labelled facets corresponding to the pressure
         loading and fixed boundaries.
     """
-    if isinstance(mesh, str):
-        ext = path.splitext(mesh)[1]
-        # If no extension is supplied, assume it's a .msh file from gmsh
-        if ext == '':
-            ext = '.msh'
-
-        # The solid model is loaded a bit differently depending on if
-        # it uses the .xml (no longer supported) or newer gmsh interface
-        if ext.lower() == '.xml':
-            # The solid mesh is an xml file
-            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_xml(
-                mesh
-            )
-        elif ext.lower() == '.msh':
-            # The solid mesh is an gmsh file
-            mesh, mesh_funcs, mesh_entities_label_to_value = meshutils.load_fenics_gmsh(
-                mesh
-            )
-        else:
-            raise ValueError(f"Can't process mesh {mesh} with extension {ext}")
+    ext = path.splitext(mesh)[1]
+    if ext.lower() == '.msh':
+        mesh, mesh_funcs, mesh_subdomains = meshutils.load_fenics_gmsh(mesh)
     else:
-        raise TypeError(f"`solid_mesh` must be a path (`str`) not `{type(mesh)}`")
+        raise ValueError(f"Invalid mesh extension {ext}")
 
-    return SolidType(
-        mesh,
-        mesh_funcs,
-        mesh_entities_label_to_value,
-        pressure_facet_labels,
-        fixed_facet_labels,
-    )
+    residual = Residual(mesh, mesh_funcs, mesh_subdomains, **kwargs)
+    if model_type == 'transient':
+        return transient.FenicsModel(residual)
+    elif model_type == 'dynamical':
+        return dynamical.FenicsModel(residual)
+    else:
+        raise ValueError(f"Invalid model type {model_type}")
 
 
 def load_fluid_model(
@@ -117,7 +99,7 @@ def load_fluid_model(
 def load_transient_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
-    SolidType: SolidClass = slr.KelvinVoigt,
+    SolidType: slr.PredefinedSolidResidual = slr.KelvinVoigt,
     FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
@@ -148,7 +130,7 @@ def load_transient_fsi_model(
         fluid/solid domains
     """
     ## Load the solid
-    solid = load_solid_model(
+    solid = load_fenics_model(
         solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels
     )
     if zs is None:
@@ -191,7 +173,7 @@ def load_transient_fsi_model(
 def load_dynamical_fsi_model(
     solid_mesh: str,
     fluid_mesh: Any,
-    SolidType: SolidClass = slr.KelvinVoigt,
+    SolidType: slr.PredefinedSolidResidual = slr.KelvinVoigt,
     FluidType: FluidClass = flr.BernoulliAreaRatioSep,
     fsi_facet_labels: Optional[Labels] = ('pressure',),
     fixed_facet_labels: Optional[Labels] = ('fixed',),
@@ -220,7 +202,7 @@ def load_dynamical_fsi_model(
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
     """
-    solid = load_solid_model(
+    solid = load_fenics_model(
         solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels
     )
     if zs is None:
