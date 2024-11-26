@@ -495,10 +495,9 @@ class MeanGlottalWidth(BaseStateMeasure):
 
     def assem(self, state, control, prop):
 
-        fluids = [fluid for fluid in self.model.fluids]
         # This gets the glottal width for each 1D fluid channel
-        fluid_areas = [np.min(fluid.control['area']) for fluid in fluids]
-        area_min = sum(fluid_areas) / len(fluid_areas)
+        fluid_area = self.model.fluid.control['area']
+        area_min = np.min(fluid_area)
         return area_min
 
 
@@ -513,15 +512,20 @@ class MidpointGlottalWidth(BaseStateMeasure):
 
     def assem(self, state, control, prop):
 
-        if len(self.model.fluids) % 2 == 1:
-            idxs_mid = [(len(self.model.fluids) - 1) / 2 + 1]
-        else:
-            idxs_mid = [len(self.model.fluids) / 2 + ii for ii in range(-1, 1)]
+        # This is the number of fluid models (if there are multiple 1D models)
+        shape_fluid = self.model.fluid.mesh.shape[:-1]
 
-        fluids = [self.models.fluids[ii] for ii in idxs_mid]
-        fluid_areas = [np.min(fluid.control['area']) for fluid in fluids]
-        area_min = sum(fluid_areas) / len(fluid_areas)
-        return area_min
+        area = self.model.fluid.control.sub['area'].reshape(*shape_fluid, -1)
+        assert area.ndim == 2
+
+        if area.shape[0] % 2 == 1:
+            idxs_mid = [(area.shape[0]-1)/2 + 1]
+        else:
+            idxs_mid = [area.shape[0] / 2 + ii for ii in range(-1, 1)]
+
+        min_midpoint_areas = [np.min(area[ii, :]) for ii in idxs_mid]
+        avg_min_midpoint_area = sum(min_midpoint_areas) / len(min_midpoint_areas)
+        return avg_min_midpoint_area
 
 
 class MinGlottalWidthFromSolid(BaseStateMeasure):

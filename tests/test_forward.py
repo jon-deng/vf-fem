@@ -91,9 +91,6 @@ class TestIntegrate(ModelFixtures):
             model.solid.residual.form['coeff.state.u0'].function_space()
         ).vector()
 
-        # model.fluid.set_prop(fluid_props)
-        # qp0, *_ = model.fluids[0].solve_qp0()
-
         ini_state = model.state0.copy()
         ini_state[:] = 0.0
         ini_state['u'][:] = u0
@@ -108,9 +105,8 @@ class TestIntegrate(ModelFixtures):
         p_sub = 800.0
 
         control = model.control
-        for ii in range(len(model.fluids)):
-            control[f'fluid{ii}.psub'][:] = p_sub * PASCAL_TO_CGS
-            control[f'fluid{ii}.psup'][:] = 0.0 * PASCAL_TO_CGS
+        control[f'psub'][:] = p_sub * PASCAL_TO_CGS
+        control[f'psup'][:] = 0.0 * PASCAL_TO_CGS
         return [control]
 
     @pytest.fixture()
@@ -149,15 +145,14 @@ class TestIntegrate(ModelFixtures):
         }
 
         # Set relevant fluid properties
-        for ii in range(len(model.fluids)):
-            default_prop.update(
-                {
-                    f'fluid{ii}.zeta_min': 1e-8,
-                    f'fluid{ii}.zeta_sep': 1e-8,
-                    f'fluid{ii}.rho_air': 1.0,
-                    f'fluid{ii}.r_sep': 1.0,
-                }
-            )
+        default_prop.update(
+            {
+                f'zeta_min': 1e-8,
+                f'zeta_sep': 1e-8,
+                f'rho_air': 1.0,
+                f'r_sep': 1.0,
+            }
+        )
 
         # This only sets the properties if they exist
         for key, value in default_prop.items():
@@ -184,11 +179,11 @@ class TestIntegrate(ModelFixtures):
         Test forward time integration of the model
         """
 
-        psub = controls[0]['fluid0.psub'][0]
+        psub = controls[0]['psub'][0]
         save_path = (
             f'{self.__class__.__name__}--{mesh_name}'
             f'--{model.solid.residual.__class__.__name__}'
-            f'--{model.fluids[0].residual.__class__.__name__}--psub{psub/10:.1f}.h5'
+            f'--{model.fluid.residual.__class__.__name__}--psub{psub/10:.1f}.h5'
         )
         self.integrate(model, ini_state, controls, prop, times, save_path)
 
