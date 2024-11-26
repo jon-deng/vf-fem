@@ -134,17 +134,17 @@ def split_model_components(model):
     # Determine whether the model has fluid/solid components
     if isinstance(model, dynamical.FSIModel):
         model_solid = model.solid
-        model_fluids = model.fluids
+        model_fluid = model.fluid
         model_coupl = model
     elif isinstance(model, dynamical.FenicsModel):
         model_solid = model
-        model_fluids = None
+        model_fluid = None
         model_coupl = None
-    elif isinstance(model, dynamical.BaseDynamicalModel):
+    elif isinstance(model, dynamical.JaxModel):
         model_solid = None
-        model_fluids = model
+        model_fluid = model
         model_coupl = None
-    return model_solid, model_fluids, model_coupl
+    return model_solid, model_fluid, model_coupl
 
 
 def set_linearization(model: dynamical.BaseDynamicalModel, state, statet, control, prop):
@@ -422,7 +422,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
 
     @pytest.fixture()
     def state(self, model: Model):
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         ## Model state
         state0 = model.state.copy()
@@ -438,10 +438,9 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
             _u[1::dim] = 0.0 * yy
             state0['u'] = _u
 
-        if model_fluids is not None:
-            for n in range(len(model_fluids)):
-                state0[f'fluid{n}.q'] = 1
-                state0[f'fluid{n}.p'] = 1e4
+        if model_fluid is not None:
+            state0[f'q'] = 1
+            state0[f'p'] = 1e4
         return state0
 
     @pytest.fixture()
@@ -452,7 +451,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
 
     @pytest.fixture()
     def prop(self, model: Model):
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         props0 = model.prop.copy()
         if model_solid is not None:
@@ -468,36 +467,38 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
             props0['ycontact'] = ycontact
             props0['ymid'] = ymid
 
-        if model_fluids is not None:
-            prop_values = {'zeta_sep': 1e-4, 'zeta_min': 1e-4, 'rho_air': 1.2e-3}
-            for n in range(len(model_fluids)):
-                for key, value in prop_values.items():
-                    _key = f'fluid{n}.{key}'
-                    if _key in props0:
-                        props0[_key] = value
+        if model_fluid is not None:
+            default_values = {'zeta_sep': 1e-4, 'zeta_min': 1e-4, 'rho_air': 1.2e-3}
+            default_values = {
+                key: val for key, val in default_values.items()
+                if key in props0
+            }
+            for key, value in default_values.items():
+                props0[key] = value
         return props0
 
     @pytest.fixture()
     def control(self, model: Model):
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         control0 = model.control.copy()
         control0[:] = 1.0
 
-        if model_fluids is not None:
-            control_values = {'qsub': 100, 'psub': 800 * 10, 'psup': 0}
-            for n in range(len(model_fluids)):
-                for key, value in control_values.items():
-                    _key = f'fluid{n}.{key}'
-                    if _key in control0:
-                        control0[_key] = value
+        if model_fluid is not None:
+            default_values = {'qsub': 100, 'psub': 800 * 10, 'psup': 0}
+            default_values = {
+                key: val for key, val in default_values.items()
+                if key in control0
+            }
+            for key, value in default_values.items():
+                control0[key] = value
         return control0
 
     @pytest.fixture()
     def dstate(self, model: Model):
         """Return a state perturbation"""
 
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         dstate = model.state.copy()
 
@@ -517,13 +518,14 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
             for bc in model_solid.residual.dirichlet_bcs['coeff.state.u1']:
                 _set_dirichlet_bvec(bc, dstate)
 
-        if model_fluids is not None:
-            values = {'q': 1e-3, 'p': 1e-3}
-            for n in range(len(model_fluids)):
-                for key, value in values.items():
-                    _key = f'fluid{n}.{key}'
-                    if _key in dstate:
-                        dstate[_key] = value
+        if model_fluid is not None:
+            default_values = {'q': 1e-3, 'p': 1e-3}
+            default_values = {
+                key: val for key, val in default_values.items()
+                if key in dstate
+            }
+            for key, value in default_values.items():
+                dstate[key] = value
 
         return dstate
 
@@ -531,7 +533,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
     def dstatet(self, model: Model):
         """Return a state derivative perturbation"""
 
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         dstatet = model.state.copy()
 
@@ -555,7 +557,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
     def dprop(self, model: Model):
         """Return a properties perturbation"""
 
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         dprop = model.prop.copy()
         dprop[:] = 0
@@ -599,23 +601,24 @@ class TestShapeModel(_TestDerivative, ModelFixtures):
 
     @pytest.fixture()
     def control(self, model: Model):
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         control0 = model.control.copy()
         control0[:] = 0.0
 
-        if model_fluids is not None:
-            control_values = {'qsub': 100, 'psub': 1e-8 * 10, 'psup': 0 * 10}
-            for n in range(len(model_fluids)):
-                for key, value in control_values.items():
-                    _key = f'fluid{n}.{key}'
-                    if _key in control0:
-                        control0[_key] = value
+        if model_fluid is not None:
+            default_values = {'qsub': 100, 'psub': 1e-8 * 10, 'psup': 0 * 10}
+            default_values = {
+                key: val for key, val in default_values.items()
+                if key in control0
+            }
+            for key, value in default_values.items():
+                control0[key] = value
         return control0
 
     @pytest.fixture()
     def prop(self, model: Model):
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         props0 = model.prop.copy()
         if model_solid is not None:
@@ -632,20 +635,21 @@ class TestShapeModel(_TestDerivative, ModelFixtures):
 
             model_coupl.ymid = ymid
 
-        if model_fluids is not None:
-            prop_values = {'zeta_sep': 1e-4, 'zeta_min': 1e-4, 'rho_air': 1.2e-3}
-            for n in range(len(model_fluids)):
-                for key, value in prop_values.items():
-                    _key = f'fluid{n}.{key}'
-                    if _key in props0:
-                        props0[_key] = value
+        if model_fluid is not None:
+            default_values = {'zeta_sep': 1e-4, 'zeta_min': 1e-4, 'rho_air': 1.2e-3}
+            default_values = {
+                key: val for key, val in default_values.items()
+                if key in props0
+            }
+            for key, value in default_values.items():
+                props0[key] = value
         return props0
 
     @pytest.fixture()
     def dprop(self, model: Model):
         """Return a properties perturbation"""
 
-        model_solid, model_fluids, model_coupl = split_model_components(model)
+        model_solid, model_fluid, model_coupl = split_model_components(model)
 
         dprop = model.prop.copy()
         dprop[:] = 0
