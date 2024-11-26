@@ -232,7 +232,8 @@ class FenicsModel(BaseTransientModel):
             new_form,
             residual._mesh,
             residual._mesh_functions,
-            residual._mesh_subdomains
+            residual._mesh_subdomains,
+            dirichlet_bc_specs=residual._dirichlet_bc_specs
         )
 
         self._residual = residual

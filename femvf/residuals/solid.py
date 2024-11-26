@@ -128,7 +128,7 @@ class PredefinedSolidResidual(FenicsResidual):
             mesh,
             mesh_functions,
             mesh_subdomains,
-            dirichlet_bcs=dirichlet_bcs
+            dirichlet_bc_specs=dirichlet_bcs
         )
 
     def init_form(

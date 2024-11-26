@@ -34,7 +34,7 @@ class FenicsResidual(BaseResidual):
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
         mesh_subdomains: list[dict[str, int]],
-        dirichlet_bcs: Optional[dict[str, list[DirichletBCTuple]]] = None
+        dirichlet_bc_specs: Optional[dict[str, list[DirichletBCTuple]]] = None
     ):
 
         self._mesh = mesh
@@ -45,11 +45,12 @@ class FenicsResidual(BaseResidual):
         self._mesh_subdomains = mesh_subdomains
 
         zero_value = dfn.Constant(mesh.topology().dim() * [0.0])
-        if dirichlet_bcs is None:
-            dirichlet_bcs = {
+        if dirichlet_bc_specs is None:
+            dirichlet_bc_specs = {
                 'coeff.state.u1': [(zero_value, 'facet', 'fixed')]
             }
 
+        self._dirichlet_bc_specs = dirichlet_bc_specs
         self._dirichlet_bcs = {
             coeff_key: tuple(
                 dfn.DirichletBC(
@@ -60,7 +61,7 @@ class FenicsResidual(BaseResidual):
                 )
                 for (value, element_type, subdomain) in dirichlet_bc_tuples
             )
-            for coeff_key, dirichlet_bc_tuples in dirichlet_bcs.items()
+            for coeff_key, dirichlet_bc_tuples in dirichlet_bc_specs.items()
         }
 
     @property
