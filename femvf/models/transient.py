@@ -728,7 +728,6 @@ class BaseTransientFSIModel(BaseTransientModel):
         Note that while each DOF array
     """
 
-    # TODO: Get rid of multiple fluid models
     def __init__(
         self,
         solid: FenicsModel,
