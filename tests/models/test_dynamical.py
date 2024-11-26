@@ -201,7 +201,10 @@ def _test_taylor(x0, dx, res, jac):
     print("Convergence rates: ", np.array(conv_rates))
 
 
-# TODO: Get derivate tests working again! currently many are just returning NaN
+# TODO: Get derivative tests working again! Many are currently returning NaN
+# Reasons:
+# - The fluid model pressure residual is NaN due to a zero 1d area. Not clear
+# why the fluid model area is reading zero since I set `ymid` with a gap!
 class _TestDerivative:
     """
     Test correctness of model derivatives
