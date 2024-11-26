@@ -5,7 +5,9 @@
 import pytest
 
 import dolfin as dfn
+import gmsh
 
+gmsh.initialize()
 
 # from femvf.vis.xdmfutils import write_xdmf, export_mesh_values
 
@@ -90,3 +92,57 @@ class FenicsMeshFixtures:
         _, cell_fields = cell_function_tuple
         return (vertex_fields,) + (mesh_dim-3)*({},) + (facet_fields, cell_fields)
 
+
+class GMSHFixtures:
+
+    @pytest.fixture()
+    def mesh_path(self):
+
+        mesh_path = "unit_square.msh"
+
+        model = gmsh.model.add("unit_square")
+
+        ## Create the geometry
+        # Add vertices
+        gmsh.model.geo.addPoint(0, 0, 0, tag=1)
+        gmsh.model.geo.addPoint(1, 0, 0, tag=2)
+        gmsh.model.geo.addPoint(1, 1, 0, tag=3)
+        gmsh.model.geo.addPoint(0, 1, 0, tag=4)
+
+        # Add edges
+        gmsh.model.geo.addLine(1, 2, tag=1)
+        gmsh.model.geo.addLine(2, 3, tag=2)
+        gmsh.model.geo.addLine(3, 4, tag=3)
+        gmsh.model.geo.addLine(4, 1, tag=4)
+
+        # Add edge loop
+        gmsh.model.geo.addCurveLoop([1, 2, 3, 4], tag=1)
+
+        # Creat the unit square surface
+        gmsh.model.geo.addPlaneSurface([1], tag=1)
+
+        ## Mark Physical entities
+
+        # Mark the top left and top right points as "inferior" and "superior"
+        gmsh.model.geo.addPhysicalGroup(0, [3], name="superior")
+        gmsh.model.geo.addPhysicalGroup(0, [4], name="inferior")
+
+        # Mark the bottom, right, top, and left surfaces
+        gmsh.model.geo.addPhysicalGroup(1, [1], name="bottom")
+        gmsh.model.geo.addPhysicalGroup(1, [2], name="right")
+        gmsh.model.geo.addPhysicalGroup(1, [3], name="top")
+        gmsh.model.geo.addPhysicalGroup(1, [4], name="left")
+
+        gmsh.model.geo.addPhysicalGroup(1, [1], name="dirichlet")
+        gmsh.model.geo.addPhysicalGroup(1, [2, 3, 4], name="neumann")
+
+        # Mark the plane surface
+        gmsh.model.geo.addPhysicalGroup(2, [1], name="volume")
+
+        gmsh.model.geo.synchronize()
+
+        gmsh.model.mesh.generate(2)
+
+        gmsh.write(mesh_path)
+
+        return mesh_path
