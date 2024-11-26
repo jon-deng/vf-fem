@@ -257,8 +257,6 @@ class FenicsModel(BaseTransientModel):
         self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
 
-        # TODO: Refactor handling of multiple `ufl_forms`
-        # This is super unclear right now
         self._assembler = FormAssembler(new_form)
 
     @property
