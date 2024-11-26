@@ -466,8 +466,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
             ymid = ymax + ygap
             ycontact = ymid - 0.1 * ygap
             props0['ycontact'] = ycontact
-
-            model_coupl.ymid = ymid
+            props0['ymid'] = ymid
 
         if model_fluids is not None:
             prop_values = {'zeta_sep': 1e-4, 'zeta_min': 1e-4, 'rho_air': 1.2e-3}

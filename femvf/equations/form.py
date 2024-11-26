@@ -257,13 +257,13 @@ def const_spec(value_dim, default_value=0):
 
 CoefficientMapping = dict[str, DfnFunction]
 
-# TODO: A `UFLForm` should represent a ufl form expression *without* any associated
+# TODO: A `Form` should represent a ufl form expression *without* any associated
 # mesh information (just element definitions for coefficients, etc.)
-# You could then associate mesh information with a `UFLForm` to get a numerically
+# You could then associate mesh information with a `Form` to get a numerically
 # integrable object.
 # Currently the mesh information is redunant because I'm using dolfin forms which
 # contain mesh information. Future work could change this.
-class UFLForm:
+class Form:
     """
     Representation of a `ufl.Form` instance with associated coefficients
 
@@ -336,26 +336,26 @@ class UFLForm:
         return key in self.coefficients
 
     ## Basic math
-    def __add__(self, other: 'UFLForm') -> 'UFLForm':
+    def __add__(self, other: 'Form') -> 'Form':
         return add_form(self, other)
 
-    def __radd__(self, other: 'UFLForm') -> 'UFLForm':
+    def __radd__(self, other: 'Form') -> 'Form':
         return add_form(self, other)
 
-    def __sub__(self, other: 'UFLForm') -> 'UFLForm':
+    def __sub__(self, other: 'Form') -> 'Form':
         return add_form(self, -1.0 * other)
 
-    def __rsub__(self, other: 'UFLForm') -> 'UFLForm':
+    def __rsub__(self, other: 'Form') -> 'Form':
         return add_form(other, -1.0 * self)
 
-    def __mul__(self, other: float) -> 'UFLForm':
+    def __mul__(self, other: float) -> 'Form':
         return mul_form(self, other)
 
-    def __rmul__(self, other: float) -> 'UFLForm':
+    def __rmul__(self, other: float) -> 'Form':
         return mul_form(self, other)
 
 
-def add_form(form_a: UFLForm, form_b: UFLForm) -> UFLForm:
+def add_form(form_a: Form, form_b: Form) -> Form:
     """
     Return a new `FenicsForm` from a sum of other forms
 
@@ -439,10 +439,10 @@ def add_form(form_a: UFLForm, form_b: UFLForm) -> UFLForm:
         for key, expr in new_expressions.items()
     }
 
-    return UFLForm(new_forms, new_coefficients, new_expressions)
+    return Form(new_forms, new_coefficients, new_expressions)
 
 
-def mul_form(form: UFLForm, scalar: float) -> UFLForm:
+def mul_form(form: Form, scalar: float) -> Form:
     """
     Return a new `FenicsForm` from a sum of other forms
     """
@@ -450,13 +450,13 @@ def mul_form(form: UFLForm, scalar: float) -> UFLForm:
     # consistent arguments
     new_forms = {key: scalar * ufl_form for key, ufl_form in form.ufl_forms.items()}
 
-    return UFLForm(new_forms, form.coefficients, form.expressions)
+    return Form(new_forms, form.coefficients, form.expressions)
 
 
 ## Pre-defined linear functionals
 
 # TODO: Make predefined forms explicitly only depend on UFL forms? i.e. not require a mesh
-class PredefinedForm(UFLForm):
+class PredefinedForm(Form):
     """
     Represents a predefined `dfn.Form`
 
@@ -1064,7 +1064,7 @@ class ShapeForm(PredefinedForm):
 
 ## Form modifiers
 
-def modify_newmark_time_discretization(form: UFLForm) -> UFLForm:
+def modify_newmark_time_discretization(form: Form) -> Form:
     u1 = form['coeff.state.u1']
     v1 = form['coeff.state.v1']
     a1 = form['coeff.state.a1']
@@ -1095,10 +1095,10 @@ def modify_newmark_time_discretization(form: UFLForm) -> UFLForm:
         for key, ufl_form in form.ufl_forms.items()
     }
 
-    return UFLForm(ufl_forms, coefficients, form.expressions)
+    return Form(ufl_forms, coefficients, form.expressions)
 
 
-def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
+def modify_unary_linearized_forms(form: Form) -> dict[str, dfn.Form]:
     """
     Generate linearized forms representing linearization of the residual wrt different states
 
@@ -1125,29 +1125,31 @@ def modify_unary_linearized_forms(form: UFLForm) -> dict[str, dfn.Form]:
 
     # Take the action of the jacobian linear forms along states to get a new linear
     # dF/dx * delta x, dF/dp * delta p, ...
-    linearized_forms = []
-    for var_name in ['u1', 'v1', 'a1']:
-        # unary_form_name = f'df1uva_{var_name}'
-        df_dx = dfn.derivative(form.ufl_forms, form[f'coeff.state.{var_name}'])
-        # print(len(df_dx.arguments()))
-        # print(len(forms[f'form.un.f1uva'].arguments()))
-        linearized_form = dfn.action(
-            df_dx, new_coefficients[f'coeff.dstate.{var_name}']
-        )
-        linearized_forms.append(linearized_form)
+    new_ufl_forms = {}
+    for form_key, ufl_form in form.ufl_forms.items():
+        linearized_forms = []
+        for var_name in ['u1', 'v1', 'a1']:
+            # unary_form_name = f'df1uva_{var_name}'
+            df_dx = dfn.derivative(ufl_form, form[f'coeff.state.{var_name}'])
+            # print(len(df_dx.arguments()))
+            # print(len(forms[f'form.un.f1uva'].arguments()))
+            linearized_form = dfn.action(
+                df_dx, new_coefficients[f'coeff.dstate.{var_name}']
+            )
+            linearized_forms.append(linearized_form)
 
-    for var_name in ['p1']:
-        # unary_form_name = f'df1uva_{var_name}'
-        # df_dx = form[f'form.bi.df1uva_d{var_name}']
-        df_dx = dfn.derivative(form.ufl_forms, form[f'coeff.fsi.{var_name}'])
-        linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dfsi.{var_name}'])
-        linearized_forms.append(linearized_form)
+        for var_name in ['p1']:
+            # unary_form_name = f'df1uva_{var_name}'
+            # df_dx = form[f'form.bi.df1uva_d{var_name}']
+            df_dx = dfn.derivative(ufl_form, form[f'coeff.fsi.{var_name}'])
+            linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dfsi.{var_name}'])
+            linearized_forms.append(linearized_form)
 
-    # Compute the total linearized residual
-    new_form = reduce(operator.add, linearized_forms)
+        # Compute the total linearized residual
+        new_ufl_forms[form_key] = reduce(operator.add, linearized_forms)
 
-    return UFLForm(
-        new_form, {**form.coefficients, **new_coefficients}, form.expressions
+    return Form(
+        new_ufl_forms, {**form.coefficients, **new_coefficients}, form.expressions
     )
 
 
@@ -1202,7 +1204,7 @@ def dform_cubic_penalty_pressure(gap, kcoll):
 ## Generation of new forms
 # These functions are mainly for generating forms that are needed for solving
 # the transient problem with a time discretization
-def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
+def gen_residual_bilinear_forms(form: Form) -> dict[str, dfn.Form]:
     """
     Generates bilinear forms representing derivatives of the residual wrt state variables
 
@@ -1254,7 +1256,7 @@ def gen_residual_bilinear_forms(form: UFLForm) -> dict[str, dfn.Form]:
     return bi_forms
 
 
-def gen_residual_bilinear_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
+def gen_residual_bilinear_property_forms(form: Form) -> dict[str, dfn.Form]:
     """
     Return a dictionary of forms of derivatives of f1 with respect to the various solid parameters
     """
@@ -1278,7 +1280,7 @@ def gen_residual_bilinear_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
 
 # These functions are mainly for generating derived forms that are needed for solving
 # the hopf bifurcation problem
-def gen_hopf_forms(form: UFLForm) -> dict[str, dfn.Form]:
+def gen_hopf_forms(form: Form) -> dict[str, dfn.Form]:
     forms = {}
     # forms.update(modify_unary_linearized_forms(form))
 
@@ -1293,7 +1295,7 @@ def gen_hopf_forms(form: UFLForm) -> dict[str, dfn.Form]:
     return forms
 
 
-def gen_jac_state_forms(form: UFLForm) -> dict[str, dfn.Form]:
+def gen_jac_state_forms(form: Form) -> dict[str, dfn.Form]:
     """
     Return the derivatives of a unary form wrt all states
     """
@@ -1311,7 +1313,7 @@ def gen_jac_state_forms(form: UFLForm) -> dict[str, dfn.Form]:
     return forms
 
 
-def gen_jac_property_forms(form: UFLForm) -> dict[str, dfn.Form]:
+def gen_jac_property_forms(form: Form) -> dict[str, dfn.Form]:
     """
     Return the derivatives of a unary form wrt all solid properties
     """

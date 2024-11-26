@@ -165,7 +165,7 @@ class BaseTransientModel:
 
 from femvf.equations import newmark
 from femvf.equations import form
-from .assemblyutils import CachedFormAssembler
+from .assemblyutils import FormAssembler
 
 
 def depack_form_coefficient_function(form_coefficient):
@@ -237,8 +237,6 @@ class FenicsModel(BaseTransientModel):
 
         self._residual = residual
 
-        bilinear_forms = form.gen_residual_bilinear_forms(self.residual.form)
-
         ## Define the state/controls/properties
         u0 = self.residual.form['coeff.state.u0']
         v0 = self.residual.form['coeff.state.v0']
@@ -261,16 +259,11 @@ class FenicsModel(BaseTransientModel):
 
         # TODO: Refactor handling of multiple `ufl_forms`
         # This is super unclear right now
-        self.FORM_KEY = 'u'
-        for form_key in residual.form.ufl_forms:
-            self.cached_form_assemblers = {
-                key: CachedFormAssembler(biform, keep_diagonal=True)
-                for key, biform in bilinear_forms.items()
-                if form_key in key
-            }
-            self.cached_form_assemblers[f'{form_key}.un.f1'] = CachedFormAssembler(
-                self.residual.form.ufl_forms[form_key]
-            )
+        self._assembler = FormAssembler(new_form)
+
+    @property
+    def assembler(self):
+        return self._assembler
 
     @property
     def residual(self) -> slr.FenicsResidual:
@@ -373,7 +366,7 @@ class FenicsModel(BaseTransientModel):
 
         res = self.state1.copy()
         values = [
-            self.cached_form_assemblers['u.un.f1'].assemble(),
+            self.assembler.assemble('u'),
             v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt),
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
         ]
@@ -405,11 +398,7 @@ class FenicsModel(BaseTransientModel):
         # trying to reassemble into that tensor seems to cause problems.
         # This is done with the `cached_form_assembler` since it caches the
         # tensor it applies on
-        dfu_du = dfn.assemble(
-            self.cached_form_assemblers['u.bi.df1_du1'].form,
-            tensor=dfn.PETScMatrix(),
-        )
-        # dfu_du = self.cached_form_assemblers['u.bi.df1_du1'].assemble()
+        dfu_du = self.assembler.assemble_derivative('u', 'coeff.state.u1')
         for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
             bc.apply(dfu_du)
 
@@ -438,9 +427,9 @@ class FenicsModel(BaseTransientModel):
         assert len(self.state1.bshape) == 1
         N = self.state1.bshape[0][0]
 
-        dfu_du = self.cached_form_assemblers['u.bi.df1_du0'].assemble()
-        dfu_dv = self.cached_form_assemblers['u.bi.df1_dv0'].assemble()
-        dfu_da = self.cached_form_assemblers['u.bi.df1_da0'].assemble()
+        dfu_du = self.assembler.assemble_derivative('u', 'coeff.state.u0')
+        dfu_dv = self.assembler.assemble_derivative('u', 'coeff.state.v0')
+        dfu_da = self.assembler.assemble_derivative('u', 'coeff.state.a0')
         for mat in (dfu_du, dfu_dv, dfu_da):
             for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
                 bc.apply(mat)
@@ -472,7 +461,7 @@ class FenicsModel(BaseTransientModel):
 
         # It should be hardcoded that the control is just the surface pressure
         assert self.control.shape[0] == 1
-        dfu_dcontrol = self.cached_form_assemblers['u.bi.df1_dp1'].assemble()
+        dfu_dcontrol = self.assembler.assemble_derivative('u', 'coeff.fsi.p1')
         dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
 
         submats = [[dfu_dcontrol], [dfv_dcontrol]]
@@ -597,15 +586,9 @@ class NodalContactModel(FenicsModel):
 
     def _assem_dresu_du_contact(self, adjoint=False):
         # Compute things needed to find sensitivities of contact pressure
-        dfu2_dtcontact = None
-        if adjoint:
-            dfu2_dtcontact = self.cached_form_assemblers[
-                'u.bi.df1uva_dtcontact_adj'
-            ].assemble()
-        else:
-            dfu2_dtcontact = self.cached_form_assemblers[
-                'u.bi.df1uva_dtcontact'
-            ].assemble()
+        dfu2_dtcontact = self.assembler.assemble_derivative(
+            'u', 'coeff.state.manual.tcontact', adjoint=adjoint
+        )
 
         XREF = self.XREF
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
@@ -640,6 +623,8 @@ from .jaxutils import blockvec_to_dict, flatten_nested_dict
 class JaxModel(BaseTransientModel):
 
     def __init__(self, residual: flr.JaxResidual):
+        self._residual = residual
+
         res, (state, control, prop) = residual.res, residual.res_args
 
         self._res = jax.jit(res)
@@ -661,6 +646,10 @@ class JaxModel(BaseTransientModel):
             blockvec_to_dict(self.control),
             blockvec_to_dict(self.prop),
         )
+
+    @property
+    def residual(self) -> flr.JaxResidual:
+        return self._residual
 
     @property
     def fluid(self):
@@ -741,6 +730,7 @@ class BaseTransientFSIModel(BaseTransientModel):
         Note that while each DOF array
     """
 
+    # TODO: Get rid of multiple fluid models
     def __init__(
         self,
         solid: FenicsModel,
@@ -1122,7 +1112,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
 
         solid = self.solid
 
-        dfu1_du1 = self.solid.cached_form_assemblers['u.bi.df1_du1'].assemble()
+        dfu1_du1 = self.solid.assembler.assemble_derivative('u', 'coeff.state.u1')
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -1130,7 +1120,8 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
-        self.solid.forms['bc.dirichlet'].apply(dfu1_du1)
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(dfu1_du1)
         dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
         x['v'][:] = b['v'] - dfv2_du2 * x['u']
         x['a'][:] = b['a'] - dfa2_du2 * x['u']
@@ -1147,10 +1138,10 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         # self.set_iter_params(**it_params)
         dt = self.solid.dt
 
-        dfu2_du2 = self.solid.cached_form_assemblers['bilin.df1_du1_adj'].assemble()
+        dfu2_du2 = self.solid.assembler.assemble_derivative('u', 'coeff.state.u1', adjoint=True)
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-        dfu2_dp2 = self.solid.cached_form_assemblers['u.bi.df1_dp1_adj'].assemble()
+        dfu2_dp2 = self.solid.assembler.assemble_derivative('u', 'coeff.fsi.p1', adjoint=True)
 
         # map dfu2_dp2 to have p on the fluid domain
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()
@@ -1170,10 +1161,12 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
 
         # adjoint states for v, a, and q are explicit so we can solve for them
-        self.solid.forms['bc.dirichlet'].apply(adj_v_rhs)
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(adj_v_rhs)
         adj_uva['v'][:] = adj_v_rhs
 
-        self.solid.forms['bc.dirichlet'].apply(adj_a_rhs)
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(adj_a_rhs)
         adj_uva['a'][:] = adj_a_rhs
 
         # TODO: how to apply fluid boundary conditions in a generic way?
@@ -1183,13 +1176,18 @@ class ImplicitFSIModel(BaseTransientFSIModel):
             dfv2_du2 * adj_uva['v'] + dfa2_du2 * adj_uva['a'] + dfq2_du2 * adj_qp['q']
         )
 
-        bc_dofs = np.array(
-            list(self.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
-            dtype=np.int32,
+        bc_dofs = np.concatenate(
+            [
+                list(bc.get_boundary_values().keys())
+                or bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']
+            ],
+            dtype=np.int32
         )
-        self.solid.forms['bc.dirichlet'].apply(dfu2_du2, adj_u_rhs)
+        bc_dofs = np.unique(bc_dofs)
+
+        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+            bc.apply(dfu2_du2, adj_u_rhs)
         dfp2_du2.zeroRows(bc_dofs, diag=0.0)
-        # self.solid.forms['bc.dirichlet'].zero_columns(dfu2_du2, adj_u_rhs.copy(), diagonal_value=1.0)
 
         # solve the coupled system for pressure and displacement residuals
         dfu2_du2_mat = dfn.as_backend_type(dfu2_du2).mat()
