@@ -675,7 +675,6 @@ class FSIModel(BaseDynamicalModel):
         self._solid_area[:] = 2 * (
             self.prop['ymid'][0] - (self.solid.XREF + self.solid.state.sub['u'])[1::dim]
         )
-
         # map solid_area to fluid area
         for fsimap, fluid in zip(self._fsimaps, self.fluids):
             control = fluid.control.copy()

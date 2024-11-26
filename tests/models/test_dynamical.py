@@ -201,10 +201,6 @@ def _test_taylor(x0, dx, res, jac):
     print("Convergence rates: ", np.array(conv_rates))
 
 
-# TODO: Get derivative tests working again! Many are currently returning NaN
-# Reasons:
-# - The fluid model pressure residual is NaN due to a zero 1d area. Not clear
-# why the fluid model area is reading zero since I set `ymid` with a gap!
 class _TestDerivative:
     """
     Test correctness of model derivatives
@@ -470,8 +466,7 @@ class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixt
             ymid = ymax + ygap
             ycontact = ymid - 0.1 * ygap
             props0['ycontact'] = ycontact
-
-            model_coupl.ymid = ymid
+            props0['ymid'] = ymid
 
         if model_fluids is not None:
             prop_values = {'zeta_sep': 1e-4, 'zeta_min': 1e-4, 'rho_air': 1.2e-3}
