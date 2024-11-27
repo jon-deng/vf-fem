@@ -5,6 +5,8 @@ Test `meshutils`
 import pytest
 
 import dolfin as dfn
+import numpy as np
+
 from femvf import meshutils
 
 from tests.fixture_mesh import GMSHFixtures, FenicsMeshFixtures
@@ -33,7 +35,7 @@ class TestMeshOperations(FenicsMeshFixtures):
     def mesh_subdomain_data(self, mesh_subdomains: list[dict[str, int]], dim: int):
         return mesh_subdomains[dim]
 
-    def test_filter_mesh_entities(
+    def test_filter_mesh_entities_by_subdomain(
         self,
         mesh: dfn.Mesh,
         mesh_function: dfn.MeshFunction,
@@ -45,4 +47,27 @@ class TestMeshOperations(FenicsMeshFixtures):
         # TODO: Fix hard-coded ['traction'] names?
         assert meshutils.filter_mesh_entities_by_subdomain(
             mesh_entities, mesh_function, filtering_mesh_values
+        )
+
+    def test_filter_mesh_entities_by_plane(
+        self,
+        mesh: dfn.Mesh,
+        mesh_function: dfn.MeshFunction,
+        mesh_subdomain_data: dict[str, int]
+    ):
+        filtering_mesh_values = set([mesh_subdomain_data[key] for key in ['traction']])
+        mesh_entities = [ent for ent in dfn.entities(mesh, 1)]
+
+        dim = mesh.topology().dim()
+        if dim == 2:
+            origin = np.zeros(2)
+            normal = np.array([0, 1])
+        elif dim == 3:
+            origin = np.zeros(3)
+            normal = np.array([0, 0, 1])
+        else:
+            assert False
+
+        assert meshutils.filter_mesh_entities_by_plane(
+            mesh_entities, origin=origin, normal=normal
         )
