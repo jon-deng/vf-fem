@@ -192,23 +192,27 @@ class GMSHFixtures:
 
         ## Mark Physical entities
 
-        # Mark the top left and top right edges as "inferior" and "superior"
-        gmsh.model.geo.addPhysicalGroup(1, [11], name="superior")
-        gmsh.model.geo.addPhysicalGroup(1, [12], name="inferior")
-
-        # Mark the bottom, right, top, and left surfaces
-        # TODO: Handle "overlapping" physical groups in load_gmsh
-        # gmsh.model.geo.addPhysicalGroup(1, [1], name="bottom")
-        # gmsh.model.geo.addPhysicalGroup(1, [2], name="right")
-        # gmsh.model.geo.addPhysicalGroup(1, [3], name="top")
-        # gmsh.model.geo.addPhysicalGroup(1, [3], name="traction")
-        # gmsh.model.geo.addPhysicalGroup(1, [4], name="left")
-
-        gmsh.model.geo.addPhysicalGroup(2, [3], name="dirichlet")
-        gmsh.model.geo.addPhysicalGroup(2, [4, 5, 6], name="traction")
-
-        # Mark the plane surface
+        # Mark the volume
         gmsh.model.geo.addPhysicalGroup(3, [1], name="volume")
+
+        # Mark vertices, edges, etc.
+
+        # TODO: Figure out how to determine geometry tags?
+        # The tags below are hard-coded from examining tag numbers in the GMSH gui
+        # (e.g. the surfaces are extruded from edges with known numbers)
+        # extruded_surface = line_tag *
+
+        gmsh.model.geo.addPhysicalGroup(2, [13], name="dirichlet")
+        gmsh.model.geo.addPhysicalGroup(2, [17, 21, 25], name="traction")
+        gmsh.model.geo.addPhysicalGroup(2, [1], name="back")
+        gmsh.model.geo.addPhysicalGroup(2, [26], name="front")
+
+        # Mark the top left and top right edges as "inferior" and "superior"
+        gmsh.model.geo.addPhysicalGroup(1, [16], name="superior")
+        gmsh.model.geo.addPhysicalGroup(1, [20], name="inferior")
+
+        # Mark the origin point
+        # gmsh.model.geo.addPhysicalGroup(0, [1], name="origin")
 
         gmsh.option.setNumber("Mesh.MeshSizeMin", 1)
         gmsh.model.geo.synchronize()

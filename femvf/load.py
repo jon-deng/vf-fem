@@ -91,7 +91,6 @@ def load_jax_model(
         raise ValueError(f"Invalid model type {model_type}")
 
 
-# TODO: Combine transient and dynamical model loading functions?
 def load_fsi_model(
     solid_mesh: str,
     SolidResidual: type[slr.PredefinedSolidResidual],
@@ -277,7 +276,7 @@ def derive_1dfluid_from_3dsolid(
 
     ## Process the fsi surface vertices to set the coupling between solid and fluid
     # Find vertices corresponding to the fsi facets
-    mesh = solid.residual.mesh()
+    mesh = solid.mesh()
     fsi_verts_list = []
     s_list = []
     for z in zs:
