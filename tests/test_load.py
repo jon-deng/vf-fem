@@ -64,7 +64,7 @@ class TestLoad(GMSHFixtures):
     def fluid_kwargs(self):
         return {}
 
-    def test_load_transient_fsi_model(
+    def test_load_fsi_model(
         self, mesh_path, SolidResidual, FluidResidual, solid_kwargs, fluid_kwargs, model_type
     ):
         assert load.load_fsi_model(
