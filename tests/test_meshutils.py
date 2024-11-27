@@ -43,6 +43,6 @@ class TestMeshOperations(FenicsMeshFixtures):
         mesh_entities = [ent for ent in dfn.entities(mesh, 1)]
 
         # TODO: Fix hard-coded ['traction'] names?
-        assert meshutils.filter_mesh_entities(
+        assert meshutils.filter_mesh_entities_by_subdomain(
             mesh_entities, mesh_function, filtering_mesh_values
         )

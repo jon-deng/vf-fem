@@ -199,7 +199,7 @@ def extract_edges_from_facets(facets, facet_function, facet_values):
     ]
     return edges
 
-def filter_mesh_entities(
+def filter_mesh_entities_by_subdomain(
     mesh_entities: list[dfn.MeshEntity],
     mesh_function: dfn.MeshFunction,
     filtering_mesh_values: set[int]

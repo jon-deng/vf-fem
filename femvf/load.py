@@ -211,7 +211,7 @@ def derive_1dfluid_from_2dsolid(
     edge_mesh_subdomain = solid.mesh_subdomain(1)
     filtering_edge_values = set(edge_mesh_subdomain[name] for name in fsi_facet_labels)
     fsi_edges = [
-        edge.index() for edge in meshutils.filter_mesh_entities(
+        edge.index() for edge in meshutils.filter_mesh_entities_by_subdomain(
             dfn.edges(mesh), edge_mesh_func, filtering_edge_values
         )
     ]
@@ -298,7 +298,7 @@ def derive_1dfluid_from_3dsolid(
             for domain_name in fsi_facet_labels
         )
         fsi_edges = [
-            edge.index() for edge in meshutils.filter_mesh_entities(
+            edge.index() for edge in meshutils.filter_mesh_entities_by_subdomain(
                 fsi_edges, solid.mesh_function('facet'), filtering_values
             )
         ]

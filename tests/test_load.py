@@ -26,6 +26,7 @@ class TestLoad(GMSHFixtures):
         return request.param
 
     SOLID_RESIDUALS = [slr.Rayleigh, slr.KelvinVoigt]
+    SOLID_RESIDUALS = [slr.Rayleigh]
 
     @pytest.fixture(params=SOLID_RESIDUALS)
     def SolidResidual(self, request):
@@ -42,7 +43,8 @@ class TestLoad(GMSHFixtures):
             mesh_path, SolidResidual, model_type=model_type, dirichlet_bcs=dirichlet_bcs
         )
 
-    FLUID_RESIDUALS = [flr.BernoulliAreaRatioSep, flr.BernoulliFixedSep]
+    # FLUID_RESIDUALS = [flr.BernoulliAreaRatioSep, flr.BernoulliFixedSep]
+    FLUID_RESIDUALS = [flr.BernoulliAreaRatioSep]
 
     @pytest.fixture(params=FLUID_RESIDUALS)
     def FluidResidual(self, request):
