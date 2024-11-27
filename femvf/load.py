@@ -27,18 +27,20 @@ def load_fenics_model(
     **kwargs: dict[str, Any]
 ) -> SolidModel:
     """
-    Load a solid model of the specified type
+    Load a solid model
 
     Parameters
     ----------
-    mesh:
-        A string indicating the path to a mesh file. This can be either in
-         '.xml' or '.msh' format.
-    Residual:
-        A class indicating the type of fenics residual
-    pressure_facet_labels, fixed_facet_labels:
-        Lists of strings for labelled facets corresponding to the pressure
-        loading and fixed boundaries.
+    mesh: str
+        A mesh file path
+
+        Only GMSH meshes are currently supported
+    Residual: slr.PredefinedSolidResidual
+        A predefined Fenics residual class
+    model_type: str
+        Type of model to load ('transient' or 'dynamical')
+    **kwargs:
+        Additional keyword args for the residual
     """
     ext = path.splitext(mesh)[1]
     if ext.lower() == '.msh':
@@ -66,11 +68,14 @@ def load_jax_model(
 
     Parameters
     ----------
-    mesh:
-        A string indicating the path to a mesh file. This can be either in
-         '.xml' or '.msh' format.
-    Residual:
-        A fluid residual class
+    mesh: NDArray
+        An NDArray representing mesh coordinates
+    Residual: flr.PredefinedFluidResidual
+        A predefined JAX residual class
+    model_type: str
+        Type of model to load ('transient' or 'dynamical')
+    **kwargs:
+        Additional keyword args for the residual
     """
     residual = Residual(mesh, **kwargs)
 
