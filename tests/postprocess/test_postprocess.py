@@ -5,7 +5,7 @@ Test `femvf.postprocess`
 import pytest
 
 from femvf import statefile as sf
-from femvf.load import load_transient_fsi_model
+from femvf.load import load_fsi_model
 from femvf.postprocess import solid, base
 from femvf.models import transient
 
@@ -15,7 +15,7 @@ def setup_model():
     """
     Return a model (subclass of `BaseTransientModel`)
     """
-    model = load_transient_fsi_model(
+    model = load_fsi_model(
         '../meshes/M5-3layers.msh',
         None,
         SolidResidual=transient.KelvinVoigtWEpithelium,

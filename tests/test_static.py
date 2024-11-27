@@ -10,7 +10,7 @@ import numpy as np
 import dolfin as dfn
 
 from femvf.models import transient
-from femvf.load import load_transient_fsi_model
+from femvf.load import load_fsi_model
 from femvf.meshutils import process_meshlabel_to_dofs
 from femvf import static
 
@@ -18,7 +18,7 @@ from femvf import static
 mesh_dir = '../meshes'
 mesh_name = 'M5-3layers'
 mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
-model = load_transient_fsi_model(
+model = load_fsi_model(
     mesh_path,
     None,
     SolidResidual=transient.KelvinVoigt,

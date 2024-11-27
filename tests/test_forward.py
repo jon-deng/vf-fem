@@ -19,7 +19,7 @@ from femvf.residuals import fluid as flr
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 from femvf.models import transient
-from femvf.load import load_transient_fsi_model, derive_1dfluid_from_2dsolid
+from femvf.load import load_fsi_model, derive_1dfluid_from_2dsolid
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
 # from femvf.vis.xdmfutils import write_xdmf, export_mesh_values

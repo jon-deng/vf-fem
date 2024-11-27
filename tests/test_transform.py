@@ -13,7 +13,7 @@ import dolfin as dfn
 
 from femvf.models import transient
 from femvf.models.dynamical import BaseDynamicalModel
-from femvf.load import load_transient_fsi_model
+from femvf.load import load_fsi_model
 from femvf.parameters import transform as tform
 
 from blockarray import blockvec as bv, linalg as blinalg
@@ -59,7 +59,7 @@ class TestTransform:
         Return the model to test
         """
         mesh_path = '../meshes/M5_BC--GA3--DZ0.00.msh'
-        model = load_transient_fsi_model(
+        model = load_fsi_model(
             mesh_path,
             None,
             SolidResidual=transient.KelvinVoigtWShape,

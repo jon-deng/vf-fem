@@ -92,17 +92,18 @@ def load_jax_model(
 
 
 # TODO: Combine transient and dynamical model loading functions?
-def load_transient_fsi_model(
+def load_fsi_model(
     solid_mesh: str,
     SolidResidual: type[slr.PredefinedSolidResidual],
     FluidResidual: type[flr.PredefinedFluidResidual],
     solid_kwargs: dict[str, Any],
     fluid_kwargs: dict[str, Any],
+    model_type: str = 'transient',
     coupling: str = 'explicit',
     zs: Optional[tuple[float]] = None,
 ) -> transient.BaseTransientFSIModel:
     """
-    Load a transient coupled (fsi) model
+    Load a coupled (fsi) model
 
     Parameters
     ----------
@@ -121,7 +122,6 @@ def load_transient_fsi_model(
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
     """
-    model_type = 'transient'
     ## Load the solid
     solid = load_fenics_model(
         solid_mesh, SolidResidual, model_type=model_type, **solid_kwargs
@@ -143,7 +143,15 @@ def load_transient_fsi_model(
             separation_vertex_label='superior',
             zs=zs,
         )
-    fluid = transient.JaxModel(fluid_res)
+
+    if model_type == 'transient':
+        fluid = transient.JaxModel(fluid_res)
+    elif model_type == 'dynamical':
+        fluid = dynamical.JaxModel(fluid_res)
+    elif model_type == 'linearized_dynamical':
+        fluid = dynamical.LinearizedJaxModel(fluid_res)
+    else:
+        raise ValueError(f"Invalid model type {model_type}")
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(
         solid.residual.form['coeff.fsi.p1'].function_space()
@@ -163,74 +171,6 @@ def load_transient_fsi_model(
         )
 
     return model
-
-
-def load_dynamical_fsi_model(
-    solid_mesh: str,
-    fluid_mesh: Any,
-    SolidType: slr.PredefinedSolidResidual = slr.KelvinVoigt,
-    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
-    fsi_facet_labels: Optional[Labels] = ('pressure',),
-    fixed_facet_labels: Optional[Labels] = ('fixed',),
-    separation_vertex_label: str = 'separation',
-    zs: Optional[tuple[float]] = None,
-) -> Union[dynamical.BaseDynamicalModel, dynamical.BaseLinearizedDynamicalModel]:
-    """
-    Load a transient coupled (fsi) model
-
-    Parameters
-    ----------
-    solid_mesh : str
-        Path to the solid mesh
-    fluid_mesh : None or (future proofing for other fluid types)
-        Currently this isn't used
-    SolidType, FluidType:
-        Classes of the solid and fluid models to load
-    fsi_facet_labels, fixed_facet_labels:
-        String identifiers for facets corresponding to traction/dirichlet
-        conditions
-    separation_vertex_label:
-        A string corresponding to a labelled vertex where separation should
-        occur. This is only relevant for quasi-static fluid models with a fixed
-        separation point
-    coupling: str
-        One of 'explicit' or 'implicit' indicating the coupling strategy between
-        fluid/solid domains
-    """
-    solid = load_fenics_model(
-        solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels
-    )
-    if zs is None:
-        fluid, fsi_verts = derive_1dfluid_from_2dsolid(
-            solid,
-            FluidResidual=FluidType,
-            fsi_facet_labels=fsi_facet_labels,
-            separation_vertex_label=separation_vertex_label,
-        )
-    else:
-        fluid, fsi_verts = derive_1dfluid_from_3dsolid(
-            solid,
-            FluidResidual=FluidType,
-            fsi_facet_labels=fsi_facet_labels,
-            separation_vertex_label=separation_vertex_label,
-            zs=zs,
-        )
-
-    # BUG: This FSI dof selection won't work for higher order elements!!
-    dofs_fsi_solid = dfn.vertex_to_dof_map(
-        solid.residual.form['coeff.fsi.p1'].function_space()
-    )[fsi_verts.flat]
-    dofs_fsi_fluid = (
-        np.ones(dofs_fsi_solid.shape[:-1], dtype=int)
-        * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
-    ).reshape(-1)
-
-    if isinstance(solid, dynamical.LinearizedFenicsModel):
-        return dynamical.LinearizedFSIModel(
-            solid, fluid, dofs_fsi_solid, dofs_fsi_fluid
-        )
-    else:
-        return dynamical.FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 
 # TODO: Refactor this function; currently does too many things

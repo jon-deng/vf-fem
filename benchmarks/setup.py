@@ -3,7 +3,7 @@ Generic code for setting up commonly used components in benchmarking
 """
 
 
-from femvf.load import load_transient_fsi_model
+from femvf.load import load_fsi_model
 from femvf.models import transient
 
 from blockarray import blockvec as bv
@@ -13,7 +13,7 @@ def setup_model(mesh_path: str) -> transient.BaseTransientModel:
     """
     Return a common model to integrate
     """
-    model = load_transient_fsi_model(
+    model = load_fsi_model(
         mesh_path,
         None,
         SolidResidual=transient.KelvinVoigtWEpithelium,
