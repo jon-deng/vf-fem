@@ -281,16 +281,8 @@ def derive_1dfluid_from_3dsolid(
     fsi_verts_list = []
     s_list = []
     for z in zs:
-        facets = meshutils.extract_zplane_facets(mesh, z=z)
-
-        # TODO: Remove this duplicate filtering
-        # `filter_mesh_entities` can directly get all edges
-        fsi_facet_ids = [
-            solid.residual.mesh_subdomain('facet')[name]
-            for name in fsi_facet_labels
-        ]
-        fsi_edges = meshutils.extract_edges_from_facets(
-            facets, solid.residual.mesh_function('facet'), fsi_facet_ids
+        edges = meshutils.filter_mesh_entities_by_plane(
+            dfn.entities(mesh, 1), np.array([0, 0, z]), np.array([0, 0, 1])
         )
 
         filtering_values = set(
@@ -299,7 +291,7 @@ def derive_1dfluid_from_3dsolid(
         )
         fsi_edges = [
             edge.index() for edge in meshutils.filter_mesh_entities_by_subdomain(
-                fsi_edges, solid.mesh_function('facet'), filtering_values
+                edges, solid.mesh_function('facet'), filtering_values
             )
         ]
 

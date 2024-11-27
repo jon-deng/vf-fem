@@ -3,6 +3,8 @@ Functionality for dealing with meshes
 """
 
 from typing import Any, Callable
+from numpy.typing import NDArray
+
 from os import path
 import warnings
 
@@ -241,6 +243,30 @@ def filter_mesh_entities_by_subdomain(
         mesh_entities,
         lambda entity: is_incident(entity, mesh_function, filtering_mesh_values)
     )
+
+def filter_mesh_entities_by_plane(
+    mesh_entities: list[dfn.MeshEntity],
+    origin: NDArray[np.float64]=np.zeros(3),
+    normal: NDArray[np.float64]=np.array([0, 0, 1])
+):
+    """
+    Return a subset of mesh entities with midpoints on a plane
+
+    Parameters
+    ----------
+    mesh_entities: list[dfn.MeshEntity]
+        An iterable of mesh entities to filter
+    origin: NDArray[np.float64]
+        The plane origin
+    normal: NDArray[np.float64]
+        The plane normal
+    """
+    def on_plane(mesh_entity):
+        midpoint = mesh_entity.midpoint().coordinates
+        normal_distance = np.dot(midpoint-origin, normal)
+        return np.isclose(normal_distance, 0)
+
+    return filter_mesh_entities(mesh_entities, on_plane)
 
 def filter_mesh_entities(
     mesh_entities: list[dfn.MeshEntity],
