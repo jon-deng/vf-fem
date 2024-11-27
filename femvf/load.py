@@ -38,7 +38,7 @@ def load_fenics_model(
     Residual: slr.PredefinedSolidResidual
         A predefined Fenics residual class
     model_type: str
-        Type of model to load ('transient' or 'dynamical')
+        Type of model to load ('transient', 'dynamical', 'linearized_dynamical')
     **kwargs:
         Additional keyword args for the residual
     """
@@ -53,6 +53,8 @@ def load_fenics_model(
         return transient.FenicsModel(residual)
     elif model_type == 'dynamical':
         return dynamical.FenicsModel(residual)
+    elif model_type == 'linearized_dynamical':
+        return dynamical.LinearizedFenicsModel(residual)
     else:
         raise ValueError(f"Invalid model type {model_type}")
 
@@ -73,7 +75,7 @@ def load_jax_model(
     Residual: flr.PredefinedFluidResidual
         A predefined JAX residual class
     model_type: str
-        Type of model to load ('transient' or 'dynamical')
+        Type of model to load ('transient', 'dynamical', 'linearized_dynamical')
     **kwargs:
         Additional keyword args for the residual
     """
@@ -83,6 +85,8 @@ def load_jax_model(
         return transient.JaxModel(residual)
     elif model_type == 'dynamical':
         return dynamical.JaxModel(residual)
+    elif model_type == 'linearized_dynamical':
+        return dynamical.LinearizedJaxModel(residual)
     else:
         raise ValueError(f"Invalid model type {model_type}")
 
