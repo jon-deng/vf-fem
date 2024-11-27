@@ -150,6 +150,8 @@ class GMSHFixtures:
 
         gmsh.model.geo.synchronize()
 
+        gmsh.option.setNumber("Mesh.MeshSizeMin", 1)
+
         gmsh.model.mesh.generate(2)
 
     def init_unit_cube_mesh(self):
@@ -233,6 +235,8 @@ class GMSHFixtures:
         gmsh.model.geo.addPhysicalGroup(3, [1], name="volume")
 
         gmsh.model.geo.synchronize()
+
+        gmsh.option.setNumber("Mesh.MeshSizeMin", 1)
 
         gmsh.model.mesh.generate(3)
 
