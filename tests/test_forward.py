@@ -73,7 +73,7 @@ class ModelFixtures(FenicsMeshFixtures):
 
     @pytest.fixture()
     def model(self, solid, FluidResidual):
-        res_fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
+        res_fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid.residual, FluidResidual, fsi_facet_labels=['traction'])
         fluid_pdofs = np.arange(solid_pdofs.size)
         fluid = transient.JaxModel(res_fluid)
         return transient.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
