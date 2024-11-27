@@ -16,8 +16,8 @@ def setup_model(mesh_path: str) -> transient.BaseTransientModel:
     model = load_transient_fsi_model(
         mesh_path,
         None,
-        SolidType=transient.KelvinVoigtWEpithelium,
-        FluidType=transient.BernoulliAreaRatioSep,
+        SolidResidual=transient.KelvinVoigtWEpithelium,
+        FluidResidual=transient.BernoulliAreaRatioSep,
         fsi_facet_labels=['pressure'],
         fixed_facet_labels=['fixed'],
         coupling='explicit',

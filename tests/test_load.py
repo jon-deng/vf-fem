@@ -43,3 +43,20 @@ class TestLoad(GMSHFixtures):
     def test_load_jax_model(self, FluidResidual):
         mesh = np.linspace(0, 1, 10)
         assert load.load_jax_model(mesh, FluidResidual)
+
+    @pytest.fixture()
+    def solid_kwargs(self, dirichlet_bcs):
+        return {
+            'dirichlet_bcs': dirichlet_bcs
+        }
+
+    @pytest.fixture()
+    def fluid_kwargs(self):
+        return {}
+
+    def test_load_transient_fsi_model(
+        self, mesh_path, SolidResidual, FluidResidual, solid_kwargs, fluid_kwargs
+    ):
+        assert load.load_transient_fsi_model(
+            mesh_path, SolidResidual, FluidResidual, solid_kwargs, fluid_kwargs
+        )

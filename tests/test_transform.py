@@ -62,8 +62,8 @@ class TestTransform:
         model = load_transient_fsi_model(
             mesh_path,
             None,
-            SolidType=transient.KelvinVoigtWShape,
-            FluidType=transient.BernoulliAreaRatioSep,
+            SolidResidual=transient.KelvinVoigtWShape,
+            FluidResidual=transient.BernoulliAreaRatioSep,
         )
         return model
 

@@ -90,12 +90,10 @@ def load_jax_model(
 # TODO: Combine transient and dynamical model loading functions?
 def load_transient_fsi_model(
     solid_mesh: str,
-    fluid_mesh: Any,
-    SolidType: slr.PredefinedSolidResidual = slr.KelvinVoigt,
-    FluidType: FluidClass = flr.BernoulliAreaRatioSep,
-    fsi_facet_labels: Optional[Labels] = ('pressure',),
-    fixed_facet_labels: Optional[Labels] = ('fixed',),
-    separation_vertex_label: str = 'separation',
+    SolidResidual: slr.PredefinedSolidResidual,
+    FluidResidual: flr.PredefinedFluidResidual,
+    solid_kwargs: dict[str, Any],
+    fluid_kwargs: dict[str, Any],
     coupling: str = 'explicit',
     zs: Optional[tuple[float]] = None,
 ) -> transient.BaseTransientFSIModel:
@@ -106,9 +104,7 @@ def load_transient_fsi_model(
     ----------
     solid_mesh : str
         Path to the solid mesh
-    fluid_mesh : None or (future proofing for other fluid types)
-        Currently this isn't used
-    SolidType, FluidType:
+    SolidResidual, FluidResidual:
         Classes of the solid and fluid models to load
     fsi_facet_labels, fixed_facet_labels:
         String identifiers for facets corresponding to traction/dirichlet
@@ -121,27 +117,29 @@ def load_transient_fsi_model(
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
     """
+    model_type = 'transient'
     ## Load the solid
     solid = load_fenics_model(
-        solid_mesh, SolidType, fsi_facet_labels, fixed_facet_labels
+        solid_mesh, SolidResidual, model_type=model_type, **solid_kwargs
     )
+
     if zs is None:
+        # TODO: Refactor hard-coded keys ('traction' ...)!
         fluid, fsi_verts = derive_1dfluid_from_2dsolid(
             solid,
-            FluidResidual=FluidType,
-            fsi_facet_labels=fsi_facet_labels,
-            separation_vertex_label=separation_vertex_label,
+            FluidResidual=FluidResidual,
+            fsi_facet_labels=['traction'],
+            separation_vertex_label='superior',
         )
     else:
         fluid, fsi_verts = derive_1dfluid_from_3dsolid(
             solid,
-            FluidResidual=FluidType,
-            fsi_facet_labels=fsi_facet_labels,
-            separation_vertex_label=separation_vertex_label,
+            FluidResidual=FluidResidual,
+            fsi_facet_labels=['traction'],
+            separation_vertex_label='superior',
             zs=zs,
         )
 
-    # Handle multiple fluid models by
     dofs_fsi_solid = dfn.vertex_to_dof_map(
         solid.residual.form['coeff.fsi.p1'].function_space()
     )[fsi_verts.flat]

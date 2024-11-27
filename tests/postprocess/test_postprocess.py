@@ -18,8 +18,8 @@ def setup_model():
     model = load_transient_fsi_model(
         '../meshes/M5-3layers.msh',
         None,
-        SolidType=transient.KelvinVoigtWEpithelium,
-        FluidType=transient.BernoulliAreaRatioSep,
+        SolidResidual=transient.KelvinVoigtWEpithelium,
+        FluidResidual=transient.BernoulliAreaRatioSep,
         fsi_facet_labels=['pressure'],
         fixed_facet_labels=['fixed'],
     )

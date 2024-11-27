@@ -21,8 +21,8 @@ mesh_path = os.path.join(mesh_dir, mesh_name + '.xml')
 model = load_transient_fsi_model(
     mesh_path,
     None,
-    SolidType=transient.KelvinVoigt,
-    FluidType=transient.BernoulliAreaRatioSep,
+    SolidResidual=transient.KelvinVoigt,
+    FluidResidual=transient.BernoulliAreaRatioSep,
     coupling='explicit',
 )
 

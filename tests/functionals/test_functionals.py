@@ -42,7 +42,7 @@ class TestFunctionals(unittest.TestCase):
         mesh_path = path.join(mesh_dir, mesh_base_filename + '.xml')
 
         model = load_transient_fsi_model(
-            mesh_path, None, SolidType=Rayleigh, FluidType=Bernoulli
+            mesh_path, None, SolidResidual=Rayleigh, FluidResidual=Bernoulli
         )
 
         ## Set time integration / fluid / solid parameters
