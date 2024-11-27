@@ -180,6 +180,8 @@ def extract_zplane_facets(mesh, z=0.0):
     return facets
 
 
+## Filter mesh entities
+
 def extract_edges_from_facets(facets, facet_function, facet_values):
     """
     Return all edges from facets that lie on a particular facet value
@@ -196,6 +198,49 @@ def extract_edges_from_facets(facets, facet_function, facet_values):
         )
     ]
     return edges
+
+def filter_mesh_entities(
+    mesh_entities: list[dfn.MeshEntity],
+    mesh_function: dfn.MeshFunction,
+    filtering_mesh_values: set[int]
+):
+    """
+    Return a subset of mesh entities incident to given subdomains
+
+    Parameters
+    ----------
+    mesh_entities: list[dfn.MeshEntity]
+        An iterable of mesh entities to filter
+    subdomains: list[str]
+        A list of subdomain names
+    mesh_function: dfn.MeshFunction
+        A mesh function specifying the subdomains
+
+        The mesh function/subdomain dimension does not have to match the
+        mesh entity dimension.
+    mesh_subdomain_data: dict[str, int]
+        A mapping from subdomain names to mesh function values
+    """
+    def is_incident(
+        mesh_entity: dfn.MeshEntity,
+        mesh_function: dfn.MeshFunction,
+        mesh_values: set[int]
+    ):
+        """
+        Return whether `mesh_entity` is incident to the subdomain
+        """
+        # Determine if `mesh_entity` is incident to the given subdomains
+        subdomain_dim = mesh_function.dim()
+        incident_entities = [ent for ent in dfn.entities(mesh_entity, subdomain_dim)]
+        incident_entity_values = [mesh_function[ent] for ent in incident_entities]
+        return any(
+            value in mesh_values for value in incident_entity_values
+        )
+
+    return [
+        mesh_entity for mesh_entity in mesh_entities
+        if is_incident(mesh_entity, mesh_function, filtering_mesh_values)
+    ]
 
 
 ## Functions for sorting medial surface coordinates in a stream-wise manner
