@@ -145,13 +145,14 @@ def load_fsi_model(
         )
 
     if model_type == 'transient':
-        fluid = transient.JaxModel(fluid_res)
+        FluidModel = transient.JaxModel
     elif model_type == 'dynamical':
-        fluid = dynamical.JaxModel(fluid_res)
+        FluidModel = dynamical.JaxModel
     elif model_type == 'linearized_dynamical':
-        fluid = dynamical.LinearizedJaxModel(fluid_res)
+        FluidModel = dynamical.LinearizedJaxModel
     else:
         raise ValueError(f"Invalid model type {model_type}")
+    fluid = FluidModel(fluid_res)
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(
         solid.residual.form['coeff.fsi.p1'].function_space()
@@ -161,16 +162,20 @@ def load_fsi_model(
         * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
     ).reshape(-1)
 
-    if coupling == 'explicit':
-        model = transient.ExplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
-    elif coupling == 'implicit':
-        model = transient.ImplicitFSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+    if model_type == 'transient' and coupling == 'explicit':
+        FSIModel = transient.ExplicitFSIModel
+    elif model_type == 'transient' and coupling == 'implicit':
+        FSIModel = transient.ImplicitFSIModel
+    elif model_type == 'dynamical':
+        FSIModel = dynamical.FSIModel
+    elif model_type == 'linearized_dynamical':
+        FSIModel = dynamical.LinearizedFSIModel
     else:
         raise ValueError(
-            f"'coupling' must be one of `['explicit', 'implicit']`, not `{coupling}`"
+            f"Invalid `model_type` and `coupling` ({model_type}, {coupling})"
         )
 
-    return model
+    return FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
 
 # TODO: Refactor this function; currently does too many things

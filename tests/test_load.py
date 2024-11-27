@@ -20,7 +20,7 @@ from tests.fixture_mesh import GMSHFixtures
 class TestLoad(GMSHFixtures):
 
     MODEL_TYPES = ['transient', 'dynamical', 'linearized_dynamical']
-    MODEL_TYPES = ['transient']
+    MODEL_TYPES = ['dynamical']
     @pytest.fixture(params=MODEL_TYPES)
     def model_type(self, request):
         return request.param
