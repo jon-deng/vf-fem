@@ -11,6 +11,7 @@ import numpy as np
 import dolfin as dfn
 
 from femvf import load
+from femvf import meshutils
 from femvf.residuals import solid as slr
 from femvf.residuals import fluid as flr
 
@@ -48,9 +49,22 @@ class TestLoad(GMSHFixtures):
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'dirichlet')]
         }
 
-    def test_load_fenics_model(self, mesh_path, SolidResidual, model_type, dirichlet_bcs):
+    def test_load_fenics_model_from_file(
+        self, mesh_path, SolidResidual, model_type, dirichlet_bcs
+    ):
         assert load.load_fenics_model(
             mesh_path, SolidResidual, model_type=model_type, dirichlet_bcs=dirichlet_bcs
+        )
+
+    @pytest.fixture()
+    def mesh_tuple(self, mesh_path):
+        return meshutils.load_fenics_gmsh(mesh_path)
+
+    def test_load_fenics_model_from_mesh_tuple(
+        self, mesh_tuple, SolidResidual, model_type, dirichlet_bcs
+    ):
+        assert load.load_fenics_model(
+            mesh_tuple, SolidResidual, model_type=model_type, dirichlet_bcs=dirichlet_bcs
         )
 
     # FLUID_RESIDUALS = [flr.BernoulliAreaRatioSep, flr.BernoulliFixedSep]

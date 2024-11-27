@@ -21,7 +21,7 @@ Labels = list[str]
 
 
 def load_fenics_model(
-    mesh: str,
+    mesh: str | tuple[dfn.Mesh, list[dfn.MeshFunction], list[dict[str, int]]],
     Residual: type[slr.PredefinedSolidResidual],
     model_type: str = 'transient',
     **kwargs: dict[str, Any]
@@ -31,8 +31,8 @@ def load_fenics_model(
 
     Parameters
     ----------
-    mesh: str
-        A mesh file path
+    mesh: str | tuple[dfn.Mesh, list[dfn.MeshFunction], list[dict[str, int]]]
+        A mesh file path or mesh information tuple
 
         Only GMSH meshes are currently supported
     Residual: slr.PredefinedSolidResidual
@@ -42,11 +42,16 @@ def load_fenics_model(
     **kwargs:
         Additional keyword args for the residual
     """
-    ext = path.splitext(mesh)[1]
-    if ext.lower() == '.msh':
-        mesh, mesh_funcs, mesh_subdomains = meshutils.load_fenics_gmsh(mesh)
+    if isinstance(mesh, str):
+        ext = path.splitext(mesh)[1]
+        if ext.lower() == '.msh':
+            mesh, mesh_funcs, mesh_subdomains = meshutils.load_fenics_gmsh(mesh)
+        else:
+            raise ValueError(f"Invalid mesh extension {ext}")
+    elif isinstance(mesh, (tuple, list)):
+        mesh, mesh_funcs, mesh_subdomains = mesh
     else:
-        raise ValueError(f"Invalid mesh extension {ext}")
+        raise TypeError(f"Invalid `mesh` type {type(mesh)}")
 
     residual = Residual(mesh, mesh_funcs, mesh_subdomains, **kwargs)
     if model_type == 'transient':
@@ -92,7 +97,7 @@ def load_jax_model(
 
 
 def load_fsi_model(
-    solid_mesh: str,
+    solid_mesh: str | tuple[dfn.Mesh, list[dfn.MeshFunction], list[dict[str, int]]],
     SolidResidual: type[slr.PredefinedSolidResidual],
     FluidResidual: type[flr.PredefinedFluidResidual],
     solid_kwargs: dict[str, Any],
