@@ -2,7 +2,7 @@
 Functionality for dealing with meshes
 """
 
-from typing import Any
+from typing import Any, Callable
 from os import path
 import warnings
 
@@ -237,9 +237,29 @@ def filter_mesh_entities_by_subdomain(
             value in mesh_values for value in incident_entity_values
         )
 
+    return filter_mesh_entities(
+        mesh_entities,
+        lambda entity: is_incident(entity, mesh_function, filtering_mesh_values)
+    )
+
+def filter_mesh_entities(
+    mesh_entities: list[dfn.MeshEntity],
+    filter: Callable[[dfn.MeshEntity], bool]
+):
+    """
+    Return a subset of mesh entities incident satisfying a condition
+
+    Parameters
+    ----------
+    mesh_entities: list[dfn.MeshEntity]
+        An iterable of mesh entities to filter
+    filter: Callable[[dfn.MeshEntity], bool]
+        A function which determines if the mesh entity is included
+
+        If filter returns `True`, then the mesh entity is included.
+    """
     return [
-        mesh_entity for mesh_entity in mesh_entities
-        if is_incident(mesh_entity, mesh_function, filtering_mesh_values)
+        mesh_entity for mesh_entity in mesh_entities if filter(mesh_entity)
     ]
 
 
