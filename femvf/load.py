@@ -22,7 +22,7 @@ Labels = list[str]
 
 def load_fenics_model(
     mesh: str,
-    Residual: slr.PredefinedSolidResidual,
+    Residual: type[slr.PredefinedSolidResidual],
     model_type: str = 'transient',
     **kwargs: dict[str, Any]
 ) -> SolidModel:
@@ -59,7 +59,7 @@ def load_fenics_model(
 
 def load_jax_model(
     mesh: NDArray,
-    Residual: flr.PredefinedFluidResidual,
+    Residual: type[flr.PredefinedFluidResidual],
     model_type: str = 'transient',
     **kwargs
 ) -> FluidModel:
@@ -90,8 +90,8 @@ def load_jax_model(
 # TODO: Combine transient and dynamical model loading functions?
 def load_transient_fsi_model(
     solid_mesh: str,
-    SolidResidual: slr.PredefinedSolidResidual,
-    FluidResidual: flr.PredefinedFluidResidual,
+    SolidResidual: type[slr.PredefinedSolidResidual],
+    FluidResidual: type[flr.PredefinedFluidResidual],
     solid_kwargs: dict[str, Any],
     fluid_kwargs: dict[str, Any],
     coupling: str = 'explicit',
