@@ -130,14 +130,14 @@ def load_fsi_model(
     if zs is None:
         # TODO: Refactor hard-coded keys ('traction' ...)!
         fluid_res, fsi_verts = derive_1dfluid_from_2dsolid(
-            solid,
+            solid.residual,
             FluidResidual=FluidResidual,
             fsi_facet_labels=['traction'],
             separation_vertex_label='superior',
         )
     else:
         fluid_res, fsi_verts = derive_1dfluid_from_3dsolid(
-            solid,
+            solid.residual,
             FluidResidual=FluidResidual,
             fsi_facet_labels=['traction'],
             separation_vertex_label='superior',
@@ -206,21 +206,12 @@ def derive_1dfluid_from_2dsolid(
         separation point
     """
     ## Process the fsi surface vertices to set the coupling between solid and fluid
-    # Find vertices corresponding to the fsi facets
-    fsi_facet_ids = [
-        solid.residual.mesh_subdomain('facet')[name]
-        for name in fsi_facet_labels
-    ]
-    fsi_edges = np.array(
-        [
-            nedge
-            for nedge, fedge in enumerate(solid.residual.mesh_function('facet').array())
-            if fedge in set(fsi_facet_ids)
-        ]
-    )
+    edge_mesh_func = solid.mesh_function(1)
+    edge_mesh_subdomain = solid.mesh_subdomain(1)
+    fsi_edges = filter_edges(fsi_facet_labels, edge_mesh_func, edge_mesh_subdomain)
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
-    mesh = solid.residual.mesh()
+    mesh = solid.mesh()
     s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
     if issubclass(
         FluidResidual,
@@ -248,6 +239,19 @@ def derive_1dfluid_from_2dsolid(
         fluid = FluidResidual(s)
 
     return fluid, fsi_verts
+
+def filter_edges(
+    edge_domains: list[str],
+    edge_mesh_function: dfn.MeshFunction,
+    edge_subdomain_data: dict[str, int]
+) -> NDArray[np.intp]:
+    # Determine all edge mesh values to filter
+    filter_edge_values = set([edge_subdomain_data[domain] for domain in edge_domains])
+    edges = [
+        idx_edge for idx_edge, edge_value in enumerate(edge_mesh_function.array())
+        if edge_value in filter_edge_values
+    ]
+    return np.array(edges)
 
 
 def derive_1dfluid_from_3dsolid(
@@ -295,6 +299,10 @@ def derive_1dfluid_from_3dsolid(
             facets, solid.residual.mesh_function('facet'), fsi_facet_ids
         )
         fsi_edges = np.array([edge.index() for edge in fsi_edges])
+
+        edge_mesh_func = solid.mesh_function(1)
+        edge_mesh_subdomain = solid.mesh_subdomain(1)
+        fsi_edges = filter_edges(fsi_facet_labels, edge_mesh_func, edge_mesh_subdomain)
 
         s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
         s_list.append(s)
@@ -344,12 +352,12 @@ def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
 
 
 def locate_separation_vertex(
-    solid: SolidModel, separation_vertex_label: str = 'separation'
+    solid: slr.FenicsResidual, separation_vertex_label: str = 'separation'
 ):
     # If the fluid has a fixed-separation point, set the appropriate
     # separation point for the fluid
-    vertex_label_to_id = solid.residual.mesh_subdomain('vertex')
-    vertex_mf = solid.residual.mesh_function('vertex')
+    vertex_label_to_id = solid.mesh_subdomain('vertex')
+    vertex_mf = solid.mesh_function('vertex')
     if vertex_mf is None:
         raise ValueError(
             f"Couldn't find separation point label {separation_vertex_label}"
