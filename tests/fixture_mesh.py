@@ -100,7 +100,7 @@ class GMSHFixtures:
 
     MESH_NAMES = ['unit_square', 'unit_cube']
     MESH_NAMES = ['unit_cube']
-    MESH_NAMES = ['unit_square']
+    # MESH_NAMES = ['unit_square']
 
     @pytest.fixture(params=MESH_NAMES)
     def mesh_name(self, request):
@@ -167,54 +167,28 @@ class GMSHFixtures:
         gmsh.model.geo.addPoint(1, 1, 0, tag=3)
         gmsh.model.geo.addPoint(0, 1, 0, tag=4)
 
-        gmsh.model.geo.addPoint(0, 0, 1, tag=5)
-        gmsh.model.geo.addPoint(1, 0, 1, tag=6)
-        gmsh.model.geo.addPoint(1, 1, 1, tag=7)
-        gmsh.model.geo.addPoint(0, 1, 1, tag=8)
-
         # Add edges
-        # back face
         gmsh.model.geo.addLine(1, 2, tag=1)
         gmsh.model.geo.addLine(2, 3, tag=2)
         gmsh.model.geo.addLine(3, 4, tag=3)
         gmsh.model.geo.addLine(4, 1, tag=4)
 
-        # front face
-        gmsh.model.geo.addLine(5, 6, tag=5)
-        gmsh.model.geo.addLine(6, 7, tag=6)
-        gmsh.model.geo.addLine(7, 8, tag=7)
-        gmsh.model.geo.addLine(8, 5, tag=8)
-
-        # back-to-front vertex connectors
-        # from the bottom-left counter-clockwise about z
-        gmsh.model.geo.addLine(1, 5, tag=9)
-        gmsh.model.geo.addLine(2, 6, tag=10)
-        gmsh.model.geo.addLine(3, 7, tag=11)
-        gmsh.model.geo.addLine(4, 8, tag=12)
-
         # Add edge loop (back, front, then sides)
         # sides start from the bottom-left counter-clockwise about z
         gmsh.model.geo.addCurveLoop([1, 2, 3, 4], tag=1)
-        gmsh.model.geo.addCurveLoop([5, 6, 7, 8], tag=2)
-
-        gmsh.model.geo.addCurveLoop([9, 1, 10, 5], tag=3, reorient=True)
-        gmsh.model.geo.addCurveLoop([10, 2, 11, 6], tag=4, reorient=True)
-        gmsh.model.geo.addCurveLoop([11, 3, 12, 7], tag=5, reorient=True)
-        gmsh.model.geo.addCurveLoop([12, 4, 9, 8], tag=6, reorient=True)
 
         # Add the square faces (back, front, then sides counter-clockwise about z starting from bottom)
         gmsh.model.geo.addPlaneSurface([1], tag=1)
-        gmsh.model.geo.addPlaneSurface([2], tag=2)
-        gmsh.model.geo.addPlaneSurface([3], tag=3)
-        gmsh.model.geo.addPlaneSurface([4], tag=4)
-        gmsh.model.geo.addPlaneSurface([5], tag=5)
-        gmsh.model.geo.addPlaneSurface([6], tag=6)
 
-        # Add the closed shell
-        gmsh.model.geo.addSurfaceLoop([1, 2, 3, 4, 5, 6], tag=1)
+        # gmsh.model.geo.synchronize()
 
-        # Add the cubic volume
-        gmsh.model.geo.addVolume([1], tag=1)
+        z_extrude_depth = 1
+        n_extrude = 1
+        extrude_vector = (0, 0, z_extrude_depth/n_extrude)
+        gmsh.model.geo.extrude(
+            [(2, 1)], *extrude_vector, [n_extrude]
+        )
+        gmsh.model.geo.synchronize()
 
         ## Mark Physical entities
 
@@ -236,9 +210,8 @@ class GMSHFixtures:
         # Mark the plane surface
         gmsh.model.geo.addPhysicalGroup(3, [1], name="volume")
 
-        gmsh.model.geo.synchronize()
-
         gmsh.option.setNumber("Mesh.MeshSizeMin", 1)
+        gmsh.model.geo.synchronize()
 
         gmsh.model.mesh.generate(3)
 
