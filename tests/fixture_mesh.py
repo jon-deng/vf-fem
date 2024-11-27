@@ -100,6 +100,7 @@ class GMSHFixtures:
 
     MESH_NAMES = ['unit_square', 'unit_cube']
     MESH_NAMES = ['unit_cube']
+    MESH_NAMES = ['unit_square']
 
     @pytest.fixture(params=MESH_NAMES)
     def mesh_name(self, request):
@@ -155,6 +156,7 @@ class GMSHFixtures:
         gmsh.model.mesh.generate(2)
 
     def init_unit_cube_mesh(self):
+        # TODO: Need to use the extruded 2D mesh for this!
 
         model = gmsh.model.add("unit_cube")
 

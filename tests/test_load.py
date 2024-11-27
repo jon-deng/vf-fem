@@ -33,9 +33,19 @@ class TestLoad(GMSHFixtures):
         return request.param
 
     @pytest.fixture()
-    def dirichlet_bcs(self):
+    def dim(self, mesh_path: str):
+        # TODO: Fix this magic constant!
+        if 'square' in mesh_path:
+            return 2
+        elif 'cube' in mesh_path:
+            return 3
+        else:
+            assert False
+
+    @pytest.fixture()
+    def dirichlet_bcs(self, dim: int):
         return {
-            'coeff.state.u1': [(dfn.Constant([0, 0]), 'facet', 'dirichlet')]
+            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'dirichlet')]
         }
 
     def test_load_fenics_model(self, mesh_path, SolidResidual, model_type, dirichlet_bcs):
