@@ -17,18 +17,21 @@ class FenicsMeshFixtures:
     def mesh_name(self):
         return "UnitSquare"
 
-    @pytest.fixture()
-    def mesh(self):
-        # TODO: Implement test for 3D case too!
-        return dfn.UnitSquareMesh(10, 10)
+    MESHES = [dfn.UnitSquareMesh(5, 5), dfn.UnitCubeMesh(5, 5, 5)]
+    MESHES = [dfn.UnitSquareMesh(5, 5)]
+    MESHES = [dfn.UnitCubeMesh(2, 2, 2)]
+
+    @pytest.fixture(params=MESHES)
+    def mesh(self, request):
+        return request.param
 
     @pytest.fixture()
     def mesh_dim(self, mesh):
         return mesh.topology().dim()
 
     @pytest.fixture()
-    def vertex_function_tuple(self, mesh: dfn.Mesh):
-        mf = dfn.MeshFunction('size_t', mesh, 0, 0)
+    def codim2_function_tuple(self, mesh: dfn.Mesh, mesh_dim: int):
+        mf = dfn.MeshFunction('size_t', mesh, mesh_dim-2, 0)
 
         # Mark the top right corner as 'separation'
         class Separation(dfn.SubDomain):
@@ -79,18 +82,18 @@ class FenicsMeshFixtures:
         return mf, {'top': 1, 'bottom': 0}
 
     @pytest.fixture()
-    def mesh_functions(self, mesh_dim, vertex_function_tuple, facet_function_tuple, cell_function_tuple):
-        vertex_func, _ = vertex_function_tuple
+    def mesh_functions(self, mesh_dim, codim2_function_tuple, facet_function_tuple, cell_function_tuple):
+        codim2_func, _ = codim2_function_tuple
         facet_func, _ = facet_function_tuple
         cell_func, _ = cell_function_tuple
-        return (vertex_func,) + (mesh_dim-3)*(None,) + (facet_func, cell_func)
+        return (mesh_dim-3)*(None,) + (codim2_func, facet_func, cell_func)
 
     @pytest.fixture()
-    def mesh_subdomains(self, mesh_dim, vertex_function_tuple, facet_function_tuple, cell_function_tuple):
-        _, vertex_fields = vertex_function_tuple
+    def mesh_subdomains(self, mesh_dim, codim2_function_tuple, facet_function_tuple, cell_function_tuple):
+        _, codim2_fields = codim2_function_tuple
         _, facet_fields = facet_function_tuple
         _, cell_fields = cell_function_tuple
-        return (vertex_fields,) + (mesh_dim-3)*({},) + (facet_fields, cell_fields)
+        return (mesh_dim-3)*({},) + (codim2_fields, facet_fields, cell_fields)
 
 
 class GMSHFixtures:
