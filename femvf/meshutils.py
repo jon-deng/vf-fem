@@ -262,7 +262,7 @@ def filter_mesh_entities_by_plane(
         The plane normal
     """
     def on_plane(mesh_entity):
-        midpoint = mesh_entity.midpoint().coordinates
+        midpoint = mesh_entity.midpoint().array()
         normal_distance = np.dot(midpoint-origin, normal)
         return np.isclose(normal_distance, 0)
 
