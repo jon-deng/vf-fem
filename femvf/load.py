@@ -125,20 +125,21 @@ def load_transient_fsi_model(
 
     if zs is None:
         # TODO: Refactor hard-coded keys ('traction' ...)!
-        fluid, fsi_verts = derive_1dfluid_from_2dsolid(
+        fluid_res, fsi_verts = derive_1dfluid_from_2dsolid(
             solid,
             FluidResidual=FluidResidual,
             fsi_facet_labels=['traction'],
             separation_vertex_label='superior',
         )
     else:
-        fluid, fsi_verts = derive_1dfluid_from_3dsolid(
+        fluid_res, fsi_verts = derive_1dfluid_from_3dsolid(
             solid,
             FluidResidual=FluidResidual,
             fsi_facet_labels=['traction'],
             separation_vertex_label='superior',
             zs=zs,
         )
+    fluid = transient.JaxModel(fluid_res)
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(
         solid.residual.form['coeff.fsi.p1'].function_space()
