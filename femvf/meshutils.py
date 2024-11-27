@@ -119,7 +119,7 @@ def load_fenics_gmsh(
     max_dim = max(set(cell_block.dim for cell_block in mio_mesh.cells))
 
     # Write out point, line, triangle, tetrahedron meshes separately
-    submesh_cell_types = ('vertex', 'line', 'triangle', 'tetrahedron')[:max_dim+1]
+    submesh_cell_types = ('vertex', 'line', 'triangle', 'tetra')[:max_dim+1]
     submesh_dims = (0, 1, 2, 3)[:max_dim+1]
     submesh_paths = tuple(
         path.join(mesh_dir, f'{mesh_name}_{cell_type}.xdmf')
