@@ -206,12 +206,17 @@ def derive_1dfluid_from_2dsolid(
         separation point
     """
     ## Process the fsi surface vertices to set the coupling between solid and fluid
+    mesh = solid.mesh()
     edge_mesh_func = solid.mesh_function(1)
     edge_mesh_subdomain = solid.mesh_subdomain(1)
-    fsi_edges = filter_edges(fsi_facet_labels, edge_mesh_func, edge_mesh_subdomain)
+    filtering_edge_values = set(edge_mesh_subdomain[name] for name in fsi_facet_labels)
+    fsi_edges = [
+        edge.index() for edge in meshutils.filter_mesh_entities(
+            dfn.edges(mesh), edge_mesh_func, filtering_edge_values
+        )
+    ]
 
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
-    mesh = solid.mesh()
     s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
     if issubclass(
         FluidResidual,
@@ -239,19 +244,6 @@ def derive_1dfluid_from_2dsolid(
         fluid = FluidResidual(s)
 
     return fluid, fsi_verts
-
-def filter_edges(
-    edge_domains: list[str],
-    edge_mesh_function: dfn.MeshFunction,
-    edge_subdomain_data: dict[str, int]
-) -> NDArray[np.intp]:
-    # Determine all edge mesh values to filter
-    filter_edge_values = set([edge_subdomain_data[domain] for domain in edge_domains])
-    edges = [
-        idx_edge for idx_edge, edge_value in enumerate(edge_mesh_function.array())
-        if edge_value in filter_edge_values
-    ]
-    return np.array(edges)
 
 
 def derive_1dfluid_from_3dsolid(
@@ -291,6 +283,8 @@ def derive_1dfluid_from_3dsolid(
     for z in zs:
         facets = meshutils.extract_zplane_facets(mesh, z=z)
 
+        # TODO: Remove this duplicate filtering
+        # `filter_mesh_entities` can directly get all edges
         fsi_facet_ids = [
             solid.residual.mesh_subdomain('facet')[name]
             for name in fsi_facet_labels
@@ -298,11 +292,16 @@ def derive_1dfluid_from_3dsolid(
         fsi_edges = meshutils.extract_edges_from_facets(
             facets, solid.residual.mesh_function('facet'), fsi_facet_ids
         )
-        fsi_edges = np.array([edge.index() for edge in fsi_edges])
 
-        edge_mesh_func = solid.mesh_function(1)
-        edge_mesh_subdomain = solid.mesh_subdomain(1)
-        fsi_edges = filter_edges(fsi_facet_labels, edge_mesh_func, edge_mesh_subdomain)
+        filtering_values = set(
+            solid.mesh_subdomain('facet')[domain_name]
+            for domain_name in fsi_facet_labels
+        )
+        fsi_edges = [
+            edge.index() for edge in meshutils.filter_mesh_entities(
+                fsi_edges, solid.mesh_function('facet'), filtering_values
+            )
+        ]
 
         s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
         s_list.append(s)
