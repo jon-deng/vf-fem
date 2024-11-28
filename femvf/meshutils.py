@@ -184,23 +184,6 @@ def extract_zplane_facets(mesh, z=0.0):
 
 ## Filter mesh entities
 
-def extract_edges_from_facets(facets, facet_function, facet_values):
-    """
-    Return all edges from facets that lie on a particular facet value
-    """
-    edges = [
-        edge
-        for facet in facets
-        for edge in dfn.edges(facet)
-        if any(
-            [
-                any(facet_function[facet] == x for x in facet_values)
-                for facet in dfn.facets(edge)
-            ]
-        )
-    ]
-    return edges
-
 def filter_mesh_entities_by_subdomain(
     mesh_entities: list[dfn.MeshEntity],
     mesh_function: dfn.MeshFunction,
