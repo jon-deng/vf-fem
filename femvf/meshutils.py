@@ -259,11 +259,13 @@ def filter_mesh_entities(
 ## Functions for sorting medial surface coordinates in a stream-wise manner
 # This is needed for getting 1D fluid model coordinates
 
-def sort_edge_vertices(mesh, edge_indices):
+def sort_edge_vertices(
+    mesh: dfn.Mesh, edges: NDArray[np.intp]
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.intp]]:
     """
     Return sorted vertices associated with a set of 1D connected edges
     """
-    vertices = vertices_from_edges(mesh, edge_indices)
+    vertices = vertices_from_edges(mesh, edges)
 
     surface_coordinates = mesh.coordinates()[vertices]
 
@@ -272,7 +274,7 @@ def sort_edge_vertices(mesh, edge_indices):
     idx_sort = sort_vertices_by_nearest_neighbours(surface_coordinates)
     surface_coordinates = surface_coordinates[idx_sort]
 
-    return surface_coordinates[:, 0], surface_coordinates[:, 1], vertices[idx_sort]
+    return surface_coordinates, vertices[idx_sort]
 
 
 def vertices_from_edges(mesh, edge_indices):

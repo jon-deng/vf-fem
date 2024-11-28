@@ -202,11 +202,10 @@ def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     # TODO: The streamwise mesh can already be known from the fsi_coordinates
     # variable computed earlier
-    x, y, fsi_verts = meshutils.sort_edge_vertices(mesh, fsi_edges)
-    dx = x[1:] - x[:-1]
-    dy = y[1:] - y[:-1]
+    vertex_coords, fsi_verts = meshutils.sort_edge_vertices(mesh, fsi_edges)
+    dxyz = vertex_coords[1:] - vertex_coords[:-1]
+    dx, dy = dxyz[:, 0], dxyz[:, 1]
     s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
-
     return s, fsi_verts
 
 
