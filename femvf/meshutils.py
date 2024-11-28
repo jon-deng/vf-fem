@@ -337,7 +337,8 @@ def sort_vertices_by_nearest_neighbours(
 # below, if you end up using this a lot
 
 
-## Functions for getting DOFs from mesh regions
+## Filter dofs by subdomain
+# TODO: Make these work like `filter_mesh...`
 def dofs_from_mesh_func(
     mesh: dfn.Mesh,
     mesh_func: dfn.MeshFunction,
