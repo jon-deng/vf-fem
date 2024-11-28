@@ -166,22 +166,6 @@ def load_fenics_gmsh(
     return dfn_mesh, tuple(mesh_funcs), tuple(mesh_subdomains)
 
 
-## Functions for getting z-slices from a 3D mesh
-
-def extract_zplane_facets(mesh, z=0.0):
-    """
-    Return all facets on a z-normal plane
-    """
-    facets = [
-        facet
-        for facet in dfn.facets(mesh)
-        if np.isclose(np.abs(np.dot(facet.normal().array(), [0, 0, 1])), 1.0)
-        and np.isclose(facet.midpoint().array()[-1], z)
-    ]
-
-    return facets
-
-
 ## Filter mesh entities
 
 def filter_mesh_entities_by_subdomain(
