@@ -332,37 +332,6 @@ def sort_vertices_by_nearest_neighbours(
 
 
 ## Functions for getting vertices from mesh regions
-def verts_from_mesh_func(
-    mesh: dfn.Mesh, mesh_func: dfn.MeshFunction, mesh_func_value: int
-) -> np.ndarray:
-    """
-    Return all vertices associated with a mesh region
-
-    The mesh region is specified through a meshfunction and value.
-
-    Parameters
-    ----------
-    mesh: dfn.Mesh
-    mesh_func: dfn.MeshFunction
-        The mesh function use to specify the mesh region
-    mesh_func_value: int
-        The mesh function value corresponding to the desired region
-
-    Returns
-    -------
-    np.ndarray
-        An array of vertex indices associated with the closure of the
-        specfied mesh region
-    """
-    verts = []
-    for mesh_entity in dfn.entities(mesh, mesh_func.dim()):
-        if mesh_func[mesh_entity.index()] == mesh_func_value:
-            # Append on all vertices (dimension 0) attached to the given mesh
-            # entity
-            verts += mesh_entity.entities(0).tolist()
-
-    return np.unique(verts)
-
 
 # TODO: Could add functions mimicking the `dofs_from_mesh_func` set of functions
 # below, if you end up using this a lot
