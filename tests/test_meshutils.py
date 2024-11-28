@@ -2,6 +2,8 @@
 Test `meshutils`
 """
 
+from numpy.typing import NDArray
+
 import pytest
 
 import dolfin as dfn
@@ -50,13 +52,14 @@ class TestMeshOperations(FenicsMeshFixtures):
         )
 
     def test_filter_mesh_entities_by_plane(
-        self, mesh: dfn.Mesh
+        self, mesh: dfn.Mesh, extrude_zs: NDArray[np.float64]
     ):
         mesh_entities = [ent for ent in dfn.entities(mesh, 1)]
 
-        origin = np.zeros(3)
+        # origin = np.zeros(3)
         normal = np.array([0, 0, 1])
 
-        assert meshutils.filter_mesh_entities_by_plane(
-            mesh_entities, origin=origin, normal=normal
-        )
+        for z in extrude_zs:
+            assert meshutils.filter_mesh_entities_by_plane(
+                mesh_entities, origin=np.array([0, 0, z]), normal=normal
+            )
