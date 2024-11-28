@@ -219,6 +219,9 @@ def filter_mesh_entities_by_plane(
     """
     Return a subset of mesh entities with midpoints on a plane
 
+    NOTE: `dfn.MeshEntity` seems to always return a 3D coordinate even for 2D meshes
+    so `origin` and `normal` should always be 3D.
+
     Parameters
     ----------
     mesh_entities: list[dfn.MeshEntity]

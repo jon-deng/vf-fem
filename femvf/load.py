@@ -211,11 +211,11 @@ def derive_edge_mesh_from_facet_subdomain(
     if dim == 2:
         fsi_edges = [
             edge.index() for edge in filter_edges(
-                dfn.edges(mesh), np.zeros(2), np.zeros(2)
+                dfn.edges(mesh), np.zeros(3), np.zeros(3)
             )
         ]
         coords, vertices = derive_edge_mesh_from_edges(mesh, fsi_edges)
-    elif dim == 3:
+    elif dim == 3 and zs is not None:
         fsi_edges = [
             [
                 edge.index() for edge in filter_edges(
@@ -227,6 +227,8 @@ def derive_edge_mesh_from_facet_subdomain(
         mesh_list = [derive_edge_mesh_from_edges(mesh, edges) for edges in fsi_edges]
         coords = np.array([coords for coords, _ in mesh_list])
         vertices = np.array([vertices for _, vertices in mesh_list], dtype=int)
+    elif dim==3 and zs is None:
+        raise ValueError("`zs` must be an array for a 3D mesh")
     else:
         raise ValueError(f"Invalid mesh dimension {dim}")
 
