@@ -133,43 +133,12 @@ def load_fsi_model(
     )
 
     mesh = solid.residual.mesh()
-    dim = mesh.topology().dim()
-    facet_mesh_func = solid.residual.mesh_function('facet')
-    filtering_edge_values = set(
+    facet_func = solid.residual.mesh_function('facet')
+    filter_facet_values = set(
         solid.residual.mesh_subdomain('facet')[name] for name in
         fluid_interface_subdomains
     )
-
-    def filter_edges(edges, origin, normal):
-        filtered_edges = meshutils.filter_mesh_entities_by_subdomain(
-            edges, facet_mesh_func, filtering_edge_values
-        )
-        filtered_edges = meshutils.filter_mesh_entities_by_plane(
-            filtered_edges, origin, normal
-        )
-        return filtered_edges
-
-    if dim == 2:
-        fsi_edges = [
-            edge.index() for edge in filter_edges(
-                dfn.edges(mesh), np.zeros(2), np.zeros(2)
-            )
-        ]
-        s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
-    elif dim == 3:
-        fsi_edges = [
-            [
-                edge.index() for edge in filter_edges(
-                    dfn.edges(mesh), np.array([0, 0, z]), np.array([0, 0, 1])
-                )
-            ]
-            for z in zs
-        ]
-        mesh_list = [derive_1dfluidmesh_from_edges(mesh, edges) for edges in fsi_edges]
-        s = np.array([s for s, fsi_verts in mesh_list])
-        fsi_verts = np.array([fsi_verts for s, fsi_verts in mesh_list], dtype=int)
-    else:
-        raise ValueError(f"Invalid mesh dimension {dim}")
+    s, fsi_verts = derive_1dmesh(mesh, facet_func, filter_facet_values, zs)
 
     fluid = load_jax_model(s, FluidResidual, model_type=model_type, **fluid_kwargs)
 
@@ -196,6 +165,60 @@ def load_fsi_model(
 
     return FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
+def derive_1dmesh(
+    mesh: dfn.Mesh,
+    facet_function: dfn.MeshFunction,
+    facet_values: set[int],
+    zs: Optional[NDArray[np.float64]]=None
+) -> tuple[NDArray[np.float64], NDArray[np.intp]]:
+    """
+    Return a 1D mesh along an edge loop lying on a given facet subdomain
+
+    Parameters
+    ----------
+    mesh : dfn.Mesh
+        The mesh
+    facet_function: dfn.MeshFunction
+        Facet subdomain markers
+    facet_values: set[int]
+        The facet subdomain to extract an edge loop on
+    zs: Optional[NDArray[np.float64]]
+        z-planes for extruded 3D meshes
+    """
+
+    def filter_edges(edges, origin, normal):
+        filtered_edges = meshutils.filter_mesh_entities_by_subdomain(
+            edges, facet_function, facet_values
+        )
+        filtered_edges = meshutils.filter_mesh_entities_by_plane(
+            filtered_edges, origin, normal
+        )
+        return filtered_edges
+
+    dim = mesh.topology().dim()
+    if dim == 2:
+        fsi_edges = [
+            edge.index() for edge in filter_edges(
+                dfn.edges(mesh), np.zeros(2), np.zeros(2)
+            )
+        ]
+        s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
+    elif dim == 3:
+        fsi_edges = [
+            [
+                edge.index() for edge in filter_edges(
+                    dfn.edges(mesh), np.array([0, 0, z]), np.array([0, 0, 1])
+                )
+            ]
+            for z in zs
+        ]
+        mesh_list = [derive_1dfluidmesh_from_edges(mesh, edges) for edges in fsi_edges]
+        s = np.array([s for s, fsi_verts in mesh_list])
+        fsi_verts = np.array([fsi_verts for s, fsi_verts in mesh_list], dtype=int)
+    else:
+        raise ValueError(f"Invalid mesh dimension {dim}")
+
+    return s, fsi_verts
 
 def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
 
