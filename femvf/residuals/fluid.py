@@ -94,7 +94,7 @@ def _BernoulliFixedSep(s: np.ndarray, idx_sep: int = 0):
         Return Bernoulli flow and pressure
         """
         # print(idx_sep)
-        area_sep = area[idx_sep]
+        area_sep = area[..., idx_sep:idx_sep+1]
         # ssep = s[idx_sep]
         q = bernoulliq_from_psub_psep(psub, psup, jnp.inf, area_sep, rho)
         p = bernoullip_from_q_psep(q, psup, area_sep, area, rho)
