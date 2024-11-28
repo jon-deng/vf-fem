@@ -131,32 +131,46 @@ def load_fsi_model(
         solid_mesh, SolidResidual, model_type=model_type, **solid_kwargs
     )
 
-    if zs is None:
-        # TODO: Refactor hard-coded keys ('traction' ...)!
-        fluid_res, fsi_verts = derive_1dfluid_from_2dsolid(
-            solid.residual,
-            FluidResidual=FluidResidual,
-            fsi_facet_labels=['traction'],
-            separation_vertex_label='superior',
-        )
-    else:
-        fluid_res, fsi_verts = derive_1dfluid_from_3dsolid(
-            solid.residual,
-            FluidResidual=FluidResidual,
-            fsi_facet_labels=['traction'],
-            separation_vertex_label='superior',
-            zs=zs,
-        )
+    # TODO: Refactor hard-coded keys ('traction' ...)!
+    mesh = solid.residual.mesh()
+    dim = mesh.topology().dim()
+    facet_mesh_func = solid.residual.mesh_function('facet')
+    filtering_edge_values = set(
+        solid.residual.mesh_subdomain('facet')[name] for name in ['traction']
+    )
 
-    if model_type == 'transient':
-        FluidModel = transient.JaxModel
-    elif model_type == 'dynamical':
-        FluidModel = dynamical.JaxModel
-    elif model_type == 'linearized_dynamical':
-        FluidModel = dynamical.LinearizedJaxModel
+    def filter_edges(edges, origin, normal):
+        filtered_edges = meshutils.filter_mesh_entities_by_subdomain(
+            edges, facet_mesh_func, filtering_edge_values
+        )
+        filtered_edges = meshutils.filter_mesh_entities_by_plane(
+            filtered_edges, origin, normal
+        )
+        return filtered_edges
+
+    if dim == 2:
+        fsi_edges = [
+            edge.index() for edge in filter_edges(
+                dfn.edges(mesh), np.zeros(2), np.zeros(2)
+            )
+        ]
+        s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
+    elif dim == 3:
+        fsi_edges = [
+            [
+                edge.index() for edge in filter_edges(
+                    dfn.edges(mesh), np.array([0, 0, z]), np.array([0, 0, 1])
+                )
+            ]
+            for z in zs
+        ]
+        mesh_list = [derive_1dfluidmesh_from_edges(mesh, edges) for edges in fsi_edges]
+        s = np.array([s for s, fsi_verts in mesh_list])
+        fsi_verts = np.array([fsi_verts for s, fsi_verts in mesh_list], dtype=int)
     else:
-        raise ValueError(f"Invalid model type {model_type}")
-    fluid = FluidModel(fluid_res)
+        raise ValueError(f"Invalid mesh dimension {dim}")
+
+    fluid = load_jax_model(s, FluidResidual, model_type=model_type, **fluid_kwargs)
 
     dofs_fsi_solid = dfn.vertex_to_dof_map(
         solid.residual.form['coeff.fsi.p1'].function_space()
@@ -180,157 +194,6 @@ def load_fsi_model(
         )
 
     return FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
-
-
-# TODO: Refactor this function; currently does too many things
-# the function should take a loaded solid model and derive a fluid mesh from it
-def derive_1dfluid_from_2dsolid(
-    solid: slr.FenicsResidual,
-    FluidResidual: type[flr.PredefinedFluidResidual] = flr.BernoulliAreaRatioSep,
-    fsi_facet_labels: Optional[Labels] = ('pressure',),
-    separation_vertex_label: str = 'separation',
-) -> tuple[flr.PredefinedFluidResidual, np.ndarray]:
-    """
-    Processes appropriate mappings between fluid/solid domains for FSI
-
-    Parameters
-    ----------
-    solid_mesh : str
-        Path to the solid mesh
-    fluid_mesh : None or (future proofing for other fluid types)
-        Currently this isn't used
-    SolidType, FluidType:
-        Classes of the solid and fluid models to load
-    fsi_facet_labels, fixed_facet_labels:
-        String identifiers for facets corresponding to traction/dirichlet
-        conditions
-    separation_vertex_label:
-        A string corresponding to a labelled vertex where separation should
-        occur. This is only relevant for quasi-static fluid models with a fixed
-        separation point
-    """
-    ## Process the fsi surface vertices to set the coupling between solid and fluid
-    mesh = solid.mesh()
-    edge_mesh_func = solid.mesh_function(1)
-    edge_mesh_subdomain = solid.mesh_subdomain(1)
-    filtering_edge_values = set(edge_mesh_subdomain[name] for name in fsi_facet_labels)
-    fsi_edges = [
-        edge.index() for edge in meshutils.filter_mesh_entities_by_subdomain(
-            dfn.edges(mesh), edge_mesh_func, filtering_edge_values
-        )
-    ]
-
-    # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
-    s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
-    if issubclass(
-        FluidResidual,
-        (
-            flr.BernoulliFixedSep,
-            # flr.LinearizedBernoulliFixedSep,
-            flr.BernoulliFlowFixedSep,
-            # flr.LinearizedBernoulliFlowFixedSep,
-            flr.BernoulliFixedSep,
-        ),
-    ):
-        sep_vert = locate_separation_vertex(solid, separation_vertex_label)
-
-        fsi_verts_fluid_ord = np.arange(fsi_verts.size)
-        idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
-        if len(idx_sep) == 1:
-            idx_sep = idx_sep[0]
-        else:
-            raise ValueError(
-                "Expected to find single separation point on FSI surface"
-                f" but found {len(idx_sep):d} instead"
-            )
-        fluid = FluidResidual(s, idx_sep=idx_sep)
-    else:
-        fluid = FluidResidual(s)
-
-    return fluid, fsi_verts
-
-
-def derive_1dfluid_from_3dsolid(
-    solid: slr.FenicsResidual,
-    FluidResidual: type[flr.PredefinedFluidResidual] = flr.BernoulliAreaRatioSep,
-    fsi_facet_labels: Optional[Labels] = ('pressure',),
-    separation_vertex_label: str = 'separation',
-    zs: Optional[np.typing.NDArray[int]] = None,
-) -> tuple[flr.PredefinedFluidResidual, np.ndarray]:
-    """
-    Processes appropriate mappings between fluid/solid domains for FSI
-
-    Parameters
-    ----------
-    solid_mesh : str
-        Path to the solid mesh
-    fluid_mesh : None or (future proofing for other fluid types)
-        Currently this isn't used
-    SolidType, FluidType:
-        Classes of the solid and fluid models to load
-    fsi_facet_labels, fixed_facet_labels:
-        String identifiers for facets corresponding to traction/dirichlet
-        conditions
-    separation_vertex_label:
-        A string corresponding to a labelled vertex where separation should
-        occur. This is only relevant for quasi-static fluid models with a fixed
-        separation point
-    """
-    if zs is None:
-        zs = np.array([0])
-
-    ## Process the fsi surface vertices to set the coupling between solid and fluid
-    # Find vertices corresponding to the fsi facets
-    mesh = solid.mesh()
-    fsi_verts_list = []
-    s_list = []
-    for z in zs:
-        edges = meshutils.filter_mesh_entities_by_plane(
-            dfn.entities(mesh, 1), np.array([0, 0, z]), np.array([0, 0, 1])
-        )
-
-        filtering_values = set(
-            solid.mesh_subdomain('facet')[domain_name]
-            for domain_name in fsi_facet_labels
-        )
-        fsi_edges = [
-            edge.index() for edge in meshutils.filter_mesh_entities_by_subdomain(
-                edges, solid.mesh_function('facet'), filtering_values
-            )
-        ]
-
-        s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
-        s_list.append(s)
-        fsi_verts_list.append(fsi_verts)
-        if issubclass(
-            FluidResidual,
-            (
-                flr.BernoulliFixedSep,
-                # flr.LinearizedBernoulliFixedSep,
-                flr.BernoulliFlowFixedSep,
-                # flr.LinearizedBernoulliFlowFixedSep,
-                flr.BernoulliFixedSep,
-            ),
-        ):
-            # TODO: For this to work you should generalize a fixed separation point
-            # to a fixed-separation line I guess
-            # sep_vert = locate_separation_vertex(solid, separation_vertex_label)
-
-            # fsi_verts_fluid_ord = np.arange(fsi_verts.size)
-            # idx_sep = fsi_verts_fluid_ord[fsi_verts == sep_vert]
-            # if len(idx_sep) == 1:
-            #     idx_sep = idx_sep[0]
-            # else:
-            #     raise ValueError(
-            #         "Expected to find single separation point on FSI surface"
-            #         f" but found {len(idx_sep):d} instead"
-            #     )
-            # fluid = FluidType(s, idx_sep=idx_sep)
-            raise ValueError("3D models can't handle fixed separation points yet")
-
-    s = np.array(s_list)
-    fluid = FluidResidual(s)
-    return fluid, np.array(fsi_verts_list, dtype=int)
 
 
 def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
