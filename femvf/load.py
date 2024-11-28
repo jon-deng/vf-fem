@@ -113,7 +113,7 @@ def load_fsi_model(
 
     Parameters
     ----------
-    solid_mesh : str
+    solid_mesh : str | tuple[dfn.Mesh, list[dfn.MeshFunction], list[dict[str, int]]]
         Path to the solid mesh
     SolidResidual, FluidResidual:
         Classes of the solid and fluid residuals to load

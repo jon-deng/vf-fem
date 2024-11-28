@@ -33,94 +33,49 @@ from tests.fixture_mesh import FenicsMeshFixtures
 
 class ModelFixtures(FenicsMeshFixtures):
 
-    RESIDUAL_CLASSES = (
+    SOLID_RESIDUALS = (
         slr.Rayleigh,
         slr.KelvinVoigt,
         slr.SwellingKelvinVoigt,
         slr.SwellingKelvinVoigtWEpithelium
     )
-
-    @pytest.fixture(params=RESIDUAL_CLASSES)
+    @pytest.fixture(params=SOLID_RESIDUALS)
     def SolidResidual(self, request):
         return request.param
 
-    @staticmethod
-    def init_residual(ResidualClass, mesh, mesh_functions, mesh_subdomains):
-        dim = mesh.topology().dim()
+    FLUID_RESIDUALS = (
+        flr.BernoulliAreaRatioSep,
+        flr.BernoulliSmoothMinSep,
+        flr.BernoulliFixedSep,
+    )
+    @pytest.fixture(params=FLUID_RESIDUALS)
+    def FluidResidual(self, request):
+        return request.param
+
+    @pytest.fixture
+    def mesh_tuple(self, mesh, mesh_functions, mesh_subdomains):
+        return (mesh, mesh_functions, mesh_subdomains)
+
+    @pytest.fixture()
+    def model(self, mesh_tuple, SolidResidual, FluidResidual, extrude_zs):
+        dim = mesh_tuple[0].topology().dim()
         dirichlet_bcs = {
             'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')],
             # 'coeff.state.u0': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
-        return ResidualClass(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-
-    @pytest.fixture()
-    def solid_residual(
-        self,
-        SolidResidual: slr.PredefinedSolidResidual,
-        mesh: dfn.Mesh,
-        mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains: list[dict[str, int]]
-    ):
-        return self.init_residual(SolidResidual, mesh, mesh_functions, mesh_subdomains)
-
-    @pytest.fixture(
-        params=[flr.BernoulliSmoothMinSep, flr.BernoulliFixedSep, flr.BernoulliAreaRatioSep]
-    )
-    def FluidResidual(self, request):
-        return request.param
-
-    @pytest.fixture()
-    def solid(self, solid_residual):
-        return transient.FenicsModel(solid_residual)
-
-    @pytest.fixture()
-    def facet_function(self, mesh_functions: list[dfn.MeshFunction]):
-        dim = len(mesh_functions)
-        return mesh_functions[dim-2]
-
-    @pytest.fixture()
-    def facet_subdomain_data(self, mesh_subdomains: list[dict[str, int]]):
-        dim = len(mesh_subdomains)
-        return mesh_subdomains[dim-2]
-
-    @pytest.fixture()
-    def pressure_function_space(self, solid_residual: slr.FenicsResidual):
-        return solid_residual.form['coeff.fsi.p1'].function_space()
-
-    @pytest.fixture()
-    def fluid_1Dinterface_info(
-        self,
-        mesh: dfn.Mesh,
-        pressure_function_space: dfn.FunctionSpace,
-        facet_function: dfn.MeshFunction,
-        facet_subdomain_data: dict[str, int],
-        extrude_zs: NDArray[np.float64]
-    ):
-        fsi_subdomain_names = ['traction']
-        facet_values = set(facet_subdomain_data[name] for name in fsi_subdomain_names)
-        s, dofs_fsi_solid, dofs_fsi_fluid = derive_1D_interface_from_facet_subdomain(
-            mesh, pressure_function_space, facet_function, facet_values, extrude_zs
+        solid_kwargs = {'dirichlet_bcs': dirichlet_bcs}
+        fluid_kwargs = {}
+        return load_fsi_model(
+            mesh_tuple,
+            SolidResidual,
+            FluidResidual,
+            solid_kwargs,
+            fluid_kwargs,
+            model_type='transient',
+            coupling='explicit',
+            fluid_interface_subdomains=('traction',),
+            zs=extrude_zs
         )
-        return s, dofs_fsi_solid, dofs_fsi_fluid
-
-    @pytest.fixture()
-    def fluid(
-        self, FluidResidual: flr.PredefinedFluidResidual, fluid_1Dinterface_info
-    ):
-        s = fluid_1Dinterface_info[0]
-        return transient.JaxModel(FluidResidual(s))
-
-    @pytest.fixture()
-    def solid_pdofs(self, fluid_1Dinterface_info):
-        return fluid_1Dinterface_info[1]
-
-    @pytest.fixture()
-    def fluid_pdofs(self, fluid_1Dinterface_info):
-        return fluid_1Dinterface_info[2]
-
-    @pytest.fixture()
-    def model(self, solid, fluid, solid_pdofs, fluid_pdofs):
-        return transient.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
 
 class TestIntegrate(ModelFixtures):
