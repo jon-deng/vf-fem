@@ -132,7 +132,6 @@ def load_fsi_model(
         solid_mesh, SolidResidual, model_type=model_type, **solid_kwargs
     )
 
-    # TODO: Refactor hard-coded keys ('traction' ...)!
     mesh = solid.residual.mesh()
     dim = mesh.topology().dim()
     facet_mesh_func = solid.residual.mesh_function('facet')
