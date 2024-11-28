@@ -25,14 +25,14 @@ class FenicsMeshFixtures:
     def ny(self, request):
         return request.param
 
-    NZS = [None, 3]
+    NZS = [0, 3]
     @pytest.fixture(params=NZS)
     def nz(self, request):
         return request.param
 
     @pytest.fixture()
     def mesh(self, nx: int, ny: int, nz: int):
-        if nz is None:
+        if nz == 0:
             return dfn.UnitSquareMesh(nx, ny)
         else:
             return dfn.UnitCubeMesh(nx, ny, nz)
@@ -118,12 +118,14 @@ class FenicsMeshFixtures:
 
 class GMSHFixtures:
 
-    MESH_NAMES = ['unit_square', 'unit_cube']
-    # MESH_NAMES = ['unit_cube']
-    # MESH_NAMES = ['unit_square']
+    N_EXTRUDES = [0, 1]
+    @pytest.fixture(params=N_EXTRUDES)
+    def n_extrude(self, request):
+        return request.param
 
-    @pytest.fixture(params=MESH_NAMES)
-    def mesh_name(self, request):
+    Z_EXTRUDES = [1]
+    @pytest.fixture(params=Z_EXTRUDES)
+    def z_extrude(self, request):
         return request.param
 
     def init_unit_square_mesh(self):
@@ -238,28 +240,35 @@ class GMSHFixtures:
         gmsh.model.mesh.generate(3)
 
     @pytest.fixture()
-    def extrude_zs(self, mesh_name: str):
-        z_extrude = 1
-        n_extrude = 2
-        if mesh_name == 'unit_square':
-            return None
-        elif mesh_name == 'unit_cube':
-            return np.linspace(0, z_extrude, n_extrude+1)
-
-    @pytest.fixture(params=[(1, 1.0)])
-    def extrude_info(self, request):
-        return request.param
+    def extrude_zs(self, mesh_name: str, z_extrude: int, n_extrude: int):
+        return np.linspace(0, z_extrude, n_extrude+1)
 
     @pytest.fixture()
-    def mesh_path(self, mesh_name: str, extrude_info: tuple[int, float]):
-        n_extrude, z_extrude = extrude_info
+    def mesh_name(self, z_extrude: int, n_extrude: int):
+        if n_extrude == 0 or z_extrude == 0:
+            return 'UnitSquareGMSH'
+        else:
+            return 'UnitCubeGMSH'
+
+    @pytest.fixture()
+    def mesh_info(self, z_extrude: int, n_extrude: int):
+
+        if n_extrude == 0 or z_extrude == 0:
+            self.init_unit_square_mesh()
+            mesh_name = 'UnitSquareGMSH'
+        else:
+            self.init_unit_cube_mesh(n_extrude, z_extrude)
+            mesh_name = 'UnitCubeGMSH'
 
         mesh_path = f"{mesh_name}.msh"
-        if mesh_name == 'unit_square':
-            self.init_unit_square_mesh()
-        elif mesh_name == 'unit_cube':
-            self.init_unit_cube_mesh(n_extrude, z_extrude)
-
         gmsh.write(mesh_path)
 
-        return mesh_path
+        return mesh_name, mesh_path
+
+    @pytest.fixture()
+    def mesh_name(self, mesh_info):
+        return mesh_info[0]
+
+    @pytest.fixture()
+    def mesh_path(self, mesh_info):
+        return mesh_info[1]
