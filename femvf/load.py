@@ -96,6 +96,7 @@ def load_jax_model(
         raise ValueError(f"Invalid model type {model_type}")
 
 
+# TODO: Figure out how re-implement fluid model separation point stuff!
 def load_fsi_model(
     solid_mesh: str | tuple[dfn.Mesh, list[dfn.MeshFunction], list[dict[str, int]]],
     SolidResidual: type[slr.PredefinedSolidResidual],
@@ -104,7 +105,7 @@ def load_fsi_model(
     fluid_kwargs: dict[str, Any],
     model_type: str = 'transient',
     coupling: str = 'explicit',
-    zs: Optional[tuple[float]] = None,
+    zs: Optional[NDArray[np.float64]] = None,
 ) -> transient.BaseTransientFSIModel:
     """
     Load a coupled (fsi) model
@@ -114,17 +115,14 @@ def load_fsi_model(
     solid_mesh : str
         Path to the solid mesh
     SolidResidual, FluidResidual:
-        Classes of the solid and fluid models to load
-    fsi_facet_labels, fixed_facet_labels:
-        String identifiers for facets corresponding to traction/dirichlet
-        conditions
-    separation_vertex_label:
-        A string corresponding to a labelled vertex where separation should
-        occur. This is only relevant for quasi-static fluid models with a fixed
-        separation point
+        Classes of the solid and fluid residuals to load
+    model_type: str
+        Which type of model to load ('transient', 'dynamical', 'linearized_dynamical')
     coupling: str
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
+    zs: NDArray[np.float64]
+        z-planes for extruded 3D meshes
     """
     ## Load the solid
     solid = load_fenics_model(
