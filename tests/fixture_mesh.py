@@ -15,17 +15,35 @@ gmsh.initialize()
 
 class FenicsMeshFixtures:
 
-    @pytest.fixture()
-    def mesh_name(self):
-        return "UnitSquare"
-
-    MESHES = [dfn.UnitSquareMesh(5, 5), dfn.UnitCubeMesh(5, 5, 5)]
-    MESHES = [dfn.UnitSquareMesh(5, 5)]
-    # MESHES = [dfn.UnitCubeMesh(2, 2, 2)]
-
-    @pytest.fixture(params=MESHES)
-    def mesh(self, request):
+    NXS = [2]
+    @pytest.fixture(params=NXS)
+    def nx(self, request):
         return request.param
+
+    NYS = [2]
+    @pytest.fixture(params=NYS)
+    def ny(self, request):
+        return request.param
+
+    NZS = [None, 3]
+    @pytest.fixture(params=NZS)
+    def nz(self, request):
+        return request.param
+
+    @pytest.fixture()
+    def mesh(self, nx: int, ny: int, nz: int):
+        if nz is None:
+            return dfn.UnitSquareMesh(nx, ny)
+        else:
+            return dfn.UnitCubeMesh(nx, ny, nz)
+
+    @pytest.fixture()
+    def mesh_name(self, mesh: dfn.mesh):
+        return mesh.__class__.__name__
+
+    @pytest.fixture()
+    def extrude_zs(self, nz: int):
+        return np.linspace(0, 1, nz)
 
     @pytest.fixture()
     def mesh_dim(self, mesh):
@@ -220,7 +238,9 @@ class GMSHFixtures:
         gmsh.model.mesh.generate(3)
 
     @pytest.fixture()
-    def extrude_zs(self, mesh_name: str, n_extrude: int, z_extrude: float):
+    def extrude_zs(self, mesh_name: str):
+        z_extrude = 1
+        n_extrude = 2
         if mesh_name == 'unit_square':
             return None
         elif mesh_name == 'unit_cube':
