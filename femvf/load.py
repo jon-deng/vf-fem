@@ -138,19 +138,13 @@ def load_fsi_model(
         solid.residual.mesh_subdomain('facet')[name] for name in
         fluid_interface_subdomains
     )
-    s, fsi_verts = derive_edge_mesh_from_facet_subdomain(
-        mesh, facet_func, filter_facet_values, zs
+    pressure_function_space = solid.residual.form['coeff.fsi.p1'].function_space()
+
+    s, dofs_fsi_solid, dofs_fsi_fluid = derive_1D_interface_from_facet_subdomain(
+        mesh, pressure_function_space, facet_func, filter_facet_values, zs
     )
 
     fluid = load_jax_model(s, FluidResidual, model_type=model_type, **fluid_kwargs)
-
-    dofs_fsi_solid = dfn.vertex_to_dof_map(
-        solid.residual.form['coeff.fsi.p1'].function_space()
-    )[fsi_verts.flat]
-    dofs_fsi_fluid = (
-        np.ones(dofs_fsi_solid.shape[:-1], dtype=int)
-        * np.arange(dofs_fsi_solid.shape[-1], dtype=int)
-    ).reshape(-1)
 
     if model_type == 'transient' and coupling == 'explicit':
         FSIModel = transient.ExplicitFSIModel
@@ -166,6 +160,58 @@ def load_fsi_model(
         )
 
     return FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
+
+def derive_1D_interface_from_facet_subdomain(
+    mesh: dfn.Mesh,
+    function_space: dfn.FunctionSpace,
+    facet_function: dfn.MeshFunction,
+    facet_values: set[int],
+    zs: Optional[NDArray[np.float64]]=None
+) -> tuple[NDArray[np.float64], NDArray[np.intp], NDArray[np.intp]]:
+    """
+    Return a 1D edge mesh and interface coupling information from a facet subdomain
+
+    For a 2D mesh, the facet subdomain directly specifies the edges.
+    For a 3D mesh, the intersection of a facet subdomain and plane specifies the edges.
+
+    Parameters
+    ----------
+    mesh : dfn.Mesh
+        The mesh
+    function_space: dfn.FunctionSpace
+        The solid side interface function's function space
+
+        Currently this was only made for coupling 1D bernoulli fluid models to a solid.
+        The fenics/mesh model side's function is pressure.
+        The 1D model side function is the 1D area.
+        Since the fluid side area is simply numbered in the same way as the fluid mesh,
+        you don't need a special function space thing.
+    facet_function: dfn.MeshFunction
+        Facet subdomain markers
+    facet_values: set[int]
+        The facet subdomain to extract an edge loop on
+    zs: Optional[NDArray[np.float64]]
+        z-planes for extruded 3D meshes
+
+    Returns
+    -------
+    coords: NDArray[np.float64]
+        Edge mesh coordinates
+    solid_dofs: NDArray[np.intp]
+    fluid_dofs: NDArray[np.intp]
+    """
+
+    interface_coords, interface_vertices = derive_edge_mesh_from_facet_subdomain(
+        mesh, facet_function, facet_values, zs
+    )
+
+    solid_dofs = dfn.vertex_to_dof_map(function_space)[interface_vertices.flat]
+    fluid_dofs = (
+        np.ones(solid_dofs.shape[:-1], dtype=int)
+        * np.arange(solid_dofs.shape[-1], dtype=int)
+    ).reshape(-1)
+
+    return interface_coords, solid_dofs, fluid_dofs
 
 def derive_edge_mesh_from_facet_subdomain(
     mesh: dfn.Mesh,
