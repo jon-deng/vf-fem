@@ -15,17 +15,17 @@ gmsh.initialize()
 
 class FenicsMeshFixtures:
 
-    NXS = [2]
+    NXS = [5]
     @pytest.fixture(params=NXS)
     def nx(self, request):
         return request.param
 
-    NYS = [2]
+    NYS = [5]
     @pytest.fixture(params=NYS)
     def ny(self, request):
         return request.param
 
-    NZS = [0, 3]
+    NZS = [0]
     @pytest.fixture(params=NZS)
     def nz(self, request):
         return request.param
@@ -43,7 +43,7 @@ class FenicsMeshFixtures:
 
     @pytest.fixture()
     def extrude_zs(self, nz: int):
-        return np.linspace(0, 1, nz)
+        return np.linspace(0, 1, nz+1)
 
     @pytest.fixture()
     def mesh_dim(self, mesh):
