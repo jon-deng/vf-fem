@@ -3,7 +3,9 @@
 """
 
 import pytest
+from numpy.typing import NDArray
 
+import numpy as np
 import dolfin as dfn
 import gmsh
 
@@ -19,7 +21,7 @@ class FenicsMeshFixtures:
 
     MESHES = [dfn.UnitSquareMesh(5, 5), dfn.UnitCubeMesh(5, 5, 5)]
     MESHES = [dfn.UnitSquareMesh(5, 5)]
-    MESHES = [dfn.UnitCubeMesh(2, 2, 2)]
+    # MESHES = [dfn.UnitCubeMesh(2, 2, 2)]
 
     @pytest.fixture(params=MESHES)
     def mesh(self, request):
@@ -99,7 +101,7 @@ class FenicsMeshFixtures:
 class GMSHFixtures:
 
     MESH_NAMES = ['unit_square', 'unit_cube']
-    MESH_NAMES = ['unit_cube']
+    # MESH_NAMES = ['unit_cube']
     # MESH_NAMES = ['unit_square']
 
     @pytest.fixture(params=MESH_NAMES)
@@ -155,7 +157,7 @@ class GMSHFixtures:
 
         gmsh.model.mesh.generate(2)
 
-    def init_unit_cube_mesh(self):
+    def init_unit_cube_mesh(self, n_extrude: int, z_extrude: float):
         # TODO: Need to use the extruded 2D mesh for this!
 
         model = gmsh.model.add("unit_cube")
@@ -182,11 +184,9 @@ class GMSHFixtures:
 
         # gmsh.model.geo.synchronize()
 
-        z_extrude_depth = 1
-        n_extrude = 1
-        extrude_vector = (0, 0, z_extrude_depth/n_extrude)
+        extrude_vector = (0, 0, z_extrude)
         gmsh.model.geo.extrude(
-            [(2, 1)], *extrude_vector, [n_extrude]
+            [(2, 1)], *extrude_vector, numElements=[n_extrude]
         )
         gmsh.model.geo.synchronize()
 
@@ -220,13 +220,25 @@ class GMSHFixtures:
         gmsh.model.mesh.generate(3)
 
     @pytest.fixture()
-    def mesh_path(self, mesh_name):
+    def extrude_zs(self, mesh_name: str, n_extrude: int, z_extrude: float):
+        if mesh_name == 'unit_square':
+            return None
+        elif mesh_name == 'unit_cube':
+            return np.linspace(0, z_extrude, n_extrude+1)
+
+    @pytest.fixture(params=[(1, 1.0)])
+    def extrude_info(self, request):
+        return request.param
+
+    @pytest.fixture()
+    def mesh_path(self, mesh_name: str, extrude_info: tuple[int, float]):
+        n_extrude, z_extrude = extrude_info
 
         mesh_path = f"{mesh_name}.msh"
         if mesh_name == 'unit_square':
             self.init_unit_square_mesh()
         elif mesh_name == 'unit_cube':
-            self.init_unit_cube_mesh()
+            self.init_unit_cube_mesh(n_extrude, z_extrude)
 
         gmsh.write(mesh_path)
 
