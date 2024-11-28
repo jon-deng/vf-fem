@@ -23,6 +23,7 @@ from femvf import load
 from petsc4py import PETSc
 
 from tests.fixture_mesh import FenicsMeshFixtures
+from tests.models.fixture_coupled import CoupledResidualFixtures
 
 # pylint: disable=redefined-outer-name
 
@@ -86,32 +87,35 @@ class TestFluid(FluidResidualFixtures):
         assert dynamical.LinearizedJaxModel(residual)
 
 
-class TestCoupled(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixtures):
+class CoupledDynamicalModelFixtures(CoupledResidualFixtures):
 
     @pytest.fixture()
-    def residual(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
-        dim = mesh.topology().dim()
-        dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
-        }
-        return SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
+    def solid(self, solid_res: slr.FenicsResidual):
+        return dynamical.FenicsModel(solid_res)
 
     @pytest.fixture()
-    def solid(self, residual):
-        return dynamical.FenicsModel(residual)
+    def linearized_solid(self, solid_res: slr.FenicsResidual):
+        return dynamical.LinearizedFenicsModel(solid_res)
 
     @pytest.fixture()
-    def linearized_solid(self, residual):
-        return dynamical.LinearizedFenicsModel(residual)
+    def fluid(self, fluid_res: flr.JaxResidual):
+        return dynamical.JaxModel(fluid_res)
+
+    @pytest.fixture()
+    def linearized_fluid(self, fluid_res: flr.JaxResidual):
+        return dynamical.LinearizedJaxModel(fluid_res)
+
+
+class TestCoupled(CoupledDynamicalModelFixtures):
 
     def test_init(
-        self, solid, linearized_solid, FluidResidual
+        self, solid, fluid, solid_pdofs, fluid_pdofs
     ):
-        fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
-        fluid, linearized_fluid = dynamical.JaxModel(fluid_res), dynamical.LinearizedJaxModel(fluid_res)
-        fluid_pdofs = np.arange(solid_pdofs.size)
-
         assert dynamical.FSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
+
+    def test_init_linearized(
+        self, linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs
+    ):
         assert dynamical.LinearizedFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
 
     # TODO: Think of ways you can test a model is working properly?
@@ -379,45 +383,21 @@ class _TestDerivative:
                 print(key, subvec.norm())
 
 
-class ModelFixtures(SolidResidualFixtures, FluidResidualFixtures, FenicsMeshFixtures):
+class ModelFixtures(CoupledDynamicalModelFixtures):
     """
     Fixtures that supply dynamical models and inputs (state, control, properties)
     """
 
     @pytest.fixture()
-    def solid_residual(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
-        dim = mesh.topology().dim()
-        dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
-        }
-        return SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
-
-    @pytest.fixture()
-    def solid(self, solid_residual):
-        return dynamical.FenicsModel(solid_residual)
-
-    @pytest.fixture()
-    def linearized_solid(self, solid_residual):
-        return dynamical.LinearizedFenicsModel(solid_residual)
-
-    @pytest.fixture()
     def model(
-        self, solid, FluidResidual
+        self, solid, fluid, solid_pdofs, fluid_pdofs
     ):
-        fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(solid, FluidResidual, fsi_facet_labels=['traction'])
-        fluid, linearized_fluid = dynamical.JaxModel(fluid_res), dynamical.LinearizedJaxModel(fluid_res)
-        fluid_pdofs = np.arange(solid_pdofs.size)
-
         return dynamical.FSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
     @pytest.fixture()
     def linearized_model(
-        self, linearized_solid, FluidResidual
+        self, linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs
     ):
-        fluid_res, solid_pdofs = load.derive_1dfluid_from_2dsolid(linearized_solid, FluidResidual, fsi_facet_labels=['traction'])
-        linearized_fluid = dynamical.LinearizedJaxModel(fluid_res)
-        fluid_pdofs = np.arange(solid_pdofs.size)
-
         return dynamical.LinearizedFSIModel(linearized_solid, linearized_fluid, solid_pdofs, fluid_pdofs)
 
     @pytest.fixture()
