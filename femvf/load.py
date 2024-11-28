@@ -214,7 +214,7 @@ def derive_edge_mesh_from_facet_subdomain(
                 dfn.edges(mesh), np.zeros(2), np.zeros(2)
             )
         ]
-        coords, vertices = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
+        coords, vertices = derive_edge_mesh_from_edges(mesh, fsi_edges)
     elif dim == 3:
         fsi_edges = [
             [
@@ -224,7 +224,7 @@ def derive_edge_mesh_from_facet_subdomain(
             ]
             for z in zs
         ]
-        mesh_list = [derive_1dfluidmesh_from_edges(mesh, edges) for edges in fsi_edges]
+        mesh_list = [derive_edge_mesh_from_edges(mesh, edges) for edges in fsi_edges]
         coords = np.array([coords for coords, _ in mesh_list])
         vertices = np.array([vertices for _, vertices in mesh_list], dtype=int)
     else:
@@ -232,12 +232,13 @@ def derive_edge_mesh_from_facet_subdomain(
 
     return coords, vertices
 
-def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
-
+def derive_edge_mesh_from_edges(
+    mesh: dfn.Mesh, edges: NDArray[np.intp]
+) -> tuple[NDArray[np.float64], NDArray[np.intp]]:
     # Load a fluid by computing a 1D fluid mesh from the solid's medial surface
     # TODO: The streamwise mesh can already be known from the fsi_coordinates
     # variable computed earlier
-    vertex_coords, fsi_verts = meshutils.sort_edge_vertices(mesh, fsi_edges)
+    vertex_coords, fsi_verts = meshutils.sort_edge_vertices(mesh, edges)
     dxyz = vertex_coords[1:] - vertex_coords[:-1]
     dx, dy = dxyz[:, 0], dxyz[:, 1]
     s = np.concatenate([[0], np.cumsum(np.sqrt(dx**2 + dy**2))])
