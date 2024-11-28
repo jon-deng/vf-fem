@@ -2,6 +2,8 @@
 Test to see if `forward.integrate` runs
 """
 
+from numpy.typing import NDArray
+
 import os
 import pytest
 from time import perf_counter
@@ -19,7 +21,7 @@ from femvf.residuals import fluid as flr
 from femvf.forward import integrate, integrate_linear
 from femvf.constants import PASCAL_TO_CGS
 from femvf.models import transient
-from femvf.load import load_fsi_model, derive_1dfluid_from_2dsolid
+from femvf.load import load_fsi_model, derive_1D_interface_from_facet_subdomain
 import femvf.postprocess.solid as solidfunc
 from femvf.postprocess.base import TimeSeries
 # from femvf.vis.xdmfutils import write_xdmf, export_mesh_values
@@ -57,7 +59,7 @@ class ModelFixtures(FenicsMeshFixtures):
         SolidResidual: slr.PredefinedSolidResidual,
         mesh: dfn.Mesh,
         mesh_functions: list[dfn.MeshFunction],
-        mesh_subdomains
+        mesh_subdomains: list[dict[str, int]]
     ):
         return self.init_residual(SolidResidual, mesh, mesh_functions, mesh_subdomains)
 
@@ -72,10 +74,52 @@ class ModelFixtures(FenicsMeshFixtures):
         return transient.FenicsModel(solid_residual)
 
     @pytest.fixture()
-    def model(self, solid, FluidResidual):
-        res_fluid, solid_pdofs = derive_1dfluid_from_2dsolid(solid.residual, FluidResidual, fsi_facet_labels=['traction'])
-        fluid_pdofs = np.arange(solid_pdofs.size)
-        fluid = transient.JaxModel(res_fluid)
+    def facet_function(self, mesh_functions: list[dfn.MeshFunction]):
+        dim = len(mesh_functions)
+        return mesh_functions[dim-2]
+
+    @pytest.fixture()
+    def facet_subdomain_data(self, mesh_subdomains: list[dict[str, int]]):
+        dim = len(mesh_subdomains)
+        return mesh_subdomains[dim-2]
+
+    @pytest.fixture()
+    def pressure_function_space(self, solid_residual: slr.FenicsResidual):
+        return solid_residual.form['coeff.fsi.p1'].function_space()
+
+    @pytest.fixture()
+    def fluid_1Dinterface_info(
+        self,
+        mesh: dfn.Mesh,
+        pressure_function_space: dfn.FunctionSpace,
+        facet_function: dfn.MeshFunction,
+        facet_subdomain_data: dict[str, int],
+        extrude_zs: NDArray[np.float64]
+    ):
+        fsi_subdomain_names = ['traction']
+        facet_values = set(facet_subdomain_data[name] for name in fsi_subdomain_names)
+        s, dofs_fsi_solid, dofs_fsi_fluid = derive_1D_interface_from_facet_subdomain(
+            mesh, pressure_function_space, facet_function, facet_values, extrude_zs
+        )
+        return s, dofs_fsi_solid, dofs_fsi_fluid
+
+    @pytest.fixture()
+    def fluid(
+        self, FluidResidual: flr.PredefinedFluidResidual, fluid_1Dinterface_info
+    ):
+        s = fluid_1Dinterface_info[0]
+        return transient.JaxModel(FluidResidual(s))
+
+    @pytest.fixture()
+    def solid_pdofs(self, fluid_1Dinterface_info):
+        return fluid_1Dinterface_info[1]
+
+    @pytest.fixture()
+    def fluid_pdofs(self, fluid_1Dinterface_info):
+        return fluid_1Dinterface_info[2]
+
+    @pytest.fixture()
+    def model(self, solid, fluid, solid_pdofs, fluid_pdofs):
         return transient.ExplicitFSIModel(solid, fluid, solid_pdofs, fluid_pdofs)
 
 
