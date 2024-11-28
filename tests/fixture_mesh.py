@@ -251,6 +251,13 @@ class GMSHFixtures:
             return 'UnitCubeGMSH'
 
     @pytest.fixture()
+    def mesh_dim(self, n_extrude: int, z_extrude: int):
+        if n_extrude == 0 or z_extrude == 0:
+            return 2
+        else:
+            return 3
+
+    @pytest.fixture()
     def mesh_info(self, z_extrude: int, n_extrude: int):
 
         if n_extrude == 0 or z_extrude == 0:
