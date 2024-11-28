@@ -53,6 +53,8 @@ class PredefinedFluidResidual(JaxResidual):
     def _make_residual(self, mesh, *args, **kwargs):
         raise NotImplementedError("Subclasses must implement this method")
 
+# TODO: Change `...FixedSep` so that `idx_sep` is a property
+# based on a mesh distance (that way you don't have to pass it in when creating the model)
 class BernoulliFixedSep(PredefinedFluidResidual):
 
     def _make_residual(self, mesh, idx_sep=0):
