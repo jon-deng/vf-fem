@@ -138,7 +138,9 @@ def load_fsi_model(
         solid.residual.mesh_subdomain('facet')[name] for name in
         fluid_interface_subdomains
     )
-    s, fsi_verts = derive_1dmesh(mesh, facet_func, filter_facet_values, zs)
+    s, fsi_verts = derive_edge_mesh_from_facet_subdomain(
+        mesh, facet_func, filter_facet_values, zs
+    )
 
     fluid = load_jax_model(s, FluidResidual, model_type=model_type, **fluid_kwargs)
 
@@ -165,14 +167,17 @@ def load_fsi_model(
 
     return FSIModel(solid, fluid, dofs_fsi_solid, dofs_fsi_fluid)
 
-def derive_1dmesh(
+def derive_edge_mesh_from_facet_subdomain(
     mesh: dfn.Mesh,
     facet_function: dfn.MeshFunction,
     facet_values: set[int],
     zs: Optional[NDArray[np.float64]]=None
 ) -> tuple[NDArray[np.float64], NDArray[np.intp]]:
     """
-    Return a 1D mesh along an edge loop lying on a given facet subdomain
+    Return a 1D edge mesh from a facet subdomain
+
+    For a 2D mesh, the facet subdomain directly specifies the edges.
+    For a 3D mesh, the intersection of a facet subdomain and plane specifies the edges.
 
     Parameters
     ----------
@@ -184,6 +189,13 @@ def derive_1dmesh(
         The facet subdomain to extract an edge loop on
     zs: Optional[NDArray[np.float64]]
         z-planes for extruded 3D meshes
+
+    Returns
+    -------
+    coords: NDArray[np.float64]
+        Edge mesh coordinates
+    vertices: NDArray[np.intp]
+        Vertex indices in `mesh` for each edge mesh coordinate
     """
 
     def filter_edges(edges, origin, normal):
@@ -202,7 +214,7 @@ def derive_1dmesh(
                 dfn.edges(mesh), np.zeros(2), np.zeros(2)
             )
         ]
-        s, fsi_verts = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
+        coords, vertices = derive_1dfluidmesh_from_edges(mesh, fsi_edges)
     elif dim == 3:
         fsi_edges = [
             [
@@ -213,12 +225,12 @@ def derive_1dmesh(
             for z in zs
         ]
         mesh_list = [derive_1dfluidmesh_from_edges(mesh, edges) for edges in fsi_edges]
-        s = np.array([s for s, fsi_verts in mesh_list])
-        fsi_verts = np.array([fsi_verts for s, fsi_verts in mesh_list], dtype=int)
+        coords = np.array([coords for coords, _ in mesh_list])
+        vertices = np.array([vertices for _, vertices in mesh_list], dtype=int)
     else:
         raise ValueError(f"Invalid mesh dimension {dim}")
 
-    return s, fsi_verts
+    return coords, vertices
 
 def derive_1dfluidmesh_from_edges(mesh, fsi_edges):
 
