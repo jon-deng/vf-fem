@@ -105,6 +105,7 @@ def load_fsi_model(
     fluid_kwargs: dict[str, Any],
     model_type: str = 'transient',
     coupling: str = 'explicit',
+    fluid_interface_subdomains: Optional[tuple[str]]=('traction',),
     zs: Optional[NDArray[np.float64]] = None,
 ) -> transient.BaseTransientFSIModel:
     """
@@ -121,6 +122,8 @@ def load_fsi_model(
     coupling: str
         One of 'explicit' or 'implicit' indicating the coupling strategy between
         fluid/solid domains
+    fluid_interface_subdomains: Optional[tuple[str]]
+        A list of subdomain names indicating the fluid interface
     zs: NDArray[np.float64]
         z-planes for extruded 3D meshes
     """
@@ -134,7 +137,8 @@ def load_fsi_model(
     dim = mesh.topology().dim()
     facet_mesh_func = solid.residual.mesh_function('facet')
     filtering_edge_values = set(
-        solid.residual.mesh_subdomain('facet')[name] for name in ['traction']
+        solid.residual.mesh_subdomain('facet')[name] for name in
+        fluid_interface_subdomains
     )
 
     def filter_edges(edges, origin, normal):
