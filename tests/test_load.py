@@ -79,12 +79,20 @@ class TestLoad(GMSHFixtures):
         return {}
 
     def test_load_fsi_model(
-        self, mesh_path, mesh_dim: int, SolidResidual, FluidResidual, solid_kwargs, fluid_kwargs, model_type
+        self,
+        mesh_path,
+        mesh_dim: int,
+        SolidResidual,
+        FluidResidual,
+        solid_kwargs,
+        fluid_kwargs,
+        model_type,
+        extrude_zs
     ):
         if mesh_dim == 3:
             zs = np.array([0, 1])
         else:
             zs = None
         assert load.load_fsi_model(
-            mesh_path, SolidResidual, FluidResidual, solid_kwargs, fluid_kwargs, model_type=model_type, zs=zs
+            mesh_path, SolidResidual, FluidResidual, solid_kwargs, fluid_kwargs, model_type=model_type, zs=extrude_zs
         )
