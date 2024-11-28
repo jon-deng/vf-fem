@@ -291,23 +291,6 @@ def filter_mesh_entities(
 
 ## Functions for sorting medial surface coordinates in a stream-wise manner
 # This is needed for getting 1D fluid model coordinates
-def streamwise1dmesh_from_edges(mesh, edge_function, f_edges):
-    """
-    Returns a list of x, y coordinates of the surface corresponding to edges numbered 'n'.
-
-    f_edges: list or tuple of int
-        edge function values to extract
-
-    It is assumed that the beginning of the stream is at the leftmost x-coordinate
-    """
-    assert isinstance(f_edges, (list, tuple))
-    edges = [
-        n_edge
-        for n_edge, f_edge in enumerate(edge_function.array())
-        if f_edge in set(f_edges)
-    ]
-    return sort_edge_vertices(mesh, edges)
-
 
 def sort_edge_vertices(mesh, edge_indices):
     """
