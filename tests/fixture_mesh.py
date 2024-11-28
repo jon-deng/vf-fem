@@ -25,7 +25,7 @@ class FenicsMeshFixtures:
     def ny(self, request):
         return request.param
 
-    NZS = [0]
+    NZS = [0, 2]
     @pytest.fixture(params=NZS)
     def nz(self, request):
         return request.param
