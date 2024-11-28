@@ -50,23 +50,12 @@ class TestMeshOperations(FenicsMeshFixtures):
         )
 
     def test_filter_mesh_entities_by_plane(
-        self,
-        mesh: dfn.Mesh,
-        mesh_function: dfn.MeshFunction,
-        mesh_subdomain_data: dict[str, int]
+        self, mesh: dfn.Mesh
     ):
-        filtering_mesh_values = set([mesh_subdomain_data[key] for key in ['traction']])
         mesh_entities = [ent for ent in dfn.entities(mesh, 1)]
 
-        dim = mesh.topology().dim()
-        if dim == 2:
-            origin = np.zeros(2)
-            normal = np.array([0, 1])
-        elif dim == 3:
-            origin = np.zeros(3)
-            normal = np.array([0, 0, 1])
-        else:
-            assert False
+        origin = np.zeros(3)
+        normal = np.array([0, 0, 1])
 
         assert meshutils.filter_mesh_entities_by_plane(
             mesh_entities, origin=origin, normal=normal
