@@ -103,14 +103,6 @@ class FenicsResidual(BaseResidual):
     def dirichlet_bcs(self):
         return self._dirichlet_bcs
 
-    @property
-    def fsi_facet_labels(self):
-        return self._fsi_facet_labels
-
-    @property
-    def fixed_facet_labels(self):
-        return self._fixed_facet_labels
-
 
 # TODO: Formalize the jax residual more with argument size/shape definitions?
 # The Jax residual is kind of fragile since you just have to create arrays
