@@ -1096,11 +1096,17 @@ def modify_newmark_time_discretization(form: Form) -> Form:
     coefficients = {**form.coefficients, **new_coefficients}
 
     dv = dfn.TestFunction(v1.function_space())
+    v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
+    v_form = dfn.inner(v1 - v1_nmk, dv) * dx
+
     da = dfn.TestFunction(a1.function_space())
+    a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+    a_form = dfn.inner(a1 - a1_nmk, da) * dx
+
     ufl_forms = {
-        'u': form.ufl_forms['u'],
-        'v': dfn.inner(newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta), dv) * dx,
-        'a': dfn.inner(newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta), da) * dx,
+        'u': ufl.replace(form.ufl_forms['u'], {v1: v1_nmk, a1: a1_nmk}),
+        'v': v_form,
+        'a': a_form,
     }
 
     return Form(ufl_forms, coefficients, form.expressions)
