@@ -556,7 +556,7 @@ class NodalContactModel(FenicsModel):
         # This sets the 'standard' state variables u/v/a
         super().set_fin_state(state)
 
-        self.residual.form['coeff.state.manual.tcontact'].vector()[:] = (
+        self.residual.form['control/tcontact'].vector()[:] = (
             self._contact_traction(state.sub['u'])
         )
 
@@ -586,7 +586,7 @@ class NodalContactModel(FenicsModel):
     def _assem_dresu_du_contact(self, adjoint=False):
         # Compute things needed to find sensitivities of contact pressure
         dfu2_dtcontact = self.assembler.assemble_derivative(
-            'u', 'coeff.state.manual.tcontact', adjoint=adjoint
+            'u', 'control/tcontact', adjoint=adjoint
         )
 
         XREF = self.XREF

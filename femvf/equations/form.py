@@ -763,7 +763,7 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
-        'coeff.state.manual.tcontact': func_spec('CG', 1, 'vector'),
+        'control/tcontact': func_spec('CG', 1, 'vector'),
         'coeff.prop.ycontact': const_spec('scalar', np.inf),
         'coeff.prop.ncontact': const_spec('vector'),
         'coeff.prop.kcontact': const_spec('scalar', 1.0),
@@ -781,9 +781,9 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         # `kcontact = coefficients['coeff.prop.kcontact']`
 
         vector_test = dfn.TestFunction(
-            coefficients['coeff.state.manual.tcontact'].function_space()
+            coefficients['control/tcontact'].function_space()
         )
-        tcontact = coefficients['coeff.state.manual.tcontact']
+        tcontact = coefficients['control/tcontact']
 
         # Set a default y-dir contact surface direction
         ncontact = coefficients['coeff.prop.ncontact'].values()

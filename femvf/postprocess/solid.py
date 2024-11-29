@@ -260,7 +260,7 @@ class ContactPressureField(BaseFieldMeasure):
         super().__init__(model, dx, fspace, **kwargs)
 
     def _init_expression(self):
-        tcontact = self.model.solid.residual.form['coeff.state.manual.tcontact']
+        tcontact = self.model.solid.residual.form['control/tcontact']
         # `tcontact*tcontact` should be the square of contact pressure
         return ufl.inner(tcontact, tcontact) ** 0.5
 
@@ -294,7 +294,7 @@ class ContactAreaDensityField(BaseFieldMeasure):
     """
 
     def _init_expression(self):
-        tcontact = self.model.solid.residual.form['coeff.state.manual.tcontact']
+        tcontact = self.model.solid.residual.form['control/tcontact']
         pcontact = (
             ufl.inner(tcontact, tcontact) ** 0.5
         )  # should be square of contact pressure
