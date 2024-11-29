@@ -1065,19 +1065,24 @@ class ShapeForm(PredefinedForm):
 ## Form modifiers
 
 def modify_newmark_time_discretization(form: Form) -> Form:
+    # TODO: Generalized hard-coded state and time derivative keys?
     u1 = form['state/u1']
     v1 = form['state/v1']
     a1 = form['state/a1']
 
-    u0 = dfn.Function(form['state/u1'].function_space())
-    v0 = dfn.Function(form['state/v1'].function_space())
-    a0 = dfn.Function(form['state/a1'].function_space())
+    u0 = dfn.Function(u1.function_space())
+    v0 = dfn.Function(v1.function_space())
+    a0 = dfn.Function(a1.function_space())
 
+    # TODO: Make dt part of a Real function space
     dt = dfn.Function(form['prop/rho'].function_space())
     gamma = dfn.Constant(1 / 2)
     beta = dfn.Constant(1 / 4)
-    v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)
-    a1_nmk = newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta)
+
+    # TODO: This seems like an ugly way to get the measure/mesh
+    # Could refactor `Form` to not use meshes at all
+    mesh = u1.function_space().mesh()
+    dx = dfn.Measure('dx', mesh)
 
     new_coefficients = {
         'state/u0': u0,
@@ -1090,9 +1095,12 @@ def modify_newmark_time_discretization(form: Form) -> Form:
 
     coefficients = {**form.coefficients, **new_coefficients}
 
+    dv = dfn.TestFunction(v1.function_space())
+    da = dfn.TestFunction(a1.function_space())
     ufl_forms = {
-        key: ufl.replace(ufl_form, {v1: v1_nmk, a1: a1_nmk})
-        for key, ufl_form in form.ufl_forms.items()
+        'u': form.ufl_forms['u'],
+        'v': dfn.inner(newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta), dv) * dx,
+        'a': dfn.inner(newmark.newmark_a(u1, u0, v0, a0, dt, gamma, beta), da) * dx,
     }
 
     return Form(ufl_forms, coefficients, form.expressions)
