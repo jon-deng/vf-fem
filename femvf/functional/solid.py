@@ -266,9 +266,9 @@ class PeriodicEnergyError(SolidFunctional):
 
         res_u = forms['u_N'] - forms['u_0']
         res_v = forms['v_N'] - forms['v_0']
-        rho = solid.forms['coeff.prop.rho']
-        emod = solid.forms['coeff.prop.emod']
-        nu = solid.forms['coeff.prop.nu']
+        rho = solid.forms['prop/rho']
+        emod = solid.forms['prop/emod']
+        nu = solid.forms['prop/nu']
 
         forms['resu'] = biform_k(res_u, res_u, emod, nu)
         forms['resv'] = biform_m(res_v, res_v, rho)
@@ -488,8 +488,8 @@ class ElasticEnergyDifference(SolidFunctional):
 
         forms = {}
 
-        emod = solid.forms['coeff.prop.emod']
-        nu = solid.forms['coeff.prop.nu']
+        emod = solid.forms['prop/emod']
+        nu = solid.forms['prop/nu']
 
         u_ini = dfn.Function(solid.vector_fspace)
         u_fin = dfn.Function(solid.vector_fspace)
@@ -597,12 +597,12 @@ class KV3DDampingWork(SolidFunctional):
 
         # Load some ufl forms from the solid model
         v1 = solid.forms['state/v1']
-        eta = solid.forms['coeff.prop.eta']
+        eta = solid.forms['prop/eta']
         uant, upos = dfn.Function(solid.vector_fspace), dfn.Function(
             solid.vector_fspace
         )
 
-        d2v_dz2 = (uant - 2 * v1 + upos) / solid.forms['coeff.prop.length'] ** 2
+        d2v_dz2 = (uant - 2 * v1 + upos) / solid.forms['prop/length'] ** 2
 
         forms = {}
         forms['damping_power'] = (
@@ -715,7 +715,7 @@ class KVDampingWork(SolidFunctional):
 
         # Load some ufl forms from the solid model
         v1 = solid.forms['state/v1']
-        eta = solid.forms['coeff.prop.eta']
+        eta = solid.forms['prop/eta']
 
         forms = {}
         forms['damping_power'] = (
@@ -828,11 +828,11 @@ class RayleighDampingWork(SolidFunctional):
         # Load some ufl forms from the solid model
         vector_trial = solid.forms['trial.vector']
         scalar_trial = solid.forms['trial.scalar']
-        ray_m = solid.forms['coeff.prop.rayleigh_m']
-        ray_k = solid.forms['coeff.prop.rayleigh_k']
-        rho = solid.forms['coeff.prop.rho']
-        emod = solid.forms['coeff.prop.emod']
-        nu = solid.forms['coeff.prop.nu']
+        ray_m = solid.forms['prop/rayleigh_m']
+        ray_k = solid.forms['prop/rayleigh_k']
+        rho = solid.forms['prop/rho']
+        emod = solid.forms['prop/emod']
+        nu = solid.forms['prop/nu']
 
         v0 = solid.forms['state/v0']
 

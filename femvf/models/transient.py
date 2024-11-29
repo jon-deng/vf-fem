@@ -187,14 +187,14 @@ def depack_form_coefficient_function(form_coefficient):
 def properties_bvec_from_forms(forms, defaults=None):
     defaults = {} if defaults is None else defaults
     prop_labels = [
-        form_name.split('.')[-1]
+        form_name.split('/')[-1]
         for form_name in forms.keys()
-        if 'coeff.prop' == form_name[: len('coeff.prop')]
+        if 'prop' == form_name.split('/', 1)[0]
     ]
     vecs = []
     for prop_label in prop_labels:
         coefficient = depack_form_coefficient_function(
-            forms['coeff.prop.' + prop_label]
+            forms['prop/' + prop_label]
         )
 
         # Generally the size of the vector comes directly from the property;
@@ -335,7 +335,7 @@ class FenicsModel(BaseTransientModel):
         """
         for key, value in prop.sub_items():
             # TODO: Check types to make sure the input property is compatible with the solid type
-            coefficient = self.residual.form['coeff.prop.' + key]
+            coefficient = self.residual.form['prop/' + key]
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
@@ -345,8 +345,8 @@ class FenicsModel(BaseTransientModel):
                 coefficient.vector()[:] = value
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates
-        if 'coeff.prop.umesh' in self.residual.form:
-            u_mesh_coeff = self.residual.form['coeff.prop.umesh']
+        if 'prop/umesh' in self.residual.form:
+            u_mesh_coeff = self.residual.form['prop/umesh']
 
             mesh = self.residual.mesh()
             fspace = self.residual.form['state/u1'].function_space()
@@ -570,9 +570,9 @@ class NodalContactModel(FenicsModel):
     def _contact_traction(self, u):
         # This computes the nodal values of the contact traction function
         XREF = self.XREF
-        ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
-        ncontact = self.residual.form['coeff.prop.ncontact'].values()
-        kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
+        ycontact = self.residual.form['prop/ycontact'].values()[0]
+        ncontact = self.residual.form['prop/ncontact'].values()
+        kcontact = self.residual.form['prop/kcontact'].values()[0]
 
         ndim = self.residual.form['state/u0'].ufl_shape[0]
         gap = np.dot((XREF + u)[:].reshape(-1, ndim), ncontact) - ycontact
@@ -590,10 +590,10 @@ class NodalContactModel(FenicsModel):
         )
 
         XREF = self.XREF
-        kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
-        ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
+        kcontact = self.residual.form['prop/kcontact'].values()[0]
+        ycontact = self.residual.form['prop/ycontact'].values()[0]
         u1 = self.residual.form['state/u1'].vector()
-        ncontact = self.residual.form['coeff.prop.ncontact'].values()
+        ncontact = self.residual.form['prop/ncontact'].values()
         gap = (
             np.dot((XREF + u1)[:].reshape(-1, ncontact.shape[-1]), ncontact) - ycontact
         )

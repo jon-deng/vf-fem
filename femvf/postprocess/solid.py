@@ -347,7 +347,7 @@ class XMomentum(BaseFieldMeasure):
 
     def _init_expression(self):
         forms = self.model.solid.form
-        rho = forms['coeff.prop.rho']
+        rho = forms['prop/rho']
         velocity = forms['state/v1']
         return ufl.inner(rho, velocity[0])
 
@@ -371,7 +371,7 @@ class YMomentum(BaseFieldMeasure):
 
     def _init_expression(self):
         forms = self.model.solid.residual.form
-        rho = forms['coeff.prop.rho']
+        rho = forms['prop/rho']
         velocity = forms['state/v1']
         return ufl.inner(rho, velocity[1])
 

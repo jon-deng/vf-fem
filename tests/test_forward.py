@@ -121,7 +121,7 @@ class TestIntegrate(ModelFixtures):
         prop['ncontact'][1] = 1.0
 
         # xy = (
-        #     residual.form['coeff.prop.emod'].function_space()
+        #     residual.form['prop/emod'].function_space()
         #     .tabulate_dof_coordinates()
         # )
         # x = xy[:, 0]

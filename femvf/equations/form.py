@@ -520,14 +520,14 @@ class InertialForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/a1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.rho': func_spec('DG', 0, 'scalar'),
+        'prop/rho': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['state/a1'].function_space())
 
         acc = coefficients['state/a1']
-        density = coefficients['coeff.prop.rho']
+        density = coefficients['prop/rho']
         inertial_body_force = density * acc
 
         return {'u': ufl.inner(inertial_body_force, vector_test) * measure}, {}
@@ -545,8 +545,8 @@ class IsotropicElasticForm(PredefinedForm):
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
         'state/v1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
+        'prop/emod': func_spec('DG', 0, 'scalar'),
+        'prop/nu': const_spec('scalar', default_value=0.45),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -556,8 +556,8 @@ class IsotropicElasticForm(PredefinedForm):
 
         u = coefficients['state/u1']
         inf_strain = strain_inf(u)
-        emod = coefficients['coeff.prop.emod']
-        nu = coefficients['coeff.prop.nu']
+        emod = coefficients['prop/emod']
+        nu = coefficients['prop/nu']
         set_fenics_function(nu, 0.45)
         stress_elastic = stress_isotropic(inf_strain, emod, nu)
 
@@ -579,9 +579,9 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.k_swelling': func_spec('DG', 0, 'scalar'),
+        'prop/emod': func_spec('DG', 0, 'scalar'),
+        'prop/v_swelling': func_spec('DG', 0, 'scalar'),
+        'prop/k_swelling': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -589,13 +589,13 @@ class IsotropicIncompressibleElasticSwellingForm(PredefinedForm):
         vector_test = dfn.TestFunction(coefficients['state/u1'].function_space())
         strain_test = strain_inf(vector_test)
 
-        emod = coefficients['coeff.prop.emod']
+        emod = coefficients['prop/emod']
         nu = 0.5
         dis = coefficients['state/u1']
         inf_strain = strain_inf(dis)
-        v_swelling = coefficients['coeff.prop.v_swelling']
+        v_swelling = coefficients['prop/v_swelling']
         set_fenics_function(v_swelling, 1.0)
-        k_swelling = coefficients['coeff.prop.k_swelling']
+        k_swelling = coefficients['prop/k_swelling']
         set_fenics_function(k_swelling, 1.0)
         lame_mu = emod / 2 / (1 + nu)
         stress_elastic = 2 * lame_mu * inf_strain + k_swelling * (
@@ -617,10 +617,10 @@ class IsotropicElasticSwellingForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
-        'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar'),
+        'prop/emod': func_spec('DG', 0, 'scalar'),
+        'prop/nu': const_spec('scalar', default_value=0.45),
+        'prop/v_swelling': func_spec('DG', 0, 'scalar'),
+        'prop/m_swelling': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -635,11 +635,11 @@ class IsotropicElasticSwellingForm(PredefinedForm):
         DE = strain_lin_green_lagrange(u, vector_test)
         E = strain_green_lagrange(u)
 
-        emod = coefficients['coeff.prop.emod']
+        emod = coefficients['prop/emod']
         nu = dfn.Constant(0.45)
-        v = coefficients['coeff.prop.v_swelling']
+        v = coefficients['prop/v_swelling']
         v.vector()[:] = 1.0
-        m = coefficients['coeff.prop.m_swelling']
+        m = coefficients['prop/m_swelling']
         m.vector()[:] = 0.0
 
         E_v = v ** (-2 / 3) * E + 1 / 2 * (v ** (-2 / 3) - 1) * ufl.Identity(3)
@@ -674,10 +674,10 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
         'state/v1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
-        'coeff.prop.v_swelling': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.m_swelling': func_spec('DG', 0, 'scalar'),
+        'prop/emod': func_spec('DG', 0, 'scalar'),
+        'prop/nu': const_spec('scalar', default_value=0.45),
+        'prop/v_swelling': func_spec('DG', 0, 'scalar'),
+        'prop/m_swelling': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -694,18 +694,18 @@ class IsotropicElasticSwellingPowerLawForm(PredefinedForm):
         E = strain_green_lagrange(u)
         E_rate = strain_green_lagrange(v)
 
-        emod = coefficients['coeff.prop.emod']
+        emod = coefficients['prop/emod']
         nu = dfn.Constant(0.45)
-        v = coefficients['coeff.prop.v_swelling']
+        v = coefficients['prop/v_swelling']
         v.vector()[:] = 1.0
-        m = coefficients['coeff.prop.m_swelling']
+        m = coefficients['prop/m_swelling']
         m.vector()[:] = 0.0
 
         E_v = v ** (-2 / 3) * E + 1 / 2 * (v ** (-2 / 3) - 1) * ufl.Identity(3)
         E_v_rate = v ** (-2 / 3) * E_rate + 1 / 2 * (v ** (-2 / 3) - 1) * ufl.Identity(3)
         # Here `mbar_v` corresponds to the scaling function 'm(v)/v' [Gou2016]
         # I used 'm(v)/v' (instead of 'm(v)') so that the coefficient
-        # `'coeff.prop.m_swelling'` will correspond to the linear stiffness
+        # `'prop/m_swelling'` will correspond to the linear stiffness
         # change used for `IsotropicElasticSwellingForm` at no swelling
         mbar_v = v**m
         S = mbar_v * v ** (1 / 3) * stress_isotropic(E_v, emod, nu)
@@ -764,9 +764,9 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
         'control/tcontact': func_spec('CG', 1, 'vector'),
-        'coeff.prop.ycontact': const_spec('scalar', np.inf),
-        'coeff.prop.ncontact': const_spec('vector'),
-        'coeff.prop.kcontact': const_spec('scalar', 1.0),
+        'prop/ycontact': const_spec('scalar', np.inf),
+        'prop/ncontact': const_spec('vector'),
+        'prop/kcontact': const_spec('scalar', 1.0),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -776,9 +776,9 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         # This manual linking is done through the class
         # `femvf.models.solid.NodalContactSolid`
         # The relevant penalty parameters are:
-        # `ycontact = coefficients['coeff.prop.ycontact']`
-        # `ncontact = coefficients['coeff.prop.ncontact']`
-        # `kcontact = coefficients['coeff.prop.kcontact']`
+        # `ycontact = coefficients['prop/ycontact']`
+        # `ncontact = coefficients['prop/ncontact']`
+        # `kcontact = coefficients['prop/kcontact']`
 
         vector_test = dfn.TestFunction(
             coefficients['control/tcontact'].function_space()
@@ -786,9 +786,9 @@ class ManualSurfaceContactTractionForm(PredefinedForm):
         tcontact = coefficients['control/tcontact']
 
         # Set a default y-dir contact surface direction
-        ncontact = coefficients['coeff.prop.ncontact'].values()
+        ncontact = coefficients['prop/ncontact'].values()
         ncontact[1] = 1.0
-        coefficients['coeff.prop.ncontact'].assign(dfn.Constant(ncontact))
+        coefficients['prop/ncontact'].assign(dfn.Constant(ncontact))
 
         expressions = {}
         return {'u': ufl.inner(tcontact, vector_test) * measure}, expressions
@@ -804,9 +804,9 @@ class IsotropicMembraneForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.emod_membrane': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.nu_membrane': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar'),
+        'prop/emod_membrane': func_spec('DG', 0, 'scalar'),
+        'prop/nu_membrane': func_spec('DG', 0, 'scalar'),
+        'prop/th_membrane': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh, large_def=False):
@@ -835,9 +835,9 @@ class IsotropicMembraneForm(PredefinedForm):
             project_pp[i, j, k, l] * strain_test[j, k], (i, l)
         )
 
-        emod = coefficients['coeff.prop.emod_membrane']
-        th_membrane = coefficients['coeff.prop.th_membrane']
-        nu = coefficients['coeff.prop.nu_membrane']
+        emod = coefficients['prop/emod_membrane']
+        th_membrane = coefficients['prop/th_membrane']
+        nu = coefficients['prop/nu_membrane']
         set_fenics_function(nu, 0.45)
         mu = emod / 2 / (1 + nu)
         lmbda = emod * nu / (1 + nu) / (1 - 2 * nu)
@@ -855,7 +855,7 @@ class IsotropicMembraneForm(PredefinedForm):
         return {'u': ufl.inner(stress_pp, strain_pp_test) * th_membrane * measure}, expressions
 
         # forms['form.un.f1uva'] += res
-        # forms['coeff.prop.nu_membrane'] = nu
+        # forms['prop/nu_membrane'] = nu
         # return forms
 
 
@@ -866,8 +866,8 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.emod_membrane': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.th_membrane': func_spec('DG', 0, 'scalar'),
+        'prop/emod_membrane': func_spec('DG', 0, 'scalar'),
+        'prop/th_membrane': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh, large_def=False):
@@ -898,8 +898,8 @@ class IsotropicIncompressibleMembraneForm(PredefinedForm):
             project_pp[i, j, k, l] * strain_test[j, k], (i, l)
         )
 
-        emod_membrane = coefficients['coeff.prop.emod_membrane']
-        th_membrane = coefficients['coeff.prop.th_membrane']
+        emod_membrane = coefficients['prop/emod_membrane']
+        th_membrane = coefficients['prop/th_membrane']
         nu = 0.5
         lame_mu = emod_membrane / 2 / (1 + nu)
         strain_pp = ufl.as_tensor(project_pp[i, j, k, l] * strain[j, k], (i, l))
@@ -922,11 +922,11 @@ class RayleighDampingForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/v1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.rho': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.nu': const_spec('scalar', 0.45),
-        'coeff.prop.rayleigh_m': const_spec('scalar', 1.0),
-        'coeff.prop.rayleigh_k': const_spec('scalar', 1.0),
+        'prop/rho': func_spec('DG', 0, 'scalar'),
+        'prop/emod': func_spec('DG', 0, 'scalar'),
+        'prop/nu': const_spec('scalar', 0.45),
+        'prop/rayleigh_m': const_spec('scalar', 1.0),
+        'prop/rayleigh_k': const_spec('scalar', 1.0),
     }
 
     def init_form(self, coefficients, measure, mesh, large_def=False):
@@ -937,16 +937,16 @@ class RayleighDampingForm(PredefinedForm):
         strain_test = strain_inf(vector_test)
         v = coefficients['state/v1']
 
-        rayleigh_m = coefficients['coeff.prop.rayleigh_m']
-        rayleigh_k = coefficients['coeff.prop.rayleigh_k']
+        rayleigh_m = coefficients['prop/rayleigh_m']
+        rayleigh_k = coefficients['prop/rayleigh_k']
 
-        emod = coefficients['coeff.prop.emod']
-        nu = coefficients['coeff.prop.nu']
+        emod = coefficients['prop/emod']
+        nu = coefficients['prop/nu']
         inf_strain = strain_inf(v)
         stress_elastic = stress_isotropic(inf_strain, emod, nu)
         stress_visco = rayleigh_k * stress_elastic
 
-        rho = coefficients['coeff.prop.rho']
+        rho = coefficients['prop/rho']
         force_visco = rayleigh_m * rho * v
 
         expressions = {}
@@ -956,9 +956,9 @@ class RayleighDampingForm(PredefinedForm):
         return {'u': form}, expressions
 
         # coefficients['form.un.f1uva'] += damping
-        # # coefficients['coeff.prop.nu'] = nu
-        # # coefficients['coeff.prop.rayleigh_m'] = rayleigh_m
-        # # coefficients['coeff.prop.rayleigh_k'] = rayleigh_k
+        # # coefficients['prop/nu'] = nu
+        # # coefficients['prop/rayleigh_m'] = rayleigh_m
+        # # coefficients['prop/rayleigh_k'] = rayleigh_k
         # return coefficients
 
 
@@ -969,7 +969,7 @@ class KelvinVoigtForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/v1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.eta': func_spec('DG', 0, 'scalar'),
+        'prop/eta': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -979,7 +979,7 @@ class KelvinVoigtForm(PredefinedForm):
         strain_test = strain_inf(vector_test)
         v = coefficients['state/v1']
 
-        eta = coefficients['coeff.prop.eta']
+        eta = coefficients['prop/eta']
         inf_strain_rate = strain_inf(v)
         stress_visco = eta * inf_strain_rate
 
@@ -998,28 +998,28 @@ class APForceForm(PredefinedForm):
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
         'state/v1': func_spec('CG', 1, 'vector'),
-        'coeff.prop.eta': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.emod': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.nu': const_spec('scalar', default_value=0.45),
-        'coeff.prop.u_ant': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.u_pos': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.length': func_spec('DG', 0, 'scalar'),
-        'coeff.prop.muscle_stress': func_spec('DG', 0, 'scalar'),
+        'prop/eta': func_spec('DG', 0, 'scalar'),
+        'prop/emod': func_spec('DG', 0, 'scalar'),
+        'prop/nu': const_spec('scalar', default_value=0.45),
+        'prop/u_ant': func_spec('DG', 0, 'scalar'),
+        'prop/u_pos': func_spec('DG', 0, 'scalar'),
+        'prop/length': func_spec('DG', 0, 'scalar'),
+        'prop/muscle_stress': func_spec('DG', 0, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(coefficients['state/v1'].function_space())
 
         u1, v1 = coefficients['state/u1'], coefficients['state/v1']
-        kv_eta = coefficients['coeff.prop.eta']
-        emod = coefficients['coeff.prop.emod']
-        nu = coefficients['coeff.prop.nu']
+        kv_eta = coefficients['prop/eta']
+        emod = coefficients['prop/emod']
+        nu = coefficients['prop/nu']
         lame_mu = emod / 2 / (1 + nu)
 
-        u_ant = coefficients['coeff.prop.u_ant']  # zero values by default
-        u_pos = coefficients['coeff.prop.u_pos']
-        length = coefficients['coeff.prop.length']
-        muscle_stress = coefficients['coeff.prop.muscle_stress']
+        u_ant = coefficients['prop/u_ant']  # zero values by default
+        u_pos = coefficients['prop/u_pos']
+        length = coefficients['prop/length']
+        muscle_stress = coefficients['prop/muscle_stress']
 
         d2u_dz2 = (u_ant - 2 * u1 + u_pos) / length**2
         d2v_dz2 = (u_ant - 2 * v1 + u_pos) / length**2
@@ -1039,13 +1039,13 @@ class ShapeForm(PredefinedForm):
     Linear functional that just adds a shape parameter
     """
 
-    COEFFICIENT_SPEC = {'coeff.prop.umesh': func_spec('CG', 1, 'vector')}
+    COEFFICIENT_SPEC = {'prop/umesh': func_spec('CG', 1, 'vector')}
 
     def init_form(self, coefficients, measure, mesh):
         vector_test = dfn.TestFunction(
-            coefficients['coeff.prop.umesh'].function_space()
+            coefficients['prop/umesh'].function_space()
         )
-        umesh = coefficients['coeff.prop.umesh']
+        umesh = coefficients['prop/umesh']
         umesh_ufl = ufl.SpatialCoordinate(mesh)
 
         # NOTE:
@@ -1055,7 +1055,7 @@ class ShapeForm(PredefinedForm):
         # store the ufl object and the coefficient vector separately.
         # Code has to manually account for this additional property,
         # for example, when taking shape derivatives
-        coefficients['ufl.coeff.prop.umesh'] = umesh_ufl
+        coefficients['prop/umesh_ufl'] = umesh_ufl
 
         expressions = {}
 
@@ -1073,7 +1073,7 @@ def modify_newmark_time_discretization(form: Form) -> Form:
     v0 = dfn.Function(form['state/v1'].function_space())
     a0 = dfn.Function(form['state/a1'].function_space())
 
-    dt = dfn.Function(form['coeff.prop.rho'].function_space())
+    dt = dfn.Function(form['prop/rho'].function_space())
     gamma = dfn.Constant(1 / 2)
     beta = dfn.Constant(1 / 4)
     v1_nmk = newmark.newmark_v(u1, u0, v0, a0, dt, gamma, beta)

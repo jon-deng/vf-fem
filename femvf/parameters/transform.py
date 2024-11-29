@@ -209,7 +209,7 @@ class TractionShape(TransformFromModel):
         # dF/du : sensitivity of residual to mesh displacement
         # dF/dt : sensitivity of residual to medial surface tractions
         residual = model.solid.residual
-        fspace = residual.form['coeff.prop.umesh'].function_space()
+        fspace = residual.form['prop/umesh'].function_space()
         dx = residual.measure('dx')
         ds = residual.measure('ds')
 
@@ -423,7 +423,7 @@ class LayerModuli(JaxTransformFromModel):
         ## Get the mapping from labelled cell regions to DOFs
         cell_label_to_dofs = meshutils.process_celllabel_to_dofs_from_residual(
             model.solid.residual,
-            model.solid.residual.form['coeff.prop.emod'].function_space(),
+            model.solid.residual.form['prop/emod'].function_space(),
         )
 
         y_dict = bvec_to_dict(model.prop)

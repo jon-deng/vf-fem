@@ -197,7 +197,7 @@ class BaseDynamicalFenicsModel:
         for key in prop.labels[0]:
             # TODO: Check types to make sure the input property is compatible with the solid type
             coefficient = depack_form_coefficient_function(
-                self.residual.form['coeff.prop.' + key]
+                self.residual.form['prop/' + key]
             )
 
             # If the property is a field variable, values have to be assigned to every spot in
@@ -208,8 +208,8 @@ class BaseDynamicalFenicsModel:
                 coefficient.vector()[:] = prop[key]
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates
-        if 'coeff.prop.umesh' in self.residual.form:
-            u_mesh_coeff = self.residual.form['coeff.prop.umesh']
+        if 'prop/umesh' in self.residual.form:
+            u_mesh_coeff = self.residual.form['prop/umesh']
 
             mesh = self.residual.mesh()
             fspace = self.residual.form['state/u1'].function_space()
@@ -289,11 +289,11 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
         ]
 
         j_emod = self.prop.labels[0].index('emod')
-        mats[0][j_emod] = self.assembler.assemble_derivative('u', 'coeff.prop.emod')
+        mats[0][j_emod] = self.assembler.assemble_derivative('u', 'prop/emod')
 
         if 'umesh' in self.prop:
             j_shape = self.prop.labels[0].index('umesh')
-            mats[0][j_shape] = self.assembler.assemble_derivative('u', 'coeff.prop.umesh')
+            mats[0][j_shape] = self.assembler.assemble_derivative('u', 'prop/umesh')
 
         return bm.BlockMatrix(mats, labels=(self.state.labels[0], self.prop.labels[0]))
 
@@ -390,11 +390,11 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
         ]
 
         j_emod = self.prop.labels[0].index('emod')
-        mats[0][j_emod] = self.assembler.assemble_derivative('u', 'coeff.prop.emod')
+        mats[0][j_emod] = self.assembler.assemble_derivative('u', 'prop/emod')
 
         if 'umesh' in self.prop:
             j_shape = self.prop.labels[0].index('umesh')
-            mats[0][j_shape] = self.assembler.assemble_derivative('u', 'coeff.prop.umesh')
+            mats[0][j_shape] = self.assembler.assemble_derivative('u', 'prop/umesh')
 
         return bm.BlockMatrix(mats, labels=self.state.labels + self.prop.labels)
 
