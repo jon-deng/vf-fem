@@ -62,7 +62,7 @@ class TransferWorkbyVelocity(FSIFunctional):
         solid = model.solid
         ds = solid.ds
 
-        p = solid.forms['coeff.fsi.p1']
+        p = solid.forms['control/p1']
         u1 = solid.forms['state/u1']
         v1 = solid.forms['state/v1']
 
@@ -219,7 +219,7 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         vector_trial = solid.forms['trial.vector']
         scalar_trial = solid.forms['trial.scalar']
 
-        pressure = solid.forms['coeff.fsi.p1']
+        pressure = solid.forms['control/p1']
         u1 = solid.forms['state/u1']
         u0 = solid.forms['state/u0']
 

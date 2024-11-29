@@ -41,7 +41,7 @@ class CoupledResidualFixtures(FenicsMeshFixtures):
 
     @pytest.fixture()
     def pressure_function_space(self, solid_res: slr.FenicsResidual):
-        return solid_res.form['coeff.fsi.p1'].function_space()
+        return solid_res.form['control/p1'].function_space()
 
     @pytest.fixture()
     def facet_function(self, mesh_functions: list[dfn.MeshFunction]):

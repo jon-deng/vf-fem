@@ -253,7 +253,7 @@ class FenicsModel(BaseTransientModel):
             (u1.vector(), v1.vector(), a1.vector()), labels=[('u', 'v', 'a')]
         )
         self.control = bv.BlockVector(
-            (self.residual.form['coeff.fsi.p1'].vector(),), labels=[('p',)]
+            (self.residual.form['control/p1'].vector(),), labels=[('p',)]
         )
         self.prop = properties_bvec_from_forms(self.residual.form)
         self.set_prop(self.prop)
@@ -460,7 +460,7 @@ class FenicsModel(BaseTransientModel):
 
         # It should be hardcoded that the control is just the surface pressure
         assert self.control.shape[0] == 1
-        dfu_dcontrol = self.assembler.assemble_derivative('u', 'coeff.fsi.p1')
+        dfu_dcontrol = self.assembler.assemble_derivative('u', 'control/p1')
         dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
 
         submats = [[dfu_dcontrol], [dfv_dcontrol]]
@@ -1102,7 +1102,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         dfu2_du2 = self.solid.assembler.assemble_derivative('u', 'state/u1', adjoint=True)
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
-        dfu2_dp2 = self.solid.assembler.assemble_derivative('u', 'coeff.fsi.p1', adjoint=True)
+        dfu2_dp2 = self.solid.assembler.assemble_derivative('u', 'control/p1', adjoint=True)
 
         # map dfu2_dp2 to have p on the fluid domain
         solid_dofs, fluid_dofs = self.get_fsi_scalar_dofs()

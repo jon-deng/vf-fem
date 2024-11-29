@@ -587,7 +587,7 @@ class VertexGlottalWidth(BaseStateMeasure):
         self.idx_dof = vert_to_vdof[2 * idx_vertex + 1]
 
         self.XREF = (
-            self.model.solid.residual.form['coeff.fsi.p1']
+            self.model.solid.residual.form['control/p1']
             .function_space()
             .tabulate_dof_coordinates()
         )

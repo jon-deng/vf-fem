@@ -166,7 +166,7 @@ class BaseDynamicalFenicsModel:
         self.statet = bv.convert_subtype_to_petsc(self.statet)
 
         self.control = bv.BlockVector(
-            (self.residual.form['coeff.fsi.p1'].vector(),), labels=[('p',)]
+            (self.residual.form['control/p1'].vector(),), labels=[('p',)]
         )
         self.control = bv.convert_subtype_to_petsc(self.control)
 
@@ -271,7 +271,7 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
     @cast_output_bmat_to_petsc
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
-        dresu_dcontrol = self.assembler.assemble_derivative('u', 'coeff.fsi.p1')
+        dresu_dcontrol = self.assembler.assemble_derivative('u', 'control/p1')
 
         dresv_dcontrol = dfn.PETScMatrix(
             subops.zero_mat(self.state['v'].size, self.control['p'].size)
@@ -374,7 +374,7 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
     def assem_dres_dcontrol(self):
         n = self.u.vector().size()
         m = self.control['p'].size
-        dresu_dg = self.assembler.assemble_derivative('u', 'coeff.fsi.p1')
+        dresu_dg = self.assembler.assemble_derivative('u', 'control/p1')
 
         dresv_dg = dfn.PETScMatrix(subops.zero_mat(n, m))
 
@@ -829,7 +829,7 @@ class LinearizedFSIModel(
         )
 
         self._dsolid_area = dfn.Function(
-            self.solid.residual.form['coeff.fsi.p1'].function_space()
+            self.solid.residual.form['control/p1'].function_space()
         ).vector()
 
     def set_dstate(self, dstate):

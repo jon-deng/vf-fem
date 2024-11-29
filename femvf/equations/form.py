@@ -737,7 +737,7 @@ class SurfacePressureForm(PredefinedForm):
 
     COEFFICIENT_SPEC = {
         'state/u1': func_spec('CG', 1, 'vector'),
-        'coeff.fsi.p1': func_spec('CG', 1, 'scalar'),
+        'control/p1': func_spec('CG', 1, 'scalar'),
     }
 
     def init_form(self, coefficients, measure, mesh):
@@ -748,7 +748,7 @@ class SurfacePressureForm(PredefinedForm):
         vector_test = dfn.TestFunction(coefficients['state/u1'].function_space())
         facet_normal = ufl.FacetNormal(mesh)
 
-        p = coefficients['coeff.fsi.p1']
+        p = coefficients['control/p1']
         reference_traction = -p * pullback_area_normal(dis, facet_normal)
 
         expressions = {}

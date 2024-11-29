@@ -119,7 +119,7 @@ def make_coupling_stuff(
     fl_state = _state_from_dynamic_or_transient_model(fluid)
 
     solid_area = dfn.Function(
-        solid.residual.form['coeff.fsi.p1'].function_space()
+        solid.residual.form['control/p1'].function_space()
     ).vector()
 
     fsimap = make_fsimap(solid, fluid, solid_fsi_dofs, fluid_fsi_dofs)
@@ -164,7 +164,7 @@ def make_fsimap(
     # fl_state = bv.concatenate_with_prefix(fl_states, 'fluid')
 
     solid_area = dfn.Function(
-        solid.residual.form['coeff.fsi.p1'].function_space()
+        solid.residual.form['control/p1'].function_space()
     ).vector()
 
     fsimap = FSIMap(fl_state['p'].size, solid_area.size(), fluid_fsi_dofs, solid_fsi_dofs)

@@ -138,7 +138,7 @@ def load_fsi_model(
         solid.residual.mesh_subdomain('facet')[name] for name in
         fluid_interface_subdomains
     )
-    pressure_function_space = solid.residual.form['coeff.fsi.p1'].function_space()
+    pressure_function_space = solid.residual.form['control/p1'].function_space()
 
     s, dofs_fsi_solid, dofs_fsi_fluid = derive_1D_interface_from_facet_subdomain(
         mesh, pressure_function_space, facet_func, filter_facet_values, zs
