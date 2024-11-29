@@ -407,6 +407,7 @@ class FenicsModel(BaseTransientModel):
         return bm.BlockMatrix(
             submats,
             shape=(len(self.FORM_KEYS), len(self.STATE1_KEYS)),
+            labels=(self.FORM_KEYS, self.STATE1_KEYS),
             check_bshape=False
         )
 
@@ -475,16 +476,16 @@ class FenicsModel(BaseTransientModel):
     def solve_dres_dstate1(self, dres_dstate1, x, b):
         """
         Solve the linearized residual problem
-
-        This solution has a special format due to the Newmark time discretization.
-        As a result, the below code only has to do one matrix solve (for the 'u'
-        residual).
         """
-        # dres_dstate1 = self.assem_dres_dstate1()
+        # NOTE: This solution strategy is hard-coded to handle the specific
+        # newmark time discretization and forms.
+        # As a result, only a single matrix solve is needed using `dfu1_du1`
+        # A general solution strategy could be to just solve the block matrices
+        # but that would like take more time.
 
-        dfu1_du1 = dres_dstate1.sub['u', 'u']
-        dfv1_du1 = dres_dstate1.sub['v', 'u']
-        dfa1_du1 = dres_dstate1.sub['a', 'u']
+        dfu1_du1 = dres_dstate1.sub['u', 'state/u1']
+        dfv1_du1 = dres_dstate1.sub['v', 'state/u1']
+        dfa1_du1 = dres_dstate1.sub['a', 'state/u1']
 
         bu, bv, ba = b.sub_blocks
 
