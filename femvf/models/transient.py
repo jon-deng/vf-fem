@@ -288,11 +288,11 @@ class FenicsModel(BaseTransientModel):
     ## Parameter setting functions
     @property
     def dt(self):
-        return self.residual.form['coeff.time.dt'].vector()[0]
+        return self.residual.form['time/dt'].vector()[0]
 
     @dt.setter
     def dt(self, value):
-        self.residual.form['coeff.time.dt'].vector()[:] = value
+        self.residual.form['time/dt'].vector()[:] = value
 
     def set_ini_state(self, state):
         """

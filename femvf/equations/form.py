@@ -1083,9 +1083,9 @@ def modify_newmark_time_discretization(form: Form) -> Form:
         'state/u0': u0,
         'state/v0': v0,
         'state/a0': a0,
-        'coeff.time.dt': dt,
-        'coeff.time.gamma': gamma,
-        'coeff.time.beta': beta,
+        'time/dt': dt,
+        'time/gamma': gamma,
+        'time/beta': beta,
     }
 
     coefficients = {**form.coefficients, **new_coefficients}
