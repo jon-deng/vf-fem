@@ -222,6 +222,11 @@ class FenicsModel(BaseTransientModel):
     """
     Class representing the discretized governing equations of a solid
     """
+    # TODO: Generalize these hard-coded constants
+    FORM_KEYS = ('u', 'v', 'a')
+    STATE0_KEYS = ('state/u0', 'state/v0', 'state/a0')
+    STATE1_KEYS = ('state/u1', 'state/v1', 'state/a1')
+    CONTROL_KEYS = ('control/p1',)
 
     def __init__(self, residual: slr.FenicsResidual):
 
@@ -360,19 +365,13 @@ class FenicsModel(BaseTransientModel):
 
     ## Residual and sensitivity functions
     def assem_res(self):
-        dt = self.dt
-        u1, v1, a1 = self.state1.sub_blocks.flat
-
-        res = self.state1.copy()
-        values = [
-            self.assembler.assemble('u'),
-            v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt),
-            a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
+        subvecs = [
+            self.assembler.assemble(form_key)
+            for form_key in self.FORM_KEYS
         ]
-        res[:] = values
         for bc in self.residual.dirichlet_bcs['state/u1']:
-            bc.apply(res.sub['u'])
-        return res
+            bc.apply(subvecs[0])
+        return bv.BlockVector(subvecs, labels=(self.FORM_KEYS,))
 
     @functools.cached_property
     def _const_assem_dres_dstate1(self):
@@ -397,74 +396,48 @@ class FenicsModel(BaseTransientModel):
         # trying to reassemble into that tensor seems to cause problems.
         # This is done with the `cached_form_assembler` since it caches the
         # tensor it applies on
-        dfu_du = self.assembler.assemble_derivative('u', 'state/u1')
-        for bc in self.residual.dirichlet_bcs['state/u1']:
-            bc.apply(dfu_du)
-
-        (_, dfu_dv, dfu_da, dfv_du, dfv_dv, dfv_da, dfa_du, dfa_dv, dfa_da) = (
-            self._const_assem_dres_dstate1
-        )
-        dfv_du = -newmark.newmark_v_du1(self.dt) * dfv_du
-        dfa_du = -newmark.newmark_a_du1(self.dt) * dfa_du
-
         submats = [
-            dfu_du,
-            dfu_dv,
-            dfu_da,
-            dfv_du,
-            dfv_dv,
-            dfv_da,
-            dfa_du,
-            dfa_dv,
-            dfa_da,
+            self.assembler.assemble_derivative(form_key, state_key)
+            for state_key in self.STATE1_KEYS
+            for form_key in self.FORM_KEYS
         ]
+        for bc in self.residual.dirichlet_bcs['state/u1']:
+            bc.apply(submats[0])
+
         return bm.BlockMatrix(
-            submats, shape=(3, 3), labels=2 * self.state1.labels, check_bshape=False
+            submats,
+            shape=(len(self.FORM_KEYS), len(self.STATE1_KEYS)),
+            check_bshape=False
         )
 
     def assem_dres_dstate0(self):
-        assert len(self.state1.bshape) == 1
-        N = self.state1.bshape[0][0]
-
-        dfu_du = self.assembler.assemble_derivative('u', 'state/u0')
-        dfu_dv = self.assembler.assemble_derivative('u', 'state/v0')
-        dfu_da = self.assembler.assemble_derivative('u', 'state/a0')
-        for mat in (dfu_du, dfu_dv, dfu_da):
-            for bc in self.residual.dirichlet_bcs['state/u1']:
-                bc.apply(mat)
-
-        dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du0(self.dt)))
-        dfv_dv = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_dv0(self.dt)))
-        dfv_da = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_da0(self.dt)))
-
-        dfa_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_du0(self.dt)))
-        dfa_dv = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_dv0(self.dt)))
-        dfa_da = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_a_da0(self.dt)))
-
+        # TODO: Handle BC errors when applied to zero matrices?
         submats = [
-            dfu_du,
-            dfu_dv,
-            dfu_da,
-            dfv_du,
-            dfv_dv,
-            dfv_da,
-            dfa_du,
-            dfa_dv,
-            dfa_da,
+            self.assembler.assemble_derivative(form_key, state_key)
+            for state_key in self.STATE0_KEYS
+            for form_key in self.FORM_KEYS
         ]
-        return bm.BlockMatrix(submats, shape=(3, 3), labels=2 * self.state1.labels)
+        # for bc in self.residual.dirichlet_bcs['state/u1']:
+        #     bc.apply(submats[0])
+
+        return bm.BlockMatrix(
+            submats,
+            shape=(len(self.FORM_KEYS), len(self.STATE0_KEYS)),
+            labels=(self.FORM_KEYS, self.STATE0_KEYS),
+            check_bshape=False
+        )
 
     def assem_dres_dcontrol(self):
-        N = self.state1.bshape[0][0]
-        M = self.control.bshape[0][0]
-
-        # It should be hardcoded that the control is just the surface pressure
-        assert self.control.shape[0] == 1
-        dfu_dcontrol = self.assembler.assemble_derivative('u', 'control/p1')
-        dfv_dcontrol = dfn.PETScMatrix(zero_mat(N, M))
-
-        submats = [[dfu_dcontrol], [dfv_dcontrol]]
-        return bm.BlockMatrix(submats, labels=self.state1.labels + self.control.labels)
+        submats = [
+            self.assembler.assemble_derivative(form_key, control_key)
+            for control_key in self.CONTROL_KEYS
+            for form_key in self.FORM_KEYS
+        ]
+        return bm.BlockMatrix(
+            submats,
+            shape=(len(self.FORM_KEYS), len(self.CONTROL_KEYS)),
+            labels=(self.FORM_KEYS, self.CONTROL_KEYS)
+        )
 
     def assem_dres_dprops(self):
         raise NotImplementedError("Not implemented yet!")
