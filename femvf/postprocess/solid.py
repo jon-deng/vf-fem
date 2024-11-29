@@ -324,7 +324,7 @@ class FluidTractionPowerDensity(BaseFieldMeasure):
     def _init_expression(self):
         form = self.model.solid.residual.form
         fluid_traction = form.expressions['expr.fluid_traction']
-        velocity = form['coeff.state.v1']
+        velocity = form['state/v1']
         return ufl.inner(fluid_traction, velocity)
 
     def assem(self, state, control, prop):
@@ -348,7 +348,7 @@ class XMomentum(BaseFieldMeasure):
     def _init_expression(self):
         forms = self.model.solid.form
         rho = forms['coeff.prop.rho']
-        velocity = forms['coeff.state.v1']
+        velocity = forms['state/v1']
         return ufl.inner(rho, velocity[0])
 
     def assem(self, state, control, prop):
@@ -372,7 +372,7 @@ class YMomentum(BaseFieldMeasure):
     def _init_expression(self):
         forms = self.model.solid.residual.form
         rho = forms['coeff.prop.rho']
-        velocity = forms['coeff.state.v1']
+        velocity = forms['state/v1']
         return ufl.inner(rho, velocity[1])
 
     def assem(self, state, control, prop):
@@ -581,7 +581,7 @@ class VertexGlottalWidth(BaseStateMeasure):
             idx_vertex = idx_vertex[0]
 
         vert_to_vdof = dfn.vertex_to_dof_map(
-            self.model.solid.residual.form['coeff.state.u1'].function_space()
+            self.model.solid.residual.form['state/u1'].function_space()
         )
         # Get the y-displacement DOF
         self.idx_dof = vert_to_vdof[2 * idx_vertex + 1]

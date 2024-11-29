@@ -239,12 +239,12 @@ class FenicsModel(BaseTransientModel):
         self._residual = residual
 
         ## Define the state/controls/properties
-        u0 = self.residual.form['coeff.state.u0']
-        v0 = self.residual.form['coeff.state.v0']
-        a0 = self.residual.form['coeff.state.a0']
-        u1 = self.residual.form['coeff.state.u1']
-        v1 = self.residual.form['coeff.state.v1']
-        a1 = self.residual.form['coeff.state.a1']
+        u0 = self.residual.form['state/u0']
+        v0 = self.residual.form['state/v0']
+        a0 = self.residual.form['state/a0']
+        u1 = self.residual.form['state/u1']
+        v1 = self.residual.form['state/v1']
+        a1 = self.residual.form['state/a1']
 
         self.state0 = bv.BlockVector(
             (u0.vector(), v0.vector(), a0.vector()), labels=[('u', 'v', 'a')]
@@ -271,7 +271,7 @@ class FenicsModel(BaseTransientModel):
     @property
     def XREF(self) -> dfn.Function:
         xref = self.state0.sub[0].copy()
-        function_space = self.residual.form['coeff.state.u1'].function_space()
+        function_space = self.residual.form['state/u1'].function_space()
         n_subspace = function_space.num_sub_spaces()
 
         xref[:] = (
@@ -349,7 +349,7 @@ class FenicsModel(BaseTransientModel):
             u_mesh_coeff = self.residual.form['coeff.prop.umesh']
 
             mesh = self.residual.mesh()
-            fspace = self.residual.form['coeff.state.u1'].function_space()
+            fspace = self.residual.form['state/u1'].function_space()
             ref_mesh_coord = self.residual.ref_mesh_coords
             VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
             dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(
@@ -370,7 +370,7 @@ class FenicsModel(BaseTransientModel):
             a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt),
         ]
         res[:] = values
-        for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
+        for bc in self.residual.dirichlet_bcs['state/u1']:
             bc.apply(res.sub['u'])
         return res
 
@@ -397,8 +397,8 @@ class FenicsModel(BaseTransientModel):
         # trying to reassemble into that tensor seems to cause problems.
         # This is done with the `cached_form_assembler` since it caches the
         # tensor it applies on
-        dfu_du = self.assembler.assemble_derivative('u', 'coeff.state.u1')
-        for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
+        dfu_du = self.assembler.assemble_derivative('u', 'state/u1')
+        for bc in self.residual.dirichlet_bcs['state/u1']:
             bc.apply(dfu_du)
 
         (_, dfu_dv, dfu_da, dfv_du, dfv_dv, dfv_da, dfa_du, dfa_dv, dfa_da) = (
@@ -426,11 +426,11 @@ class FenicsModel(BaseTransientModel):
         assert len(self.state1.bshape) == 1
         N = self.state1.bshape[0][0]
 
-        dfu_du = self.assembler.assemble_derivative('u', 'coeff.state.u0')
-        dfu_dv = self.assembler.assemble_derivative('u', 'coeff.state.v0')
-        dfu_da = self.assembler.assemble_derivative('u', 'coeff.state.a0')
+        dfu_du = self.assembler.assemble_derivative('u', 'state/u0')
+        dfu_dv = self.assembler.assemble_derivative('u', 'state/v0')
+        dfu_da = self.assembler.assemble_derivative('u', 'state/a0')
         for mat in (dfu_du, dfu_dv, dfu_da):
-            for bc in self.residual.dirichlet_bcs['coeff.state.u1']:
+            for bc in self.residual.dirichlet_bcs['state/u1']:
                 bc.apply(mat)
 
         dfv_du = dfn.PETScMatrix(diag_mat(N, 0 - newmark.newmark_v_du0(self.dt)))
@@ -574,7 +574,7 @@ class NodalContactModel(FenicsModel):
         ncontact = self.residual.form['coeff.prop.ncontact'].values()
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
 
-        ndim = self.residual.form['coeff.state.u0'].ufl_shape[0]
+        ndim = self.residual.form['state/u0'].ufl_shape[0]
         gap = np.dot((XREF + u)[:].reshape(-1, ndim), ncontact) - ycontact
         tcontact = (
             (-form.pressure_contact_cubic_penalty(gap, kcontact)[:, None] * ncontact)
@@ -592,7 +592,7 @@ class NodalContactModel(FenicsModel):
         XREF = self.XREF
         kcontact = self.residual.form['coeff.prop.kcontact'].values()[0]
         ycontact = self.residual.form['coeff.prop.ycontact'].values()[0]
-        u1 = self.residual.form['coeff.state.u1'].vector()
+        u1 = self.residual.form['state/u1'].vector()
         ncontact = self.residual.form['coeff.prop.ncontact'].values()
         gap = (
             np.dot((XREF + u1)[:].reshape(-1, ncontact.shape[-1]), ncontact) - ycontact
@@ -603,7 +603,7 @@ class NodalContactModel(FenicsModel):
         # for a general collision plane normal, the operation 'df_dtc*dtc_du' will
         # have to be represented by a block diagonal dtc_du (need to loop in python to do this). It
         # reduces to a diagonal if n is aligned with a coordinate axis.
-        dtcontact_du2 = self.residual.form['coeff.state.u1'].vector().copy()
+        dtcontact_du2 = self.residual.form['state/u1'].vector().copy()
         dpcontact_dgap, _ = form.dform_cubic_penalty_pressure(gap, kcontact)
         dtcontact_du2[:] = np.array((-dpcontact_dgap[:, None] * dgap_du).reshape(-1))
 
@@ -1073,7 +1073,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
 
         solid = self.solid
 
-        dfu1_du1 = self.solid.assembler.assemble_derivative('u', 'coeff.state.u1')
+        dfu1_du1 = self.solid.assembler.assemble_derivative('u', 'state/u1')
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
 
@@ -1081,7 +1081,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         dfq2_du2 = 0 - dq_du
         dfp2_du2 = 0 - dp_du
 
-        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+        for bc in self.solid.residual.dirichlet_bcs['state/u1']:
             bc.apply(dfu1_du1)
         dfn.solve(dfu1_du1, x['u'], b['u'], 'petsc')
         x['v'][:] = b['v'] - dfv2_du2 * x['u']
@@ -1099,7 +1099,7 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         # self.set_iter_params(**it_params)
         dt = self.solid.dt
 
-        dfu2_du2 = self.solid.assembler.assemble_derivative('u', 'coeff.state.u1', adjoint=True)
+        dfu2_du2 = self.solid.assembler.assemble_derivative('u', 'state/u1', adjoint=True)
         dfv2_du2 = 0 - newmark.newmark_v_du1(dt)
         dfa2_du2 = 0 - newmark.newmark_a_du1(dt)
         dfu2_dp2 = self.solid.assembler.assemble_derivative('u', 'coeff.fsi.p1', adjoint=True)
@@ -1122,11 +1122,11 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         adj_u_rhs, adj_v_rhs, adj_a_rhs, adj_q_rhs, adj_p_rhs = b
 
         # adjoint states for v, a, and q are explicit so we can solve for them
-        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+        for bc in self.solid.residual.dirichlet_bcs['state/u1']:
             bc.apply(adj_v_rhs)
         adj_uva['v'][:] = adj_v_rhs
 
-        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+        for bc in self.solid.residual.dirichlet_bcs['state/u1']:
             bc.apply(adj_a_rhs)
         adj_uva['a'][:] = adj_a_rhs
 
@@ -1140,13 +1140,13 @@ class ImplicitFSIModel(BaseTransientFSIModel):
         bc_dofs = np.concatenate(
             [
                 list(bc.get_boundary_values().keys())
-                or bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']
+                or bc in self.solid.residual.dirichlet_bcs['state/u1']
             ],
             dtype=np.int32
         )
         bc_dofs = np.unique(bc_dofs)
 
-        for bc in self.solid.residual.dirichlet_bcs['coeff.state.u1']:
+        for bc in self.solid.residual.dirichlet_bcs['state/u1']:
             bc.apply(dfu2_du2, adj_u_rhs)
         dfp2_du2.zeroRows(bc_dofs, diag=0.0)
 

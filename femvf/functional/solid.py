@@ -596,7 +596,7 @@ class KV3DDampingWork(SolidFunctional):
         solid = solid
 
         # Load some ufl forms from the solid model
-        v1 = solid.forms['coeff.state.v1']
+        v1 = solid.forms['state/v1']
         eta = solid.forms['coeff.prop.eta']
         uant, upos = dfn.Function(solid.vector_fspace), dfn.Function(
             solid.vector_fspace
@@ -714,7 +714,7 @@ class KVDampingWork(SolidFunctional):
         solid = solid
 
         # Load some ufl forms from the solid model
-        v1 = solid.forms['coeff.state.v1']
+        v1 = solid.forms['state/v1']
         eta = solid.forms['coeff.prop.eta']
 
         forms = {}
@@ -834,7 +834,7 @@ class RayleighDampingWork(SolidFunctional):
         emod = solid.forms['coeff.prop.emod']
         nu = solid.forms['coeff.prop.nu']
 
-        v0 = solid.forms['coeff.state.v0']
+        v0 = solid.forms['state/v0']
 
         from ..solid import biform_m, biform_k
 

@@ -28,7 +28,7 @@ class TestSolid(FenicsMeshFixtures):
     def init_residual(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
         dim = mesh.topology().dim()
         dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+            'state/u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         return SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
 

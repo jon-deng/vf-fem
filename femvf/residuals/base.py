@@ -47,7 +47,7 @@ class FenicsResidual(BaseResidual):
         zero_value = dfn.Constant(mesh.topology().dim() * [0.0])
         if dirichlet_bc_specs is None:
             dirichlet_bc_specs = {
-                'coeff.state.u1': [(zero_value, 'facet', 'fixed')]
+                'state/u1': [(zero_value, 'facet', 'fixed')]
             }
 
         self._dirichlet_bc_specs = dirichlet_bc_specs

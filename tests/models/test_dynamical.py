@@ -55,7 +55,7 @@ class TestSolid(SolidResidualFixtures, FenicsMeshFixtures):
         ):
         dim = mesh.topology().dim()
         dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+            'state/u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
         assert dynamical.FenicsModel(residual)
@@ -495,7 +495,7 @@ class ModelFixtures(CoupledDynamicalModelFixtures):
             # model_solid.forms['bc.dirichlet'].apply(dxv)
             dstate['v'] = dxv
 
-            for bc in model_solid.residual.dirichlet_bcs['coeff.state.u1']:
+            for bc in model_solid.residual.dirichlet_bcs['state/u1']:
                 _set_dirichlet_bvec(bc, dstate)
 
         if model_fluid is not None:
@@ -519,7 +519,7 @@ class ModelFixtures(CoupledDynamicalModelFixtures):
 
         dstatet[:] = 1e-6
         if model_solid is not None:
-            for bc in model_solid.residual.dirichlet_bcs['coeff.state.u1']:
+            for bc in model_solid.residual.dirichlet_bcs['state/u1']:
                 _set_dirichlet_bvec(bc, dstatet)
 
         return dstatet
@@ -547,7 +547,7 @@ class ModelFixtures(CoupledDynamicalModelFixtures):
 
             if 'umesh' in dprop:
                 # Use a uniaxial y stretching motion
-                fspace = model_solid.residual.form['coeff.state.u1'].function_space()
+                fspace = model_solid.residual.form['state/u1'].function_space()
                 VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
                 coords = np.array(model_solid.XREF[:]).copy().reshape(-1, 2)
                 umesh = coords.copy()
@@ -636,7 +636,7 @@ class TestShapeModel(_TestDerivative, ModelFixtures):
 
         if model_solid is not None:
             # Test mesh motion along a uniaxial y-direction stretching motion
-            fspace = model_solid.residual.form['coeff.state.u1'].function_space()
+            fspace = model_solid.residual.form['state/u1'].function_space()
             VDOF_TO_VERT = dfn.dof_to_vertex_map(fspace)
             coords = np.array(model_solid.XREF[:]).copy().reshape(-1, 2)
             umesh = coords.copy()

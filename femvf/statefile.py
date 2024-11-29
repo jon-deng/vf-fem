@@ -209,7 +209,7 @@ class StateFile:
             dtype=np.intp,
         )
 
-        dofmaps = [solid.residual.form['coeff.state.u0'].function_space().dofmap()]
+        dofmaps = [solid.residual.form['state/u0'].function_space().dofmap()]
         for dofmap in dofmaps:
             dofmap_array = np.array(
                 [dofmap.cell_dofs(idx_cell) for idx_cell in range(cells.shape[0])]

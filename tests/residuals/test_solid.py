@@ -28,8 +28,8 @@ class TestResidual(FenicsMeshFixtures):
 
         dim = mesh.topology().dim()
         dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')],
-            # 'coeff.state.u0': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+            'state/u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')],
+            # 'state/u0': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
 
         return ResidualClass(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)

@@ -22,10 +22,10 @@ def solve_prephonatory_configuration(solid):
     control = solid.control.copy()
     control['p'][:] = 0.0
 
-    jac = dfn.derivative(solid.forms['form.un.f1uva'], solid.forms['coeff.state.u1'])
+    jac = dfn.derivative(solid.forms['form.un.f1uva'], solid.forms['state/u1'])
     dfn.solve(
         solid.forms['form.un.f1uva'] == 0.0,
-        solid.forms['coeff.state.u1'],
+        solid.forms['state/u1'],
         bcs=[solid.forms['bc.dirichlet']],
         J=jac,
         solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM},

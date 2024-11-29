@@ -63,8 +63,8 @@ class TransferWorkbyVelocity(FSIFunctional):
         ds = solid.ds
 
         p = solid.forms['coeff.fsi.p1']
-        u1 = solid.forms['coeff.state.u1']
-        v1 = solid.forms['coeff.state.v1']
+        u1 = solid.forms['state/u1']
+        v1 = solid.forms['state/v1']
 
         deformation_gradient = ufl.grad(u1) + ufl.Identity(2)
         deformation_cofactor = (
@@ -220,8 +220,8 @@ class TransferWorkbyDisplacementIncrement(FSIFunctional):
         scalar_trial = solid.forms['trial.scalar']
 
         pressure = solid.forms['coeff.fsi.p1']
-        u1 = solid.forms['coeff.state.u1']
-        u0 = solid.forms['coeff.state.u0']
+        u1 = solid.forms['state/u1']
+        u0 = solid.forms['state/u0']
 
         deformation_gradient = ufl.grad(u0) + ufl.Identity(2)
         deformation_cofactor = (

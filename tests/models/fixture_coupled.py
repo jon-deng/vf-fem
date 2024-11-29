@@ -28,7 +28,7 @@ class CoupledResidualFixtures(FenicsMeshFixtures):
     def solid_res(self, SolidResidual, mesh, mesh_functions, mesh_subdomains):
         dim = mesh.topology().dim()
         dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+            'state/u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         residual = SolidResidual(mesh, mesh_functions, mesh_subdomains, dirichlet_bcs)
         return residual

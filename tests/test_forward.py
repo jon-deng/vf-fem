@@ -60,8 +60,8 @@ class ModelFixtures(FenicsMeshFixtures):
     def model(self, mesh_tuple, SolidResidual, FluidResidual, extrude_zs):
         dim = mesh_tuple[0].topology().dim()
         dirichlet_bcs = {
-            'coeff.state.u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')],
-            # 'coeff.state.u0': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
+            'state/u1': [(dfn.Constant(dim*[0]), 'facet', 'fixed')],
+            # 'state/u0': [(dfn.Constant(dim*[0]), 'facet', 'fixed')]
         }
         solid_kwargs = {'dirichlet_bcs': dirichlet_bcs}
         fluid_kwargs = {}
@@ -87,7 +87,7 @@ class TestIntegrate(ModelFixtures):
         x = xy[:, 0]
         y = xy[:, 1]
         u0 = dfn.Function(
-            model.solid.residual.form['coeff.state.u0'].function_space()
+            model.solid.residual.form['state/u0'].function_space()
         ).vector()
 
         ini_state = model.state0.copy()

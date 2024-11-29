@@ -151,15 +151,15 @@ class BaseDynamicalFenicsModel:
 
         self._residual = residual
 
-        self.u = self.residual.form['coeff.state.u1']
-        self.v = self.residual.form['coeff.state.v1']
+        self.u = self.residual.form['state/u1']
+        self.v = self.residual.form['state/v1']
         self.state = bv.BlockVector(
             (self.u.vector(), self.v.vector()), labels=[('u', 'v')]
         )
         self.state = bv.convert_subtype_to_petsc(self.state)
 
-        self.ut = dfn.Function(self.residual.form['coeff.state.u1'].function_space())
-        self.vt = self.residual.form['coeff.state.a1']
+        self.ut = dfn.Function(self.residual.form['state/u1'].function_space())
+        self.vt = self.residual.form['state/a1']
         self.statet = bv.BlockVector(
             (self.ut.vector(), self.vt.vector()), labels=[('u', 'v')]
         )
@@ -212,7 +212,7 @@ class BaseDynamicalFenicsModel:
             u_mesh_coeff = self.residual.form['coeff.prop.umesh']
 
             mesh = self.residual.mesh()
-            fspace = self.residual.form['coeff.state.u1'].function_space()
+            fspace = self.residual.form['state/u1'].function_space()
             ref_mesh_coord = self.residual.ref_mesh_coords
             VERT_TO_VDOF = dfn.vertex_to_dof_map(fspace)
             dmesh_coords = np.array(u_mesh_coeff.vector()[VERT_TO_VDOF]).reshape(
@@ -225,7 +225,7 @@ class BaseDynamicalFenicsModel:
     @property
     def XREF(self) -> dfn.Function:
         xref = self.state.sub[0].copy()
-        function_space = self.residual.form['coeff.state.u1'].function_space()
+        function_space = self.residual.form['state/u1'].function_space()
         n_subspace = function_space.num_sub_spaces()
 
         xref[:] = (
@@ -246,8 +246,8 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
 
     @cast_output_bmat_to_petsc
     def assem_dres_dstate(self):
-        dresu_du = self.assembler.assemble_derivative('u', 'coeff.state.u1')
-        dresu_dv = self.assembler.assemble_derivative('u', 'coeff.state.v1')
+        dresu_du = self.assembler.assemble_derivative('u', 'state/u1')
+        dresu_dv = self.assembler.assemble_derivative('u', 'state/v1')
 
         n = self.v.vector().size()
         dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -260,7 +260,7 @@ class FenicsModel(BaseDynamicalFenicsModel, BaseDynamicalModel):
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
-        dresu_dvt = self.assembler.assemble_derivative('u', 'coeff.state.a1')
+        dresu_dvt = self.assembler.assemble_derivative('u', 'state/a1')
 
         dresv_dut = dfn.PETScMatrix(-1 * subops.ident_mat(n))
         dresv_dvt = dfn.PETScMatrix(subops.diag_mat(n, diag=0))
@@ -348,8 +348,8 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
 
     @cast_output_bmat_to_petsc
     def assem_dres_dstate(self):
-        dresu_du = self.assembler.assemble_derivative('u', 'coeff.state.u1')
-        dresu_dv = self.assembler.assemble_derivative('u', 'coeff.state.v1')
+        dresu_du = self.assembler.assemble_derivative('u', 'state/u1')
+        dresu_dv = self.assembler.assemble_derivative('u', 'state/v1')
 
         n = self.u.vector().size()
         dresv_du = dfn.PETScMatrix(subops.zero_mat(n, n))
@@ -362,7 +362,7 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
     def assem_dres_dstatet(self):
         n = self.u.vector().size()
         dresu_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
-        dresu_dvt = self.assembler.assemble_derivative('u', 'coeff.state.a1')
+        dresu_dvt = self.assembler.assemble_derivative('u', 'state/a1')
 
         dresv_dut = dfn.PETScMatrix(subops.zero_mat(n, n))
         dresv_dvt = dfn.PETScMatrix(subops.zero_mat(n, n))

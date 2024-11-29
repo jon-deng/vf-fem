@@ -36,7 +36,7 @@ class TestLoad(GMSHFixtures):
     @pytest.fixture()
     def dirichlet_bcs(self, mesh_dim: int):
         return {
-            'coeff.state.u1': [(dfn.Constant(mesh_dim*[0]), 'facet', 'dirichlet')]
+            'state/u1': [(dfn.Constant(mesh_dim*[0]), 'facet', 'dirichlet')]
         }
 
     def test_load_fenics_model_from_file(

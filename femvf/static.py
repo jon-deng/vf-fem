@@ -106,7 +106,7 @@ def static_solid_configuration(
         # Here use the non-linear governing residual to solve
         # For a transient model, the residual contains initial condition effects
         # and to get rid of these effects we can create a new residual where
-        # 'coeff.state.u0' always matches 'coeff.state.u1'
+        # 'state/u0' always matches 'state/u1'
         form = model.residual.form
         if is_tra_model:
             # Zero final/initial states to solve for a transient
@@ -116,26 +116,26 @@ def static_solid_configuration(
             model.set_ini_state(zero_state)
 
             res_form = ufl.replace(
-                form.ufl_forms, {form['coeff.state.u0']: form['coeff.state.u1']}
+                form.ufl_forms, {form['state/u0']: form['state/u1']}
             )
         else:
             res_form = form.ufl_forms
 
-        jac = dfn.derivative(res_form, form['coeff.state.u1'])
+        jac = dfn.derivative(res_form, form['state/u1'])
 
         def iterative_subproblem(x_n):
-            form['coeff.state.u1'].vector()[:] = x_n
-            dx = form['coeff.state.u1'].vector()
+            form['state/u1'].vector()[:] = x_n
+            dx = form['state/u1'].vector()
 
             def assem_res():
                 res = dfn.assemble(res_form)
-                for bc in model.residual.dirichlet_bcs['coeff.state.u1']:
+                for bc in model.residual.dirichlet_bcs['state/u1']:
                     bc.apply(res)
                 return res
 
             def solve_res(res):
                 A = dfn.assemble(jac)
-                for bc in model.residual.dirichlet_bcs['coeff.state.u1']:
+                for bc in model.residual.dirichlet_bcs['state/u1']:
                     bc.apply(A)
                 dfn.solve(A, dx, res)
                 return dx
@@ -145,18 +145,18 @@ def static_solid_configuration(
         def norm(res_n):
             return res_n.norm('l2')
 
-        u_0 = model.residual.form['coeff.state.u1'].vector().copy()
+        u_0 = model.residual.form['state/u1'].vector().copy()
         u_0 = state_n.sub['u']
         u, info = nonlineq.newton_solve(u_0, iterative_subproblem, norm=norm)
         state_n['u'] = u
     elif solver == 'automatic':
         jac = dfn.derivative(
-            model.residual.form.ufl_forms, model.residual.form['coeff.state.u1']
+            model.residual.form.ufl_forms, model.residual.form['state/u1']
         )
         dfn.solve(
             model.residual.form.ufl_forms == 0.0,
-            model.residual.form['coeff.state.u1'],
-            bcs=model.residual.dirichlet_bcs['coeff.state.u1'],
+            model.residual.form['state/u1'],
+            bcs=model.residual.dirichlet_bcs['state/u1'],
             J=jac,
             solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM},
         )
@@ -226,12 +226,12 @@ def static_coupled_configuration_picard(
             # Solve for the solid deformation under the guessed fluid load
             dfn.solve(
                 solid.residual.form.ufl_forms == 0.0,
-                solid.residual.form['coeff.state.u1'],
-                bcs=solid.residual.dirichlet_bcs['coeff.state.u1'],
+                solid.residual.form['state/u1'],
+                bcs=solid.residual.dirichlet_bcs['state/u1'],
                 # J= ... ()
                 solver_parameters={"newton_solver": DEFAULT_NEWTON_SOLVER_PRM},
             )
-            # the vector corresponding to solid.residual.form['coeff.state.u1']
+            # the vector corresponding to solid.residual.form['state/u1']
             u = bv.BlockVector([solid.state1['u'].copy()], labels=[['u']])
 
             # update the fluid load for the new solid deformation
