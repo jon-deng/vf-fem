@@ -311,23 +311,23 @@ class LinearizedFenicsModel(BaseDynamicalFenicsModel, BaseLinearizedDynamicalMod
         )
         super().__init__(new_residual)
 
-        self.du = self.residual.form['coeff.dstate.u1']
-        self.dv = self.residual.form['coeff.dstate.v1']
+        self.du = self.residual.form['dstate/u1']
+        self.dv = self.residual.form['dstate/v1']
         self.dstate = bv.BlockVector(
             (self.du.vector(), self.dv.vector()), labels=[('u', 'v')]
         )
         self.dstate = bv.convert_subtype_to_petsc(self.dstate)
 
-        self.dut = dfn.Function(self.residual.form['coeff.dstate.u1'].function_space())
-        self.dvt = self.residual.form['coeff.dstate.a1']
+        self.dut = dfn.Function(self.residual.form['dstate/u1'].function_space())
+        self.dvt = self.residual.form['dstate/a1']
         self.dstatet = bv.BlockVector(
             (self.dut.vector(), self.dvt.vector()), labels=[('u', 'v')]
         )
         self.dstatet = bv.convert_subtype_to_petsc(self.dstatet)
 
-        # self.p = self.forms['coeff.dfsi.p1']
+        # self.p = self.forms['dcontrol/p1']
         self.dcontrol = bv.BlockVector(
-            (self.residual.form['coeff.dfsi.p1'].vector(),), labels=[('p',)]
+            (self.residual.form['dcontrol/p1'].vector(),), labels=[('p',)]
         )
         self.dcontrol = bv.convert_subtype_to_petsc(self.dcontrol)
 

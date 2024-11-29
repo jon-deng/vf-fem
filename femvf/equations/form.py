@@ -1108,20 +1108,20 @@ def modify_unary_linearized_forms(form: Form) -> dict[str, dfn.Form]:
 
     # Create coefficients for linearization directions
     for var_name in ['u1', 'v1', 'a1']:
-        new_coefficients[f'coeff.dstate.{var_name}'] = dfn.Function(
+        new_coefficients[f'dstate/{var_name}'] = dfn.Function(
             form[f'state/{var_name}'].function_space()
         )
     for var_name in ['p1']:
-        new_coefficients[f'coeff.dfsi.{var_name}'] = dfn.Function(
-            form[f'coeff.fsi.{var_name}'].function_space()
+        new_coefficients[f'dcontrol/{var_name}'] = dfn.Function(
+            form[f'control/{var_name}'].function_space()
         )
 
     # Compute the jacobian bilinear forms
     # unary_form_name = 'f1uva'
     # for var_name in ['u1', 'v1', 'a1']:
-    #     form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form.form, form[f'coeff.state.{var_name}'])
+    #     form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form.form, form[f'state/{var_name}'])
     # for var_name in ['p1']:
-    #     form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form.form, form[f'coeff.fsi.{var_name}'])
+    #     form[f'form.bi.d{unary_form_name}_d{var_name}'] = dfn.derivative(form.form, form[f'control/{var_name}'])
 
     # Take the action of the jacobian linear forms along states to get a new linear
     # dF/dx * delta x, dF/dp * delta p, ...
@@ -1134,15 +1134,15 @@ def modify_unary_linearized_forms(form: Form) -> dict[str, dfn.Form]:
             # print(len(df_dx.arguments()))
             # print(len(forms[f'form.un.f1uva'].arguments()))
             linearized_form = dfn.action(
-                df_dx, new_coefficients[f'coeff.dstate.{var_name}']
+                df_dx, new_coefficients[f'dstate/{var_name}']
             )
             linearized_forms.append(linearized_form)
 
         for var_name in ['p1']:
             # unary_form_name = f'df1uva_{var_name}'
             # df_dx = form[f'form.bi.df1uva_d{var_name}']
-            df_dx = dfn.derivative(ufl_form, form[f'coeff.fsi.{var_name}'])
-            linearized_form = dfn.action(df_dx, new_coefficients[f'coeff.dfsi.{var_name}'])
+            df_dx = dfn.derivative(ufl_form, form[f'control/{var_name}'])
+            linearized_form = dfn.action(df_dx, new_coefficients[f'dcontrol/{var_name}'])
             linearized_forms.append(linearized_form)
 
         # Compute the total linearized residual
