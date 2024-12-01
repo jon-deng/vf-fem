@@ -365,12 +365,24 @@ class FenicsModel(BaseTransientModel):
 
     ## Residual and sensitivity functions
     def assem_res(self):
-        subvecs = [
-            self.assembler.assemble(form_key)
-            for form_key in self.FORM_KEYS
-        ]
+
+        def assem(form_key: str):
+            u1, v1, a1 = self.state1.sub_blocks
+            dt = self.dt
+            # NOTE: Assembling 'v' and 'a' residuals using `assembler.assemble`
+            # (i.e. assembling UFL expressions) takes significantly longer than
+            # the below manual approach!
+            if form_key == 'u':
+                return self.assembler.assemble('u')
+            elif form_key == 'v':
+                return v1 - newmark.newmark_v(u1, *self.state0.sub_blocks, dt)
+            elif form_key == 'a':
+                return a1 - newmark.newmark_a(u1, *self.state0.sub_blocks, dt)
+
+        subvecs = [assem(form_key) for form_key in self.FORM_KEYS]
         for bc in self.residual.dirichlet_bcs['state/u1']:
             bc.apply(subvecs[0])
+
         return bv.BlockVector(subvecs, labels=(self.FORM_KEYS,))
 
     @functools.cached_property
