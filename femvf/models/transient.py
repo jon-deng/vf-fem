@@ -386,6 +386,10 @@ class FenicsModel(BaseTransientModel):
         # trying to reassemble into that tensor seems to cause problems.
         # This is done with the `cached_form_assembler` since it caches the
         # tensor it applies on
+
+        # TODO: Implement newmark residuals derivatives ('v' and 'a') manually?
+        # Computing them through `assembler` is automatic but incurs a performance
+        # penalty
         submats = [
             self.assembler.assemble_derivative(form_key, state_key)
             for state_key in self.STATE1_KEYS
