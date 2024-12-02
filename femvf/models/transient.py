@@ -286,10 +286,6 @@ class FenicsModel(BaseTransientModel):
         )
         return xref
 
-    @property
-    def solid(self) -> 'FenicsModel':
-        return self
-
     ## Parameter setting functions
     @property
     def dt(self):
