@@ -385,24 +385,6 @@ class FenicsModel(BaseTransientModel):
 
         return bv.BlockVector(subvecs, labels=(self.FORM_KEYS,))
 
-    @functools.cached_property
-    def _const_assem_dres_dstate1(self):
-        # These are constant matrices that only have to be computed once
-        N = self.state1.bshape[0][0]
-        # dfu_du = dfn.PETScMatrix(diag_mat(N, 1))
-        dfu_du = None
-        dfu_dv = dfn.PETScMatrix(zero_mat(N, N))
-        dfu_da = dfn.PETScMatrix(zero_mat(N, N))
-
-        dfv_du = dfn.PETScMatrix(diag_mat(N, 1))
-        dfv_dv = dfn.PETScMatrix(diag_mat(N, 1))
-        dfv_da = dfn.PETScMatrix(zero_mat(N, N))
-
-        dfa_du = dfn.PETScMatrix(diag_mat(N, 1))
-        dfa_dv = dfn.PETScMatrix(zero_mat(N, N))
-        dfa_da = dfn.PETScMatrix(diag_mat(N, 1))
-        return (dfu_du, dfu_dv, dfu_da, dfv_du, dfv_dv, dfv_da, dfa_du, dfa_dv, dfa_da)
-
     def assem_dres_dstate1(self):
         # BUG: Applying BCs to a tensor (`dfn.PETScMatrix()`) then
         # trying to reassemble into that tensor seems to cause problems.
