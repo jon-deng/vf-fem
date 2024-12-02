@@ -1074,14 +1074,15 @@ def modify_newmark_time_discretization(form: Form) -> Form:
     v0 = dfn.Function(v1.function_space())
     a0 = dfn.Function(a1.function_space())
 
-    # TODO: Make dt part of a Real function space
-    dt = dfn.Function(form['prop/rho'].function_space())
-    gamma = dfn.Constant(1 / 2)
-    beta = dfn.Constant(1 / 4)
-
     # TODO: This seems like an ugly way to get the measure/mesh
     # Could refactor `Form` to not use meshes at all
     mesh = u1.function_space().mesh()
+
+    RealSpace = dfn.FunctionSpace(mesh, 'R', 0)
+    dt = dfn.Function(RealSpace)
+    gamma = dfn.Constant(1 / 2)
+    beta = dfn.Constant(1 / 4)
+
     dx = dfn.Measure('dx', mesh)
 
     new_coefficients = {
