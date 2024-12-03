@@ -144,7 +144,7 @@ def cast_output_bvec_to_petsc(func):
 
     return wrapped_func
 
-
+# TODO: Simplify residual + assembly for Fenics type dynamical models
 class BaseDynamicalFenicsModel:
 
     def __init__(self, residual: solid.FenicsResidual):
