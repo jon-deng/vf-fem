@@ -5,8 +5,7 @@ Vocal fold models are based on the finite element method (FEM) while fluid model
 
 ## Installation
 
-This package relies on many other packages and libraries.
-In order to run this package you will need to install:
+To install this package, you will need to install the following dependencies:
 
 - Common scientific Python packages
   - `numpy`
