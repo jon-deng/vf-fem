@@ -253,5 +253,5 @@ class TestIntegrate(ModelFixtures):
         df['fo'] = fo
         df['amplitude'] = amplitude
 
-        stats_path = f'{os.path.splitext(save_path)[0]}.xlsx'
-        df.to_excel(stats_path)
+        stats_path = f'{os.path.splitext(save_path)[0]}.csv'
+        df.to_csv(stats_path)
