@@ -73,7 +73,7 @@ class ModelFixtures(FenicsMeshFixtures):
             fluid_kwargs,
             model_type='transient',
             coupling='explicit',
-            fluid_interface_subdomains=('traction',),
+            fluid_interface_subdomains=('pressure',),
             zs=extrude_zs
         )
 

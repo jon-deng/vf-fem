@@ -207,7 +207,7 @@ def properties_bvec_from_forms(forms, defaults=None):
         ):
             vec = np.ones(coefficient.values().size)
             vec[:] = coefficient.values()
-        else:
+        elif isinstance(coefficient, dfn.function.function.Function):
             vec = coefficient.vector().copy()
 
         if prop_label in defaults:
@@ -340,9 +340,9 @@ class FenicsModel(BaseTransientModel):
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
-            if isinstance(coefficient, dfn.function.constant.Constant):
+            if isinstance(coefficient, dfn.Constant):
                 coefficient.assign(dfn.Constant(np.squeeze(value)))
-            else:
+            elif isinstance(coefficient, dfn.Function):
                 coefficient.vector()[:] = value
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates

@@ -105,7 +105,7 @@ def load_fsi_model(
     fluid_kwargs: dict[str, Any],
     model_type: str = 'transient',
     coupling: str = 'explicit',
-    fluid_interface_subdomains: Optional[tuple[str]]=('traction',),
+    fluid_interface_subdomains: Optional[tuple[str]]=('pressure',),
     zs: Optional[NDArray[np.float64]] = None,
 ) -> transient.BaseTransientFSIModel:
     """

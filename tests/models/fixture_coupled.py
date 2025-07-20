@@ -62,7 +62,7 @@ class CoupledResidualFixtures(FenicsMeshFixtures):
         facet_subdomain_data: dict[str, int],
         extrude_zs: NDArray[np.float64]
     ):
-        fsi_subdomain_names = ['traction']
+        fsi_subdomain_names = ['pressure']
         facet_values = set(facet_subdomain_data[name] for name in fsi_subdomain_names)
         s, dofs_fsi_solid, dofs_fsi_fluid = derive_1D_interface_from_facet_subdomain(
             mesh, pressure_function_space, facet_function, facet_values, extrude_zs

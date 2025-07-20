@@ -43,10 +43,10 @@ class TestMeshOperations(FenicsMeshFixtures):
         mesh_function: dfn.MeshFunction,
         mesh_subdomain_data: dict[str, int]
     ):
-        filtering_mesh_values = set([mesh_subdomain_data[key] for key in ['traction']])
+        filtering_mesh_values = set([mesh_subdomain_data[key] for key in ['pressure']])
         mesh_entities = [ent for ent in dfn.entities(mesh, 1)]
 
-        # TODO: Fix hard-coded ['traction'] names?
+        # TODO: Fix hard-coded ['pressure'] names?
         assert meshutils.filter_mesh_entities_by_subdomain(
             mesh_entities, mesh_function, filtering_mesh_values
         )

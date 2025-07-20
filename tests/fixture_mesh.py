@@ -84,7 +84,7 @@ class FenicsMeshFixtures:
 
         fixed = Fixed()
         fixed.mark(mf, 1)
-        return mf, {'fixed': 1, 'traction': 0}
+        return mf, {'fixed': 1, 'pressure': 0}
 
     @pytest.fixture()
     def cell_function_tuple(self, mesh: dfn.Mesh, mesh_dim: int):

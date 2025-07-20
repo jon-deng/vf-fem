@@ -202,9 +202,9 @@ class BaseDynamicalFenicsModel:
 
             # If the property is a field variable, values have to be assigned to every spot in
             # the vector
-            if isinstance(coefficient, dfn.function.constant.Constant):
+            if isinstance(coefficient, dfn.Constant):
                 coefficient.assign(dfn.Constant(np.squeeze(prop[key])))
-            else:
+            elif isinstance(coefficient, dfn.Function):
                 coefficient.vector()[:] = prop[key]
 
         # If a shape parameter exists, it needs special handling to update the mesh coordinates

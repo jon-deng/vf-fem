@@ -140,7 +140,7 @@ class PredefinedSolidResidual(FenicsResidual):
         raise NotImplementedError()
 
 # NOTE: All the forms below apply a traction over a facet subdomain named
-# 'traction'
+# 'pressure'
 class Rayleigh(PredefinedSolidResidual):
 
     def init_form(
@@ -153,7 +153,7 @@ class Rayleigh(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -177,7 +177,7 @@ class KelvinVoigt(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -202,7 +202,7 @@ class KelvinVoigtWShape(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -227,7 +227,7 @@ class KelvinVoigtWEpithelium(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -252,7 +252,7 @@ class IncompSwellingKelvinVoigt(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -276,7 +276,7 @@ class SwellingKelvinVoigt(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -300,7 +300,7 @@ class SwellingKelvinVoigtWEpithelium(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -325,7 +325,7 @@ class SwellingKelvinVoigtWEpitheliumNoShape(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -350,7 +350,7 @@ class SwellingPowerLawKelvinVoigtWEpitheliumNoShape(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
@@ -375,7 +375,7 @@ class Approximate3DKelvinVoigt(PredefinedSolidResidual):
         ds = get_measure('facet', mesh, mesh_functions)
 
         ds_subdomain = get_subdomain('facet', mesh_subdomains)
-        ds_traction = subdomain_measure(ds, ds_subdomain, 'traction')
+        ds_traction = subdomain_measure(ds, ds_subdomain, 'pressure')
 
         form = (
             _form.InertialForm({}, dx, mesh)
