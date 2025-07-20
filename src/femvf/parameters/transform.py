@@ -213,7 +213,7 @@ class TractionShape(TransformFromModel):
         dx = residual.measure('dx')
         ds = residual.measure('ds')
 
-        facet_label_to_id = residual.mesh_function_label_to_value('facet')
+        facet_label_to_id = residual.mesh_subdomain('facet')
         # ds_traction_surfaces = [
         #     ds(int(facet_label_to_id[facet_label]))
         #     for facet_label in residual.fsi_facet_labels

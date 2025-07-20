@@ -568,7 +568,7 @@ class VertexGlottalWidth(BaseStateMeasure):
         # Get the DOF/vertex number corresponding to `vertex_name`
         if vertex_name is None:
             raise ValueError("`vertex_name` must be supplied")
-        vertlabel_to_id = self.model.solid.residual.mesh_function_label_to_value(
+        vertlabel_to_id = self.model.solid.residual.mesh_subdomain(
             'vertex'
         )
         vert_mf = self.model.solid.residual.mesh_function('vertex')
