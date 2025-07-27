@@ -9,15 +9,16 @@ To install this package, you will need to install the following dependencies:
 
 - The 'Fenics' project, a tool for modelling finite element problems, and associated FEM tools
   - `fenics` (https://fenicsproject.org/)
-- Linear algebra (also dependencies of FEniCS)
-  - `petsc4py`
-  - `slepc4py`
+  - `fenics` dependencies
+    - `petsc4py`
+    - `slepc4py`
 - Common scientific Python packages
   - `numpy`
   - `scipy`
   - `pandas`
   - `matplotlib`
   - `h5py`
+  - `jupyter`
 - Automatic differentiation
   - `jax` (https://github.com/google/jax)
 - Meshing
@@ -29,7 +30,6 @@ To install this package, you will need to install the following dependencies:
   - `pytest`
   - `lxml`
   - `tqdm`
-  - `jupyter`
 - Other libraries
   - `BlockArray` (https://github.com/jon-deng/block-array)
   - `nonlineq` (https://github.com/jon-deng/nonlinear-equation)
